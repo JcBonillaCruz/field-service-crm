@@ -1,13 +1,15 @@
 /* eslint-disable @next/next/no-img-element */
-import { initials } from "@/lib/types";
+import { initials, solidColor } from "@/lib/types";
 
 export default function Avatar({
   name,
   url,
+  seed,
   size = 36,
 }: {
   name: string;
   url: string | null;
+  seed?: string;
   size?: number;
 }) {
   if (url) {
@@ -18,8 +20,8 @@ export default function Avatar({
   }
   return (
     <span
-      className="flex items-center justify-center rounded-full bg-[#0f766e] font-semibold text-white ring-2 ring-white"
-      style={{ width: size, height: size, fontSize: size * 0.38 }}
+      className="flex items-center justify-center rounded-full font-semibold text-white ring-2 ring-white"
+      style={{ width: size, height: size, fontSize: size * 0.38, backgroundColor: solidColor(seed || name) }}
       aria-label={name}
     >
       {initials(name)}

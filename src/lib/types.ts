@@ -95,3 +95,37 @@ export function formatPhone(value: string) {
   if (d.length < 7) return `(${d.slice(0, 3)}) ${d.slice(3)}`;
   return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
 }
+
+// Colores automáticos para iniciales (siempre el mismo color para la misma compañía o persona)
+const SOFT_PALETTE = [
+  { bg: "#d6f3ec", text: "#0f766e" }, // teal
+  { bg: "#dbeafe", text: "#1d4ed8" }, // blue
+  { bg: "#ede9fe", text: "#6d28d9" }, // violet
+  { bg: "#fce7f3", text: "#be185d" }, // pink
+  { bg: "#ffedd5", text: "#c2410c" }, // orange
+  { bg: "#fef3c7", text: "#a16207" }, // amber
+  { bg: "#dcfce7", text: "#15803d" }, // green
+  { bg: "#e0f2fe", text: "#0369a1" }, // sky
+  { bg: "#fee2e2", text: "#b91c1c" }, // red
+  { bg: "#e2e8f0", text: "#334155" }, // slate
+];
+
+const SOLID_PALETTE = [
+  "#0f766e", "#2563eb", "#7c3aed", "#db2777", "#ea580c",
+  "#ca8a04", "#16a34a", "#0284c7", "#dc2626", "#475569",
+];
+
+function hash(seed: string) {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+export function softColor(seed: string | number) {
+  const i = typeof seed === "number" ? seed : hash(seed);
+  return SOFT_PALETTE[i % SOFT_PALETTE.length];
+}
+
+export function solidColor(seed: string) {
+  return SOLID_PALETTE[hash(seed) % SOLID_PALETTE.length];
+}

@@ -5,8 +5,9 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Avatar from "@/components/Avatar";
+import CompanyBadge from "@/components/CompanyBadge";
 import CreateCompanyForm from "@/components/CreateCompanyForm";
-import { CompanySummary, CurrentUser, ROLE_LABEL, initials, setCurrentCompany } from "@/lib/types";
+import { CompanySummary, CurrentUser, ROLE_LABEL, setCurrentCompany } from "@/lib/types";
 
 export default function AppHeader({
   user,
@@ -85,9 +86,7 @@ export default function AppHeader({
                 aria-expanded={switcherOpen}
                 className="flex items-center gap-2 rounded-lg border border-slate-200 py-1.5 pl-1.5 pr-3 text-sm hover:bg-slate-50"
               >
-                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#d6f3ec] text-xs font-semibold text-[#0f766e]">
-                  {initials(current?.name ?? "")}
-                </span>
+                {current && <CompanyBadge id={current.id} name={current.name} index={companies.indexOf(current)} size={28} />}
                 <span className="max-w-[140px] truncate font-medium text-slate-800 sm:max-w-[220px]">{current?.name}</span>
                 <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-400" fill="currentColor" aria-hidden="true">
                   <path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" />
@@ -98,16 +97,14 @@ export default function AppHeader({
                 <div className="absolute left-0 mt-2 w-72 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,40,60,0.12)]">
                   <p className="px-4 pb-1 pt-3 text-xs font-medium text-slate-500">Your companies</p>
                   <ul className="max-h-72 overflow-y-auto py-1">
-                    {companies.map((c) => (
+                    {companies.map((c, i) => (
                       <li key={c.id}>
                         <button
                           type="button"
                           onClick={() => switchTo(c.id)}
                           className={`flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-slate-50 ${c.id === currentId ? "bg-[#f0faf7]" : ""}`}
                         >
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#d6f3ec] text-xs font-semibold text-[#0f766e]">
-                            {initials(c.name)}
-                          </span>
+                          <CompanyBadge id={c.id} name={c.name} index={i} size={32} />
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-medium text-slate-800">{c.name}</span>
                             <span className="block text-xs text-slate-500">{c.industry ?? "Business"} · {ROLE_LABEL[c.role]}</span>
@@ -135,7 +132,7 @@ export default function AppHeader({
         </div>
 
         <button type="button" onClick={() => setProfileOpen(true)} aria-label="Open my profile" className="rounded-full">
-          <Avatar name={user.fullName || user.email} url={user.avatarUrl} size={36} />
+          <Avatar name={user.fullName || user.email} url={user.avatarUrl} seed={user.id} size={36} />
         </button>
       </header>
 
@@ -154,7 +151,7 @@ export default function AppHeader({
 
             <div className="flex flex-col items-center border-b border-slate-100 px-6 pb-6 text-center">
               <div className="relative">
-                <Avatar name={user.fullName || user.email} url={user.avatarUrl} size={88} />
+                <Avatar name={user.fullName || user.email} url={user.avatarUrl} seed={user.id} size={88} />
                 <button
                   type="button"
                   onClick={() => fileRef.current?.click()}
@@ -180,13 +177,16 @@ export default function AppHeader({
               <p className="text-sm font-semibold text-slate-700">My companies</p>
               <ul className="mt-3 space-y-1">
                 {companies.length === 0 && <li className="text-sm text-slate-500">No companies yet.</li>}
-                {companies.map((c) => (
+                {companies.map((c, i) => (
                   <li key={c.id}>
                     <button type="button" onClick={() => { switchTo(c.id); setProfileOpen(false); }}
                       className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left hover:bg-slate-50">
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium text-slate-800">{c.name}</span>
-                        <span className="block text-xs text-slate-500">{c.industry ?? "Business"}</span>
+                      <span className="flex min-w-0 items-center gap-3">
+                        <CompanyBadge id={c.id} name={c.name} index={i} size={32} />
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium text-slate-800">{c.name}</span>
+                          <span className="block text-xs text-slate-500">{c.industry ?? "Business"}</span>
+                        </span>
                       </span>
                       <span className="ml-3 shrink-0 rounded-full bg-[#d6f3ec] px-2.5 py-0.5 text-xs font-medium text-[#0f766e]">
                         {ROLE_LABEL[c.role]}
