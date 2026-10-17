@@ -1,36 +1,37 @@
 import type { Metadata, Viewport } from "next";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "Field Service CRM",
+  title: "Sign in | BrightPro",
   description:
-    "CRM profesional para compañías de servicios en campo — facturación, inventario y despacho.",
+    "BrightPro: invoicing, van inventory and dispatch for field service companies.",
   manifest: "/manifest.json",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "default",
-    title: "Field CRM",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
   },
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "BrightPro" },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#1a2744",
+  themeColor: "#0f766e",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es">
-      <head>
-        <link rel="apple-touch-icon" href="/icon-192.png" />
-      </head>
-      <body className="bg-gray-50 text-gray-900 antialiased">{children}</body>
+    <html lang="en">
+      <body className={`${jakarta.className} bg-white text-slate-900 antialiased`}>
+        {children}
+      </body>
     </html>
   );
 }

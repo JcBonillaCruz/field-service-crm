@@ -1,24 +1,14 @@
 {
-  "name": "Field Service CRM",
-  "short_name": "Field CRM",
-  "description": "CRM profesional para compañías de servicios en campo",
+  "name": "BrightPro",
+  "short_name": "BrightPro",
+  "description": "CRM for field service companies",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#1a2744",
-  "theme_color": "#1a2744",
+  "background_color": "#ffffff",
+  "theme_color": "#0f766e",
   "orientation": "portrait-primary",
   "icons": [
-    {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
   ]
 }
