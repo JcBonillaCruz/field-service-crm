@@ -1,7 +1,5 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
-  // PWA headers for installable app
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   async headers() {
     return [
       {
