@@ -18,7 +18,7 @@ type NavItem = {
 // "roles": quién ve cada opción. Sin "roles", la ven todos.
 const NAV: NavItem[] = [
   { label: "Home", href: "/dashboard", icon: "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" },
-  { label: "Customers", icon: "M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM22 19v-1a4 4 0 0 0-3-3.9M16 4.1a3 3 0 0 1 0 5.8", roles: ["owner", "manager", "office"] },
+  { label: "Customers", href: "/dashboard/customers", icon: "M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM22 19v-1a4 4 0 0 0-3-3.9M16 4.1a3 3 0 0 1 0 5.8", roles: ["owner", "manager", "office"] },
   { label: "Quotes & contracts", icon: "M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8zM14 3v5h5M9 13h6M9 17h4", roles: ["owner", "manager", "office"] },
   { label: "Invoices", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3", roles: ["owner", "manager", "office"] },
   { label: "Payments", icon: "M3 7h18v10H3zM3 11h18M7 15h2", roles: ["owner", "manager"] },
@@ -39,14 +39,14 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
     <nav className="flex-1 overflow-y-auto px-3 py-4">
       <ul className="space-y-0.5">
         {items.map((item) => {
-          const active = item.href && pathname === item.href;
+          const active = item.href && (item.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(item.href));
           const content = (
             <>
               <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d={item.icon} />
               </svg>
-              <span className="flex-1">{item.label}</span>
-              {!item.href && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-400">Soon</span>}
+              <span className="min-w-0 flex-1 truncate">{item.label}</span>
+              {!item.href && <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-400">Soon</span>}
             </>
           );
           const base = "flex items-center gap-3 rounded-lg px-3 py-2.5 text-[15px]";

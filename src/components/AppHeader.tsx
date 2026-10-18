@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Avatar from "@/components/Avatar";
 import CompanyBadge from "@/components/CompanyBadge";
@@ -20,6 +20,7 @@ export default function AppHeader({
   onMenu?: () => void;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -41,6 +42,9 @@ export default function AppHeader({
   function switchTo(id: string) {
     setCurrentCompany(id);
     setSwitcherOpen(false);
+    // Si estás viendo un cliente, regresa a la lista (ese cliente es de la otra compañía)
+    const section = pathname.match(/^\/dashboard\/[^/]+/)?.[0];
+    if (section && pathname !== section) router.push(section);
     router.refresh();
   }
 
