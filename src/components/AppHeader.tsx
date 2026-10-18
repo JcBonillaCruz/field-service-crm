@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Avatar from "@/components/Avatar";
@@ -13,10 +12,12 @@ export default function AppHeader({
   user,
   companies,
   currentId,
+  onMenu,
 }: {
   user: CurrentUser;
   companies: CompanySummary[];
   currentId: string | null;
+  onMenu?: () => void;
 }) {
   const router = useRouter();
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -74,27 +75,36 @@ export default function AppHeader({
 
   return (
     <>
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
-        <div className="flex items-center gap-3 sm:gap-6">
-          <Image src="/logo-brightpro.png" alt="BrightPro" width={140} height={38} className="h-7 w-auto sm:h-8" />
+      <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-slate-200 bg-white px-3 sm:px-6">
+        <button
+          type="button"
+          onClick={onMenu}
+          aria-label="Open menu"
+          className="shrink-0 rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
+        >
+          <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <path d="M4 7h16M4 12h16M4 17h16" />
+          </svg>
+        </button>
 
+        <div className="flex min-w-0 flex-1 items-center">
           {companies.length > 0 && (
-            <div ref={switcherRef} className="relative">
+            <div ref={switcherRef} className="relative min-w-0 max-w-full sm:max-w-[320px]">
               <button
                 type="button"
                 onClick={() => setSwitcherOpen(!switcherOpen)}
                 aria-expanded={switcherOpen}
-                className="flex items-center gap-2 rounded-lg border border-slate-200 py-1.5 pl-1.5 pr-3 text-sm hover:bg-slate-50"
+                className="flex w-full min-w-0 items-center gap-2 rounded-lg border border-slate-200 py-1.5 pl-1.5 pr-3 text-sm hover:bg-slate-50"
               >
                 {current && <CompanyBadge id={current.id} name={current.name} index={companies.indexOf(current)} size={28} />}
-                <span className="max-w-[140px] truncate font-medium text-slate-800 sm:max-w-[220px]">{current?.name}</span>
-                <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-400" fill="currentColor" aria-hidden="true">
+                <span className="min-w-0 flex-1 truncate text-left font-medium text-slate-800">{current?.name}</span>
+                <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate-400" fill="currentColor" aria-hidden="true">
                   <path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" />
                 </svg>
               </button>
 
               {switcherOpen && (
-                <div className="absolute left-0 mt-2 w-72 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,40,60,0.12)]">
+                <div className="absolute left-0 mt-2 w-[min(18rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,40,60,0.12)]">
                   <p className="px-4 pb-1 pt-3 text-xs font-medium text-slate-500">Your companies</p>
                   <ul className="max-h-72 overflow-y-auto py-1">
                     {companies.map((c, i) => (
@@ -131,7 +141,7 @@ export default function AppHeader({
           )}
         </div>
 
-        <button type="button" onClick={() => setProfileOpen(true)} aria-label="Open my profile" className="rounded-full">
+        <button type="button" onClick={() => setProfileOpen(true)} aria-label="Open my profile" className="shrink-0 rounded-full">
           <Avatar name={user.fullName || user.email} url={user.avatarUrl} seed={user.id} size={36} />
         </button>
       </header>

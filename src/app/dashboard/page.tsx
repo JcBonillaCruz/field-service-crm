@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import AppHeader from "@/components/AppHeader";
+import AppShell from "@/components/AppShell";
 import CreateCompanyForm from "@/components/CreateCompanyForm";
 import { COMPANY_COOKIE, CompanySummary, ROLE_LABEL, Role } from "@/lib/types";
 
@@ -35,12 +35,11 @@ export default async function DashboardPage() {
   const firstName = (fullName || user.email || "").split(" ")[0];
 
   return (
-    <main className="min-h-screen bg-[#f4f6f8]">
-      <AppHeader
-        user={{ id: user.id, email: user.email ?? "", fullName, avatarUrl: profile?.avatar_url ?? null }}
-        companies={companies}
-        currentId={current?.id ?? null}
-      />
+    <AppShell
+      user={{ id: user.id, email: user.email ?? "", fullName, avatarUrl: profile?.avatar_url ?? null }}
+      companies={companies}
+      currentId={current?.id ?? null}
+    >
 
       {!current ? (
         <section className="mx-auto max-w-lg px-6 py-16">
@@ -55,9 +54,9 @@ export default async function DashboardPage() {
           </div>
         </section>
       ) : (
-        <section className="mx-auto max-w-5xl px-6 py-12">
+        <section className="mx-auto max-w-5xl px-5 py-10 sm:px-8 sm:py-12">
           <p className="text-sm font-medium text-[#0f766e]">{current.industry ?? "Business"}</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-[#0b1f3a]">{current.name}</h1>
+          <h1 className="mt-1 text-2xl sm:text-3xl font-semibold tracking-tight text-[#0b1f3a]">{current.name}</h1>
           <p className="mt-2 text-slate-500">
             Hello, {firstName}. You&apos;re signed in as {ROLE_LABEL[current.role].toLowerCase()} of this company.
           </p>
@@ -80,6 +79,6 @@ export default async function DashboardPage() {
           </div>
         </section>
       )}
-    </main>
+    </AppShell>
   );
 }
