@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import SelectMenu from "@/components/ui/SelectMenu";
 import { inputClass } from "@/components/customers/ui";
 
 // Etiqueta de un teléfono o correo: opciones comunes o una personalizada
@@ -37,14 +38,11 @@ export default function LabelPicker({
   }
 
   return (
-    <select id={id} aria-label={ariaLabel} value={options.includes(value) ? value : options[0]}
-      onChange={(e) => {
-        if (e.target.value === "__custom") { setCustom(true); onChange(""); }
-        else onChange(e.target.value);
-      }}
-      className={`${inputClass} pr-8`}>
-      {options.map((o) => <option key={o} value={o}>{o}</option>)}
-      <option value="__custom">Custom label…</option>
-    </select>
+    <SelectMenu id={id} ariaLabel={ariaLabel} value={options.includes(value) ? value : options[0]}
+      options={[...options.map((o) => ({ value: o, label: o })), { value: "__custom", label: "+ Custom label…", divider: true }]}
+      onChange={(v) => {
+        if (v === "__custom") { setCustom(true); onChange(""); }
+        else onChange(v);
+      }} />
   );
 }

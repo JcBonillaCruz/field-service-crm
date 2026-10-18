@@ -1,9 +1,8 @@
 "use client";
 
 import { PHONE_LABELS, Phone, formatPhoneFor, newPhone, phoneError } from "@/lib/customers";
-import { dialCode } from "@/lib/geo";
 import LabelPicker from "@/components/customers/LabelPicker";
-import { CountryOptions } from "@/components/customers/CountrySelect";
+import { DialCodeSelect } from "@/components/customers/CountrySelect";
 import { useNoFill } from "@/components/customers/noFill";
 import { inputClass } from "@/components/customers/ui";
 
@@ -32,25 +31,15 @@ export default function PhoneList({
           const err = showErrors ? phoneError(p) : "";
           return (
             <li key={i}>
-              <div className="grid grid-cols-[1fr_auto] items-center gap-2 sm:grid-cols-[9.5rem_6.5rem_1fr_auto]">
+              <div className="grid grid-cols-[1fr_auto] items-center gap-2 sm:grid-cols-[9.5rem_7rem_1fr_auto]">
                 <div className="col-span-2 sm:col-span-1">
                   <LabelPicker id={`phone-label-${i}`} ariaLabel={`Phone ${i + 1} label`} options={PHONE_LABELS}
                     value={p.label} onChange={(label) => update(i, { ...p, label })} />
                 </div>
 
-                <div className="col-span-2 grid grid-cols-[6.5rem_1fr] gap-2 sm:col-span-2 sm:grid-cols-[6.5rem_1fr]">
-                  {/* Código de país: se ve corto (US +1) pero al abrir muestra el nombre completo */}
-                  <div className="relative">
-                    <div className={`${inputClass} pointer-events-none flex items-center justify-between gap-1 whitespace-nowrap`} aria-hidden="true">
-                      <span className="font-medium text-slate-700">{p.country}</span>
-                      <span className="text-slate-500">{dialCode(p.country)}</span>
-                    </div>
-                    <select aria-label={`Phone ${i + 1} country`} value={p.country}
-                      onChange={(e) => update(i, { ...p, country: e.target.value, number: formatPhoneFor(e.target.value, p.number) })}
-                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0">
-                      <CountryOptions withDial />
-                    </select>
-                  </div>
+                <div className="col-span-2 grid grid-cols-[7rem_1fr] gap-2 sm:col-span-2 sm:grid-cols-[7rem_1fr]">
+                  <DialCodeSelect ariaLabel={`Phone ${i + 1} country code`} value={p.country}
+                    onChange={(country) => update(i, { ...p, country, number: formatPhoneFor(country, p.number) })} />
                   <input id={`phone-${i}`} type="text" inputMode="tel" aria-label={`Phone ${i + 1} number`} value={p.number}
                     {...noFill(`ph${i}`)}
                     placeholder={p.country === "US" || p.country === "CA" ? "(214) 555-0123" : "Phone number"}

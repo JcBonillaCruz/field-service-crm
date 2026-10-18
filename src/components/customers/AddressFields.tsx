@@ -2,7 +2,7 @@
 
 import { Address } from "@/lib/customers";
 import { cleanPostal, postalLabel, postalPlaceholder, stateLabel, subdivisions } from "@/lib/geo";
-import { CountryOptions } from "@/components/customers/CountrySelect";
+import { CountrySelect, StateSelect } from "@/components/customers/CountrySelect";
 import { useNoFill } from "@/components/customers/noFill";
 import { inputClass, labelClass } from "@/components/customers/ui";
 
@@ -17,7 +17,7 @@ export default function AddressFields({
 }) {
   const noFill = useNoFill();
   const states = subdivisions(value.country);
-  const set = (k: keyof Address) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+  const set = (k: keyof Address) => (e: React.ChangeEvent<HTMLInputElement>) =>
     onChange({ ...value, [k]: e.target.value });
 
   return (
@@ -31,11 +31,8 @@ export default function AddressFields({
       </div>
       <div className="sm:col-span-3">
         <label htmlFor={`${idPrefix}-country`} className={labelClass}>Country</label>
-        <select id={`${idPrefix}-country`} value={value.country}
-          onChange={(e) => onChange({ ...value, country: e.target.value, state: "", zip: cleanPostal(e.target.value, value.zip) })}
-          className={inputClass}>
-          <CountryOptions />
-        </select>
+        <CountrySelect id={`${idPrefix}-country`} value={value.country}
+          onChange={(country) => onChange({ ...value, country, state: country === value.country ? value.state : "", zip: cleanPostal(country, value.zip) })} />
       </div>
       <div className="sm:col-span-4">
         <label htmlFor={`${idPrefix}-street`} className={labelClass}>Street address</label>
@@ -60,10 +57,8 @@ export default function AddressFields({
           {states.length === 0 && <span className="font-normal text-slate-400"> (optional)</span>}
         </label>
         {states.length > 0 ? (
-          <select id={`${idPrefix}-state`} value={value.state} onChange={set("state")} className={inputClass}>
-            <option value="">Select…</option>
-            {states.map(([v, name]) => <option key={v} value={v}>{name}</option>)}
-          </select>
+          <StateSelect id={`${idPrefix}-state`} country={value.country} value={value.state}
+            onChange={(state) => onChange({ ...value, state })} />
         ) : (
           <input id={`${idPrefix}-state`} value={value.state} onChange={set("state")} {...noFill(`${idPrefix}-a5`)}
             className={inputClass} />

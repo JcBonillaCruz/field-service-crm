@@ -1,20 +1,38 @@
 "use client";
 
-import { COUNTRIES, PINNED_COUNTRIES } from "@/lib/geo";
+import { useMemo } from "react";
+import { COUNTRIES, PINNED_COUNTRIES, subdivisions } from "@/lib/geo";
+import SearchSelect, { SelectOption } from "@/components/ui/SearchSelect";
 
-const pinned = PINNED_COUNTRIES.map((c) => COUNTRIES.find((x) => x.code === c)!);
+function countryOptions(withDial: boolean): SelectOption[] {
+  const list = withDial ? COUNTRIES.filter((c) => c.dial) : COUNTRIES;
+  const make = (c: (typeof COUNTRIES)[number], group: string): SelectOption => ({
+    value: c.code,
+    label: c.name,
+    short: withDial ? `${c.code} ${c.dial}` : undefined,
+    hint: withDial ? c.dial : undefined,
+    search: `${c.code} ${c.dial} ${c.dial.replace("+", "")}`,
+    group,
+  });
+  const pinned = PINNED_COUNTRIES.map((code) => list.find((c) => c.code === code)!).filter(Boolean);
+  return [...pinned.map((c) => make(c, "Common")), ...list.map((c) => make(c, "All countries"))];
+}
 
-// Lista de países con los más usados arriba. withDial muestra el código telefónico.
-export function CountryOptions({ withDial = false }: { withDial?: boolean }) {
-  const label = (c: (typeof COUNTRIES)[number]) => (withDial ? `${c.name} (${c.dial})` : c.name);
+const COUNTRY_OPTIONS = countryOptions(false);
+const DIAL_OPTIONS = countryOptions(true);
+
+export function CountrySelect({ id, value, onChange }: { id?: string; value: string; onChange: (v: string) => void }) {
+  return <SearchSelect id={id} value={value} options={COUNTRY_OPTIONS} onChange={onChange} placeholder="Search country" />;
+}
+
+export function DialCodeSelect({ value, onChange, ariaLabel }: { value: string; onChange: (v: string) => void; ariaLabel: string }) {
   return (
-    <>
-      <optgroup label="Common">
-        {pinned.map((c) => <option key={`p-${c.code}`} value={c.code}>{label(c)}</option>)}
-      </optgroup>
-      <optgroup label="All countries">
-        {COUNTRIES.filter((c) => !withDial || c.dial).map((c) => <option key={c.code} value={c.code}>{label(c)}</option>)}
-      </optgroup>
-    </>
+    <SearchSelect compact value={value} options={DIAL_OPTIONS} onChange={onChange} ariaLabel={ariaLabel}
+      placeholder="Code" panelWidth="w-72" />
   );
+}
+
+export function StateSelect({ id, country, value, onChange }: { id?: string; country: string; value: string; onChange: (v: string) => void }) {
+  const options = useMemo(() => subdivisions(country).map(([v, label]) => ({ value: v, label, search: v })), [country]);
+  return <SearchSelect id={id} value={value} options={options} onChange={onChange} placeholder="Search…" />;
 }
