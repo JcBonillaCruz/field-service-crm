@@ -1,20 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 export default function SearchBox({ initial }: { initial: string }) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [q, setQ] = useState(initial);
 
   useEffect(() => {
     const t = setTimeout(() => {
       if (q === initial) return;
-      router.replace(q ? `${pathname}?q=${encodeURIComponent(q)}` : pathname);
+      const next = new URLSearchParams(searchParams.toString());
+      if (q) next.set("q", q); else next.delete("q");
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname);
     }, 300);
     return () => clearTimeout(t);
-  }, [q, initial, pathname, router]);
+  }, [q, initial, pathname, router, searchParams]);
 
   return (
     <div className="relative">

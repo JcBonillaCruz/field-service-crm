@@ -62,6 +62,11 @@ export function canManageCustomers(role: Role) {
   return role === "owner" || role === "manager" || role === "office";
 }
 
+// Exportar saca toda la lista de clientes: solo el dueño y el encargado
+export function canExportCustomers(role: Role) {
+  return role === "owner" || role === "manager";
+}
+
 export function canDeleteCustomers(role: Role) {
   return role === "owner" || role === "manager";
 }
