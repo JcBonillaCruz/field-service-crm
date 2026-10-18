@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Address, EMPTY_ADDRESS, addressError, addressLine, cityLine, cleanAddress, mapsUrl } from "@/lib/customers";
+import { Address, EMPTY_ADDRESS, addressError, addressLine, cityLine, cleanAddress, countryLine, mapsUrl } from "@/lib/customers";
 import AddressFields from "@/components/customers/AddressFields";
 import { primaryButton, secondaryButton } from "@/components/customers/ui";
 
@@ -29,7 +29,7 @@ export default function AddressManager({
   }
 
   function startEdit(a: Address & { id: string }) {
-    setDraft({ ...a, label: a.label ?? "", unit: a.unit ?? "", zip: a.zip ?? "" });
+    setDraft({ ...a, label: a.label ?? "", unit: a.unit ?? "", zip: a.zip ?? "", state: a.state ?? "", country: a.country || "US" });
     setEditingId(a.id);
     setError("");
   }
@@ -102,6 +102,7 @@ export default function AddressManager({
                   </div>
                   <p className="mt-1 text-sm text-slate-600">{addressLine(a)}</p>
                   <p className="text-sm text-slate-600">{cityLine(a)}</p>
+                  {countryLine(a) && <p className="text-sm text-slate-600">{countryLine(a)}</p>}
                 </div>
                 <a href={mapsUrl(a)} target="_blank" rel="noopener noreferrer"
                   className="shrink-0 text-sm font-semibold text-[#0f766e] hover:underline">

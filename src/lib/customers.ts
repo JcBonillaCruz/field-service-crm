@@ -1,4 +1,5 @@
-import { Role } from "@/lib/types";
+import { Role, formatPhone } from "@/lib/types";
+import { cleanPostal, countryName, dialCode, postalError, subdivisionName, subdivisions, usesNanpFormat } from "@/lib/geo";
 
 export type CustomerType = "residential" | "commercial";
 
@@ -10,6 +11,20 @@ export type Address = {
   city: string;
   state: string;
   zip: string;
+  country: string;
+  is_primary: boolean;
+};
+
+export type Phone = {
+  label: string;
+  country: string;
+  number: string;
+  is_primary: boolean;
+};
+
+export type Email = {
+  label: string;
+  email: string;
   is_primary: boolean;
 };
 
@@ -26,15 +41,22 @@ export type Customer = {
   created_at: string;
 };
 
+export const PHONE_LABELS = ["Main", "Mobile", "Office", "Home", "Work", "Fax", "Other"];
+export const EMAIL_LABELS = ["Main", "Quotes", "Invoices", "Billing", "Work", "Personal", "Other"];
+
 export const EMPTY_ADDRESS: Address = {
   label: "",
   street: "",
   unit: "",
   city: "",
-  state: "TX",
+  state: "",
   zip: "",
+  country: "US",
   is_primary: false,
 };
+
+export const newPhone = (is_primary = false): Phone => ({ label: "Mobile", country: "US", number: "", is_primary });
+export const newEmail = (is_primary = false): Email => ({ label: "Main", email: "", is_primary });
 
 export function canManageCustomers(role: Role) {
   return role === "owner" || role === "manager" || role === "office";
@@ -44,16 +66,53 @@ export function canDeleteCustomers(role: Role) {
   return role === "owner" || role === "manager";
 }
 
+// ---------- Teléfonos ----------
+export function formatPhoneFor(country: string, value: string) {
+  if (usesNanpFormat(country)) return formatPhone(value);
+  return value.replace(/[^\d\s-]/g, "").replace(/\s{2,}/g, " ").slice(0, 20);
+}
+
+export function phoneError(p: Phone) {
+  const digits = p.number.replace(/\D/g, "");
+  if (!digits) return "";
+  if (usesNanpFormat(p.country) && digits.length !== 10) return "Enter a 10-digit phone number.";
+  if (!usesNanpFormat(p.country) && (digits.length < 6 || digits.length > 15)) return "Enter a valid phone number.";
+  return "";
+}
+
+export function phoneDisplay(p: { country: string; dial_code?: string; number: string }) {
+  if (usesNanpFormat(p.country)) return p.number;
+  return `${p.dial_code || dialCode(p.country)} ${p.number}`;
+}
+
+export function phoneHref(p: { country: string; dial_code?: string; number: string }) {
+  return `tel:${p.dial_code || dialCode(p.country)}${p.number.replace(/\D/g, "")}`;
+}
+
+// ---------- Correos ----------
+export function emailError(e: Email) {
+  const v = e.email.trim();
+  if (!v) return "";
+  return /^\S+@\S+\.\S+$/.test(v) ? "" : "Enter a valid email address.";
+}
+
+// ---------- Direcciones ----------
 export function addressLine(a: Pick<Address, "street" | "unit">) {
   return [a.street, a.unit].filter(Boolean).join(", ");
 }
 
-export function cityLine(a: { city: string; state: string; zip?: string | null }) {
-  return `${a.city}, ${a.state}${a.zip ? " " + a.zip : ""}`;
+export function cityLine(a: { city: string; state: string | null; zip?: string | null; country?: string | null }) {
+  const state = a.country && a.country !== "US" ? subdivisionName(a.country, a.state) : a.state || "";
+  const left = [a.city, state].filter(Boolean).join(", ");
+  return `${left}${a.zip ? " " + a.zip : ""}`;
+}
+
+export function countryLine(a: { country?: string | null }) {
+  return a.country && a.country !== "US" ? countryName(a.country) : "";
 }
 
 export function mapsUrl(a: Address) {
-  const q = `${addressLine(a)}, ${cityLine(a)}`;
+  const q = [addressLine(a), cityLine(a), countryName(a.country)].filter(Boolean).join(", ");
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
 }
 
@@ -64,9 +123,8 @@ export function addressIsEmpty(a: Address) {
 export function addressError(a: Address) {
   if (!a.street.trim()) return "Enter the street address.";
   if (!a.city.trim()) return "Enter the city.";
-  if (!/^[A-Za-z]{2}$/.test(a.state.trim())) return "Use the 2-letter state code, like TX.";
-  if (a.zip && !/^\d{5}$/.test(a.zip.trim())) return "ZIP code must be 5 digits.";
-  return "";
+  if (subdivisions(a.country).length > 0 && !a.state.trim()) return "Choose the state or province.";
+  return postalError(a.country, a.zip);
 }
 
 export function cleanAddress(a: Address) {
@@ -75,8 +133,9 @@ export function cleanAddress(a: Address) {
     street: a.street.trim(),
     unit: a.unit.trim() || null,
     city: a.city.trim(),
-    state: a.state.trim().toUpperCase(),
-    zip: a.zip.trim() || null,
+    state: a.state.trim() || null,
+    zip: cleanPostal(a.country, a.zip).trim() || null,
+    country: a.country || "US",
     is_primary: a.is_primary,
   };
 }

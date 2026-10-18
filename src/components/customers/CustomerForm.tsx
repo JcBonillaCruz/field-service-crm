@@ -4,45 +4,60 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { formatPhone } from "@/lib/types";
+import { dialCode } from "@/lib/geo";
 import {
   Address,
   Customer,
   CustomerType,
   EMPTY_ADDRESS,
+  Email,
+  Phone,
   addressError,
   addressIsEmpty,
   cleanAddress,
+  emailError,
+  newEmail,
+  newPhone,
+  phoneError,
 } from "@/lib/customers";
 import AddressFields from "@/components/customers/AddressFields";
+import PhoneList from "@/components/customers/PhoneList";
+import EmailList from "@/components/customers/EmailList";
+import { useNoFill } from "@/components/customers/noFill";
 import { inputClass, labelClass, primaryButton, secondaryButton } from "@/components/customers/ui";
 
 export default function CustomerForm({
   companyId,
   customer,
+  initialPhones,
+  initialEmails,
 }: {
   companyId: string;
   customer?: Customer;
+  initialPhones?: Phone[];
+  initialEmails?: Email[];
 }) {
   const router = useRouter();
+  const noFill = useNoFill();
   const editing = Boolean(customer);
 
   const [type, setType] = useState<CustomerType>(customer?.customer_type ?? "residential");
   const [firstName, setFirstName] = useState(customer?.first_name ?? "");
   const [lastName, setLastName] = useState(customer?.last_name ?? "");
   const [companyName, setCompanyName] = useState(customer?.company_name ?? "");
-  const [phone, setPhone] = useState(customer?.phone ?? "");
-  const [email, setEmail] = useState(customer?.email ?? "");
+  const [phones, setPhones] = useState<Phone[]>(initialPhones?.length ? initialPhones : [newPhone(true)]);
+  const [emails, setEmails] = useState<Email[]>(initialEmails?.length ? initialEmails : [newEmail(true)]);
   const [notes, setNotes] = useState(customer?.notes ?? "");
   const [addresses, setAddresses] = useState<Address[]>([{ ...EMPTY_ADDRESS, is_primary: true }]);
   const [error, setError] = useState("");
+  const [showErrors, setShowErrors] = useState(false);
   const [saving, setSaving] = useState(false);
 
   function validate() {
     if (type === "residential" && !firstName.trim() && !lastName.trim()) return "Enter the customer's name.";
     if (type === "commercial" && !companyName.trim()) return "Enter the business name.";
-    if (phone && phone.replace(/\D/g, "").length !== 10) return "Enter a 10-digit phone number, or leave it blank.";
-    if (email && !/^\S+@\S+\.\S+$/.test(email.trim())) return "Enter a valid email, or leave it blank.";
+    if (phones.some((p) => phoneError(p))) return "Check the phone numbers marked in red.";
+    if (emails.some((e) => emailError(e))) return "Check the emails marked in red.";
     if (!editing) {
       for (const a of addresses) {
         if (addressIsEmpty(a)) continue;
@@ -55,57 +70,47 @@ export default function CustomerForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setShowErrors(true);
     const msg = validate();
     if (msg) return setError(msg);
 
     setSaving(true);
     setError("");
-    const supabase = createClient();
-    const payload = {
-      customer_type: type,
-      first_name: firstName.trim() || null,
-      last_name: lastName.trim() || null,
-      company_name: type === "commercial" ? companyName.trim() || null : null,
-      phone: phone || null,
-      email: email.trim().toLowerCase() || null,
-      notes: notes.trim() || null,
-    };
 
-    if (editing && customer) {
-      const { error } = await supabase.from("customers").update(payload).eq("id", customer.id);
-      setSaving(false);
-      if (error) return setError("The changes couldn't be saved. Try again.");
-      router.push(`/dashboard/customers/${customer.id}`);
-      router.refresh();
-      return;
-    }
+    const filledPhones = phones.filter((p) => p.number.replace(/\D/g, ""));
+    const filledEmails = emails.filter((x) => x.email.trim());
+    const filledAddresses = addresses.filter((a) => !addressIsEmpty(a));
 
-    const { data, error } = await supabase
-      .from("customers")
-      .insert({ ...payload, company_id: companyId })
-      .select("id")
-      .single();
-
-    if (error || !data) {
-      setSaving(false);
-      return setError("The customer couldn't be saved. Try again.");
-    }
-
-    const filled = addresses.filter((a) => !addressIsEmpty(a));
-    if (filled.length > 0) {
-      if (!filled.some((a) => a.is_primary)) filled[0].is_primary = true;
-      const { error: addrErr } = await supabase.from("customer_addresses").insert(
-        filled.map((a) => ({ ...cleanAddress(a), customer_id: data.id, company_id: companyId }))
-      );
-      if (addrErr) {
-        setSaving(false);
-        router.push(`/dashboard/customers/${data.id}?warn=addresses`);
-        return;
-      }
-    }
+    const { data, error } = await createClient().rpc("save_customer", {
+      p_company_id: companyId,
+      p_customer_id: customer?.id ?? null,
+      p_customer: {
+        customer_type: type,
+        first_name: firstName,
+        last_name: lastName,
+        company_name: type === "commercial" ? companyName : "",
+        notes,
+      },
+      p_phones: filledPhones.map((p) => ({
+        label: p.label.trim() || "Main",
+        country: p.country,
+        dial_code: dialCode(p.country),
+        number: p.number.trim(),
+        is_primary: p.is_primary,
+      })),
+      p_emails: filledEmails.map((x) => ({
+        label: x.label.trim() || "Main",
+        email: x.email.trim().toLowerCase(),
+        is_primary: x.is_primary,
+      })),
+      p_addresses: editing ? null : filledAddresses.map(cleanAddress),
+    });
 
     setSaving(false);
-    router.push(`/dashboard/customers/${data.id}`);
+    if (error || !data) {
+      return setError(editing ? "The changes couldn't be saved. Try again." : "The customer couldn't be saved. Try again.");
+    }
+    router.push(`/dashboard/customers/${data}`);
     router.refresh();
   }
 
@@ -121,13 +126,16 @@ export default function CustomerForm({
   function removeAddress(i: number) {
     setAddresses((list) => {
       const next = list.filter((_, j) => j !== i);
-      if (next.length && !next.some((a) => a.is_primary)) next[0].is_primary = true;
+      if (next.length && !next.some((a) => a.is_primary)) next[0] = { ...next[0], is_primary: true };
       return next;
     });
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="space-y-6">
+    <form onSubmit={handleSubmit} noValidate autoComplete="off" className="space-y-6">
+      {/* Campo trampa: algunos navegadores rellenan el primer campo que encuentran */}
+      <input type="text" tabIndex={-1} aria-hidden="true" autoComplete="off" className="hidden" />
+
       <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
         <h2 className="text-base font-semibold text-[#0b1f3a]">Customer details</h2>
 
@@ -143,44 +151,46 @@ export default function CustomerForm({
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           {type === "commercial" && (
             <div className="sm:col-span-2">
-              <label htmlFor="company" className={labelClass}>Business name</label>
-              <input id="company" value={companyName} autoComplete="off" placeholder="e.g. Oak Lawn Dental Group"
+              <label htmlFor="c-business" className={labelClass}>Business name</label>
+              <input id="c-business" value={companyName} {...noFill("c1")} placeholder="e.g. Oak Lawn Dental Group"
                 onChange={(e) => { setCompanyName(e.target.value); setError(""); }} className={inputClass} />
             </div>
           )}
           <div>
-            <label htmlFor="first" className={labelClass}>
+            <label htmlFor="c-given" className={labelClass}>
               {type === "commercial" ? "Contact first name" : "First name"}
               {type === "commercial" && <span className="font-normal text-slate-400"> (optional)</span>}
             </label>
-            <input id="first" value={firstName} autoComplete="off"
+            <input id="c-given" value={firstName} {...noFill("c2")}
               onChange={(e) => { setFirstName(e.target.value); setError(""); }} className={inputClass} />
           </div>
           <div>
-            <label htmlFor="last" className={labelClass}>
+            <label htmlFor="c-family" className={labelClass}>
               {type === "commercial" ? "Contact last name" : "Last name"}
               {type === "commercial" && <span className="font-normal text-slate-400"> (optional)</span>}
             </label>
-            <input id="last" value={lastName} autoComplete="off"
+            <input id="c-family" value={lastName} {...noFill("c3")}
               onChange={(e) => { setLastName(e.target.value); setError(""); }} className={inputClass} />
           </div>
-          <div>
-            <label htmlFor="phone" className={labelClass}>Phone</label>
-            <input id="phone" type="tel" inputMode="tel" maxLength={14} value={phone} placeholder="(214) 555-0123"
-              onChange={(e) => { setPhone(formatPhone(e.target.value)); setError(""); }} className={inputClass} />
-          </div>
-          <div>
-            <label htmlFor="email" className={labelClass}>Email</label>
-            <input id="email" type="email" value={email} autoComplete="off" placeholder="name@email.com"
-              onChange={(e) => { setEmail(e.target.value); setError(""); }} className={inputClass} />
-          </div>
-          <div className="sm:col-span-2">
-            <label htmlFor="notes" className={labelClass}>
-              Notes <span className="font-normal text-slate-400">(optional)</span>
-            </label>
-            <textarea id="notes" rows={3} value={notes} placeholder="Gate code, pets, best time to call..."
-              onChange={(e) => setNotes(e.target.value)} className={inputClass} />
-          </div>
+        </div>
+
+        <div className="mt-6">
+          <p className={labelClass}>Phone numbers</p>
+          <PhoneList phones={phones} showErrors={showErrors} onChange={(l) => { setPhones(l); setError(""); }} />
+        </div>
+
+        <div className="mt-6">
+          <p className={labelClass}>Emails</p>
+          <p className="-mt-1 mb-2 text-xs text-slate-500">Use labels like Quotes or Invoices to know where each document goes.</p>
+          <EmailList emails={emails} showErrors={showErrors} onChange={(l) => { setEmails(l); setError(""); }} />
+        </div>
+
+        <div className="mt-6">
+          <label htmlFor="c-notes" className={labelClass}>
+            Notes <span className="font-normal text-slate-400">(optional)</span>
+          </label>
+          <textarea id="c-notes" rows={3} value={notes} {...noFill("c4")} placeholder="Gate code, pets, best time to call..."
+            onChange={(e) => setNotes(e.target.value)} className={inputClass} />
         </div>
       </section>
 
@@ -196,7 +206,7 @@ export default function CustomerForm({
                   <p className="text-sm font-semibold text-slate-700">Address {i + 1}</p>
                   <div className="flex items-center gap-4">
                     <label className="flex items-center gap-2 text-sm text-slate-600">
-                      <input type="radio" name="primary" checked={a.is_primary} onChange={() => setPrimary(i)} className="h-4 w-4 accent-[#0f766e]" />
+                      <input type="radio" name="primary-address" checked={a.is_primary} onChange={() => setPrimary(i)} className="h-4 w-4 accent-[#0f766e]" />
                       Primary
                     </label>
                     {addresses.length > 1 && (
@@ -211,7 +221,7 @@ export default function CustomerForm({
             ))}
           </div>
 
-          <button type="button" onClick={() => setAddresses((l) => [...l, { ...EMPTY_ADDRESS }])}
+          <button type="button" onClick={() => setAddresses((l) => [...l, { ...EMPTY_ADDRESS, country: l[l.length - 1]?.country ?? "US" }])}
             className="mt-4 text-sm font-semibold text-[#0f766e] hover:underline">
             + Add another address
           </button>

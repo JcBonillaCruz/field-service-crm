@@ -13,7 +13,7 @@ type Row = {
   customer_type: "residential" | "commercial";
   phone: string | null;
   email: string | null;
-  customer_addresses: { city: string; state: string; zip: string | null; is_primary: boolean }[];
+  customer_addresses: { city: string; state: string | null; zip: string | null; country: string; is_primary: boolean }[];
 };
 
 export default async function CustomersPage({ searchParams }: { searchParams: { q?: string } }) {
@@ -24,7 +24,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: { 
   const q = (searchParams.q ?? "").trim();
   let query = supabase
     .from("customers")
-    .select("id, display_name, customer_type, phone, email, customer_addresses ( city, state, zip, is_primary )")
+    .select("id, display_name, customer_type, phone, email, customer_addresses ( city, state, zip, country, is_primary )")
     .eq("company_id", current.id)
     .eq("is_archived", false)
     .order("display_name")
@@ -33,8 +33,8 @@ export default async function CustomersPage({ searchParams }: { searchParams: { 
   if (q) {
     const safe = q.replace(/[,()%*\\]/g, " ").trim();
     const digits = q.replace(/\D/g, "");
-    const parts = [`display_name.ilike.%${safe}%`, `email.ilike.%${safe}%`];
-    if (digits.length >= 3) parts.push(`phone_digits.like.%${digits}%`);
+    const parts = [`display_name.ilike.%${safe}%`, `contact_search.ilike.%${safe.toLowerCase()}%`];
+    if (digits.length >= 3) parts.push(`contact_search.like.%${digits}%`);
     query = query.or(parts.join(","));
   }
 

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
-import { Address, Customer, canDeleteCustomers, canManageCustomers } from "@/lib/customers";
+import { Address, Customer, canDeleteCustomers, canManageCustomers, phoneDisplay, phoneHref } from "@/lib/customers";
 import Avatar from "@/components/Avatar";
 import AddressManager from "@/components/customers/AddressManager";
 import DeleteCustomerButton from "@/components/customers/DeleteCustomerButton";
@@ -29,18 +29,28 @@ export default async function CustomerPage({
   if (!customer) notFound();
   const c = customer as Customer;
 
-  const { data: addrRows } = await supabase
-    .from("customer_addresses")
-    .select("id, label, street, unit, city, state, zip, is_primary")
-    .eq("customer_id", c.id)
-    .order("is_primary", { ascending: false })
-    .order("created_at");
+  const [{ data: addrRows }, { data: phoneRows }, { data: emailRows }] = await Promise.all([
+    supabase
+      .from("customer_addresses")
+      .select("id, label, street, unit, city, state, zip, country, is_primary")
+      .eq("customer_id", c.id)
+      .order("is_primary", { ascending: false })
+      .order("created_at"),
+    supabase.from("customer_phones").select("id, label, country, dial_code, number, is_primary")
+      .eq("customer_id", c.id).order("position"),
+    supabase.from("customer_emails").select("id, label, email, is_primary")
+      .eq("customer_id", c.id).order("position"),
+  ]);
+  const phones = phoneRows ?? [];
+  const emails = emailRows ?? [];
 
   const addresses = (addrRows ?? []).map((a) => ({
     ...a,
     label: a.label ?? "",
     unit: a.unit ?? "",
     zip: a.zip ?? "",
+    state: a.state ?? "",
+    country: a.country ?? "US",
   })) as (Address & { id: string })[];
 
   const contact = [c.first_name, c.last_name].filter(Boolean).join(" ");
@@ -75,16 +85,30 @@ export default async function CustomerPage({
             <h2 className="text-base font-semibold text-[#0b1f3a]">Contact</h2>
             <dl className="mt-4 space-y-3 text-sm">
               <div>
-                <dt className="text-slate-500">Phone</dt>
-                <dd className="mt-0.5">
-                  {c.phone ? <a href={`tel:${c.phone.replace(/\D/g, "")}`} className="font-medium text-[#0f766e] hover:underline">{c.phone}</a> : <span className="text-slate-400">Not added</span>}
-                </dd>
+                <dt className="text-slate-500">{phones.length > 1 ? "Phones" : "Phone"}</dt>
+                {phones.length === 0 && <dd className="mt-0.5 text-slate-400">Not added</dd>}
+                {phones.map((p) => (
+                  <dd key={p.id} className="mt-1 flex flex-wrap items-center gap-x-2">
+                    <a href={phoneHref(p)} className="font-medium text-[#0f766e] hover:underline">{phoneDisplay(p)}</a>
+                    <span className="text-xs text-slate-500">{p.label}</span>
+                    {p.is_primary && phones.length > 1 && (
+                      <span className="rounded-full bg-[#d6f3ec] px-2 py-0.5 text-[11px] font-medium text-[#0f766e]">Primary</span>
+                    )}
+                  </dd>
+                ))}
               </div>
               <div>
-                <dt className="text-slate-500">Email</dt>
-                <dd className="mt-0.5 break-all">
-                  {c.email ? <a href={`mailto:${c.email}`} className="font-medium text-[#0f766e] hover:underline">{c.email}</a> : <span className="text-slate-400">Not added</span>}
-                </dd>
+                <dt className="text-slate-500">{emails.length > 1 ? "Emails" : "Email"}</dt>
+                {emails.length === 0 && <dd className="mt-0.5 text-slate-400">Not added</dd>}
+                {emails.map((e) => (
+                  <dd key={e.id} className="mt-1 flex flex-wrap items-center gap-x-2">
+                    <a href={`mailto:${e.email}`} className="break-all font-medium text-[#0f766e] hover:underline">{e.email}</a>
+                    <span className="text-xs text-slate-500">{e.label}</span>
+                    {e.is_primary && emails.length > 1 && (
+                      <span className="rounded-full bg-[#d6f3ec] px-2 py-0.5 text-[11px] font-medium text-[#0f766e]">Primary</span>
+                    )}
+                  </dd>
+                ))}
               </div>
               <div>
                 <dt className="text-slate-500">Customer since</dt>
