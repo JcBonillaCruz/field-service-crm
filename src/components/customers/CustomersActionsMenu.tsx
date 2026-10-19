@@ -47,15 +47,15 @@ export default function CustomersActionsMenu({
   basePath,
   canImport,
   canExport,
-  exportQuery,
+  onExport,
   submenuSide = "left",
 }: {
   params: ListParams;
   basePath: string;        // la ruta actual, para no perder el cliente abierto
   canImport: boolean;
   canExport: boolean;
-  exportQuery: string;     // query para "exportar vista actual"
-  submenuSide?: "left" | "right"; // hacia dónde abrir los submenús
+  onExport: () => void;    // abre el pop-up de exportar
+  submenuSide?: "left" | "right";
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -126,14 +126,10 @@ export default function CustomersActionsMenu({
           {canExport && (
             <Flyout side={submenuSide} icon="M10 13V3m0 0L6 7m4-4 4 4M4 15v1a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-1" label="Export">
               <p className={heading}>Export</p>
-              <a href="/dashboard/customers/export" download className={row} onClick={() => setOpen(false)}>
+              <button type="button" onClick={() => { onExport(); setOpen(false); }} className={row}>
                 <Ico d="M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
-                Export all customers
-              </a>
-              <a href={`/dashboard/customers/export${exportQuery ? exportQuery + "&" : "?"}scope=view`} download className={row} onClick={() => setOpen(false)}>
-                <Ico d="M3 5h14M6 10h8m-5 5h2" />
-                Export current view
-              </a>
+                Export customers…
+              </button>
             </Flyout>
           )}
 

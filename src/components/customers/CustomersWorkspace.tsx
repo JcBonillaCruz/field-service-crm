@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import Avatar from "@/components/Avatar";
 import CustomersActionsMenu from "@/components/customers/CustomersActionsMenu";
 import SearchBox from "@/components/customers/SearchBox";
+import ExportModal from "@/components/customers/ExportModal";
 import { cityLine } from "@/lib/customers";
 import { ListRow, VIEWS, filterSortCustomers, readListParams } from "@/lib/customer-list";
 
@@ -27,6 +28,7 @@ export default function CustomersWorkspace({
   const pathname = usePathname();
   const router = useRouter();
   const sp = useSearchParams();
+  const [exportOpen, setExportOpen] = useState(false);
 
   // IMPORTANTE: todos los hooks (incluido useMemo) van antes de cualquier return,
   // o React se rompe al cambiar entre la lista y el formulario.
@@ -42,15 +44,6 @@ export default function CustomersWorkspace({
   const view = VIEWS.find((v) => v.value === params.view) ?? VIEWS[0];
   const filtered = Boolean(params.q) || params.view !== "all";
 
-  const exportQuery = (() => {
-    const q = new URLSearchParams();
-    if (params.q) q.set("q", params.q);
-    if (params.view !== "all") q.set("view", params.view);
-    if (params.sort !== "name") q.set("sort", params.sort);
-    if (params.dir === "desc") q.set("dir", "desc");
-    const s = q.toString();
-    return s ? `?${s}` : "";
-  })();
 
   function switchView(value: string) {
     const q = new URLSearchParams(sp.toString());
@@ -108,7 +101,7 @@ export default function CustomersWorkspace({
                 <Link href="/dashboard/customers/new"
                   className="rounded-lg bg-[#0f766e] px-4 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f58]">+ New</Link>
               )}
-              <CustomersActionsMenu params={params} basePath={pathname} canImport={canImport} canExport={canExport} exportQuery={exportQuery} submenuSide={selectedId ? "right" : "left"} />
+              <CustomersActionsMenu params={params} basePath={pathname} canImport={canImport} canExport={canExport} onExport={() => setExportOpen(true)} submenuSide={selectedId ? "right" : "left"} />
             </div>
           </div>
 
@@ -144,6 +137,8 @@ export default function CustomersWorkspace({
       <div className={detailPane}>
         <div className="min-h-0 flex-1 lg:overflow-y-auto">{children}</div>
       </div>
+
+      <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} />
     </div>
   );
 }
