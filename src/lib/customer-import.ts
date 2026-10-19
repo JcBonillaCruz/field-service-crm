@@ -176,7 +176,8 @@ function parseState(country: string, v: string) {
 const DIALS = COUNTRIES.filter((c) => c.dial).sort((a, b) => b.dial.length - a.dial.length);
 
 function parsePhone(v: string) {
-  const t = v.trim();
+  // Zoho antepone un apóstrofo y usa guion (p. ej. '+1-9404844444)
+  const t = v.trim().replace(/^'+/, "").trim();
   if (!t) return null;
   if (t.startsWith("+") || t.startsWith("00")) {
     const digits = t.replace(/\D/g, "").replace(/^00/, "");

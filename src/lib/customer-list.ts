@@ -55,3 +55,45 @@ export function customerListQuery(supabase: SupabaseClient, companyId: string, p
   if (column !== "display_name") query = query.order("display_name");
   return query;
 }
+
+// ----- Filtro y orden del lado del cliente (para la lista con pantallas divididas) -----
+export type ListRow = {
+  id: string;
+  display_name: string;
+  customer_type: "residential" | "commercial";
+  company_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  email: string | null;
+  contact_search: string | null;
+  created_at: string;
+  customer_addresses: { city: string; state: string | null; country: string; is_primary: boolean }[];
+};
+
+const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+export function filterSortCustomers(list: ListRow[], p: ListParams): ListRow[] {
+  let out = list;
+  if (p.view === "residential" || p.view === "commercial") out = out.filter((c) => c.customer_type === p.view);
+
+  if (p.q) {
+    const ql = fold(p.q);
+    const digits = p.q.replace(/\D/g, "");
+    out = out.filter((c) => {
+      const blob = `${fold(c.display_name)} ${c.contact_search ?? ""} ${fold(c.company_name ?? "")}`;
+      if (blob.includes(ql)) return true;
+      if (digits.length >= 3 && (c.contact_search ?? "").includes(digits)) return true;
+      return false;
+    });
+  }
+
+  const column = SORTS.find((s) => s.value === p.sort)!.column as keyof ListRow;
+  const factor = p.dir === "asc" ? 1 : -1;
+  return [...out].sort((a, b) => {
+    const av = (a[column] ?? "") as string;
+    const bv = (b[column] ?? "") as string;
+    const cmp = column === "created_at" ? av.localeCompare(bv) : fold(av).localeCompare(fold(bv));
+    return (cmp || fold(a.display_name).localeCompare(fold(b.display_name))) * factor;
+  });
+}
