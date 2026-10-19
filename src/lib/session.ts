@@ -26,7 +26,7 @@ export const getSession = cache(async () => {
   const companies: CompanySummary[] = ((rows ?? []) as unknown as Row[])
     .filter((r) => r.companies)
     .sort((a, b) => a.companies!.created_at.localeCompare(b.companies!.created_at))
-    .map((r) => ({ id: r.companies!.id, name: r.companies!.name, industry: r.companies!.industry, role: r.role }));
+    .map((r) => ({ id: r.companies!.id, name: r.companies!.name, industry: r.companies!.industry, role: r.role, createdAt: r.companies!.created_at }));
 
   const saved = cookies().get(COMPANY_COOKIE)?.value;
   const current = companies.find((c) => c.id === saved) ?? companies[0] ?? null;

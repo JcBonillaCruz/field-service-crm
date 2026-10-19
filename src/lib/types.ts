@@ -5,6 +5,7 @@ export type CompanySummary = {
   name: string;
   industry: string | null;
   role: Role;
+  createdAt: string;
 };
 
 export type CurrentUser = {
