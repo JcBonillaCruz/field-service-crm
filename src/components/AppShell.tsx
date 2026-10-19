@@ -12,24 +12,25 @@ import { CompanySummary, CurrentUser, Role } from "@/lib/types";
 type NavItem = {
   label: string;
   href?: string;
+  addHref?: string; // botón "+" para crear directo desde el menú
   icon: string;
   roles?: Role[];
 };
 
-// "roles": quién ve cada opción. Sin "roles", la ven todos.
+// Íconos de línea (24 px). "roles": quién ve cada opción. Sin "roles", la ven todos.
 const NAV: NavItem[] = [
-  { label: "Home", href: "/dashboard", icon: "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" },
-  { label: "Customers", href: "/dashboard/customers", icon: "M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM22 19v-1a4 4 0 0 0-3-3.9M16 4.1a3 3 0 0 1 0 5.8", roles: ["owner", "manager", "office"] },
-  { label: "Quotes & contracts", icon: "M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8zM14 3v5h5M9 13h6M9 17h4", roles: ["owner", "manager", "office"] },
-  { label: "Invoices", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3", roles: ["owner", "manager", "office"] },
-  { label: "Payments", icon: "M3 7h18v10H3zM3 11h18M7 15h2", roles: ["owner", "manager"] },
-  { label: "Jobs", icon: "M9 6V4h6v2M4 6h16v13H4zM4 12h16", },
-  { label: "Dispatch", icon: "M4 5h16v15H4zM4 9h16M8 3v4M16 3v4", roles: ["owner", "manager", "office"] },
-  { label: "Van inventory", icon: "M3 7h11v9H3zM14 10h4l3 3v3h-7zM7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM17 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" },
-  { label: "Time tracking", icon: "M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 9v4l2.5 2M9 2h6" },
-  { label: "Reports", icon: "M4 20V10M10 20V4M16 20v-7M22 20H2", roles: ["owner", "manager"] },
-  { label: "Team", icon: "M17 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M10 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM20 8v6M23 11h-6", roles: ["owner", "manager"] },
-  { label: "Settings", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z", roles: ["owner", "manager"] },
+  { label: "Home", href: "/dashboard", icon: "M4 10.2 12 4l8 6.2V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z" },
+  { label: "Customers", href: "/dashboard/customers", addHref: "/dashboard/customers/new", icon: "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2.5 20a6.5 6.5 0 0 1 13 0M16 4.3a3.5 3.5 0 0 1 0 6.4M18.5 14.2a6.5 6.5 0 0 1 3 5.8", roles: ["owner", "manager", "office"] },
+  { label: "Quotes & contracts", icon: "M13.5 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4.5M13.5 3 19 8.5M13.5 3v5.5H19M9 12.5h5M9 16h2.5M15 21l5-5-1.8-1.8-5 5V21z", roles: ["owner", "manager", "office"] },
+  { label: "Invoices", icon: "M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4L6 21zM14.5 8.2c-.4-.7-1.3-1.1-2.5-1.1-1.4 0-2.5.6-2.5 1.6s1.1 1.4 2.5 1.7 2.5.7 2.5 1.7-1.1 1.7-2.5 1.7c-1.2 0-2.1-.4-2.5-1.1M12 5.8v10", roles: ["owner", "manager", "office"] },
+  { label: "Payments", icon: "M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 10h18M7 15h3", roles: ["owner", "manager"] },
+  { label: "Jobs", icon: "M14.7 6.3a4 4 0 0 0-5.4 5.2l-5.8 5.8a1.8 1.8 0 0 0 2.6 2.6l5.8-5.8a4 4 0 0 0 5.2-5.4l-2.5 2.5-2.4-.4-.4-2.4z" },
+  { label: "Dispatch", icon: "M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 1 1 13 0c0 5.4-6.5 11-6.5 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z", roles: ["owner", "manager", "office"] },
+  { label: "Van inventory", icon: "M2.5 7a1 1 0 0 1 1-1h10v10.5h-11zM13.5 9.5h4l3 3.5v3.5h-7zM7 19.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM17 19.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" },
+  { label: "Time tracking", icon: "M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 9v4l2.5 1.5M10 2.5h4M18.5 6.2l1.5-1.5" },
+  { label: "Reports", icon: "M4 4v16h16M8.5 16v-4M12.5 16V8M16.5 16v-6", roles: ["owner", "manager"] },
+  { label: "Team", icon: "M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6", roles: ["owner", "manager"] },
+  { label: "Settings", icon: "M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1M15 5v4M9 10v4M17 15v4", roles: ["owner", "manager"] },
 ];
 
 function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => void }) {
@@ -43,16 +44,16 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
           const active = item.href && (item.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(item.href));
           const content = (
             <>
-              <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 group-hover:animate-[bp-nav-pop_0.5s_ease-out_forwards]" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d={item.icon} />
               </svg>
               <span className="min-w-0 flex-1 truncate">{item.label}</span>
               {!item.href && <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-400">Soon</span>}
             </>
           );
-          const base = "flex items-center gap-3 rounded-lg px-3 py-2.5 text-[15px]";
+          const base = `flex items-center gap-3 rounded-lg px-3 py-2.5 text-[15px] ${item.addHref ? "pr-11" : ""}`;
           return (
-            <li key={item.label}>
+            <li key={item.label} className="group relative">
               {item.href ? (
                 <Link href={item.href} onClick={onNavigate}
                   className={`${base} ${active ? "bg-[#e9f7f4] font-semibold text-[#0f766e]" : "text-slate-700 hover:bg-slate-50"}`}>
@@ -60,6 +61,12 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
                 </Link>
               ) : (
                 <span className={`${base} cursor-default text-slate-400`} aria-disabled="true">{content}</span>
+              )}
+              {item.addHref && (
+                <Link href={item.addHref} onClick={onNavigate} aria-label={`New ${item.label.toLowerCase().replace(/s$/, "")}`} title="Create new"
+                  className={`absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-[#0f766e] transition-all hover:bg-[#0f766e] hover:text-white focus:opacity-100 ${active ? "bg-white/70" : "lg:opacity-0 lg:group-hover:opacity-100"}`}>
+                  <svg viewBox="0 0 20 20" className="h-4 w-4 transition-transform duration-200 hover:rotate-90" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11" /></svg>
+                </Link>
               )}
             </li>
           );

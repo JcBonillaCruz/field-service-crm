@@ -40,7 +40,32 @@ export type Customer = {
   phone: string | null;
   notes: string | null;
   created_at: string;
+  // Paso 3.21 (requieren el SQL nuevo; si faltan se usan los valores por defecto)
+  language?: string | null;
+  currency?: string | null;
+  payment_terms?: string | null;
+  portal_enabled?: boolean | null;
 };
+
+export const LANGUAGES = ["English", "Spanish", "Portuguese", "French", "Vietnamese", "Chinese", "Korean", "Arabic", "Hindi", "Tagalog", "Russian", "German"];
+
+export const CURRENCIES = [
+  { value: "USD", label: "USD - United States Dollar" },
+  { value: "MXN", label: "MXN - Mexican Peso" },
+  { value: "CAD", label: "CAD - Canadian Dollar" },
+  { value: "EUR", label: "EUR - Euro" },
+  { value: "GBP", label: "GBP - Pound Sterling" },
+  { value: "AUD", label: "AUD - Australian Dollar" },
+  { value: "COP", label: "COP - Colombian Peso" },
+  { value: "GTQ", label: "GTQ - Guatemalan Quetzal" },
+  { value: "HNL", label: "HNL - Honduran Lempira" },
+  { value: "DOP", label: "DOP - Dominican Peso" },
+  { value: "BRL", label: "BRL - Brazilian Real" },
+  { value: "INR", label: "INR - Indian Rupee" },
+  { value: "JPY", label: "JPY - Japanese Yen" },
+];
+
+export const PAYMENT_TERMS = ["Due on Receipt", "Net 15", "Net 30", "Net 45", "Net 60", "Due end of the month", "Due end of next month"];
 
 export const SALUTATIONS = ["Mr.", "Mrs.", "Ms.", "Miss", "Dr.", "Mx.", "Prof."];
 

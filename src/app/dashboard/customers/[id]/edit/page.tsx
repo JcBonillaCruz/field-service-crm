@@ -12,7 +12,7 @@ export default async function EditCustomerPage({ params }: { params: { id: strin
 
   const { data } = await supabase
     .from("customers")
-    .select("id, customer_type, salutation, first_name, last_name, company_name, display_name, email, phone, notes, created_at")
+    .select("*")
     .eq("id", params.id)
     .eq("company_id", current.id)
     .maybeSingle();
@@ -25,11 +25,15 @@ export default async function EditCustomerPage({ params }: { params: { id: strin
   ]);
 
   return (
-    <section className="mx-auto max-w-3xl px-5 py-8 sm:px-8 sm:py-10">
-      <Link href={`/dashboard/customers/${c.id}`} className="text-sm font-medium text-slate-500 hover:text-slate-800">&larr; {c.display_name}</Link>
-      <h1 className="mb-6 mt-3 text-2xl font-semibold tracking-tight text-[#0b1f3a] sm:text-3xl">Edit customer</h1>
+    <section className="min-h-[calc(100vh-4rem)] bg-white">
+      <div className="border-b border-slate-200 px-5 py-5 sm:px-8">
+        <Link href={`/dashboard/customers/${c.id}`} className="text-sm font-medium text-slate-500 hover:text-slate-800">&larr; {c.display_name}</Link>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-[#0b1f3a]">Edit Customer</h1>
+      </div>
+      <div className="px-5 pt-6 sm:px-8">
       <CustomerForm companyId={current.id} customer={c}
         initialPhones={(phoneRows ?? []) as Phone[]} initialEmails={(emailRows ?? []) as Email[]} />
+      </div>
     </section>
   );
 }

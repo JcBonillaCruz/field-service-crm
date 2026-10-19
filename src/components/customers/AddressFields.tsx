@@ -10,10 +10,12 @@ export default function AddressFields({
   value,
   onChange,
   idPrefix,
+  hideLabel = false,
 }: {
   value: Address;
   onChange: (a: Address) => void;
   idPrefix: string;
+  hideLabel?: boolean;
 }) {
   const noFill = useNoFill();
   const states = subdivisions(value.country);
@@ -22,14 +24,14 @@ export default function AddressFields({
 
   return (
     <div className="grid gap-3 sm:grid-cols-6">
-      <div className="sm:col-span-3">
+      {!hideLabel && <div className="sm:col-span-3">
         <label htmlFor={`${idPrefix}-label`} className={labelClass}>
           Name for this address <span className="font-normal text-slate-400">(optional)</span>
         </label>
         <input id={`${idPrefix}-label`} value={value.label} onChange={set("label")} {...noFill(`${idPrefix}-a1`)}
           placeholder="e.g. Home, Main office, Store #2" className={inputClass} />
-      </div>
-      <div className="sm:col-span-3">
+      </div>}
+      <div className={hideLabel ? "sm:col-span-6" : "sm:col-span-3"}>
         <label htmlFor={`${idPrefix}-country`} className={labelClass}>Country</label>
         <CountrySelect id={`${idPrefix}-country`} value={value.country}
           onChange={(country) => onChange({ ...value, country, state: country === value.country ? value.state : "", zip: cleanPostal(country, value.zip) })} />

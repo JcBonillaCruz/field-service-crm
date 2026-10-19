@@ -11,11 +11,14 @@ export default async function NewCustomerPage() {
   if (!canManageCustomers(current.role)) return <NoAccess />;
 
   return (
-    <section className="mx-auto max-w-3xl px-5 py-8 sm:px-8 sm:py-10">
-      <Link href="/dashboard/customers" className="text-sm font-medium text-slate-500 hover:text-slate-800">&larr; Customers</Link>
-      <h1 className="mt-3 text-2xl font-semibold tracking-tight text-[#0b1f3a] sm:text-3xl">New customer</h1>
-      <p className="mb-6 mt-1 text-slate-500">For {current.name}</p>
-      <CustomerForm companyId={current.id} />
+    <section className="min-h-[calc(100vh-4rem)] bg-white">
+      <div className="border-b border-slate-200 px-5 py-5 sm:px-8">
+        <Link href="/dashboard/customers" className="text-sm font-medium text-slate-500 hover:text-slate-800">&larr; Customers</Link>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-[#0b1f3a]">New Customer</h1>
+      </div>
+      <div className="px-5 pt-6 sm:px-8">
+        <CustomerForm companyId={current.id} />
+      </div>
     </section>
   );
 }

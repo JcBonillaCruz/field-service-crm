@@ -10,6 +10,7 @@
 /* Dashboard de computadora: animación de gráficas y encabezado de tarjetas pequeñas */
 @keyframes bp-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 @keyframes bp-line { to { stroke-dashoffset: 0; } }
+@keyframes bp-nav-pop { 0% { transform: none; } 35% { transform: translateY(-2px) rotate(-10deg) scale(1.15); } 65% { transform: rotate(6deg) scale(1.1); } 100% { transform: scale(1.08); } }
 @keyframes bp-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .bp-bar { transform-box: fill-box; transform-origin: 50% 100%; animation: bp-grow 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 .bp-line { stroke-dasharray: 1; stroke-dashoffset: 1; animation: bp-line 1s ease-out forwards; }
