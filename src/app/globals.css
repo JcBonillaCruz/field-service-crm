@@ -7,6 +7,19 @@
   outline-offset: 2px;
 }
 
+/* Dashboard de computadora: animación de gráficas y encabezado de tarjetas pequeñas */
+@keyframes bp-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes bp-line { to { stroke-dashoffset: 0; } }
+@keyframes bp-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.bp-bar { transform-box: fill-box; transform-origin: 50% 100%; animation: bp-grow 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.bp-line { stroke-dasharray: 1; stroke-dashoffset: 1; animation: bp-line 1s ease-out forwards; }
+.bp-mini { container-type: inline-size; }
+.bp-mini-head { flex-direction: column; align-items: flex-start; justify-content: center; }
+@container (min-width: 340px) {
+  .bp-mini-head { flex-direction: row; align-items: center; justify-content: space-between; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
+  .bp-line { stroke-dasharray: none; stroke-dashoffset: 0; }
 }

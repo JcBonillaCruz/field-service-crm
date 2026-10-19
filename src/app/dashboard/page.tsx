@@ -1,11 +1,12 @@
 import CreateCompanyForm from "@/components/CreateCompanyForm";
 import { getSession } from "@/lib/session";
-import Dashboard from "@/components/dashboard/Dashboard";
+import Dashboard from "@/components/dashboard/Dashboard"; // celular (sin cambios)
+import DesktopDashboard from "@/components/dashboard/DesktopDashboard"; // computadora
 
 const TRIAL_DAYS = 14;
 
-export default async function DashboardPage() {
-  const { supabase, current, firstName } = await getSession();
+export default async function DashboardPage({ searchParams }: { searchParams?: { demo?: string } }) {
+  const { supabase, current, firstName, companies } = await getSession();
 
   if (!current) {
     return (
@@ -36,13 +37,28 @@ export default async function DashboardPage() {
   const daysLeft = Math.max(0, TRIAL_DAYS - Math.floor((Date.now() - new Date(current.createdAt).getTime()) / 86400000));
 
   return (
-    <Dashboard
-      firstName={firstName ?? "there"}
-      companyName={current.name}
-      industry={current.industry ?? "Business"}
-      role={current.role}
-      counts={counts}
-      daysLeft={daysLeft}
-    />
+    <>
+      {/* Celular y tablet: diseño móvil (igual que antes) */}
+      <div className="lg:hidden">
+        <Dashboard
+          firstName={firstName ?? "there"}
+          companyName={current.name}
+          industry={current.industry ?? "Business"}
+          role={current.role}
+          counts={counts}
+          daysLeft={daysLeft}
+        />
+      </div>
+      {/* Computadora (1024 px o más): diseño tipo Zoho. Con ?demo=1 muestra datos de ejemplo */}
+      <div className="hidden lg:block">
+        <DesktopDashboard
+          firstName={firstName || "there"}
+          companyId={current.id}
+          companyName={current.name}
+          companyIndex={Math.max(0, companies.indexOf(current))}
+          demo={searchParams?.demo === "1"}
+        />
+      </div>
+    </>
   );
 }
