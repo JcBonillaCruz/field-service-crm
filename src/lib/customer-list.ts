@@ -94,13 +94,13 @@ export function filterSortCustomers(list: ListRow[], p: ListParams): ListRow[] {
   else if (p.view === "missing-email") out = out.filter((c) => !c.email);
   else if (p.view === "missing-address") out = out.filter((c) => c.customer_addresses.length === 0);
 
-  if (p.q) {
-    const ql = fold(p.q);
+  if (p.q.trim()) {
+    const terms = fold(p.q).split(/\s+/).filter(Boolean);
     const digits = p.q.replace(/\D/g, "");
     out = out.filter((c) => {
-      const blob = `${fold(c.display_name)} ${c.contact_search ?? ""} ${fold(c.company_name ?? "")}`;
-      if (blob.includes(ql)) return true;
-      if (digits.length >= 3 && (c.contact_search ?? "").includes(digits)) return true;
+      const blob = `${fold(c.display_name)} ${fold(c.first_name ?? "")} ${fold(c.last_name ?? "")} ${fold(c.company_name ?? "")} ${c.contact_search ?? ""}`;
+      if (terms.every((t) => blob.includes(t))) return true;              // todas las palabras
+      if (digits.length >= 3 && (c.contact_search ?? "").includes(digits)) return true;  // o por teléfono
       return false;
     });
   }

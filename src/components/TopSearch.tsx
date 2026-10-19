@@ -49,6 +49,16 @@ export default function TopSearch() {
     return () => document.removeEventListener("mousedown", onDown);
   }, [menuOpen]);
 
+  function clearSearch() {
+    setQ("");
+    if (onCustomers) {
+      const params = new URLSearchParams(sp.toString());
+      params.delete("q");
+      const qs = params.toString();
+      router.replace(`/dashboard/customers${qs ? `?${qs}` : ""}`, { scroll: false });
+    }
+  }
+
   return (
     <div ref={wrapRef} className={`relative transition-all duration-300 ease-out ${focused ? "w-[30rem]" : "w-[22rem]"}`}>
       <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 focus-within:border-[#0f766e] focus-within:bg-white focus-within:ring-4 focus-within:ring-[#14a39a]/15">
@@ -61,22 +71,16 @@ export default function TopSearch() {
         <input
           name={`${seed}-search`} autoComplete="off" data-lpignore="true" data-1p-ignore="true" data-form-type="other"
           value={q} onChange={(e) => setQ(e.target.value)} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              setQ("");
-              if (onCustomers) {
-                const params = new URLSearchParams(sp.toString());
-                params.delete("q");
-                const qs = params.toString();
-                router.replace(`/dashboard/customers${qs ? `?${qs}` : ""}`, { scroll: false });
-              }
-              (e.target as HTMLInputElement).blur();
-            }
-          }}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); } }}
           placeholder={`Search in ${module}`} aria-label={`Search in ${module}`}
-          className="w-full bg-transparent py-2 pr-3 text-sm placeholder:text-slate-400 focus:outline-none"
+          className="w-full bg-transparent py-2 pr-1 text-sm placeholder:text-slate-400 focus:outline-none"
         />
+        {q && (
+          <button type="button" aria-label="Clear search" onClick={clearSearch}
+            className="mr-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
+          </button>
+        )}
       </div>
 
       {menuOpen && (
