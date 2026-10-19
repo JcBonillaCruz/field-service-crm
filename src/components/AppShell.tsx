@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
+import ProfilePanel from "@/components/ProfilePanel";
 import Avatar from "@/components/Avatar";
 import { CompanySummary, CurrentUser, Role } from "@/lib/types";
 
@@ -80,6 +81,7 @@ export default function AppShell({
   children: React.ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const pathname = usePathname();
   const role = companies.find((c) => c.id === currentId)?.role ?? null;
 
@@ -113,19 +115,22 @@ export default function AppShell({
                 </svg>
               </button>
             </div>
-            <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
+            <button type="button" onClick={() => { setMenuOpen(false); setProfileOpen(true); }}
+              className="flex w-full items-center gap-3 border-b border-slate-100 px-5 py-4 text-left hover:bg-slate-50">
               <Avatar name={user.fullName || user.email} url={user.avatarUrl} seed={user.id} size={44} />
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold text-[#0b1f3a]">{user.fullName || "Your name"}</p>
                 <p className="truncate text-sm text-slate-500">{user.email}</p>
               </div>
-            </div>
+              <svg viewBox="0 0 20 20" className="h-5 w-5 shrink-0 text-slate-300" fill="currentColor"><path d="M7.5 5 12.5 10l-5 5" /></svg>
+            </button>
             <NavList role={role} onNavigate={() => setMenuOpen(false)} />
           </aside>
         </div>
       )}
 
-      <AppHeader user={user} companies={companies} currentId={currentId} onMenu={() => setMenuOpen(true)} />
+      <AppHeader user={user} companies={companies} currentId={currentId} onMenu={() => setMenuOpen(true)} onOpenProfile={() => setProfileOpen(true)} />
+      <ProfilePanel user={user} companies={companies} currentId={currentId} open={profileOpen} onClose={() => setProfileOpen(false)} />
       <main>{children}</main>
     </div>
   );
