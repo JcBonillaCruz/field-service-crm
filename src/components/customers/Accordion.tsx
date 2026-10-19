@@ -37,9 +37,10 @@ export default function Accordion({
 export function PencilLink({ href, label = "Edit" }: { href: string; label?: string }) {
   return (
     <a href={href} aria-label={label} title={label}
-      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-[#0f766e]">
-      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
-        <path d="M4 13.5V16h2.5l7-7L11 6.5zM12.5 5l2.5 2.5" strokeLinecap="round" strokeLinejoin="round" />
+      className="group/edit flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-400 transition-all duration-200 ease-out hover:scale-110 hover:bg-[#e9f7f4] hover:text-[#0f766e]">
+      <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] transition-transform duration-200 group-hover/edit:-rotate-12" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <path d="M12 20h9" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     </a>
   );

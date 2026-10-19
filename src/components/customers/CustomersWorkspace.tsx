@@ -28,15 +28,17 @@ export default function CustomersWorkspace({
   const router = useRouter();
   const sp = useSearchParams();
 
-  // Las pantallas de formulario ocupan todo (no llevan lista al lado)
-  const isForm = pathname.endsWith("/new") || pathname.endsWith("/import") || pathname.endsWith("/edit");
-  if (isForm) return <>{children}</>;
-
+  // IMPORTANTE: todos los hooks (incluido useMemo) van antes de cualquier return,
+  // o React se rompe al cambiar entre la lista y el formulario.
   const m = pathname.match(/^\/dashboard\/customers\/([^/]+)$/);
-  const selectedId = m && m[1] !== "new" && m[1] !== "import" ? m[1] : null;
+  const selectedId = m && m[1] !== "new" && m[1] !== "import" && m[1] !== "edit" ? m[1] : null;
 
   const params = readListParams(Object.fromEntries(sp.entries()));
   const list = useMemo(() => filterSortCustomers(customers, params), [customers, params]);
+
+  // Las pantallas de formulario ocupan todo (no llevan lista al lado)
+  const isForm = pathname.endsWith("/new") || pathname.endsWith("/import") || pathname.endsWith("/edit");
+  if (isForm) return <>{children}</>;
   const view = VIEWS.find((v) => v.value === params.view) ?? VIEWS[0];
   const filtered = Boolean(params.q) || params.view !== "all";
 
@@ -200,9 +202,10 @@ function WideRow({ c }: { c: ListRow }) {
 function QuickEdit({ id, name, className }: { id: string; name: string; className: string }) {
   return (
     <Link href={`/dashboard/customers/${id}/edit`} aria-label={`Edit ${name}`} title="Edit"
-      className={`absolute top-1/2 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 opacity-0 shadow-sm transition-opacity hover:text-[#0f766e] focus:opacity-100 group-hover:opacity-100 md:flex ${className}`}>
-      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
-        <path d="M4 13.5V16h2.5l7-7L11 6.5zM12.5 5l2.5 2.5" strokeLinecap="round" strokeLinejoin="round" />
+      className={`group/edit absolute top-1/2 hidden h-9 w-9 -translate-y-1/2 scale-90 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 opacity-0 shadow-sm transition-all duration-200 ease-out hover:scale-110 hover:border-[#14a39a] hover:bg-[#e9f7f4] hover:text-[#0f766e] hover:shadow-md focus-visible:opacity-100 group-hover:scale-100 group-hover:opacity-100 md:flex ${className}`}>
+      <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] transition-transform duration-200 group-hover/edit:-rotate-12" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <path d="M12 20h9" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     </Link>
   );
