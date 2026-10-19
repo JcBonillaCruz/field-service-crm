@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "@headlessui/react";
+import DatePicker from "@/components/ui/DatePicker";
 
 // Módulos que tendrá el export (solo Customers funciona hoy; el resto llega después)
 const MODULE_GROUPS: { group: string; items: string[] }[] = [
@@ -177,8 +179,8 @@ export default function ExportModal({ open, onClose }: { open: boolean; onClose:
             </div>
             {records === "period" && (
               <div className="mt-3 grid grid-cols-2 gap-3">
-                <div><Label>From</Label><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={inputClass} /></div>
-                <div><Label>To</Label><input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={inputClass} /></div>
+                <div><Label>From</Label><DatePicker value={from} onChange={setFrom} /></div>
+                <div><Label>To</Label><DatePicker value={to} onChange={setTo} /></div>
               </div>
             )}
           </div>
@@ -186,9 +188,21 @@ export default function ExportModal({ open, onClose }: { open: boolean; onClose:
           {/* Formato decimal */}
           <div className="mb-5">
             <Label req>Decimal format</Label>
-            <select value={decimal} onChange={(e) => setDecimal(e.target.value)} className={inputClass}>
-              {DECIMALS.map((d) => <option key={d} value={d}>{d}</option>)}
-            </select>
+            <Listbox value={decimal} onChange={setDecimal}>
+              <ListboxButton className={`${inputClass} flex items-center justify-between text-left data-[open]:border-[#0f766e] data-[open]:bg-white`}>
+                {decimal}
+                <svg viewBox="0 0 20 20" className="h-5 w-5 text-slate-400" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
+              </ListboxButton>
+              <ListboxOptions anchor="bottom start" transition
+                className="z-[90] mt-1 w-[var(--button-width)] origin-top rounded-xl border border-slate-200 bg-white py-1 shadow-[0_12px_40px_rgba(15,40,60,0.18)] transition duration-150 ease-out focus:outline-none data-[closed]:scale-95 data-[closed]:opacity-0">
+                {DECIMALS.map((d) => (
+                  <ListboxOption key={d} value={d} className="group flex cursor-pointer items-center justify-between px-4 py-2 text-sm text-slate-700 data-[focus]:bg-[#f0faf7] data-[focus]:text-[#0b1f3a]">
+                    <span>{d}</span>
+                    <svg viewBox="0 0 20 20" className="invisible h-4 w-4 text-[#0f766e] group-data-[selected]:visible" fill="currentColor"><path d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0z" /></svg>
+                  </ListboxOption>
+                ))}
+              </ListboxOptions>
+            </Listbox>
             <p className="mt-1 text-xs text-slate-400">Applies to amount columns (invoices, payments…) when those modules are ready.</p>
           </div>
 

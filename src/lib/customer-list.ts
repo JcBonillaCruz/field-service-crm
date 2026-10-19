@@ -7,6 +7,20 @@ export const VIEWS = [
   { value: "commercial", label: "Commercial" },
 ] as const;
 
+// Filtros extra que aparecen SOLO en móvil (el escritorio mantiene VIEWS)
+export const MOBILE_FILTERS = [
+  { value: "all", label: "All customers" },
+  { value: "residential", label: "Residential" },
+  { value: "commercial", label: "Commercial" },
+  { value: "missing-phone", label: "Missing phone" },
+  { value: "missing-email", label: "Missing email" },
+  { value: "missing-address", label: "Missing address" },
+] as const;
+
+export function filterLabel(v: string) {
+  return MOBILE_FILTERS.find((f) => f.value === v)?.label ?? "All customers";
+}
+
 export const SORTS = [
   { value: "name", label: "Name", column: "display_name" },
   { value: "company", label: "Company name", column: "company_name" },
@@ -17,7 +31,7 @@ export const SORTS = [
 export type ListParams = { q: string; view: string; sort: string; dir: "asc" | "desc" };
 
 export function readListParams(sp: Record<string, string | undefined>): ListParams {
-  const view = VIEWS.some((v) => v.value === sp.view) ? sp.view! : "all";
+  const view = MOBILE_FILTERS.some((v) => v.value === sp.view) ? sp.view! : "all";
   const sort = SORTS.some((s) => s.value === sp.sort) ? sp.sort! : "name";
   const dir = sp.dir === "desc" ? "desc" : "asc";
   return { q: (sp.q ?? "").trim(), view, sort, dir };
@@ -76,6 +90,9 @@ const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").t
 export function filterSortCustomers(list: ListRow[], p: ListParams): ListRow[] {
   let out = list;
   if (p.view === "residential" || p.view === "commercial") out = out.filter((c) => c.customer_type === p.view);
+  else if (p.view === "missing-phone") out = out.filter((c) => !c.phone);
+  else if (p.view === "missing-email") out = out.filter((c) => !c.email);
+  else if (p.view === "missing-address") out = out.filter((c) => c.customer_addresses.length === 0);
 
   if (p.q) {
     const ql = fold(p.q);

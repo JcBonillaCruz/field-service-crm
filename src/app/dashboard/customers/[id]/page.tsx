@@ -87,8 +87,8 @@ export default async function CustomerPage({
         <div className="grid gap-6 xl:grid-cols-[minmax(340px,400px)_1fr]">
           {/* IZQUIERDA: info del cliente en acordeones */}
           <div className="space-y-5">
-            {/* Acciones rápidas (solo móvil) */}
-            <div className="grid grid-cols-3 gap-3 lg:hidden">
+            {/* Acciones rápidas (solo móvil) — compactas como Zoho */}
+            <div className="flex items-center justify-around gap-2 rounded-2xl border border-slate-200 bg-white px-2 py-3 lg:hidden">
               <CallButton label="Mobile" href={callMobile ? phoneHref(callMobile) : undefined}
                 icon="M7 2h6a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm3 13.5h0" />
               <CallButton label="Work phone" href={callWork ? phoneHref(callWork) : undefined}
@@ -171,14 +171,14 @@ export default async function CustomerPage({
 function CallButton({ label, href, icon }: { label: string; href?: string; icon: string }) {
   const inner = (
     <>
-      <span className={`flex h-12 w-12 items-center justify-center rounded-full ${href ? "bg-[#0f766e] text-white shadow-sm" : "bg-slate-100 text-slate-300"}`}>
-        <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <span className={`flex h-10 w-10 items-center justify-center rounded-full ${href ? "bg-[#0f766e] text-white" : "bg-slate-100 text-slate-300"}`}>
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
           <path d={icon} strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </span>
-      <span className={`text-xs font-medium ${href ? "text-[#0f766e]" : "text-slate-400"}`}>{label}</span>
+      <span className={`text-[11px] font-medium ${href ? "text-[#0f766e]" : "text-slate-400"}`}>{label}</span>
     </>
   );
-  const box = "flex flex-col items-center gap-2 rounded-2xl border border-slate-200 bg-white py-4";
+  const box = "flex flex-1 flex-col items-center gap-1.5 rounded-xl py-1";
   return href ? <a href={href} className={`${box} active:bg-slate-50`}>{inner}</a> : <div className={box}>{inner}</div>;
 }

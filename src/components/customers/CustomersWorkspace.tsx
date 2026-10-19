@@ -11,7 +11,7 @@ import ExportModal from "@/components/customers/ExportModal";
 import BottomSheet from "@/components/customers/BottomSheet";
 import MobileSortSheet from "@/components/customers/MobileSortSheet";
 import { cityLine } from "@/lib/customers";
-import { ListRow, VIEWS, filterSortCustomers, readListParams } from "@/lib/customer-list";
+import { ListRow, MOBILE_FILTERS, VIEWS, filterLabel, filterSortCustomers, readListParams } from "@/lib/customer-list";
 
 const dash = <span className="text-slate-300">—</span>;
 const COLS = "md:grid-cols-[2fr_1.6fr_2fr_1.3fr_1.4fr]";
@@ -45,6 +45,7 @@ export default function CustomersWorkspace({
   // Las pantallas de formulario ocupan todo (no llevan lista al lado)
   const isForm = pathname.endsWith("/new") || pathname.endsWith("/import") || pathname.endsWith("/edit");
   if (isForm) return <>{children}</>;
+  const onList = pathname === "/dashboard/customers"; // el botón flotante solo aquí
   const view = VIEWS.find((v) => v.value === params.view) ?? VIEWS[0];
   const filtered = Boolean(params.q) || params.view !== "all";
 
@@ -138,7 +139,7 @@ export default function CustomersWorkspace({
             </div>
             <div className="mt-3 flex items-center justify-between">
               <button type="button" onClick={() => setMSheet("filter")} className="flex items-center gap-1.5 border-b-2 border-[#0f766e] pb-0.5 text-[15px] font-semibold text-[#0f766e]">
-                {view.label}
+                {filterLabel(params.view)}
                 <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
               </button>
               <span className="text-xs text-slate-500">{list.length} {list.length === 1 ? "customer" : "customers"}</span>
@@ -179,8 +180,8 @@ export default function CustomersWorkspace({
         <div className="min-h-0 flex-1 lg:overflow-y-auto">{children}</div>
       </div>
 
-      {/* Botón flotante (móvil) */}
-      {!selectedId && (
+      {/* Botón flotante (móvil) — solo en la lista de clientes */}
+      {onList && (
         <Link href="/dashboard/customers/new" aria-label="New customer"
           className="fixed bottom-6 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#0f766e] text-white shadow-lg shadow-[#0f766e]/30 transition-transform active:scale-95 lg:hidden">
           <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
@@ -191,8 +192,8 @@ export default function CustomersWorkspace({
       <BottomSheet open={mSheet === "filter"} onClose={() => setMSheet(null)} title="Filter">
         <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Default filters</p>
         <ul className="space-y-2">
-          {VIEWS.map((v) => {
-            const active = v.value === view.value;
+          {MOBILE_FILTERS.map((v) => {
+            const active = v.value === params.view;
             return (
               <li key={v.value}>
                 <button type="button" onClick={() => { switchView(v.value); setMSheet(null); }}

@@ -8,8 +8,8 @@ export default function CustomerDetailActions({ customerId }: { customerId: stri
     <div className="flex shrink-0 items-center gap-2">
       <Link href={`/dashboard/customers/${customerId}/edit`} className={`${secondaryButton} hidden sm:inline-flex`}>Edit</Link>
       <Link href={`/dashboard/customers/${customerId}/edit`} aria-label="Edit"
-        className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 sm:hidden">
-        <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 13.5V16h2.5l7-7L11 6.5zM12.5 5l2.5 2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        className="group/edit flex h-11 w-11 items-center justify-center rounded-full bg-[#fdf1ea] text-[#e8713a] shadow-sm transition-all duration-200 ease-out hover:scale-110 active:scale-95 sm:hidden">
+        <svg viewBox="0 0 24 24" className="h-[22px] w-[22px] transition-transform duration-200 group-hover/edit:-rotate-12" fill="none" stroke="currentColor" strokeWidth="1.9"><path d="M12 20h9" strokeLinecap="round" strokeLinejoin="round" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" strokeLinecap="round" strokeLinejoin="round" /></svg>
       </Link>
       <span title="Coming soon" className="hidden cursor-default items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-400 sm:inline-flex">
         New transaction<span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium">Soon</span>

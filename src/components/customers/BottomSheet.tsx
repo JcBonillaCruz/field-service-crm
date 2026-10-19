@@ -30,7 +30,7 @@ export default function BottomSheet({
       <button type="button" aria-label="Close" onClick={onClose}
         className={`absolute inset-0 bg-slate-900/40 transition-opacity duration-200 ${shown ? "opacity-100" : "opacity-0"}`} />
       <div className={`relative flex max-h-[82vh] w-full flex-col rounded-t-3xl bg-white transition-transform duration-200 ease-out ${shown ? "translate-y-0" : "translate-y-full"}`}>
-        <div className="flex items-center justify-between rounded-t-3xl bg-[#eef1ff] px-5 py-4">
+        <div className="flex items-center justify-between rounded-t-3xl bg-[#fdf1ea] px-5 py-4">
           <span className="h-9 w-9" />
           <h2 className="text-lg font-semibold text-[#0b1f3a]">{title}</h2>
           <button type="button" onClick={onClose} aria-label="Close"
