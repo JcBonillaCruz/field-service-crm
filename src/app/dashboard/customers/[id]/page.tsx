@@ -8,6 +8,7 @@ import DeleteCustomerButton from "@/components/customers/DeleteCustomerButton";
 import NoAccess from "@/components/customers/NoAccess";
 import CustomerDetailActions from "@/components/customers/CustomerDetailActions";
 import Accordion, { PencilLink } from "@/components/customers/Accordion";
+import RecentLogger from "@/components/RecentLogger";
 
 const TABS = ["Overview", "Comments", "Transactions", "Mails", "Statement"];
 const MOBILE_TABS = ["Details", "Transactions", "Comments"];
@@ -52,6 +53,7 @@ export default async function CustomerPage({
 
   return (
     <div className="flex min-h-full flex-col">
+      <RecentLogger id={c.id} name={c.display_name} />
       {/* Barra de la ficha */}
       <div className="lg:sticky lg:top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">

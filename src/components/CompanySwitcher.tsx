@@ -27,7 +27,7 @@ export default function CompanySwitcher({
   return (
     <div ref={ref} className="relative min-w-0 max-w-full sm:max-w-[260px]">
       <button type="button" onClick={() => setOpen(!open)} aria-expanded={open}
-        className="flex w-full min-w-0 items-center gap-2 rounded-lg border border-slate-200 py-1.5 pl-1.5 pr-3 text-sm hover:bg-slate-50">
+        className="flex w-full min-w-0 items-center gap-2 rounded-lg py-1.5 pl-1.5 pr-2 text-sm hover:bg-slate-100">
         {current && <CompanyBadge id={current.id} name={current.name} index={companies.indexOf(current)} size={28} />}
         <span className="min-w-0 flex-1 truncate text-left font-medium text-slate-800">{current?.name}</span>
         <svg viewBox="0 0 20 20" className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} fill="currentColor" aria-hidden="true">

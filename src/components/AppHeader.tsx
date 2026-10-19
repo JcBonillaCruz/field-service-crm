@@ -9,6 +9,9 @@ import CompanyBadge from "@/components/CompanyBadge";
 import CompanySwitcher from "@/components/CompanySwitcher";
 import TopSearch from "@/components/TopSearch";
 import AppsMenu from "@/components/AppsMenu";
+import QuickCreate from "@/components/QuickCreate";
+import NotificationsBell from "@/components/NotificationsBell";
+import RecentMenu from "@/components/RecentMenu";
 import CreateCompanyForm from "@/components/CreateCompanyForm";
 import { CompanySummary, CurrentUser, ROLE_LABEL, setCurrentCompany } from "@/lib/types";
 
@@ -87,10 +90,11 @@ export default function AppHeader({
         <div className="lg:hidden">{avatarButton}</div>
 
         {/* ===== Escritorio: barra completa estilo Zoho ===== */}
-        <div className="hidden min-w-0 flex-1 items-center gap-4 lg:flex">
+        <div className="hidden min-w-0 flex-1 items-center gap-2 lg:flex">
+          <RecentMenu />
           <TopSearch />
 
-          <div className="ml-auto flex items-center gap-1.5">
+          <div className="ml-auto flex items-center gap-1">
             {/* Prueba + Subscribe */}
             <Popover className="relative">
               <div className="mr-1 hidden items-center gap-2 text-sm xl:flex">
@@ -105,6 +109,8 @@ export default function AppHeader({
             </Popover>
 
             <CompanySwitcher companies={companies} currentId={currentId} onSwitch={switchTo} onNewCompany={() => setCreating(true)} />
+            <QuickCreate />
+            <NotificationsBell />
 
             {/* Settings */}
             <Popover className="relative">

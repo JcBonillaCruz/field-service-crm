@@ -147,7 +147,7 @@ export default function CustomersWorkspace({
           </div>
 
           {/* ====== Buscador (compartido) ====== */}
-          <div className={`pb-4 ${selectedId ? "px-4" : "px-4 sm:px-8 lg:px-5"} ${mSearchOpen ? "block" : "hidden"} lg:block`}>
+          <div className={`pb-4 ${selectedId ? "px-4" : "px-4 sm:px-8 lg:px-5"} ${mSearchOpen ? "block" : "hidden"} lg:hidden`}>
             <SearchBox initial={params.q} autoFocus={mSearchOpen} />
           </div>
         </div>
