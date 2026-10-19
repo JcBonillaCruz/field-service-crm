@@ -7,12 +7,12 @@ import AddressManager from "@/components/customers/AddressManager";
 import DeleteCustomerButton from "@/components/customers/DeleteCustomerButton";
 import NoAccess from "@/components/customers/NoAccess";
 import CustomerDetailActions from "@/components/customers/CustomerDetailActions";
+import Accordion, { PencilLink } from "@/components/customers/Accordion";
 
 const TABS = ["Overview", "Comments", "Transactions", "Mails", "Statement"];
 
 export default async function CustomerPage({
-  params,
-  searchParams,
+  params, searchParams,
 }: {
   params: { id: string };
   searchParams: { warn?: string };
@@ -24,12 +24,11 @@ export default async function CustomerPage({
   const { data: customer } = await supabase
     .from("customers")
     .select("id, customer_type, first_name, last_name, company_name, display_name, email, phone, notes, created_at")
-    .eq("id", params.id)
-    .eq("company_id", current.id)
-    .maybeSingle();
+    .eq("id", params.id).eq("company_id", current.id).maybeSingle();
 
   if (!customer) notFound();
   const c = customer as Customer;
+  const editHref = `/dashboard/customers/${c.id}/edit`;
 
   const [{ data: addrRows }, { data: phoneRows }, { data: emailRows }] = await Promise.all([
     supabase.from("customer_addresses").select("id, label, street, unit, city, state, zip, country, is_primary")
@@ -44,14 +43,15 @@ export default async function CustomerPage({
   })) as (Address & { id: string })[];
 
   const contact = [c.first_name, c.last_name].filter(Boolean).join(" ");
+  const since = new Date(c.created_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const sinceShort = new Date(c.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
   return (
     <div className="flex min-h-full flex-col">
-      {/* Barra de la ficha: nombre, acciones y cerrar */}
+      {/* Barra de la ficha */}
       <div className="lg:sticky lg:top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
-          <Link href="/dashboard/customers" aria-label="Back to customers"
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 lg:hidden">
+          <Link href="/dashboard/customers" aria-label="Back to customers" className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 lg:hidden">
             <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 15 7 10l5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </Link>
           <Avatar name={c.display_name} url={null} seed={c.id} size={40} />
@@ -65,16 +65,14 @@ export default async function CustomerPage({
         <CustomerDetailActions customerId={c.id} />
       </div>
 
-      {/* Pestañas (por ahora solo Overview; las demás llegan con facturas y correos) */}
+      {/* Pestañas */}
       <div className="lg:sticky lg:top-[65px] z-10 flex gap-1 overflow-x-auto border-b border-slate-200 bg-white px-4 sm:px-6">
-        {TABS.map((t, i) => (
-          i === 0 ? (
-            <span key={t} className="whitespace-nowrap border-b-2 border-[#0f766e] px-3 py-3 text-sm font-semibold text-[#0f766e]">{t}</span>
-          ) : (
-            <span key={t} title="Coming soon" className="flex items-center gap-1.5 whitespace-nowrap px-3 py-3 text-sm text-slate-400">
-              {t}<span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium">Soon</span>
-            </span>
-          )
+        {TABS.map((t, i) => i === 0 ? (
+          <span key={t} className="whitespace-nowrap border-b-2 border-[#0f766e] px-3 py-3 text-sm font-semibold text-[#0f766e]">{t}</span>
+        ) : (
+          <span key={t} title="Coming soon" className="flex items-center gap-1.5 whitespace-nowrap px-3 py-3 text-sm text-slate-400">
+            {t}<span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium">Soon</span>
+          </span>
         ))}
       </div>
 
@@ -83,11 +81,11 @@ export default async function CustomerPage({
           <p className="mb-5 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">The customer was saved, but the addresses weren&apos;t. Add them again below.</p>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-[1fr_1.4fr]">
-          <div className="space-y-6">
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-              <h2 className="text-base font-semibold text-[#0b1f3a]">Contact</h2>
-              <dl className="mt-4 space-y-3 text-sm">
+        <div className="grid gap-6 xl:grid-cols-[minmax(340px,400px)_1fr]">
+          {/* IZQUIERDA: info del cliente en acordeones */}
+          <div className="space-y-5">
+            <Accordion title="Contact" action={<PencilLink href={editHref} />}>
+              <dl className="space-y-3 text-sm">
                 <div>
                   <dt className="text-slate-500">{phones.length > 1 ? "Phones" : "Phone"}</dt>
                   {phones.length === 0 && <dd className="mt-0.5 text-slate-400">Not added</dd>}
@@ -110,30 +108,46 @@ export default async function CustomerPage({
                     </dd>
                   ))}
                 </div>
-                <div>
-                  <dt className="text-slate-500">Customer since</dt>
-                  <dd className="mt-0.5 text-slate-700">{new Date(c.created_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</dd>
-                </div>
               </dl>
-            </div>
+            </Accordion>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-              <h2 className="text-base font-semibold text-[#0b1f3a]">Notes</h2>
-              <p className="mt-3 whitespace-pre-wrap text-sm text-slate-600">{c.notes || <span className="text-slate-400">No notes.</span>}</p>
-            </div>
+            <Accordion title="Service addresses" count={addresses.length}>
+              <AddressManager customerId={c.id} companyId={current.id} addresses={addresses} />
+            </Accordion>
+
+            <Accordion title="Notes" action={<PencilLink href={editHref} />}>
+              <p className="whitespace-pre-wrap text-sm text-slate-600">{c.notes || <span className="text-slate-400">No notes.</span>}</p>
+            </Accordion>
+
+            <Accordion title="Details" defaultOpen={false} action={<PencilLink href={editHref} />}>
+              <dl className="space-y-3 text-sm">
+                <div className="flex justify-between gap-4"><dt className="text-slate-500">Customer type</dt><dd className="text-slate-700">{c.customer_type === "commercial" ? "Commercial" : "Residential"}</dd></div>
+                <div className="flex justify-between gap-4"><dt className="text-slate-500">Customer since</dt><dd className="text-slate-700">{since}</dd></div>
+              </dl>
+            </Accordion>
 
             {canDeleteCustomers(current.role) && (
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+              <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 sm:px-6">
                 <DeleteCustomerButton id={c.id} name={c.display_name} />
               </div>
             )}
           </div>
 
+          {/* DERECHA: historial de actividad */}
           <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-            <h2 className="mb-4 text-base font-semibold text-[#0b1f3a]">
-              Service addresses <span className="font-normal text-slate-400">({addresses.length})</span>
-            </h2>
-            <AddressManager customerId={c.id} companyId={current.id} addresses={addresses} />
+            <h2 className="text-base font-semibold text-[#0b1f3a]">Activity</h2>
+            <ol className="mt-5 space-y-5">
+              <li className="relative flex gap-4 pl-1">
+                <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[#14a39a] ring-4 ring-[#e9f7f4]" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-[#0b1f3a]">Customer created</p>
+                  <p className="text-xs text-slate-500">{sinceShort}</p>
+                </div>
+              </li>
+            </ol>
+            <div className="mt-6 rounded-xl bg-[#f6fbfa] px-4 py-5 text-center">
+              <p className="text-sm text-slate-500">Quotes, invoices and payments for this customer will show up here once you start creating them.</p>
+            </div>
           </div>
         </div>
       </div>

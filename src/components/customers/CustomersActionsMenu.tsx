@@ -22,7 +22,7 @@ const parentRow = "flex w-full items-center justify-between gap-3 px-4 py-2 text
 const heading = "px-4 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400";
 
 // Una fila del menú que abre un submenú a la izquierda al pasar el ratón
-function Flyout({ icon, label, children }: { icon: string; label: string; children: React.ReactNode }) {
+function Flyout({ icon, label, side, children }: { icon: string; label: string; side: "left" | "right"; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const show = () => { clearTimeout(timer.current); setOpen(true); };
@@ -34,7 +34,7 @@ function Flyout({ icon, label, children }: { icon: string; label: string; childr
         <Caret />
       </button>
       {open && (
-        <div className={`absolute right-full top-[-6px] mr-1 w-60 ${panel}`} onMouseEnter={show} onMouseLeave={hide}>
+        <div className={`absolute top-[-6px] w-60 ${side === "right" ? "left-full ml-1" : "right-full mr-1"} ${panel}`} onMouseEnter={show} onMouseLeave={hide}>
           {children}
         </div>
       )}
@@ -48,12 +48,14 @@ export default function CustomersActionsMenu({
   canImport,
   canExport,
   exportQuery,
+  submenuSide = "left",
 }: {
   params: ListParams;
   basePath: string;        // la ruta actual, para no perder el cliente abierto
   canImport: boolean;
   canExport: boolean;
   exportQuery: string;     // query para "exportar vista actual"
+  submenuSide?: "left" | "right"; // hacia dónde abrir los submenús
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -93,7 +95,7 @@ export default function CustomersActionsMenu({
       {open && (
         <div className={`absolute right-0 z-50 mt-2 w-56 origin-top ${panel}`}>
           {/* Sort by */}
-          <Flyout icon="M7 4v12m0 0-3-3m3 3 3-3M13 16V4m0 0-3 3m3-3 3 3" label="Sort by">
+          <Flyout side={submenuSide} icon="M7 4v12m0 0-3-3m3 3 3-3M13 16V4m0 0-3 3m3-3 3 3" label="Sort by">
             <p className={heading}>Sort by</p>
             {SORTS.map((s) => {
               const active = params.sort === s.value;
@@ -112,7 +114,7 @@ export default function CustomersActionsMenu({
           </Flyout>
 
           {canImport && (
-            <Flyout icon="M10 3v10m0 0-4-4m4 4 4-4M4 15v1a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-1" label="Import">
+            <Flyout side={submenuSide} icon="M10 3v10m0 0-4-4m4 4 4-4M4 15v1a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-1" label="Import">
               <p className={heading}>Import</p>
               <Link href="/dashboard/customers/import" className={row} onClick={() => setOpen(false)}>
                 <Ico d="M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
@@ -122,7 +124,7 @@ export default function CustomersActionsMenu({
           )}
 
           {canExport && (
-            <Flyout icon="M10 13V3m0 0L6 7m4-4 4 4M4 15v1a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-1" label="Export">
+            <Flyout side={submenuSide} icon="M10 13V3m0 0L6 7m4-4 4 4M4 15v1a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-1" label="Export">
               <p className={heading}>Export</p>
               <a href="/dashboard/customers/export" download className={row} onClick={() => setOpen(false)}>
                 <Ico d="M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />

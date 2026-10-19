@@ -106,7 +106,7 @@ export default function CustomersWorkspace({
                 <Link href="/dashboard/customers/new"
                   className="rounded-lg bg-[#0f766e] px-4 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f58]">+ New</Link>
               )}
-              <CustomersActionsMenu params={params} basePath={pathname} canImport={canImport} canExport={canExport} exportQuery={exportQuery} />
+              <CustomersActionsMenu params={params} basePath={pathname} canImport={canImport} canExport={canExport} exportQuery={exportQuery} submenuSide={selectedId ? "right" : "left"} />
             </div>
           </div>
 
@@ -154,15 +154,16 @@ function subtitle(c: ListRow) {
 
 function CompactRow({ c, active }: { c: ListRow; active: boolean }) {
   return (
-    <li>
+    <li className="group relative">
       <Link href={`/dashboard/customers/${c.id}`}
         className={`flex items-center gap-3 px-4 py-3 transition-colors ${active ? "bg-[#e9f7f4]" : "hover:bg-[#f6fbfa]"}`}>
         <Avatar name={c.display_name} url={null} seed={c.id} size={38} />
-        <span className="min-w-0 flex-1">
+        <span className="min-w-0 flex-1 pr-8">
           <span className={`block truncate font-medium ${active ? "text-[#0f766e]" : "text-[#0b1f3a]"}`}>{c.display_name}</span>
           <span className="block truncate text-xs text-slate-500">{subtitle(c)}</span>
         </span>
       </Link>
+      <QuickEdit id={c.id} name={c.display_name} className="right-2" />
     </li>
   );
 }
@@ -172,7 +173,7 @@ function WideRow({ c }: { c: ListRow }) {
   const more = c.customer_addresses.length - 1;
   const person = [c.first_name, c.last_name].filter(Boolean).join(" ");
   return (
-    <li>
+    <li className="group relative">
       <Link href={`/dashboard/customers/${c.id}`}
         className={`grid gap-1 px-5 py-4 transition-colors hover:bg-[#f6fbfa] md:items-center md:gap-4 ${COLS}`}>
         <span className="flex min-w-0 items-center gap-3">
@@ -190,7 +191,20 @@ function WideRow({ c }: { c: ListRow }) {
           {more > 0 && <span className="ml-1 text-xs text-slate-400">+{more}</span>}
         </span>
       </Link>
+      <QuickEdit id={c.id} name={c.display_name} className="right-4" />
     </li>
+  );
+}
+
+// Lápiz de edición rápida que aparece al pasar el mouse por la fila
+function QuickEdit({ id, name, className }: { id: string; name: string; className: string }) {
+  return (
+    <Link href={`/dashboard/customers/${id}/edit`} aria-label={`Edit ${name}`} title="Edit"
+      className={`absolute top-1/2 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 opacity-0 shadow-sm transition-opacity hover:text-[#0f766e] focus:opacity-100 group-hover:opacity-100 md:flex ${className}`}>
+      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+        <path d="M4 13.5V16h2.5l7-7L11 6.5zM12.5 5l2.5 2.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </Link>
   );
 }
 
