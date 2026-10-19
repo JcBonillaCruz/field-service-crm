@@ -85,7 +85,7 @@ export default function AppHeader({
 
         {/* ===== Celular: compañía + usuario ===== */}
         <div className="flex min-w-0 flex-1 items-center lg:hidden">
-          <CompanySwitcher companies={companies} currentId={currentId} onSwitch={switchTo} onNewCompany={() => setCreating(true)} />
+          <CompanySwitcher companies={companies} currentId={currentId} userId={user.id} onSwitch={switchTo} onNewCompany={() => setCreating(true)} />
         </div>
         <div className="lg:hidden">{avatarButton}</div>
 
@@ -108,7 +108,7 @@ export default function AppHeader({
               </PopoverPanel>
             </Popover>
 
-            <CompanySwitcher companies={companies} currentId={currentId} onSwitch={switchTo} onNewCompany={() => setCreating(true)} />
+            <CompanySwitcher companies={companies} currentId={currentId} userId={user.id} onSwitch={switchTo} onNewCompany={() => setCreating(true)} />
             <QuickCreate />
             <NotificationsBell />
 

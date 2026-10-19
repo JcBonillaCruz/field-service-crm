@@ -61,6 +61,19 @@ export default function TopSearch() {
         <input
           name={`${seed}-search`} autoComplete="off" data-lpignore="true" data-1p-ignore="true" data-form-type="other"
           value={q} onChange={(e) => setQ(e.target.value)} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              setQ("");
+              if (onCustomers) {
+                const params = new URLSearchParams(sp.toString());
+                params.delete("q");
+                const qs = params.toString();
+                router.replace(`/dashboard/customers${qs ? `?${qs}` : ""}`, { scroll: false });
+              }
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
           placeholder={`Search in ${module}`} aria-label={`Search in ${module}`}
           className="w-full bg-transparent py-2 pr-3 text-sm placeholder:text-slate-400 focus:outline-none"
         />
