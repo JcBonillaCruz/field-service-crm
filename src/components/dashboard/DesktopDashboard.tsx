@@ -57,7 +57,7 @@ export default function DesktopDashboard({ firstName, companyId, companyName, co
   return (
     <div className="min-h-full bg-white">
       {/* Saludo + pestañas. Al bajar, el saludo se esconde y las pestañas se quedan arriba */}
-      <div className="sticky -top-8 z-10 border-b border-slate-200 bg-[#f6f8f9]">
+      <div className="sticky -top-8 z-10 border-b border-slate-200 bg-[#fcfdfd]">
         <HeaderPattern />
         <div className="relative flex h-24 items-center justify-between gap-6 px-8">
           <div className="flex min-w-0 items-center gap-4">
@@ -66,7 +66,7 @@ export default function DesktopDashboard({ firstName, companyId, companyName, co
             </span>
             <div className="min-w-0">
               <h1 className="truncate text-[22px] font-semibold leading-tight text-[#0b1f3a]">Hello, {firstName}</h1>
-              <p className="mt-0.5 truncate text-[15px] text-slate-500">{companyName}</p>
+              <p className="mt-0.5 truncate text-[15px] text-slate-600">{companyName}</p>
             </div>
           </div>
           <Support onHelp={() => go("Help")} />
@@ -355,7 +355,7 @@ function HeaderPattern() {
         <pattern id="bp-dash-pattern" width="560" height="96" patternUnits="userSpaceOnUse">
           {PATTERN.map(([d, x, y, r]) => (
             <path key={`${x}-${y}`} d={d} transform={`translate(${x} ${y}) rotate(${r} 12 12) scale(1.25)`}
-              fill="none" stroke="#dbe3e8" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+              fill="none" stroke="#e3e9ee" strokeWidth="1.2" opacity="0.45" strokeLinecap="round" strokeLinejoin="round" />
           ))}
         </pattern>
       </defs>
