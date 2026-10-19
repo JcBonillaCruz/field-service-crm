@@ -12,7 +12,7 @@ export default async function EditCustomerPage({ params }: { params: { id: strin
 
   const { data } = await supabase
     .from("customers")
-    .select("id, customer_type, first_name, last_name, company_name, display_name, email, phone, notes, created_at")
+    .select("id, customer_type, salutation, first_name, last_name, company_name, display_name, email, phone, notes, created_at")
     .eq("id", params.id)
     .eq("company_id", current.id)
     .maybeSingle();

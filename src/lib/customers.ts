@@ -31,6 +31,7 @@ export type Email = {
 export type Customer = {
   id: string;
   customer_type: CustomerType;
+  salutation: string | null;
   first_name: string | null;
   last_name: string | null;
   company_name: string | null;
@@ -40,6 +41,8 @@ export type Customer = {
   notes: string | null;
   created_at: string;
 };
+
+export const SALUTATIONS = ["Mr.", "Mrs.", "Ms.", "Miss", "Dr.", "Mx.", "Prof."];
 
 export const PHONE_LABELS = ["Main", "Mobile", "Office", "Home", "Work", "Fax", "Other"];
 export const EMAIL_LABELS = ["Main", "Quotes", "Invoices", "Billing", "Work", "Personal", "Other"];

@@ -23,7 +23,7 @@ export default async function CustomerPage({
 
   const { data: customer } = await supabase
     .from("customers")
-    .select("id, customer_type, first_name, last_name, company_name, display_name, email, phone, notes, created_at")
+    .select("id, customer_type, salutation, first_name, last_name, company_name, display_name, email, phone, notes, created_at")
     .eq("id", params.id).eq("company_id", current.id).maybeSingle();
 
   if (!customer) notFound();
@@ -42,7 +42,7 @@ export default async function CustomerPage({
     ...a, label: a.label ?? "", unit: a.unit ?? "", zip: a.zip ?? "", state: a.state ?? "", country: a.country ?? "US",
   })) as (Address & { id: string })[];
 
-  const contact = [c.first_name, c.last_name].filter(Boolean).join(" ");
+  const contact = [c.salutation, c.first_name, c.last_name].filter(Boolean).join(" ");
   const since = new Date(c.created_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
   const sinceShort = new Date(c.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
