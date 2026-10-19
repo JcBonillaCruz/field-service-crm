@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-export default function SearchBox({ initial }: { initial: string }) {
+export default function SearchBox({ initial, autoFocus }: { initial: string; autoFocus?: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -26,7 +26,7 @@ export default function SearchBox({ initial }: { initial: string }) {
         <circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" />
       </svg>
       <label htmlFor="customer-search" className="sr-only">Search customers</label>
-      <input id="customer-search" value={q} onChange={(e) => setQ(e.target.value)} autoComplete="off"
+      <input id="customer-search" value={q} onChange={(e) => setQ(e.target.value)} autoComplete="off" autoFocus={autoFocus}
         placeholder="Search by name, phone or email"
         className="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-11 pr-4 text-[15px] placeholder:text-slate-400 focus:border-[#0f766e] focus:outline-none focus:ring-4 focus:ring-[#14a39a]/15" />
     </div>

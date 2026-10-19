@@ -43,6 +43,9 @@ export default async function CustomerPage({
   })) as (Address & { id: string })[];
 
   const contact = [c.salutation, c.first_name, c.last_name].filter(Boolean).join(" ");
+  const callMobile = phones.find((p) => /mobile|cell|celular|m[oó]vil/i.test(p.label));
+  const callWork = phones.find((p) => p !== callMobile && /office|work|main|trabajo|oficina/i.test(p.label)) ?? phones.find((p) => p !== callMobile) ?? null;
+  const primaryEmail = emails.find((e) => e.is_primary) ?? emails[0] ?? null;
   const since = new Date(c.created_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
   const sinceShort = new Date(c.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
@@ -84,6 +87,16 @@ export default async function CustomerPage({
         <div className="grid gap-6 xl:grid-cols-[minmax(340px,400px)_1fr]">
           {/* IZQUIERDA: info del cliente en acordeones */}
           <div className="space-y-5">
+            {/* Acciones rápidas (solo móvil) */}
+            <div className="grid grid-cols-3 gap-3 lg:hidden">
+              <CallButton label="Mobile" href={callMobile ? phoneHref(callMobile) : undefined}
+                icon="M7 2h6a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm3 13.5h0" />
+              <CallButton label="Work phone" href={callWork ? phoneHref(callWork) : undefined}
+                icon="M5 4h3l1.5 4-2 1.5a11 11 0 0 0 5 5l1.5-2 4 1.5v3a1 1 0 0 1-1 1A14 14 0 0 1 4 5a1 1 0 0 1 1-1z" />
+              <CallButton label="Email" href={primaryEmail ? `mailto:${primaryEmail.email}` : undefined}
+                icon="M3 5h18v14H3zM3 6l9 7 9-7" />
+            </div>
+
             <Accordion title="Contact" action={<PencilLink href={editHref} />}>
               <dl className="space-y-3 text-sm">
                 <div>
@@ -153,4 +166,19 @@ export default async function CustomerPage({
       </div>
     </div>
   );
+}
+
+function CallButton({ label, href, icon }: { label: string; href?: string; icon: string }) {
+  const inner = (
+    <>
+      <span className={`flex h-12 w-12 items-center justify-center rounded-full ${href ? "bg-[#0f766e] text-white shadow-sm" : "bg-slate-100 text-slate-300"}`}>
+        <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+          <path d={icon} strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </span>
+      <span className={`text-xs font-medium ${href ? "text-[#0f766e]" : "text-slate-400"}`}>{label}</span>
+    </>
+  );
+  const box = "flex flex-col items-center gap-2 rounded-2xl border border-slate-200 bg-white py-4";
+  return href ? <a href={href} className={`${box} active:bg-slate-50`}>{inner}</a> : <div className={box}>{inner}</div>;
 }

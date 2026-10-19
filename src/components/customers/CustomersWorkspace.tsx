@@ -8,6 +8,8 @@ import Avatar from "@/components/Avatar";
 import CustomersActionsMenu from "@/components/customers/CustomersActionsMenu";
 import SearchBox from "@/components/customers/SearchBox";
 import ExportModal from "@/components/customers/ExportModal";
+import BottomSheet from "@/components/customers/BottomSheet";
+import MobileSortSheet from "@/components/customers/MobileSortSheet";
 import { cityLine } from "@/lib/customers";
 import { ListRow, VIEWS, filterSortCustomers, readListParams } from "@/lib/customer-list";
 
@@ -29,6 +31,8 @@ export default function CustomersWorkspace({
   const router = useRouter();
   const sp = useSearchParams();
   const [exportOpen, setExportOpen] = useState(false);
+  const [mSheet, setMSheet] = useState<null | "filter" | "sort" | "more">(null);
+  const [mSearchOpen, setMSearchOpen] = useState(false);
 
   // IMPORTANTE: todos los hooks (incluido useMemo) van antes de cualquier return,
   // o React se rompe al cambiar entre la lista y el formulario.
@@ -52,6 +56,15 @@ export default function CustomersWorkspace({
     router.replace(`${pathname}${s ? `?${s}` : ""}`, { scroll: false });
   }
 
+  function applySort(value: string, d: "asc" | "desc") {
+    const q = new URLSearchParams(sp.toString());
+    if (value === "name") q.delete("sort"); else q.set("sort", value);
+    if (d === "desc") q.set("dir", "desc"); else q.delete("dir");
+    const s = q.toString();
+    router.replace(`${pathname}${s ? `?${s}` : ""}`, { scroll: false });
+    setMSheet(null);
+  }
+
   const listPane = selectedId
     ? "hidden w-full shrink-0 flex-col border-r border-slate-200 bg-white lg:flex lg:w-[340px]"
     : "flex w-full flex-col";
@@ -61,52 +74,80 @@ export default function CustomersWorkspace({
     <div className="lg:flex lg:h-[calc(100vh-4rem)] lg:overflow-hidden">
       {/* ---------- LISTA ---------- */}
       <div className={listPane}>
-        <div className={`shrink-0 border-b border-slate-100 ${selectedId ? "px-4 pt-4 pb-3" : "px-5 pt-6 pb-4 sm:px-8"}`}>
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <Menu>
-                <MenuButton className={`group flex items-center gap-2 font-semibold tracking-tight text-[#0b1f3a] focus:outline-none ${selectedId ? "text-lg" : "text-2xl sm:text-3xl"}`}>
-                  <span className="truncate">{view.label}</span>
-                  <svg viewBox="0 0 20 20" className="h-5 w-5 shrink-0 text-[#0f766e] transition-transform group-data-[open]:rotate-180" fill="currentColor" aria-hidden="true">
-                    <path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" />
-                  </svg>
-                </MenuButton>
-                <MenuItems anchor="bottom start" transition
-                  className="z-50 mt-1 w-56 rounded-xl border border-slate-200 bg-white py-1 shadow-[0_12px_40px_rgba(15,40,60,0.14)] transition duration-150 ease-out focus:outline-none data-[closed]:scale-95 data-[closed]:opacity-0">
-                  {VIEWS.map((v) => (
-                    <MenuItem key={v.value}>
-                      <button type="button" onClick={() => switchView(v.value)}
-                        className="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-slate-700 data-[focus]:bg-[#f0faf7] data-[focus]:text-[#0b1f3a]">
-                        {v.label}
-                        {v.value === view.value && (
-                          <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#0f766e]" fill="currentColor" aria-hidden="true">
-                            <path d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0z" />
-                          </svg>
-                        )}
-                      </button>
-                    </MenuItem>
-                  ))}
-                </MenuItems>
-              </Menu>
-              {!selectedId && <p className="mt-0.5 text-sm text-slate-500">{list.length} {list.length === 1 ? "customer" : "customers"}</p>}
-            </div>
+        <div className="shrink-0 border-b border-slate-100">
+          {/* ====== Escritorio ====== */}
+          <div className={`hidden lg:block ${selectedId ? "px-4 pt-4 pb-3" : "px-5 pt-6 pb-4 sm:px-8"}`}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <Menu>
+                  <MenuButton className={`group flex items-center gap-2 font-semibold tracking-tight text-[#0b1f3a] focus:outline-none ${selectedId ? "text-lg" : "text-2xl sm:text-3xl"}`}>
+                    <span className="truncate">{view.label}</span>
+                    <svg viewBox="0 0 20 20" className="h-5 w-5 shrink-0 text-[#0f766e] transition-transform group-data-[open]:rotate-180" fill="currentColor" aria-hidden="true">
+                      <path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" />
+                    </svg>
+                  </MenuButton>
+                  <MenuItems anchor="bottom start" transition
+                    className="z-50 mt-1 w-56 rounded-xl border border-slate-200 bg-white py-1 shadow-[0_12px_40px_rgba(15,40,60,0.14)] transition duration-150 ease-out focus:outline-none data-[closed]:scale-95 data-[closed]:opacity-0">
+                    {VIEWS.map((v) => (
+                      <MenuItem key={v.value}>
+                        <button type="button" onClick={() => switchView(v.value)}
+                          className="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-slate-700 data-[focus]:bg-[#f0faf7] data-[focus]:text-[#0b1f3a]">
+                          {v.label}
+                          {v.value === view.value && (
+                            <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#0f766e]" fill="currentColor" aria-hidden="true">
+                              <path d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0z" />
+                            </svg>
+                          )}
+                        </button>
+                      </MenuItem>
+                    ))}
+                  </MenuItems>
+                </Menu>
+                {!selectedId && <p className="mt-0.5 text-sm text-slate-500">{list.length} {list.length === 1 ? "customer" : "customers"}</p>}
+              </div>
 
-            <div className="flex shrink-0 items-center gap-2">
-              {selectedId ? (
-                <Link href="/dashboard/customers/new" aria-label="New customer"
-                  className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#0f766e] text-white hover:bg-[#0c5f58]">
-                  <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 4v12M4 10h12" strokeLinecap="round" /></svg>
-                </Link>
-              ) : (
-                <Link href="/dashboard/customers/new"
-                  className="rounded-lg bg-[#0f766e] px-4 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f58]">+ New</Link>
-              )}
-              <CustomersActionsMenu params={params} basePath={pathname} canImport={canImport} canExport={canExport} onExport={() => setExportOpen(true)} submenuSide={selectedId ? "right" : "left"} />
+              <div className="flex shrink-0 items-center gap-2">
+                {selectedId ? (
+                  <Link href="/dashboard/customers/new" aria-label="New customer" className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#0f766e] text-white hover:bg-[#0c5f58]">
+                    <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 4v12M4 10h12" strokeLinecap="round" /></svg>
+                  </Link>
+                ) : (
+                  <Link href="/dashboard/customers/new" className="rounded-lg bg-[#0f766e] px-4 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f58]">+ New</Link>
+                )}
+                <CustomersActionsMenu params={params} basePath={pathname} canImport={canImport} canExport={canExport} onExport={() => setExportOpen(true)} submenuSide={selectedId ? "right" : "left"} />
+              </div>
             </div>
           </div>
 
-          <div className="mt-4">
-            <SearchBox initial={params.q} />
+          {/* ====== Móvil ====== */}
+          <div className="lg:hidden px-4 pt-5 pb-2">
+            <div className="flex items-center justify-between gap-2">
+              <h1 className="text-2xl font-semibold tracking-tight text-[#0b1f3a]">Customers</h1>
+              <div className="flex items-center gap-0.5">
+                <button type="button" aria-label="Search" onClick={() => setMSearchOpen((v) => !v)}
+                  className={`flex h-10 w-10 items-center justify-center rounded-lg ${mSearchOpen ? "bg-[#e9f7f4] text-[#0f766e]" : "text-slate-600 active:bg-slate-100"}`}>
+                  <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
+                </button>
+                <button type="button" aria-label="Sort" onClick={() => setMSheet("sort")} className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100">
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M8 4v16m0 0-3-3m3 3 3-3M13 6h8M13 11h5M13 16h3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </button>
+                <button type="button" aria-label="More" onClick={() => setMSheet("more")} className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100">
+                  <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor"><circle cx="4.5" cy="10" r="1.6" /><circle cx="10" cy="10" r="1.6" /><circle cx="15.5" cy="10" r="1.6" /></svg>
+                </button>
+              </div>
+            </div>
+            <div className="mt-3 flex items-center justify-between">
+              <button type="button" onClick={() => setMSheet("filter")} className="flex items-center gap-1.5 border-b-2 border-[#0f766e] pb-0.5 text-[15px] font-semibold text-[#0f766e]">
+                {view.label}
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
+              </button>
+              <span className="text-xs text-slate-500">{list.length} {list.length === 1 ? "customer" : "customers"}</span>
+            </div>
+          </div>
+
+          {/* ====== Buscador (compartido) ====== */}
+          <div className={`pb-4 ${selectedId ? "px-4" : "px-4 sm:px-8 lg:px-5"} ${mSearchOpen ? "block" : "hidden"} lg:block`}>
+            <SearchBox initial={params.q} autoFocus={mSearchOpen} />
           </div>
         </div>
 
@@ -137,6 +178,53 @@ export default function CustomersWorkspace({
       <div className={detailPane}>
         <div className="min-h-0 flex-1 lg:overflow-y-auto">{children}</div>
       </div>
+
+      {/* Botón flotante (móvil) */}
+      {!selectedId && (
+        <Link href="/dashboard/customers/new" aria-label="New customer"
+          className="fixed bottom-6 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#0f766e] text-white shadow-lg shadow-[#0f766e]/30 transition-transform active:scale-95 lg:hidden">
+          <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
+        </Link>
+      )}
+
+      {/* Hoja: Filtro (móvil) */}
+      <BottomSheet open={mSheet === "filter"} onClose={() => setMSheet(null)} title="Filter">
+        <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Default filters</p>
+        <ul className="space-y-2">
+          {VIEWS.map((v) => {
+            const active = v.value === view.value;
+            return (
+              <li key={v.value}>
+                <button type="button" onClick={() => { switchView(v.value); setMSheet(null); }}
+                  className={`flex w-full items-center justify-between rounded-xl border px-4 py-3.5 text-left ${active ? "border-[#0f766e] bg-[#f6fbfa] font-medium text-[#0b1f3a]" : "border-slate-200 text-slate-700"}`}>
+                  {v.label}
+                  {active && (
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0f766e] text-white">
+                      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><path d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0z" /></svg>
+                    </span>
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </BottomSheet>
+
+      {/* Hoja: Ordenar (móvil) */}
+      {mSheet === "sort" && (
+        <MobileSortSheet open onClose={() => setMSheet(null)} sort={params.sort} dir={params.dir} onApply={applySort} />
+      )}
+
+      {/* Hoja: Más información (móvil) */}
+      <BottomSheet open={mSheet === "more"} onClose={() => setMSheet(null)} title="More information">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3.5">
+            <span className="text-slate-700">Total customers</span>
+            <span className="text-lg font-semibold text-[#0b1f3a]">{list.length}</span>
+          </div>
+          <p className="rounded-xl bg-[#eef6ff] px-4 py-3 text-sm text-slate-600">Importing and exporting customers is available on the desktop version.</p>
+        </div>
+      </BottomSheet>
 
       <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} />
     </div>
