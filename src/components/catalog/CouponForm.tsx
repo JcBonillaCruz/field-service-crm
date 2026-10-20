@@ -9,21 +9,24 @@ import SearchSelect from "@/components/ui/SearchSelect";
 import { inputClass } from "@/components/customers/ui";
 import { FormHeader, FormRow, SaveBar, SectionTitle } from "@/components/catalog/FormBits";
 import ProductModal from "@/components/catalog/ProductModal";
+import DatePicker from "@/components/ui/DatePicker";
 
-export default function CouponForm({ companyId, products: initialProducts, coupon }: {
-  companyId: string; products: CatalogProduct[]; coupon?: Coupon;
+export default function CouponForm({ companyId, products: initialProducts, coupon, clone }: {
+  companyId: string; products: CatalogProduct[]; coupon?: Coupon; clone?: Coupon;
 }) {
   const router = useRouter();
+  const src = coupon ?? clone;
+  const back = coupon ? `/dashboard/coupons/${coupon.id}` : "/dashboard/coupons";
   const [products, setProducts] = useState(initialProducts);
-  const [productId, setProductId] = useState(coupon?.product_id ?? "");
-  const [name, setName] = useState(coupon?.name ?? "");
+  const [productId, setProductId] = useState(src?.product_id ?? "");
+  const [name, setName] = useState(src?.name ?? "");
   const [code, setCode] = useState(coupon?.code ?? "");
-  const [dtype, setDtype] = useState<DiscountType>(coupon?.discount_type ?? "flat");
-  const [value, setValue] = useState(coupon ? String(coupon.discount_value) : "");
-  const [rtype, setRtype] = useState<RedemptionType>(coupon?.redemption_type ?? "one_time");
-  const [cycles, setCycles] = useState(coupon?.cycles ? String(coupon.cycles) : "");
-  const [expires, setExpires] = useState(coupon?.expires_on ?? "");
-  const [maxRed, setMaxRed] = useState(coupon?.max_redemptions ? String(coupon.max_redemptions) : "");
+  const [dtype, setDtype] = useState<DiscountType>(src?.discount_type ?? "flat");
+  const [value, setValue] = useState(src ? String(src.discount_value) : "");
+  const [rtype, setRtype] = useState<RedemptionType>(src?.redemption_type ?? "one_time");
+  const [cycles, setCycles] = useState(src?.cycles ? String(src.cycles) : "");
+  const [expires, setExpires] = useState(src?.expires_on ?? "");
+  const [maxRed, setMaxRed] = useState(src?.max_redemptions ? String(src.max_redemptions) : "");
   const [active, setActive] = useState(coupon?.is_active ?? true);
   const [modal, setModal] = useState(false);
   const [error, setError] = useState("");
@@ -46,14 +49,14 @@ export default function CouponForm({ companyId, products: initialProducts, coupo
       max_redemptions: Number(maxRed) > 0 ? Number(maxRed) : null, is_active: active,
     };
     const supabase = createClient();
-    const { error: dbErr } = coupon
-      ? await supabase.from("coupons").update(row).eq("id", coupon.id)
-      : await supabase.from("coupons").insert({ ...row, company_id: companyId });
-    if (dbErr) {
+    const { data: saved, error: dbErr } = coupon
+      ? await supabase.from("coupons").update(row).eq("id", coupon.id).select("id").single()
+      : await supabase.from("coupons").insert({ ...row, company_id: companyId }).select("id").single();
+    if (dbErr || !saved) {
       setSaving(false);
-      return setError(dbErr.code === "23505" ? "That coupon code is already in use." : "The coupon couldn't be saved. Did you run the SQL for Paso 3.23?");
+      return setError(dbErr?.code === "23505" ? "That coupon code is already in use." : "The coupon couldn't be saved. Did you run the SQL for Paso 3.24?");
     }
-    router.push("/dashboard/coupons");
+    router.push(`/dashboard/coupons/${saved.id}`);
     router.refresh();
   }
 
@@ -67,7 +70,7 @@ export default function CouponForm({ companyId, products: initialProducts, coupo
 
   return (
     <form onSubmit={submit} noValidate autoComplete="off" className="flex min-h-[calc(100vh-4rem)] flex-col bg-white">
-      <FormHeader title={coupon ? "Edit Coupon" : "New Coupon"} closeHref="/dashboard/coupons" />
+      <FormHeader title={coupon ? "Edit Coupon" : clone ? "Clone Coupon" : "New Coupon"} closeHref={back} />
 
       <div className="flex-1">
         <div className="border-b border-slate-200 bg-[#fafbfc] px-5 py-6 sm:px-8">
@@ -78,13 +81,13 @@ export default function CouponForm({ companyId, products: initialProducts, coupo
               <button type="button" onClick={() => setModal(true)} className="mt-1.5 text-sm font-medium text-[#2563eb] hover:underline">+ New Product</button>
             </FormRow>
             <div className="hidden xl:block" />
-            <FormRow label="Coupon Name" htmlFor="cp-name" required width="max-w-[340px]">
+            <FormRow label="Coupon Name" htmlFor="cp-name" required width="max-w-[340px]" hint="A name for your team to recognize this coupon. Customers don't see it.">
               <input id="cp-name" value={name} onChange={(e) => { setName(e.target.value); clear(); }} placeholder="e.g. Fall tune-up special" className={inputClass} />
             </FormRow>
-            <FormRow label="Coupon Code" htmlFor="cp-code" required width="max-w-[340px]" hint="What the customer or your team types to get the discount. Letters, numbers, - and _ only.">
+            <FormRow label="Coupon Code" htmlFor="cp-code" required width="max-w-[340px]" hint="A unique code that helps you identify this coupon, and apply it for discounts and promotions. Letters, numbers, - and _ only.">
               <input id="cp-code" value={code} onChange={(e) => { setCode(cleanCode(e.target.value)); clear(); }} placeholder="FALL25" className={`${inputClass} font-medium uppercase tracking-wide`} />
             </FormRow>
-            <FormRow label={dtype === "percent" ? "Discount (%)" : "Discount (USD)"} htmlFor="cp-value" required width="max-w-[340px]">
+            <FormRow label={dtype === "percent" ? "Discount (%)" : "Discount (USD)"} htmlFor="cp-value" required width="max-w-[340px]" hint="Flat takes a fixed amount off. % takes a percentage off the product price.">
               <div className="flex">
                 <input id="cp-value" inputMode="decimal" value={value} placeholder={dtype === "percent" ? "10" : "25.00"}
                   onChange={(e) => { setValue(e.target.value.replace(/[^0-9.]/g, "")); clear(); }} className={`${inputClass} rounded-r-none`} />
@@ -120,8 +123,8 @@ export default function CouponForm({ companyId, products: initialProducts, coupo
         <div className="px-5 py-7 sm:px-8">
           <SectionTitle>Validity</SectionTitle>
           <div className="grid max-w-[1100px] gap-5 xl:grid-cols-2 xl:gap-x-10">
-            <FormRow label="Expiration Date" htmlFor="cp-exp" width="max-w-[340px]">
-              <input id="cp-exp" type="date" value={expires} onChange={(e) => setExpires(e.target.value)} className={inputClass} />
+            <FormRow label="Expiration Date" htmlFor="cp-exp" width="max-w-[340px]" hint="After this date the code can no longer be used. Leave empty so it never expires.">
+              <DatePicker id="cp-exp" value={expires} onChange={setExpires} placeholder="Click to select" minDate={new Date().toLocaleDateString("en-CA")} />
             </FormRow>
             <FormRow label="Maximum Redemptions" htmlFor="cp-max" width="max-w-[340px]" hint="How many times this code can be used in total. Leave empty for no limit.">
               <input id="cp-max" inputMode="numeric" value={maxRed} placeholder="Enter a number" onChange={(e) => setMaxRed(e.target.value.replace(/\D/g, ""))} className={inputClass} />
@@ -138,7 +141,7 @@ export default function CouponForm({ companyId, products: initialProducts, coupo
         </div>
       </div>
 
-      <SaveBar saving={saving} cancelHref="/dashboard/coupons" error={error} onDelete={coupon ? remove : undefined} deleteLabel="Delete coupon" />
+      <SaveBar saving={saving} cancelHref={back} error={error} onDelete={coupon ? remove : undefined} deleteLabel="Delete coupon" />
       <ProductModal open={modal} companyId={companyId} onClose={() => setModal(false)}
         onCreated={(p) => { setProducts((l) => [...l, p].sort((a, b) => a.name.localeCompare(b.name))); setProductId(p.id); clear(); }} />
     </form>

@@ -65,12 +65,12 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
         {!item.href && <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-400">Soon</span>}
       </>
     );
-    const base = `flex items-center gap-3 rounded-lg py-2.5 text-[15px] ${child ? "pl-11 pr-3" : "px-3"} ${item.addHref ? "pr-11" : ""}`;
+    const base = `flex items-center gap-3 rounded-lg py-2.5 text-[15px] transition-all duration-150 ${child ? "pl-11 pr-3" : "px-3"} ${item.addHref ? "pr-11" : ""}`;
     return (
       <li key={item.label} className="group relative">
         {item.href ? (
           <Link href={item.href} onClick={onNavigate}
-            className={`${base} ${active ? "bg-[#e9f7f4] font-semibold text-[#0f766e]" : "text-slate-700 hover:bg-slate-50"}`}>
+            className={`${base} ${active ? "bg-gradient-to-r from-[#0f766e] to-[#14a39a] font-semibold text-white shadow-md shadow-[#0f766e]/25" : "text-slate-700 hover:bg-[#d7f1eb] hover:text-[#0b1f3a] active:bg-[#c3eadf]"}`}>
             {content}
           </Link>
         ) : (
@@ -78,7 +78,7 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
         )}
         {item.addHref && (
           <Link href={item.addHref} onClick={onNavigate} aria-label={`New ${item.label.toLowerCase().replace(/s$/, "")}`} title="Create new"
-            className={`absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-[#0f766e] transition-all hover:bg-[#0f766e] hover:text-white focus:opacity-100 ${active ? "bg-white/70" : "lg:opacity-0 lg:group-hover:opacity-100"}`}>
+            className={`absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md transition-all focus:opacity-100 ${active ? "bg-white/20 text-white hover:bg-white hover:text-[#0f766e]" : "text-[#0f766e] hover:bg-[#0f766e] hover:text-white lg:opacity-0 lg:group-hover:opacity-100"}`}>
             <svg viewBox="0 0 20 20" className="h-4 w-4 transition-transform duration-200 hover:rotate-90" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11" /></svg>
           </Link>
         )}
@@ -96,15 +96,15 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
           return (
             <li key={item.label}>
               <button type="button" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [item.label]: !isOpen }))}
-                className={`group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[15px] transition-colors hover:bg-slate-50 ${inside ? "font-medium text-[#0b1f3a]" : "text-slate-700"}`}>
+                className={`group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[15px] transition-colors hover:bg-[#d7f1eb] ${inside ? "bg-[#e9f7f4] font-semibold text-[#0f766e]" : "text-slate-700 hover:text-[#0b1f3a]"}`}>
                 {icon(item.icon)}
                 <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                <svg viewBox="0 0 20 20" className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} fill="currentColor" aria-hidden="true">
+                <svg viewBox="0 0 20 20" className={`h-4 w-4 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180 text-[#0f766e]" : "text-slate-400"}`} fill="currentColor" aria-hidden="true">
                   <path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" />
                 </svg>
               </button>
               {isOpen && (
-                <ul className="mt-0.5 space-y-0.5">
+                <ul className="mt-0.5 space-y-0.5 animate-[bp-fade_0.2s_ease-out]">
                   {item.children.map((c) => entry(c, true))}
                 </ul>
               )}

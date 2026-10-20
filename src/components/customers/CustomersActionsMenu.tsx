@@ -17,8 +17,8 @@ const Caret = () => (
 const panel =
   "rounded-xl border border-slate-200 bg-white py-1.5 shadow-[0_12px_40px_rgba(15,40,60,0.16)] " +
   "transition duration-150 ease-out data-[closed]:scale-95 data-[closed]:opacity-0";
-const row = "flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-slate-700 hover:bg-[#f0faf7] hover:text-[#0b1f3a]";
-const parentRow = "flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm text-slate-700 hover:bg-[#f0faf7] hover:text-[#0b1f3a]";
+const row = "flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-slate-700 hover:bg-[#d7f1eb] hover:text-[#0b1f3a]";
+const parentRow = "flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm text-slate-700 hover:bg-[#d7f1eb] hover:text-[#0b1f3a]";
 const heading = "px-4 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400";
 
 // Una fila del menú que abre un submenú a la izquierda al pasar el ratón
@@ -29,7 +29,7 @@ function Flyout({ icon, label, side, children }: { icon: string; label: string; 
   const hide = () => { timer.current = setTimeout(() => setOpen(false), 120); };
   return (
     <div className="relative" onMouseEnter={show} onMouseLeave={hide}>
-      <button type="button" className={`${parentRow} ${open ? "bg-[#f0faf7] text-[#0b1f3a]" : ""}`} onClick={() => setOpen((v) => !v)}>
+      <button type="button" className={`${parentRow} ${open ? "bg-[#d7f1eb] text-[#0b1f3a]" : ""}`} onClick={() => setOpen((v) => !v)}>
         <span className="flex items-center gap-3"><Ico d={icon} />{label}</span>
         <Caret />
       </button>

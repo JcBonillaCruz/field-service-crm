@@ -3,18 +3,27 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-// Módulos donde se puede buscar (hoy solo Customers; el resto llega después)
-const MODULES = ["Customers", "Items", "Quotes", "Invoices", "Subscriptions", "Credit notes", "Expenses", "Projects", "Tasks"];
-const ENABLED = new Set(["Customers"]);
+// Módulos donde se puede buscar (el resto llega después)
+const MODULES = ["Customers", "Items", "Coupons", "Quotes", "Invoices", "Subscriptions", "Credit notes", "Expenses", "Projects", "Tasks"];
+const ROUTES: Record<string, string> = { Customers: "/dashboard/customers", Items: "/dashboard/items", Coupons: "/dashboard/coupons" };
+const ENABLED = new Set(Object.keys(ROUTES));
+const moduleFor = (path: string) => Object.entries(ROUTES).find(([, r]) => path.startsWith(r))?.[0] ?? "Customers";
 
 export default function TopSearch() {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
-  const onCustomers = pathname === "/dashboard/customers";
-
-  const [module, setModule] = useState("Customers");
+  const [module, setModule] = useState(() => moduleFor(pathname));
+  const route = ROUTES[module];
+  const onCustomers = pathname === route; // estamos en la lista del módulo elegido
   const [q, setQ] = useState(onCustomers ? sp.get("q") ?? "" : "");
+
+  // Al cambiar de sección, el buscador cambia solo a ese módulo
+  useEffect(() => {
+    const m = moduleFor(pathname);
+    if (Object.values(ROUTES).some((r) => pathname.startsWith(r)) && m !== module) { setModule(m); setQ(pathname === ROUTES[m] ? sp.get("q") ?? "" : ""); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
   const [focused, setFocused] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [seed, setSeed] = useState("bp");
@@ -33,9 +42,9 @@ export default function TopSearch() {
         const params = new URLSearchParams(sp.toString());
         if (term) params.set("q", term); else params.delete("q");
         const qs = params.toString();
-        router.replace(`/dashboard/customers${qs ? `?${qs}` : ""}`, { scroll: false });
+        router.replace(`${route}${qs ? `?${qs}` : ""}`, { scroll: false });
       } else {
-        router.push(term ? `/dashboard/customers?q=${encodeURIComponent(term)}` : "/dashboard/customers");
+        router.push(term ? `${route}?q=${encodeURIComponent(term)}` : route);
       }
     }, 300);
     return () => clearTimeout(id);
@@ -55,7 +64,7 @@ export default function TopSearch() {
       const params = new URLSearchParams(sp.toString());
       params.delete("q");
       const qs = params.toString();
-      router.replace(`/dashboard/customers${qs ? `?${qs}` : ""}`, { scroll: false });
+      router.replace(`${route}${qs ? `?${qs}` : ""}`, { scroll: false });
     }
   }
 

@@ -92,7 +92,7 @@ export default function CustomersWorkspace({
                     {VIEWS.map((v) => (
                       <MenuItem key={v.value}>
                         <button type="button" onClick={() => switchView(v.value)}
-                          className="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-slate-700 data-[focus]:bg-[#f0faf7] data-[focus]:text-[#0b1f3a]">
+                          className="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-slate-700 data-[focus]:bg-[#d7f1eb] data-[focus]:text-[#0b1f3a]">
                           {v.label}
                           {v.value === view.value && (
                             <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#0f766e]" fill="currentColor" aria-hidden="true">
@@ -244,7 +244,7 @@ function CompactRow({ c, active }: { c: ListRow; active: boolean }) {
   return (
     <li className="group relative">
       <Link href={`/dashboard/customers/${c.id}`}
-        className={`flex items-center gap-3 px-4 py-3 transition-colors ${active ? "bg-[#e9f7f4]" : "hover:bg-[#f6fbfa]"}`}>
+        className={`relative flex items-center gap-3 px-4 py-3 transition-colors ${active ? "bg-[#d7f1eb] before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-[#0f766e]" : "hover:bg-[#f0faf7]"}`}>
         <Avatar name={c.display_name} url={null} seed={c.id} size={38} />
         <span className="min-w-0 flex-1 pr-8">
           <span className={`block truncate font-medium ${active ? "text-[#0f766e]" : "text-[#0b1f3a]"}`}>{c.display_name}</span>
@@ -263,7 +263,7 @@ function WideRow({ c }: { c: ListRow }) {
   return (
     <li className="group relative">
       <Link href={`/dashboard/customers/${c.id}`}
-        className={`grid gap-1 px-5 py-4 transition-colors hover:bg-[#f6fbfa] md:items-center md:gap-4 ${COLS}`}>
+        className={`grid gap-1 px-5 py-4 transition-colors hover:bg-[#f0faf7] md:items-center md:gap-4 ${COLS}`}>
         <span className="flex min-w-0 items-center gap-3">
           <Avatar name={c.display_name} url={null} seed={c.id} size={36} />
           <span className="min-w-0">

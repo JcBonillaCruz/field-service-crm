@@ -11,11 +11,13 @@ const display = (s: string) => { if (!s) return ""; const d = fromStr(s); return
 
 // Calendario con nuestro diseño (reemplaza el del navegador)
 export default function DatePicker({
-  value, onChange, placeholder = "mm/dd/yyyy",
+  value, onChange, placeholder = "mm/dd/yyyy", minDate, id,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+  minDate?: string; // "yyyy-mm-dd": los días anteriores salen apagados (como Zoho)
+  id?: string;
 }) {
   const [cursor, setCursor] = useState(() => (value ? fromStr(value) : new Date()));
   const year = cursor.getFullYear();
@@ -30,7 +32,7 @@ export default function DatePicker({
 
   return (
     <Popover className="relative">
-      <PopoverButton className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[15px] focus:border-[#0f766e] focus:bg-white focus:outline-none data-[open]:border-[#0f766e] data-[open]:bg-white">
+      <PopoverButton id={id} className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[15px] focus:border-[#0f766e] focus:bg-white focus:outline-none data-[open]:border-[#0f766e] data-[open]:bg-white">
         <span className={value ? "text-slate-800" : "text-slate-400"}>{value ? display(value) : placeholder}</span>
         <svg viewBox="0 0 20 20" className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="4" width="14" height="13" rx="2" /><path d="M3 8h14M7 2v3M13 2v3" strokeLinecap="round" /></svg>
       </PopoverButton>
@@ -58,9 +60,10 @@ export default function DatePicker({
                 const ds = toStr(new Date(year, month, d));
                 const selected = ds === value;
                 const isToday = ds === today;
+                const off = Boolean(minDate && ds < minDate);
                 return (
-                  <button key={i} type="button" onClick={() => { onChange(ds); close(); }}
-                    className={`h-9 rounded-lg text-sm transition-colors ${selected ? "bg-[#0f766e] font-semibold text-white" : isToday ? "bg-[#e9f7f4] font-medium text-[#0f766e]" : "text-slate-700 hover:bg-slate-100"}`}>
+                  <button key={i} type="button" disabled={off} onClick={() => { onChange(ds); close(); }}
+                    className={`h-9 rounded-lg text-sm transition-colors ${off ? "cursor-not-allowed text-slate-300" : selected ? "bg-[#0f766e] font-semibold text-white" : isToday ? "bg-[#e9f7f4] font-medium text-[#0f766e]" : "text-slate-700 hover:bg-slate-100"}`}>
                     {d}
                   </button>
                 );

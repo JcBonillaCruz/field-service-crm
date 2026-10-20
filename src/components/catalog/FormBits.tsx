@@ -2,21 +2,48 @@
 
 import Link from "next/link";
 
-// Piezas compartidas de los formularios del catálogo (mismo diseño que New Customer)
+// Globito de ayuda (como Zoho): aparece al pasar el mouse por el nombre del campo o por la (i)
+export function Tip({ text, children, side = "right" }: { text: string; children: React.ReactNode; side?: "right" | "top" }) {
+  return (
+    <span className="group/tip relative inline-flex items-center">
+      {children}
+      <span role="tooltip"
+        className={`pointer-events-none absolute z-[70] w-max max-w-[17rem] rounded-lg bg-[#0b1f3a] px-3 py-2 text-left text-[13px] font-normal leading-snug text-white opacity-0 shadow-[0_10px_30px_rgba(11,31,58,0.28)] transition-all duration-150 group-hover/tip:opacity-100 group-focus-within/tip:opacity-100 ${
+          side === "right"
+            ? "bottom-full left-0 mb-2 translate-y-1 group-hover/tip:translate-y-0 lg:bottom-auto lg:left-full lg:top-1/2 lg:mb-0 lg:ml-3 lg:-translate-y-1/2 lg:translate-x-1 lg:group-hover/tip:-translate-y-1/2 lg:group-hover/tip:translate-x-0"
+            : "bottom-full left-1/2 mb-2 -translate-x-1/2 translate-y-1 group-hover/tip:translate-y-0"
+        }`}>
+        {text}
+        <span className={`absolute h-2.5 w-2.5 rotate-45 bg-[#0b1f3a] ${side === "right" ? "left-4 top-full -mt-1.5 lg:-left-1 lg:top-1/2 lg:mt-0 lg:-translate-y-1/2" : "left-1/2 top-full -mt-1.5 -translate-x-1/2"}`} />
+      </span>
+    </span>
+  );
+}
+
+export const InfoIcon = () => (
+  <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-400 transition-colors group-hover/tip:text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><circle cx="10" cy="10" r="7.5" /><path d="M10 9v4.5M10 6.5v.01" strokeLinecap="round" /></svg>
+);
+
+// Fila del formulario. Si tiene ayuda, el nombre lleva subrayado punteado + (i) y al hacer clic NO salta al campo.
 export function FormRow({ label, htmlFor, required, hint, alignTop, children, width = "max-w-[460px]" }: {
   label: string; htmlFor?: string; required?: boolean; hint?: string; alignTop?: boolean; children: React.ReactNode; width?: string;
 }) {
+  const text = <>{label}{required && "*"}</>;
   return (
     <div className={`grid gap-1.5 lg:grid-cols-[10.5rem_minmax(0,1fr)] lg:gap-6 ${alignTop ? "lg:items-start" : "lg:items-center"}`}>
-      <label htmlFor={htmlFor} className={`flex items-center gap-1.5 text-[15px] ${alignTop ? "lg:pt-2.5" : ""} ${required ? "text-red-600" : "text-slate-700"}`}>
-        {label}{required && "*"}
-        {hint && (
-          <span title={hint} className="text-slate-400">
-            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><circle cx="10" cy="10" r="7.5" /><path d="M10 9v4.5M10 6.5v.01" strokeLinecap="round" /></svg>
-            <span className="sr-only">{hint}</span>
-          </span>
+      <div className={`flex items-center text-[15px] ${alignTop ? "lg:pt-2.5" : ""} ${required ? "text-red-600" : "text-slate-700"}`}>
+        {hint ? (
+          <Tip text={hint}>
+            <label htmlFor={htmlFor} onClick={(e) => e.preventDefault()} tabIndex={0}
+              className="flex cursor-help items-center gap-1.5 focus:outline-none">
+              <span className="border-b border-dotted border-current pb-px">{text}</span>
+              <InfoIcon />
+            </label>
+          </Tip>
+        ) : (
+          <label htmlFor={htmlFor}>{text}</label>
         )}
-      </label>
+      </div>
       <div className={width}>{children}</div>
     </div>
   );
