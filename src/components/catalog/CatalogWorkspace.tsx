@@ -249,12 +249,12 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
             <h1 className="text-2xl font-semibold tracking-tight text-[#0b1f3a]">{info.plural}</h1>
             <div className="flex items-center gap-0.5">
               <button type="button" aria-label="Search" onClick={() => setMSearch((v) => !v)}
-                className={`flex h-10 w-10 items-center justify-center rounded-lg ${mSearch || q ? "bg-[#e9f7f4] text-[#0f766e]" : "text-slate-600 active:bg-slate-100"}`}>
-                <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
+                className={`flex h-12 w-12 items-center justify-center rounded-xl ${mSearch || q ? "bg-[#e9f7f4] text-[#0f766e]" : "text-slate-700 active:bg-slate-100"}`}>
+                <svg viewBox="0 0 20 20" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
               </button>
               {module === "items" && (
-                <button type="button" aria-label="Scan barcode" onClick={() => setScanOpen(true)} className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100">
-                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M8 8v8M11 8v8M14 8v8M17 8v8" /></svg>
+                <button type="button" aria-label="Scan barcode" onClick={() => setScanOpen(true)} className="flex h-12 w-12 items-center justify-center rounded-xl text-slate-700 active:bg-slate-100">
+                  <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M8 8v8M11 8v8M14 8v8M17 8v8" /></svg>
                 </button>
               )}
               <button type="button" aria-label="Sort" onClick={() => setMSheet("sort")} className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100">
