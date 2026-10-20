@@ -15,12 +15,18 @@ type NavItem = {
   addHref?: string; // botón "+" para crear directo desde el menú
   icon: string;
   roles?: Role[];
+  children?: NavItem[]; // grupo plegable (ej. Product Catalog → Items, Coupons)
 };
 
 // Íconos de línea (24 px). "roles": quién ve cada opción. Sin "roles", la ven todos.
 const NAV: NavItem[] = [
   { label: "Home", href: "/dashboard", icon: "M4 10.2 12 4l8 6.2V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z" },
   { label: "Customers", href: "/dashboard/customers", addHref: "/dashboard/customers/new", icon: "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2.5 20a6.5 6.5 0 0 1 13 0M16 4.3a3.5 3.5 0 0 1 0 6.4M18.5 14.2a6.5 6.5 0 0 1 3 5.8", roles: ["owner", "manager", "office"] },
+  { label: "Product Catalog", icon: "M5 8.5h14l-1.2 11a1.5 1.5 0 0 1-1.5 1.3H7.7a1.5 1.5 0 0 1-1.5-1.3zM9 8.5V7a3 3 0 0 1 6 0v1.5M9.5 13h5", roles: ["owner", "manager", "office"],
+    children: [
+      { label: "Items", href: "/dashboard/items", addHref: "/dashboard/items/new", icon: "" },
+      { label: "Coupons", href: "/dashboard/coupons", addHref: "/dashboard/coupons/new", icon: "" },
+    ] },
   { label: "Quotes & contracts", icon: "M13.5 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4.5M13.5 3 19 8.5M13.5 3v5.5H19M9 12.5h5M9 16h2.5M15 21l5-5-1.8-1.8-5 5V21z", roles: ["owner", "manager", "office"] },
   { label: "Invoices", icon: "M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4L6 21zM14.5 8.2c-.4-.7-1.3-1.1-2.5-1.1-1.4 0-2.5.6-2.5 1.6s1.1 1.4 2.5 1.7 2.5.7 2.5 1.7-1.1 1.7-2.5 1.7c-1.2 0-2.1-.4-2.5-1.1M12 5.8v10", roles: ["owner", "manager", "office"] },
   { label: "Payments", icon: "M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 10h18M7 15h3", roles: ["owner", "manager"] },
@@ -36,37 +42,71 @@ const NAV: NavItem[] = [
 function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => void }) {
   const pathname = usePathname();
   const items = NAV.filter((i) => !i.roles || (role && i.roles.includes(role)));
+  const isActive = (href?: string) => Boolean(href && (href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href)));
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    // Abre el grupo cuando estás dentro de una de sus páginas
+    NAV.forEach((g) => { if (g.children?.some((c) => isActive(c.href))) setOpen((o) => (o[g.label] ? o : { ...o, [g.label]: true })); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  const icon = (d: string) => (
+    <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 group-hover:animate-[bp-nav-pop_0.5s_ease-out_forwards]" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={d} />
+    </svg>
+  );
+
+  function entry(item: NavItem, child = false) {
+    const active = isActive(item.href);
+    const content = (
+      <>
+        {!child && icon(item.icon)}
+        <span className="min-w-0 flex-1 truncate">{item.label}</span>
+        {!item.href && <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-400">Soon</span>}
+      </>
+    );
+    const base = `flex items-center gap-3 rounded-lg py-2.5 text-[15px] ${child ? "pl-11 pr-3" : "px-3"} ${item.addHref ? "pr-11" : ""}`;
+    return (
+      <li key={item.label} className="group relative">
+        {item.href ? (
+          <Link href={item.href} onClick={onNavigate}
+            className={`${base} ${active ? "bg-[#e9f7f4] font-semibold text-[#0f766e]" : "text-slate-700 hover:bg-slate-50"}`}>
+            {content}
+          </Link>
+        ) : (
+          <span className={`${base} cursor-default text-slate-400`} aria-disabled="true">{content}</span>
+        )}
+        {item.addHref && (
+          <Link href={item.addHref} onClick={onNavigate} aria-label={`New ${item.label.toLowerCase().replace(/s$/, "")}`} title="Create new"
+            className={`absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-[#0f766e] transition-all hover:bg-[#0f766e] hover:text-white focus:opacity-100 ${active ? "bg-white/70" : "lg:opacity-0 lg:group-hover:opacity-100"}`}>
+            <svg viewBox="0 0 20 20" className="h-4 w-4 transition-transform duration-200 hover:rotate-90" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11" /></svg>
+          </Link>
+        )}
+      </li>
+    );
+  }
 
   return (
     <nav className="flex-1 overflow-y-auto px-3 py-4">
       <ul className="space-y-0.5">
         {items.map((item) => {
-          const active = item.href && (item.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(item.href));
-          const content = (
-            <>
-              <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 group-hover:animate-[bp-nav-pop_0.5s_ease-out_forwards]" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d={item.icon} />
-              </svg>
-              <span className="min-w-0 flex-1 truncate">{item.label}</span>
-              {!item.href && <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-400">Soon</span>}
-            </>
-          );
-          const base = `flex items-center gap-3 rounded-lg px-3 py-2.5 text-[15px] ${item.addHref ? "pr-11" : ""}`;
+          if (!item.children) return entry(item);
+          const isOpen = Boolean(open[item.label]);
+          const inside = item.children.some((c) => isActive(c.href));
           return (
-            <li key={item.label} className="group relative">
-              {item.href ? (
-                <Link href={item.href} onClick={onNavigate}
-                  className={`${base} ${active ? "bg-[#e9f7f4] font-semibold text-[#0f766e]" : "text-slate-700 hover:bg-slate-50"}`}>
-                  {content}
-                </Link>
-              ) : (
-                <span className={`${base} cursor-default text-slate-400`} aria-disabled="true">{content}</span>
-              )}
-              {item.addHref && (
-                <Link href={item.addHref} onClick={onNavigate} aria-label={`New ${item.label.toLowerCase().replace(/s$/, "")}`} title="Create new"
-                  className={`absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-[#0f766e] transition-all hover:bg-[#0f766e] hover:text-white focus:opacity-100 ${active ? "bg-white/70" : "lg:opacity-0 lg:group-hover:opacity-100"}`}>
-                  <svg viewBox="0 0 20 20" className="h-4 w-4 transition-transform duration-200 hover:rotate-90" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11" /></svg>
-                </Link>
+            <li key={item.label}>
+              <button type="button" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [item.label]: !isOpen }))}
+                className={`group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[15px] transition-colors hover:bg-slate-50 ${inside ? "font-medium text-[#0b1f3a]" : "text-slate-700"}`}>
+                {icon(item.icon)}
+                <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                <svg viewBox="0 0 20 20" className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} fill="currentColor" aria-hidden="true">
+                  <path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" />
+                </svg>
+              </button>
+              {isOpen && (
+                <ul className="mt-0.5 space-y-0.5">
+                  {item.children.map((c) => entry(c, true))}
+                </ul>
               )}
             </li>
           );
