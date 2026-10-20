@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -44,28 +44,42 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
   const items = NAV.filter((i) => !i.roles || (role && i.roles.includes(role)));
   const isActive = (href?: string) => Boolean(href && (href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href)));
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const leaveTimer = useRef<ReturnType<typeof setTimeout>>();
+  // Solo queda abierto el grupo donde estás. Al ir a Home, Customers, etc. se vuelve a cerrar.
+  const insideGroups = () => Object.fromEntries(NAV.filter((g) => g.children?.some((c) => isActive(c.href))).map((g) => [g.label, true]));
   useEffect(() => {
-    // Abre el grupo cuando estás dentro de una de sus páginas
-    NAV.forEach((g) => { if (g.children?.some((c) => isActive(c.href))) setOpen((o) => (o[g.label] ? o : { ...o, [g.label]: true })); });
+    setOpen(insideGroups());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
   const icon = (d: string) => (
-    <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 group-hover:animate-[bp-nav-pop_0.5s_ease-out_forwards]" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] shrink-0 group-hover:animate-[bp-nav-pop_0.5s_ease-out_forwards]" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d={d} />
     </svg>
+  );
+  // Flechita a la izquierda (como Zoho). Los que no tienen grupo dejan el mismo espacio para que todo quede alineado.
+  const caret = (isOpen?: boolean) => (
+    <span className="flex w-3.5 shrink-0 justify-center">
+      {isOpen !== undefined && (
+        <svg viewBox="0 0 20 20" className={`h-3.5 w-3.5 transition-transform duration-200 ${isOpen ? "text-[#0f766e]" : "-rotate-90 text-slate-400"}`} fill="currentColor" aria-hidden="true">
+          <path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" />
+        </svg>
+      )}
+    </span>
   );
 
   function entry(item: NavItem, child = false) {
     const active = isActive(item.href);
     const content = (
       <>
+        {!child && caret()}
         {!child && icon(item.icon)}
         <span className="min-w-0 flex-1 truncate">{item.label}</span>
-        {!item.href && <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-400">Soon</span>}
+        {!item.href && <span className="shrink-0 rounded-full bg-slate-200/70 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">Soon</span>}
       </>
     );
-    const base = `flex items-center gap-3 rounded-lg py-2.5 text-[15px] transition-all duration-150 ${child ? "pl-11 pr-3" : "px-3"} ${item.addHref ? "pr-11" : ""}`;
+    const base = `flex items-center gap-2.5 rounded-lg py-2 text-[13px] transition-all duration-150 ${child ? "pl-[3.35rem] pr-2.5" : "px-2.5"} ${item.addHref ? "pr-10" : ""}`;
+    const singular = item.label.replace(/s$/, "");
     return (
       <li key={item.label} className="group relative">
         {item.href ? (
@@ -77,9 +91,13 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
           <span className={`${base} cursor-default text-slate-400`} aria-disabled="true">{content}</span>
         )}
         {item.addHref && (
-          <Link href={item.addHref} onClick={onNavigate} aria-label={`New ${item.label.toLowerCase().replace(/s$/, "")}`} title="Create new"
-            className={`absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md transition-all focus:opacity-100 ${active ? "bg-white/20 text-white hover:bg-white hover:text-[#0f766e]" : "text-[#0f766e] hover:bg-[#0f766e] hover:text-white lg:opacity-0 lg:group-hover:opacity-100"}`}>
-            <svg viewBox="0 0 20 20" className="h-4 w-4 transition-transform duration-200 hover:rotate-90" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11" /></svg>
+          <Link href={item.addHref} onClick={onNavigate} aria-label={`New ${singular}`} title={`New ${singular}`}
+            className={`absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md transition-all duration-150 focus:opacity-100 ${
+              active
+                ? "bg-white/25 text-white hover:scale-110 hover:bg-white hover:text-[#0f766e] hover:shadow-md"
+                : "bg-slate-200/80 text-slate-500 hover:scale-110 hover:bg-[#0f766e] hover:text-white hover:shadow-md hover:shadow-[#0f766e]/30 lg:opacity-0 lg:group-hover:opacity-100"
+            }`}>
+            <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 transition-transform duration-200 hover:rotate-90" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11" /></svg>
           </Link>
         )}
       </li>
@@ -87,7 +105,10 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
   }
 
   return (
-    <nav className="flex-1 overflow-y-auto px-3 py-4">
+    <nav className="flex-1 overflow-y-auto px-2.5 py-3"
+      onMouseEnter={() => clearTimeout(leaveTimer.current)}
+      // Si abriste un grupo y sacas el mouse del menú sin elegir nada, se vuelve a cerrar
+      onMouseLeave={() => { leaveTimer.current = setTimeout(() => setOpen(insideGroups()), 700); }}>
       <ul className="space-y-0.5">
         {items.map((item) => {
           if (!item.children) return entry(item);
@@ -96,12 +117,10 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
           return (
             <li key={item.label}>
               <button type="button" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [item.label]: !isOpen }))}
-                className={`group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[15px] transition-colors hover:bg-[#d7f1eb] ${inside ? "bg-[#e9f7f4] font-semibold text-[#0f766e]" : "text-slate-700 hover:text-[#0b1f3a]"}`}>
+                className={`group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] transition-colors hover:bg-[#d7f1eb] ${inside ? "bg-[#e9f7f4] font-semibold text-[#0f766e]" : "text-slate-700 hover:text-[#0b1f3a]"}`}>
+                {caret(isOpen)}
                 {icon(item.icon)}
                 <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                <svg viewBox="0 0 20 20" className={`h-4 w-4 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180 text-[#0f766e]" : "text-slate-400"}`} fill="currentColor" aria-hidden="true">
-                  <path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" />
-                </svg>
               </button>
               {isOpen && (
                 <ul className="mt-0.5 space-y-0.5 animate-[bp-fade_0.2s_ease-out]">
@@ -142,8 +161,8 @@ export default function AppShell({
   return (
     <div className="min-h-screen bg-[#f4f6f8] lg:pl-64">
       {/* Menú fijo en computadora */}
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-slate-200 bg-white lg:flex">
-        <div className="flex h-16 items-center border-b border-slate-200 px-6">
+      <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-[#dfe7ee] bg-[#f4f7fa] lg:flex">
+        <div className="flex h-16 items-center border-b border-[#cde8e0] bg-[#e7f5f1] px-6">
           <Image src="/logo-brightpro.png" alt="BrightPro" width={140} height={38} className="h-8 w-auto" priority />
         </div>
         <NavList role={role} />
@@ -153,8 +172,8 @@ export default function AppShell({
       {menuOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <button type="button" aria-label="Close menu" onClick={() => setMenuOpen(false)} className="absolute inset-0 bg-slate-900/30" />
-          <aside className="absolute inset-y-0 left-0 flex w-[82%] max-w-xs flex-col bg-white shadow-2xl">
-            <div className="flex h-16 items-center justify-between border-b border-slate-200 px-5">
+          <aside className="absolute inset-y-0 left-0 flex w-[82%] max-w-xs flex-col bg-[#f4f7fa] shadow-2xl">
+            <div className="flex h-16 items-center justify-between border-b border-[#cde8e0] bg-[#e7f5f1] px-5">
               <Image src="/logo-brightpro.png" alt="BrightPro" width={130} height={36} className="h-7 w-auto" />
               <button type="button" onClick={() => setMenuOpen(false)} aria-label="Close menu" className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
                 <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor" aria-hidden="true">

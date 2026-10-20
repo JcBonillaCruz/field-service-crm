@@ -1,11 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import { createClient } from "@/lib/supabase/client";
 import { FIELD_LABELS, HistoryRow, Item, usd } from "@/lib/catalog";
-import { CloseButton, HistoryTable, ICONS, MoreMenu, PencilButton, Tabs } from "@/components/catalog/DetailBits";
+import { CloseButton, HistoryTable, ICONS, MenuAction, MoreMenu, PencilButton, Tabs, Timeline } from "@/components/catalog/DetailBits";
+import BottomSheet from "@/components/customers/BottomSheet";
+import MobileSortSheet from "@/components/customers/MobileSortSheet";
 
 const TABS = ["Overview", "Transactions", "History"];
 
@@ -30,8 +32,16 @@ export default function ItemDetailView({ item, history, companyId }: { item: Ite
     router.refresh();
   }
 
+  const actions = [
+    { label: "Clone Item", href: `/dashboard/items/new?clone=${item.id}`, icon: ICONS.clone },
+    { label: item.is_active ? "Mark as Inactive" : "Mark as Active", onClick: busy ? undefined : toggleActive, icon: item.is_active ? ICONS.off : ICONS.on },
+    { label: "Delete", onClick: remove, danger: true, icon: ICONS.trash },
+  ];
+
   return (
-    <div className="flex min-h-full flex-col bg-white">
+    <>
+    <ItemMobile item={item} history={history} companyId={companyId} actions={actions} msg={msg} />
+    <div className="hidden min-h-full flex-col bg-white lg:flex">
       <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 pb-1 pt-4 sm:px-7">
         <div className="min-w-0">
           <h1 className="truncate text-[22px] font-semibold tracking-tight text-[#0b1f3a]">{item.name}</h1>
@@ -39,11 +49,7 @@ export default function ItemDetailView({ item, history, companyId }: { item: Ite
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <PencilButton href={`/dashboard/items/${item.id}/edit`} label="Edit item" />
-          <MoreMenu actions={[
-            { label: "Clone Item", href: `/dashboard/items/new?clone=${item.id}`, icon: ICONS.clone },
-            { label: item.is_active ? "Mark as Inactive" : "Mark as Active", onClick: busy ? undefined : toggleActive, icon: item.is_active ? ICONS.off : ICONS.on },
-            { label: "Delete", onClick: remove, danger: true, icon: ICONS.trash },
-          ]} />
+          <MoreMenu actions={actions} />
           <CloseButton href="/dashboard/items" />
         </div>
       </div>
@@ -62,6 +68,7 @@ export default function ItemDetailView({ item, history, companyId }: { item: Ite
         )}
       </div>
     </div>
+    </>
   );
 }
 
@@ -111,14 +118,12 @@ function Overview({ item, companyId }: { item: Item; companyId: string }) {
   );
 }
 
-// Foto del item: se puede subir o quitar aquí mismo
-function ImageBox({ item, companyId }: { item: Item; companyId: string }) {
+// Foto del item: se puede subir o quitar aquí mismo (escritorio y celular)
+function useItemImage(item: Item, companyId: string) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [drag, setDrag] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState("");
-
   async function save(url: string | null) {
     const { error } = await createClient().from("items").update({ image_url: url, updated_at: new Date().toISOString() }).eq("id", item.id);
     if (error) return setErr("The image couldn't be saved.");
@@ -136,10 +141,17 @@ function ImageBox({ item, companyId }: { item: Item; companyId: string }) {
     if (error) return setErr("The image couldn't be uploaded.");
     await save(supabase.storage.from("item-images").getPublicUrl(path).data.publicUrl);
   }
+  const input = <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => upload(e.target.files?.[0])} />;
+  return { fileRef, uploading, err, save, upload, input };
+}
+
+function ImageBox({ item, companyId }: { item: Item; companyId: string }) {
+  const { fileRef, uploading, err, save, upload, input } = useItemImage(item, companyId);
+  const [drag, setDrag] = useState(false);
 
   return (
     <div className="shrink-0">
-      <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => upload(e.target.files?.[0])} />
+      {input}
       <div onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
         onDrop={(e) => { e.preventDefault(); setDrag(false); upload(e.dataTransfer.files?.[0]); }}
         className={`group/img relative flex h-56 w-full flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed bg-white text-center transition-colors sm:w-64 ${drag ? "border-[#14a39a] bg-[#f0faf7]" : "border-slate-300"}`}>
@@ -224,3 +236,194 @@ function Pick({ label, value, options, onChange }: { label: string; value: strin
     </Menu>
   );
 }
+
+/* ====================================================================
+   CELULAR (como la app de Zoho): encabezado con precio + foto,
+   pestañas DETAILS / TRANSACTIONS / HISTORY que se deslizan con el dedo
+   ==================================================================== */
+const M_TABS = ["Details", "Transactions", "History"];
+const Q_STATUSES = ["All", "Draft", "Sent", "Client Viewed", "Accepted", "Invoiced", "Declined", "Expired"];
+const I_STATUSES = ["All", "Draft", "Sent", "Viewed", "Partially Paid", "Paid", "Overdue", "Void"];
+
+function ItemMobile({ item, history, companyId, actions, msg }: { item: Item; history: HistoryRow[]; companyId: string; actions: MenuAction[]; msg: string }) {
+  const img = useItemImage(item, companyId);
+  const scroller = useRef<HTMLDivElement>(null);
+  const [idx, setIdx] = useState(0);
+  const go = (i: number) => { const el = scroller.current; if (el) el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" }); setIdx(i); };
+  const onScroll = () => { const el = scroller.current; if (el) setIdx(Math.round(el.scrollLeft / el.clientWidth)); };
+
+  return (
+    <div className="flex min-h-[calc(100vh-4rem)] flex-col bg-[#f4f6f8] lg:hidden">
+      {img.input}
+      <div className="bg-[#e7f5f1] px-4 pb-5 pt-3">
+        <div className="flex items-center justify-end gap-2">
+          <PencilButton href={`/dashboard/items/${item.id}/edit`} label="Edit item" />
+          <MoreMenu actions={actions} />
+          <CloseButton href="/dashboard/items" />
+        </div>
+        <h1 className="mt-2 text-[22px] font-semibold leading-tight text-[#0b1f3a]">{item.name}</h1>
+        {!item.is_active && <span className="mt-1 inline-flex rounded-full bg-white px-2.5 py-0.5 text-xs font-medium text-slate-500">Inactive</span>}
+        <div className="mt-4 flex items-end justify-between gap-4">
+          <div>
+            <p className="text-sm text-slate-500">Selling Price</p>
+            <p className="text-[26px] font-semibold tabular-nums text-[#0b1f3a]">{usd(item.selling_price)}</p>
+          </div>
+          <button type="button" onClick={() => img.fileRef.current?.click()}
+            className="flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white bg-white text-center text-[15px] font-medium text-slate-600 shadow-sm active:scale-95">
+            {item.image_url
+              // eslint-disable-next-line @next/next/no-img-element
+              ? <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
+              : <span className="px-2">{img.uploading ? "Uploading..." : "+ Add Image"}</span>}
+          </button>
+        </div>
+        {(img.err || msg) && <p role="alert" className="mt-2 text-sm text-red-600">{img.err || msg}</p>}
+      </div>
+
+      <div className="sticky top-16 z-10 grid grid-cols-3 border-b border-slate-200 bg-white shadow-sm">
+        {M_TABS.map((t, i) => (
+          <button key={t} type="button" onClick={() => go(i)}
+            className={`relative py-3.5 text-[13px] font-semibold uppercase tracking-wide transition-colors ${idx === i ? "text-[#0f766e]" : "text-slate-600"}`}>
+            {t}
+            <span className={`absolute inset-x-3 bottom-0 h-[3px] rounded-full bg-[#0f766e] transition-transform duration-200 ${idx === i ? "scale-x-100" : "scale-x-0"}`} />
+          </button>
+        ))}
+      </div>
+
+      <div ref={scroller} onScroll={onScroll}
+        className="flex flex-1 snap-x snap-mandatory items-start overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="w-full shrink-0 snap-start space-y-3 p-3"><MDetails item={item} /></div>
+        <div className="w-full shrink-0 snap-start p-3"><MTransactions /></div>
+        <div className="w-full shrink-0 snap-start p-3">
+          <div className="rounded-xl bg-white px-4 py-5 shadow-[0_1px_2px_rgba(15,40,60,0.06)]">
+            <Timeline rows={(history.length ? history : [{ id: "c", action: "created", actor_name: null, changes: null, created_at: item.created_at }]).map((h) => ({
+              id: h.id, title: `${h.action} by`, who: h.actor_name, when: h.created_at,
+              note: h.changes?.length ? h.changes.map((c) => FIELD_LABELS[c] ?? c).join(", ") : undefined,
+            }))} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Card({ title, icon, children }: { title: string; icon: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-xl bg-white px-4 py-4 shadow-[0_1px_2px_rgba(15,40,60,0.06)]">
+      <h2 className="mb-3 flex items-center gap-2.5 text-[17px] font-semibold text-[#0b1f3a]">
+        <svg viewBox="0 0 24 24" className="h-5 w-5 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={icon} /></svg>
+        {title}
+      </h2>
+      {children}
+    </section>
+  );
+}
+const MInfo = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <div className="py-2"><p className="text-sm text-slate-500">{label}</p><p className="mt-0.5 text-[16px] text-[#0b1f3a]">{children}</p></div>
+);
+
+function MDetails({ item }: { item: Item }) {
+  const [desc, setDesc] = useState(false);
+  return (
+    <>
+      <Card title="Sales Information" icon="M3 8.5V5a2 2 0 0 1 2-2h3.5L20 14.5 14.5 20 3 8.5zM7.5 7.5h.01">
+        <MInfo label="Selling Price">{usd(item.selling_price)}</MInfo>
+        <MInfo label="Sales Account">{item.account}</MInfo>
+        {item.description && (
+          <>
+            <button type="button" onClick={() => setDesc((v) => !v)} className="mt-1 text-[15px] font-medium text-[#0f9f6e]">{desc ? "Hide description" : "Show description"}</button>
+            {desc && <p className="mt-2 whitespace-pre-line rounded-lg bg-[#f6fbfa] px-3 py-2 text-[15px] text-slate-700 animate-[bp-fade_0.2s_ease-out]">{item.description}</p>}
+          </>
+        )}
+      </Card>
+      <Card title="Sales Summary" icon="M4 19V5M4 19h16M8 15v-3M12 15V8M16 15v-5">
+        <div className="grid grid-cols-2 gap-2">
+          {[["Quotes", "0"], ["Invoices", "0"], ["Units Sold", "0"], ["Total Sold", usd(0)]].map(([l, v]) => (
+            <div key={l} className="rounded-lg bg-[#f6fbfa] px-3 py-2.5">
+              <p className="text-xs text-slate-500">{l}</p><p className="text-lg font-semibold tabular-nums text-[#0b1f3a]">{v}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
+      <Card title="More Information" icon="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z">
+        <MInfo label="Item Type">Sales Items</MInfo>
+        <MInfo label="Type">{item.item_type === "goods" ? "Goods" : "Service"}</MInfo>
+        {item.unit && <MInfo label="Unit">{item.unit}</MInfo>}
+        {item.sku && <MInfo label="SKU">{item.sku}</MInfo>}
+        <MInfo label="Created Source">{item.source === "import" ? "Import" : "User"}</MInfo>
+        <MInfo label="Status">{item.is_active ? "Active" : "Inactive"}</MInfo>
+      </Card>
+    </>
+  );
+}
+
+function MTransactions() {
+  const [kind, setKind] = useState<"Quotes" | "Invoices">("Quotes");
+  const [sheet, setSheet] = useState<null | "kind" | "filter" | "sort">(null);
+  const [status, setStatus] = useState("All");
+  const [draft, setDraft] = useState("All");
+  const [sort, setSort] = useState({ value: "date", dir: "desc" as "asc" | "desc" });
+  useEffect(() => { if (sheet === "filter") setDraft(status); }, [sheet, status]);
+  const statuses = kind === "Quotes" ? Q_STATUSES : I_STATUSES;
+  const square = "flex h-11 w-11 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 active:bg-slate-50";
+  return (
+    <div>
+      <div className="flex items-start justify-between gap-3 px-1 pb-3">
+        <div>
+          <button type="button" onClick={() => setSheet("kind")} className="flex items-center gap-1.5 text-[20px] font-semibold text-[#0b1f3a]">
+            {kind}
+            <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor"><path d="M5.5 8h9L10 13z" /></svg>
+          </button>
+          <p className="text-sm font-medium text-[#2563eb]">Total Count: 0{status !== "All" && <span className="ml-1 text-slate-500">· {status}</span>}</p>
+        </div>
+        <div className="flex gap-2">
+          <button type="button" aria-label="Filter" onClick={() => setSheet("filter")} className={`${square} ${status !== "All" ? "border-[#0f766e] text-[#0f766e]" : ""}`}>
+            <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"><path d="M3 4h14l-5.5 6.5V16l-3-1.5v-4z" /></svg>
+          </button>
+          <button type="button" aria-label="Sort" onClick={() => setSheet("sort")} className={square}>
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M7 4v16m0 0-3-3m3 3 3-3M13 6h8M13 11h5M13 16h3" /></svg>
+          </button>
+        </div>
+      </div>
+      <div className="rounded-xl bg-white px-6 py-12 text-center shadow-[0_1px_2px_rgba(15,40,60,0.06)]">
+        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#e9f7f4] text-[#0f766e]">
+          <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M13.5 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5zM13.5 3v5.5H19M9 13h6M9 17h4" /></svg>
+        </span>
+        <p className="mt-4 font-semibold text-[#0b1f3a]">No {kind.toLowerCase()} yet</p>
+        <p className="mx-auto mt-1 max-w-xs text-sm text-slate-500">When you add this item to a {kind === "Quotes" ? "quote" : "invoice"}, you&apos;ll see the customer, number, date, amount and status here.</p>
+      </div>
+
+      <BottomSheet open={sheet === "kind"} onClose={() => setSheet(null)} title="Show">
+        <ul className="space-y-2">
+          {(["Quotes", "Invoices"] as const).map((k) => (
+            <li key={k}><button type="button" onClick={() => { setKind(k); setStatus("All"); setSheet(null); }}
+              className={`flex w-full items-center justify-between rounded-xl border px-4 py-3.5 text-left ${kind === k ? "border-[#0f766e] bg-[#f6fbfa] font-medium text-[#0b1f3a]" : "border-slate-200 text-slate-700"}`}>
+              {k}{kind === k && <CheckDot />}
+            </button></li>
+          ))}
+        </ul>
+      </BottomSheet>
+      <BottomSheet open={sheet === "filter"} onClose={() => setSheet(null)} title="Filter"
+        footer={<button type="button" onClick={() => { setStatus(draft); setSheet(null); }} className="w-full rounded-full bg-[#0f9f6e] py-3 text-[16px] font-semibold text-white active:bg-[#0c8a5f]">Filter</button>}>
+        <ul className="-mx-4">
+          {statuses.map((st) => (
+            <li key={st}><button type="button" onClick={() => setDraft(st)}
+              className={`flex w-full items-center justify-between px-6 py-4 text-left text-[16px] ${draft === st ? "bg-slate-100 font-medium text-[#0b1f3a]" : "text-slate-700"}`}>
+              {st}{draft === st && <CheckDot dark />}
+            </button></li>
+          ))}
+        </ul>
+      </BottomSheet>
+      {sheet === "sort" && (
+        <MobileSortSheet open onClose={() => setSheet(null)} sort={sort.value} dir={sort.dir}
+          options={[{ value: "date", label: "Date" }, { value: "number", label: kind === "Quotes" ? "Quote Number" : "Invoice Number" }]}
+          onApply={(value, dir) => { setSort({ value, dir }); setSheet(null); }} />
+      )}
+    </div>
+  );
+}
+
+const CheckDot = ({ dark = false }: { dark?: boolean }) => (
+  <span className={`flex h-6 w-6 items-center justify-center rounded-full text-white ${dark ? "bg-[#1f2937]" : "bg-[#0f766e]"}`}>
+    <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><path d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0z" /></svg>
+  </span>
+);

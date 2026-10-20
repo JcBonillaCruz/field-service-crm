@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { CouponRow, FIELD_LABELS, HistoryRow, REDEMPTION_OPTIONS, couponStatus, discountLabel, fmtDate } from "@/lib/catalog";
-import { CloseButton, HistoryTable, ICONS, MoreMenu, PencilButton, Tabs } from "@/components/catalog/DetailBits";
+import { CloseButton, ICONS, MoreMenu, PencilButton, Tabs, Timeline } from "@/components/catalog/DetailBits";
 import { Tip } from "@/components/catalog/FormBits";
 
 const TABS = ["Coupon Details", "Transactions", "Activity Logs"];
@@ -24,6 +24,7 @@ export default function CouponDetailView({ coupon, history }: { coupon: CouponRo
   const [busy, setBusy] = useState(false);
   const s = couponStatus(coupon);
   const rib = RIBBON[s.tone];
+  const logs = activity(history, coupon);
   const redemption = REDEMPTION_OPTIONS.find((r) => r.value === coupon.redemption_type)?.label.replace("-", " ") ?? "";
 
   async function toggleActive() {
@@ -68,12 +69,12 @@ export default function CouponDetailView({ coupon, history }: { coupon: CouponRo
 
       <div className="space-y-4 p-4 sm:p-6">
         {/* Tarjeta del cupón con su cintita de estado */}
-        <div className="relative rounded-xl border border-slate-200 bg-white px-5 pb-5 pt-9 shadow-[0_1px_2px_rgba(15,40,60,0.04)] sm:px-6">
-          <span key={s.tone} className={`absolute -left-1.5 top-3 rounded-r-md rounded-tl-sm px-3 py-1 text-xs font-semibold text-white shadow-sm animate-[bp-fade_0.35s_ease-out] ${rib.bg}`}>
+        <div className="relative rounded-xl border border-slate-200 bg-white px-4 pb-5 pt-12 shadow-[0_1px_2px_rgba(15,40,60,0.04)] sm:px-6">
+          <span key={s.tone} className={`absolute -left-1.5 top-3.5 rounded-r-md rounded-tl-sm px-3 py-1 text-xs font-semibold text-white shadow-sm animate-[bp-fade_0.35s_ease-out] ${rib.bg}`}>
             {s.label}
             <span className={`absolute left-0 top-full h-0 w-0 border-l-[6px] border-t-[6px] border-l-transparent ${rib.fold}`} />
           </span>
-          <div className="flex flex-col gap-5 md:flex-row md:items-center">
+          <div className="flex flex-col gap-5 sm:px-1 md:flex-row md:items-center">
             <div className="flex min-w-0 flex-1 items-center gap-4">
               <div className="flex h-16 min-w-[5.5rem] shrink-0 flex-col items-center justify-center rounded-lg border border-slate-200 bg-[#fafbfc] px-3">
                 <span className="text-xl font-semibold leading-none text-[#0b1f3a]">{discountLabel(coupon)}</span>
@@ -84,7 +85,7 @@ export default function CouponDetailView({ coupon, history }: { coupon: CouponRo
                 <p className="text-sm text-slate-500">Redemption Type: <span className="font-medium text-[#0b1f3a]">{redemption}{coupon.cycles ? ` (${coupon.cycles} cycles)` : ""}</span></p>
               </div>
             </div>
-            <div className="flex flex-1 items-center justify-between gap-4">
+            <div className="flex flex-1 items-center justify-between gap-4 border-t border-slate-100 pt-4 md:border-t-0 md:pt-0">
               <div className="border-l-2 border-[#e8713a] pl-4">
                 <p className="text-sm text-slate-500">Expiration Date</p>
                 <p className="text-lg font-semibold text-[#0b1f3a]">{coupon.expires_on ? fmtDate(coupon.expires_on) : "Never expires"}</p>
@@ -106,10 +107,11 @@ export default function CouponDetailView({ coupon, history }: { coupon: CouponRo
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white">
+        {/* ===== Computadora: pestañas ===== */}
+        <div className="hidden rounded-xl border border-slate-200 bg-white lg:block">
           <Tabs tabs={TABS} active={tab} onChange={setTab} />
           {tab === "Coupon Details" && (
-            <dl className="grid gap-x-10 gap-y-1 px-5 py-5 text-[15px] sm:px-7 lg:grid-cols-2">
+            <dl className="grid grid-cols-2 gap-x-10 gap-y-1 px-7 py-5 text-[15px]">
               <Row label="Coupon Name">{coupon.name}</Row>
               <Row label="Coupon Code">{coupon.code}</Row>
               <Row label="Redemption Type">{redemption}</Row>
@@ -122,20 +124,82 @@ export default function CouponDetailView({ coupon, history }: { coupon: CouponRo
               <Row label="Created On">{fmtDate(coupon.created_at)}</Row>
             </dl>
           )}
-          {tab === "Transactions" && (
-            <div className="px-5 py-14 text-center text-slate-500 sm:px-7">
-              This coupon hasn&apos;t been used yet.
-              <span className="mt-1 block text-xs text-slate-400">Every quote, invoice or subscription that uses this code will show up here.</span>
-            </div>
-          )}
+          {tab === "Transactions" && <NoTransactions />}
           {tab === "Activity Logs" && (
-            <div className="py-2">
-              <HistoryTable fallbackCreated={coupon.created_at}
-                rows={history.map((h) => ({ ...h, changes: (h.changes ?? []).map((c) => FIELD_LABELS[c] ?? c) }))} />
-            </div>
+            <ul className="px-7 py-2">
+              {logs.map((l) => (
+                <li key={l.id} className="grid grid-cols-[15rem_minmax(0,1fr)] items-center gap-6 border-b border-slate-100 py-4 last:border-b-0">
+                  <span className="text-[14px] text-slate-500">{new Date(l.when).toLocaleString("en-US", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                  <span className="flex items-center gap-3 text-[14px] text-[#0b1f3a]">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#fde8dc] text-[#e8713a]">
+                      <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3.5 8.5V5A1.5 1.5 0 0 1 5 3.5h3.5l8 8-5 5-8-8z" strokeLinejoin="round" /><circle cx="7" cy="7" r="1" fill="currentColor" /></svg>
+                    </span>
+                    <span>{l.title}{l.who && <span className="text-slate-500"> by {l.who}</span>}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
+
+        {/* ===== Celular: todo en una sola pantalla, sin pestañas ===== */}
+        <div className="space-y-4 lg:hidden">
+          <section className="rounded-xl border border-slate-200 bg-white px-4 py-4">
+            <h2 className="mb-2 text-[15px] font-semibold text-[#0b1f3a]">Coupon Details</h2>
+            <dl className="divide-y divide-slate-100 text-[15px]">
+              <MRow label="Coupon Name">{coupon.name}</MRow>
+              <MRow label="Coupon Code">{coupon.code}</MRow>
+              <MRow label="Redemption Type">{redemption}</MRow>
+              <MRow label="Maximum Redemptions" tip="How many times this code can be used in total.">{coupon.max_redemptions ?? "Unlimited"}</MRow>
+              <MRow label="Product Name">
+                <Link href={`/dashboard/coupons?q=${encodeURIComponent(coupon.catalog_products?.name ?? "")}`} className="text-[#2563eb] hover:underline">{coupon.catalog_products?.name ?? "—"}</Link>
+              </MRow>
+              <MRow label="Times Used">{coupon.redemptions}{coupon.max_redemptions ? ` of ${coupon.max_redemptions}` : ""}</MRow>
+              <MRow label="Discount">{discountLabel(coupon)} ({coupon.discount_type === "percent" ? "Percentage" : "Flat"})</MRow>
+              <MRow label="Created On">{fmtDate(coupon.created_at)}</MRow>
+            </dl>
+          </section>
+          <section className="rounded-xl border border-slate-200 bg-white px-4 py-4">
+            <h2 className="text-[15px] font-semibold text-[#0b1f3a]">Transactions</h2>
+            <p className="mt-2 text-sm text-slate-500">This coupon hasn&apos;t been used yet.</p>
+          </section>
+          <section className="rounded-xl border border-slate-200 bg-white px-4 py-4">
+            <h2 className="mb-4 text-[15px] font-semibold text-[#0b1f3a]">Activity</h2>
+            <Timeline rows={logs} />
+          </section>
+        </div>
       </div>
+    </div>
+  );
+}
+
+// Mensajes del historial como Zoho: "Status of Coupon with code X has been changed from Active to Inactive."
+function activity(history: HistoryRow[], c: CouponRow) {
+  const list = history.length ? history : [{ id: "c", action: "created", actor_name: null, changes: null, created_at: c.created_at }];
+  return list.map((h) => {
+    const fields = (h.changes ?? []).map((k) => FIELD_LABELS[k] ?? k);
+    const title =
+      h.action === "marked as inactive" ? `Status of Coupon with code ${c.code} has been changed from Active to Inactive.`
+        : h.action === "marked as active" ? `Status of Coupon with code ${c.code} has been changed from Inactive to Active.`
+          : h.action === "created" ? `Coupon ${c.code} added.`
+            : h.action === "imported" ? `Coupon ${c.code} imported.`
+              : `Coupon ${c.code} updated${fields.length ? ` (${fields.join(", ")})` : ""}.`;
+    return { id: h.id, title, who: h.actor_name, when: h.created_at };
+  });
+}
+
+const NoTransactions = () => (
+  <div className="px-7 py-14 text-center text-slate-500">
+    This coupon hasn&apos;t been used yet.
+    <span className="mt-1 block text-xs text-slate-400">Every quote, invoice or subscription that uses this code will show up here.</span>
+  </div>
+);
+
+function MRow({ label, children }: { label: string; tip?: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-2.5">
+      <dt className="shrink-0 text-slate-500">{label}</dt>
+      <dd className="min-w-0 text-right text-[#0b1f3a]">{children}</dd>
     </div>
   );
 }

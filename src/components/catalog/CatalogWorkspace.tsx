@@ -15,6 +15,8 @@ import { downloadBlob, makeZip } from "@/lib/zip";
 import CatalogActionsMenu, { ACTION_ICONS, ActionGroup } from "@/components/catalog/CatalogActionsMenu";
 import ItemPrefsModal from "@/components/catalog/ItemPrefsModal";
 import { NoImage } from "@/components/catalog/DetailBits";
+import BottomSheet from "@/components/customers/BottomSheet";
+import MobileSortSheet from "@/components/customers/MobileSortSheet";
 
 const STATUS_TONE: Record<string, string> = { active: "text-[#16a34a]", inactive: "text-slate-400", expired: "text-[#e11d48]", used: "text-[#d97706]" };
 const Star = ({ on }: { on: boolean }) => (
@@ -40,6 +42,9 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
   const [prefsOpen, setPrefsOpen] = useState(false);
   const [busy, setBusy] = useState("");
   const [toast, setToast] = useState("");
+  const [mSheet, setMSheet] = useState<null | "filter" | "sort">(null);
+  const [mSearch, setMSearch] = useState(false);
+  const searchTimer = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     try {
@@ -244,7 +249,39 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
     <div className="lg:flex lg:h-[calc(100vh-4rem)] lg:overflow-hidden">
       <div className={listPane}>
         {/* Encabezado */}
-        <div className={`flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 ${selectedId ? "px-4 py-3" : "px-5 py-4 sm:px-6"}`}>
+        {/* ====== Celular (como la app de Zoho): título, buscar, ordenar y filtro ====== */}
+        <div className="shrink-0 border-b border-slate-100 bg-white px-4 pb-2 pt-5 lg:hidden">
+          <div className="flex items-center justify-between gap-2">
+            <h1 className="text-2xl font-semibold tracking-tight text-[#0b1f3a]">{info.plural}</h1>
+            <div className="flex items-center gap-0.5">
+              <button type="button" aria-label="Search" onClick={() => setMSearch((v) => !v)}
+                className={`flex h-10 w-10 items-center justify-center rounded-lg ${mSearch || q ? "bg-[#e9f7f4] text-[#0f766e]" : "text-slate-600 active:bg-slate-100"}`}>
+                <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
+              </button>
+              <button type="button" aria-label="Sort" onClick={() => setMSheet("sort")} className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100">
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M8 4v16m0 0-3-3m3 3 3-3M13 6h8M13 11h5M13 16h3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+            </div>
+          </div>
+          <div className="mt-3 flex items-center justify-between">
+            <button type="button" onClick={() => setMSheet("filter")} className="flex items-center gap-1.5 border-b-2 border-[#0f766e] pb-0.5 text-[15px] font-semibold text-[#0f766e]">
+              {shortViewName(module, view)}
+              <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
+            </button>
+            <span className="text-xs text-slate-500">{list.length} {list.length === 1 ? info.singular.toLowerCase() : info.plural.toLowerCase()}</span>
+          </div>
+          {(mSearch || q) && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 focus-within:border-[#0f766e] focus-within:bg-white">
+              <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
+              <input autoFocus defaultValue={q} placeholder={`Search ${info.plural.toLowerCase()}`} autoComplete="off"
+                onChange={(e) => { const v = e.target.value; clearTimeout(searchTimer.current); searchTimer.current = setTimeout(() => setParams({ q: v.trim() || null }), 300); }}
+                className="w-full bg-transparent py-2.5 text-[15px] focus:outline-none" />
+            </div>
+          )}
+        </div>
+
+        {/* ====== Computadora ====== */}
+        <div className={`hidden shrink-0 items-center justify-between gap-3 border-b border-slate-200 lg:flex ${selectedId ? "px-4 py-3" : "px-5 py-4 sm:px-6"}`}>
           {viewMenu}
           <div className="flex shrink-0 items-center gap-2">
             {selectedId ? (
@@ -339,6 +376,29 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
           className="fixed bottom-6 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#0f766e] text-white shadow-lg shadow-[#0f766e]/30 transition-transform active:scale-95 lg:hidden">
           <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
         </Link>
+      )}
+
+      <BottomSheet open={mSheet === "filter"} onClose={() => setMSheet(null)} title="Filter">
+        <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Default filters</p>
+        <ul className="space-y-2">
+          {allViews.map((v, i) => {
+            const on = v.id === view.id;
+            return (
+              <li key={v.id}>
+                {i === BUILTIN_VIEWS[module].length && <p className="mb-2 mt-4 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Custom views</p>}
+                <button type="button" onClick={() => { switchView(v.id); setMSheet(null); }}
+                  className={`flex w-full items-center justify-between rounded-xl border px-4 py-3.5 text-left ${on ? "border-[#0f766e] bg-[#f6fbfa] font-medium text-[#0b1f3a]" : "border-slate-200 text-slate-700"}`}>
+                  {shortViewName(module, v)}
+                  {on && <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0f766e] text-white"><svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><path d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0z" /></svg></span>}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </BottomSheet>
+      {mSheet === "sort" && (
+        <MobileSortSheet open onClose={() => setMSheet(null)} sort={sort} dir={dir} options={SORTS[module]}
+          onApply={(value, d) => { setParams({ sort: value, dir: d }); setMSheet(null); }} />
       )}
 
       {toast && <div role="status" className="fixed bottom-6 left-1/2 z-[95] -translate-x-1/2 rounded-xl bg-[#0b1f3a] px-4 py-2.5 text-sm text-white shadow-xl animate-[bp-fade_0.2s_ease-out]">{toast}</div>}

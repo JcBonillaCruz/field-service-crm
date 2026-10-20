@@ -70,7 +70,7 @@ export default function TopSearch() {
 
   return (
     <div ref={wrapRef} className={`relative transition-all duration-300 ease-out ${focused ? "w-[30rem]" : "w-[22rem]"}`}>
-      <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 focus-within:border-[#0f766e] focus-within:bg-white focus-within:ring-4 focus-within:ring-[#14a39a]/15">
+      <div className="flex items-center rounded-lg border border-[#cfe3dd] bg-white focus-within:border-[#0f766e] focus-within:bg-white focus-within:ring-4 focus-within:ring-[#14a39a]/15">
         {/* lupa + flechita (abre los módulos) */}
         <button type="button" onClick={() => setMenuOpen((v) => !v)} aria-label="Choose what to search"
           className="flex shrink-0 items-center gap-1 rounded-l-lg py-2 pl-3 pr-1.5 text-slate-400 hover:text-slate-600">

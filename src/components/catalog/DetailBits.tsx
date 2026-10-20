@@ -73,12 +73,12 @@ export const ICONS = {
 
 export function Tabs({ tabs, active, onChange }: { tabs: string[]; active: string; onChange: (t: string) => void }) {
   return (
-    <div role="tablist" className="flex gap-7 overflow-x-auto border-b border-slate-200 px-5 sm:px-7">
+    <div role="tablist" className="flex gap-7 overflow-x-auto overflow-y-hidden border-b border-slate-200 px-5 [scrollbar-width:none] sm:px-7 [&::-webkit-scrollbar]:hidden">
       {tabs.map((t) => (
         <button key={t} type="button" role="tab" aria-selected={active === t} onClick={() => onChange(t)}
           className={`relative shrink-0 py-3 text-[15px] transition-colors ${active === t ? "font-semibold text-[#0f766e]" : "text-slate-600 hover:text-[#0b1f3a]"}`}>
           {t}
-          <span className={`absolute inset-x-0 -bottom-px h-[3px] rounded-full bg-[#0f766e] transition-transform duration-200 ${active === t ? "scale-x-100" : "scale-x-0"}`} />
+          <span className={`absolute inset-x-0 bottom-0 h-[3px] rounded-full bg-[#0f766e] transition-transform duration-200 ${active === t ? "scale-x-100" : "scale-x-0"}`} />
         </button>
       ))}
     </div>
@@ -125,5 +125,27 @@ export function HistoryTable({ rows, fallbackCreated }: {
         </tbody>
       </table>
     </div>
+  );
+}
+
+// Línea de tiempo (como el historial de Zoho en el celular): puntito, línea hacia abajo, otro puntito
+export function Timeline({ rows }: { rows: { id: string; title: string; who: string | null; when: string; note?: string }[] }) {
+  return (
+    <ol className="relative">
+      {rows.map((r, i) => (
+        <li key={r.id} className="relative flex gap-4 pb-6 last:pb-1">
+          {i < rows.length - 1 && <span className="absolute left-[9px] top-6 h-[calc(100%-1.25rem)] w-px bg-slate-200" aria-hidden="true" />}
+          <span className="relative mt-0.5 flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-full border-2 border-[#0f9f6e] bg-white" aria-hidden="true" />
+          <div className="min-w-0">
+            <p className="text-[15px] text-[#0b1f3a]">{r.title}</p>
+            {r.note && <p className="mt-0.5 text-[13px] text-slate-500">{r.note}</p>}
+            <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[13px] text-slate-500">
+              <span>{r.who || "A team member"}</span><span className="h-3.5 w-px bg-slate-300" />
+              <span>{new Date(r.when).toLocaleString("en-US", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+            </p>
+          </div>
+        </li>
+      ))}
+    </ol>
   );
 }

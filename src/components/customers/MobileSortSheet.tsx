@@ -5,8 +5,9 @@ import BottomSheet from "@/components/customers/BottomSheet";
 import { SORTS } from "@/lib/customer-list";
 
 export default function MobileSortSheet({
-  open, onClose, sort, dir, onApply,
+  open, onClose, sort, dir, onApply, options = SORTS,
 }: {
+  options?: readonly { value: string; label: string }[];
   open: boolean;
   onClose: () => void;
   sort: string;
@@ -18,10 +19,10 @@ export default function MobileSortSheet({
 
   function tap(value: string) {
     if (value === sel) setSelDir((d) => (d === "asc" ? "desc" : "asc"));
-    else { setSel(value); setSelDir(value === "created" ? "desc" : "asc"); }
+    else { setSel(value); setSelDir(value === "created" || value === "updated" || value === "date" ? "desc" : "asc"); }
   }
 
-  const current = SORTS.find((s) => s.value === sel)?.label ?? "Name";
+  const current = options.find((s) => s.value === sel)?.label ?? "Name";
 
   return (
     <BottomSheet open={open} onClose={onClose} title="Sort by"
@@ -33,7 +34,7 @@ export default function MobileSortSheet({
         </div>
       }>
       <ul className="space-y-2">
-        {SORTS.map((s) => {
+        {options.map((s) => {
           const active = s.value === sel;
           return (
             <li key={s.value}>

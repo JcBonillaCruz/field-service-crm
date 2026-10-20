@@ -42,9 +42,9 @@ export default function AppHeader({
 
   return (
     <>
-      <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-slate-200 bg-white px-3 sm:px-6">
+      <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-[#cde8e0] bg-[#e7f5f1] px-3 sm:px-6">
         {/* Hamburguesa (celular) */}
-        <button type="button" onClick={onMenu} aria-label="Open menu" className="shrink-0 rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden">
+        <button type="button" onClick={onMenu} aria-label="Open menu" className="shrink-0 rounded-lg p-2 text-slate-600 hover:bg-white/70 lg:hidden">
           <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
         </button>
 
@@ -77,7 +77,7 @@ export default function AppHeader({
             <NotificationsBell />
 
             <Popover className="relative">
-              <PopoverButton aria-label="Settings" className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus:outline-none data-[open]:bg-[#e9f7f4] data-[open]:text-[#0f766e]">
+              <PopoverButton aria-label="Settings" className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-white/70 focus:outline-none data-[open]:bg-[#e9f7f4] data-[open]:text-[#0f766e]">
                 <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.8 1.2V21a2 2 0 1 1-4 0a1.7 1.7 0 0 0-2.8-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.8H3a2 2 0 1 1 0-4a1.7 1.7 0 0 0 1.2-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.8-1.2V3a2 2 0 1 1 4 0a1.7 1.7 0 0 0 2.8 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-1.2 2.8H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg>
               </PopoverButton>
               <PopoverPanel anchor="bottom end" transition className={`${popPanel} w-64`}>
