@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
-import { Customer, Email, Phone, canManageCustomers } from "@/lib/customers";
+import { Address, Customer, Email, Phone, canManageCustomers } from "@/lib/customers";
 import CustomerForm from "@/components/customers/CustomerForm";
 import NoAccess from "@/components/customers/NoAccess";
 
@@ -19,9 +19,10 @@ export default async function EditCustomerPage({ params }: { params: { id: strin
   if (!data) notFound();
   const c = data as Customer;
 
-  const [{ data: phoneRows }, { data: emailRows }] = await Promise.all([
+  const [{ data: phoneRows }, { data: emailRows }, { data: addrRows }] = await Promise.all([
     supabase.from("customer_phones").select("label, country, number, is_primary").eq("customer_id", c.id).order("position"),
     supabase.from("customer_emails").select("label, email, is_primary").eq("customer_id", c.id).order("position"),
+    supabase.from("customer_addresses").select("id, label, street, unit, city, state, zip, country, is_primary").eq("customer_id", c.id).order("created_at"),
   ]);
 
   return (
@@ -32,7 +33,7 @@ export default async function EditCustomerPage({ params }: { params: { id: strin
       </div>
       <div className="px-5 pt-6 sm:px-8">
       <CustomerForm companyId={current.id} customer={c}
-        initialPhones={(phoneRows ?? []) as Phone[]} initialEmails={(emailRows ?? []) as Email[]} />
+        initialPhones={(phoneRows ?? []) as Phone[]} initialEmails={(emailRows ?? []) as Email[]} initialAddresses={(addrRows ?? []) as Address[]} />
       </div>
     </section>
   );

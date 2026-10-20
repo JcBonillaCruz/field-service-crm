@@ -26,12 +26,13 @@ const sameAddress = (a: Address, b: Address) =>
   (["street", "unit", "city", "state", "zip", "country"] as const).every((k) => a[k].trim() === b[k].trim());
 
 export default function CustomerForm({
-  companyId, customer, initialPhones, initialEmails,
+  companyId, customer, initialPhones, initialEmails, initialAddresses,
 }: {
   companyId: string;
   customer?: Customer;
   initialPhones?: Phone[];
   initialEmails?: Email[];
+  initialAddresses?: Address[];
 }) {
   const router = useRouter();
   const noFill = useNoFill();
@@ -43,7 +44,6 @@ export default function CustomerForm({
   const [lastName, setLastName] = useState(customer?.last_name ?? "");
   const [companyName, setCompanyName] = useState(customer?.company_name ?? "");
   const [display, setDisplay] = useState(customer?.display_name ?? "");
-  const [displayTouched, setDisplayTouched] = useState(editing);
   const [phones, setPhones] = useState<Phone[]>(initialPhones?.length ? initialPhones : [newPhone(true)]);
   const [emails, setEmails] = useState<Email[]>(initialEmails?.length ? initialEmails : [newEmail(true)]);
   const [language, setLanguage] = useState(customer?.language || "English");
@@ -51,11 +51,13 @@ export default function CustomerForm({
   const [terms, setTerms] = useState(customer?.payment_terms || "Due on Receipt");
   const [portal, setPortal] = useState(Boolean(customer?.portal_enabled));
   const [notes, setNotes] = useState(customer?.notes ?? "");
-  const [billing, setBilling] = useState<Address>({ ...EMPTY_ADDRESS, label: "Billing address", is_primary: true });
-  const [billAttn, setBillAttn] = useState("");
-  const [shipping, setShipping] = useState<Address>({ ...EMPTY_ADDRESS, label: "Shipping address" });
-  const [shipAttn, setShipAttn] = useState("");
-  const [sites, setSites] = useState<Address[]>([]);
+  // Direcciones guardadas: "Billing address" y "Shipping address" van en su pestaña; las demás son Job Sites
+  const [initial] = useState(() => splitAddresses(initialAddresses ?? []));
+  const [billing, setBilling] = useState<Address>(initial.billing);
+  const [billAttn, setBillAttn] = useState(customer?.billing_attention ?? "");
+  const [shipping, setShipping] = useState<Address>(initial.shipping);
+  const [shipAttn, setShipAttn] = useState(customer?.shipping_attention ?? "");
+  const [sites, setSites] = useState<Address[]>(initial.sites);
   const [tab, setTab] = useState("other");
   const [error, setError] = useState("");
   const [showErrors, setShowErrors] = useState(false);
@@ -63,7 +65,8 @@ export default function CustomerForm({
 
   const TABS: { id: string; label: string; soon?: boolean }[] = [
     { id: "other", label: "Other Details" },
-    ...(editing ? [] : [{ id: "address", label: "Address" }, { id: "sites", label: "Job Sites" }]),
+    { id: "address", label: "Address" },
+    { id: "sites", label: "Job Sites" },
     { id: "contacts", label: "Contact Persons", soon: true },
     { id: "custom", label: "Custom Fields", soon: true },
     { id: "remarks", label: "Remarks" },
@@ -76,9 +79,7 @@ export default function CustomerForm({
     const list = [s && full ? `${s} ${full}` : "", full, f && l ? `${l}, ${f}` : "", c];
     return list.filter((x, i) => x && list.indexOf(x) === i);
   }, [firstName, lastName, salutation, companyName]);
-  const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(" ");
-  const autoDisplay = type === "commercial" ? companyName.trim() || fullName : fullName || companyName.trim();
-  const shownDisplay = displayTouched ? display : autoDisplay;
+  const shownDisplay = display; // como Zoho: vacío hasta que eliges una sugerencia o lo escribes
   const clear = () => setError("");
 
   function validate() {
@@ -87,7 +88,7 @@ export default function CustomerForm({
     if (!shownDisplay.trim()) return "Choose or type a display name.";
     if (phones.some((p) => phoneError(p))) return "Check the phone numbers marked in red.";
     if (emails.some((e) => emailError(e))) return "Check the emails marked in red.";
-    if (!editing) {
+    {
       const checks: [Address, string, string][] = [
         [billing, "address", "Billing address: "],
         [shipping, "address", "Shipping address: "],
@@ -113,7 +114,7 @@ export default function CustomerForm({
     // Billing = principal; Shipping solo si es diferente; luego los job sites
     const list: Address[] = [];
     if (!addressIsEmpty(billing)) list.push({ ...billing, label: "Billing address", is_primary: true });
-    if (!addressIsEmpty(shipping) && !(list.length && sameAddress(billing, shipping))) list.push({ ...shipping, label: "Shipping address", is_primary: false });
+    if (!addressIsEmpty(shipping) && !(list.length && !shipping.id && sameAddress(billing, shipping))) list.push({ ...shipping, label: "Shipping address", is_primary: false });
     sites.filter((s) => !addressIsEmpty(s)).forEach((s) => list.push({ ...s, is_primary: false }));
     if (list.length && !list.some((a) => a.is_primary)) list[0] = { ...list[0], is_primary: true };
 
@@ -133,9 +134,24 @@ export default function CustomerForm({
       return setError(editing ? "The changes couldn't be saved. Try again." : "The customer couldn't be saved. Try again.");
     }
 
+    // Al editar: actualiza, agrega o borra direcciones directamente
+    if (editing) {
+      const keep = new Set(list.filter((a) => a.id).map((a) => a.id));
+      const gone = (initialAddresses ?? []).filter((a) => a.id && !keep.has(a.id)).map((a) => a.id as string);
+      if (gone.length) await supabase.from("customer_addresses").delete().in("id", gone);
+      await supabase.from("customer_addresses").update({ is_primary: false }).eq("customer_id", data);
+      for (const a of list) {
+        const row = cleanAddress(a);
+        const { error: aErr } = a.id
+          ? await supabase.from("customer_addresses").update(row).eq("id", a.id)
+          : await supabase.from("customer_addresses").insert({ ...row, customer_id: data, company_id: companyId });
+        if (aErr) { setSaving(false); return setError("The customer was saved, but an address couldn't be saved. Try again."); }
+      }
+    }
+
     // Display name, idioma, moneda, términos y attention (función del SQL paso 3.21)
     const extras: Record<string, unknown> = { display_name: shownDisplay.trim(), language, currency, payment_terms: terms, portal_enabled: portal };
-    if (!editing) Object.assign(extras, { billing_attention: billAttn, shipping_attention: shipAttn });
+    Object.assign(extras, { billing_attention: billAttn, shipping_attention: shipAttn });
     const { error: extraErr } = await supabase.rpc("save_customer_extras", { p_customer_id: data, p_extras: extras });
     if (extraErr) console.error("save_customer_extras:", extraErr.message);
 
@@ -173,11 +189,11 @@ export default function CustomerForm({
         </Row>
 
         <Row label="Display Name" htmlFor="c-display" required hint="How this customer appears in lists, quotes and invoices.">
-          <Combobox immediate value={shownDisplay} onChange={(v: string | null) => { if (v != null) { setDisplay(v); setDisplayTouched(true); clear(); } }}>
+          <Combobox immediate value={shownDisplay} onChange={(v: string | null) => { if (v != null) { setDisplay(v); clear(); } }}>
             <div className="relative">
               <ComboboxInput id="c-display" autoComplete="off" data-lpignore="true" data-1p-ignore="true" spellCheck={false}
                 placeholder="Select or type to add" displayValue={(v: string) => v}
-                onChange={(e) => { setDisplay(e.target.value); setDisplayTouched(true); clear(); }}
+                onChange={(e) => { setDisplay(e.target.value); clear(); }}
                 className={`${inputClass} pr-10`} />
               <ComboboxButton aria-label="Show suggestions" className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600"><Chevron /></ComboboxButton>
             </div>
@@ -205,7 +221,7 @@ export default function CustomerForm({
       </div>
 
       {/* ---------- Pestañas ---------- */}
-      <div className="mt-10 flex gap-8 overflow-x-auto border-b border-slate-200" role="tablist">
+      <div className="mt-10 flex gap-8 overflow-x-auto overflow-y-hidden border-b border-slate-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist">
         {TABS.map((t) => t.soon ? (
           <span key={t.id} title="Coming soon" className="flex shrink-0 items-center gap-1.5 whitespace-nowrap pb-3 text-[15px] text-slate-400">
             {t.label}<span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium">Soon</span>
@@ -214,7 +230,7 @@ export default function CustomerForm({
           <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
             className={`relative shrink-0 whitespace-nowrap pb-3 text-[15px] transition-colors ${tab === t.id ? "font-semibold text-[#0b1f3a]" : "text-slate-500 hover:text-[#0b1f3a]"}`}>
             {t.label}
-            {tab === t.id && <span className="absolute inset-x-0 -bottom-px h-[3px] rounded-full bg-[#0f766e]" />}
+            {tab === t.id && <span className="absolute inset-x-0 bottom-0 h-[3px] rounded-full bg-[#0f766e]" />}
           </button>
         ))}
       </div>
@@ -245,8 +261,8 @@ export default function CustomerForm({
           </div>
         )}
 
-        {tab === "address" && !editing && (
-          <div className="grid gap-10 xl:grid-cols-2">
+        {tab === "address" && (
+          <div className="grid max-w-[1040px] gap-x-14 gap-y-10 xl:grid-cols-2">
             <div>
               <h3 className="mb-5 text-base font-semibold text-[#0b1f3a]">Billing Address</h3>
               <label htmlFor="bill-attn" className="mb-1.5 block text-sm font-medium text-slate-700">Attention</label>
@@ -269,7 +285,7 @@ export default function CustomerForm({
           </div>
         )}
 
-        {tab === "sites" && !editing && (
+        {tab === "sites" && (
           <div className="max-w-4xl">
             <p className="text-[15px] text-slate-600">Add every house or property you work at for this customer, like each home a builder sends you. Invoices can go to a specific job site instead of the office.</p>
             <div className="mt-5 space-y-5">
@@ -292,7 +308,6 @@ export default function CustomerForm({
           <div className="max-w-3xl">
             <label htmlFor="c-notes" className="mb-1.5 block text-sm font-medium text-slate-700">Remarks <span className="font-normal text-slate-400">(for internal use)</span></label>
             <textarea id="c-notes" rows={5} value={notes} {...noFill("c4")} placeholder="Gate code, pets, best time to call..." onChange={(e) => setNotes(e.target.value)} className={inputClass} />
-            {editing && <p className="mt-3 text-xs text-slate-400">Addresses and job sites are managed from the customer page.</p>}
           </div>
         )}
       </div>
@@ -305,6 +320,18 @@ export default function CustomerForm({
       </div>
     </form>
   );
+}
+
+function splitAddresses(list: Address[]) {
+  const clean = list.map((a) => ({ ...EMPTY_ADDRESS, ...a, label: a.label ?? "", unit: a.unit ?? "", zip: a.zip ?? "", state: a.state ?? "", country: a.country || "US" }));
+  const isBill = (a: Address) => /^billing/i.test(a.label);
+  const billing = clean.find(isBill) ?? clean.find((a) => a.is_primary && !a.label.trim());
+  const shipping = clean.find((a) => /^shipping/i.test(a.label));
+  return {
+    billing: billing ?? { ...EMPTY_ADDRESS, label: "Billing address", is_primary: true },
+    shipping: shipping ?? { ...EMPTY_ADDRESS, label: "Shipping address" },
+    sites: clean.filter((a) => a !== billing && a !== shipping),
+  };
 }
 
 function Row({ label, htmlFor, required, hint, wide, alignTop, children }: {

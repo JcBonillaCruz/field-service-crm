@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
-import { Address, Customer, canDeleteCustomers, canManageCustomers, phoneDisplay, phoneHref } from "@/lib/customers";
+import { Address, CURRENCIES, Customer, canDeleteCustomers, canManageCustomers, phoneDisplay, phoneHref } from "@/lib/customers";
 import Avatar from "@/components/Avatar";
 import AddressManager from "@/components/customers/AddressManager";
 import DeleteCustomerButton from "@/components/customers/DeleteCustomerButton";
@@ -25,7 +25,7 @@ export default async function CustomerPage({
 
   const { data: customer } = await supabase
     .from("customers")
-    .select("id, customer_type, salutation, first_name, last_name, company_name, display_name, email, phone, notes, created_at")
+    .select("*")
     .eq("id", params.id).eq("company_id", current.id).maybeSingle();
 
   if (!customer) notFound();
@@ -49,6 +49,7 @@ export default async function CustomerPage({
   const callWork = phones.find((p) => p !== callMobile && /office|work|main|trabajo|oficina/i.test(p.label)) ?? phones.find((p) => p !== callMobile) ?? null;
   const primaryEmail = emails.find((e) => e.is_primary) ?? emails[0] ?? null;
   const since = new Date(c.created_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const money = (v: number) => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: c.currency || "USD" }).format(v); } catch { return `$${v.toFixed(2)}`; } };
   const sinceShort = new Date(c.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
   return (
@@ -98,11 +99,41 @@ export default async function CustomerPage({
         )}
 
         <div className="grid gap-6 xl:grid-cols-[minmax(340px,400px)_1fr]">
-          {/* IZQUIERDA: info del cliente en acordeones */}
-          <div className="space-y-5">
-            <Accordion title="Contact" action={<PencilLink href={editHref} />}>
+          {/* IZQUIERDA: toda la info del cliente en un solo panel (como Zoho) */}
+          <div className="self-start overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="bg-[#f8fafb] px-5 py-5">
+              <div className="flex items-start justify-between gap-3">
+                <p className="pt-1 text-[15px] font-medium text-[#0b1f3a]">{contact || c.display_name}</p>
+                <PencilLink href={editHref} />
+              </div>
+              <div className="hidden lg:block">
+              <dl className="space-y-3 text-sm">
+                <div>
+                  <dt className="text-slate-500">{phones.length > 1 ? "Phones" : "Phone"}</dt>
+                  {phones.length === 0 && <dd className="mt-0.5 text-slate-400">Not added</dd>}
+                  {phones.map((p) => (
+                    <dd key={p.id} className="mt-1 flex flex-wrap items-center gap-x-2">
+                      <a href={phoneHref(p)} className="font-medium text-[#0f766e] hover:underline">{phoneDisplay(p)}</a>
+                      <span className="text-xs text-slate-500">{p.label}</span>
+                      {p.is_primary && phones.length > 1 && <span className="rounded-full bg-[#d6f3ec] px-2 py-0.5 text-[11px] font-medium text-[#0f766e]">Primary</span>}
+                    </dd>
+                  ))}
+                </div>
+                <div>
+                  <dt className="text-slate-500">{emails.length > 1 ? "Emails" : "Email"}</dt>
+                  {emails.length === 0 && <dd className="mt-0.5 text-slate-400">Not added</dd>}
+                  {emails.map((e) => (
+                    <dd key={e.id} className="mt-1 flex flex-wrap items-center gap-x-2">
+                      <a href={`mailto:${e.email}`} className="break-all font-medium text-[#0f766e] hover:underline">{e.email}</a>
+                      <span className="text-xs text-slate-500">{e.label}</span>
+                      {e.is_primary && emails.length > 1 && <span className="rounded-full bg-[#d6f3ec] px-2 py-0.5 text-[11px] font-medium text-[#0f766e]">Primary</span>}
+                    </dd>
+                  ))}
+                </div>
+              </dl>
+              </div>
               {/* ===== Contacto en móvil (estilo Zoho) ===== */}
-              <div className="lg:hidden">
+              <div className="mt-2 lg:hidden">
                 <div className="flex items-center gap-3">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400">
                     <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="8" r="4" /><path d="M4 20a8 8 0 0 1 16 0" strokeLinecap="round" /></svg>
@@ -128,57 +159,66 @@ export default async function CustomerPage({
                 </div>
               </div>
 
-              {/* ===== Contacto en escritorio (como ya estaba) ===== */}
-              <dl className="hidden space-y-3 text-sm lg:block">
-                <div>
-                  <dt className="text-slate-500">{phones.length > 1 ? "Phones" : "Phone"}</dt>
-                  {phones.length === 0 && <dd className="mt-0.5 text-slate-400">Not added</dd>}
-                  {phones.map((p) => (
-                    <dd key={p.id} className="mt-1 flex flex-wrap items-center gap-x-2">
-                      <a href={phoneHref(p)} className="font-medium text-[#0f766e] hover:underline">{phoneDisplay(p)}</a>
-                      <span className="text-xs text-slate-500">{p.label}</span>
-                      {p.is_primary && phones.length > 1 && <span className="rounded-full bg-[#d6f3ec] px-2 py-0.5 text-[11px] font-medium text-[#0f766e]">Primary</span>}
-                    </dd>
-                  ))}
-                </div>
-                <div>
-                  <dt className="text-slate-500">{emails.length > 1 ? "Emails" : "Email"}</dt>
-                  {emails.length === 0 && <dd className="mt-0.5 text-slate-400">Not added</dd>}
-                  {emails.map((e) => (
-                    <dd key={e.id} className="mt-1 flex flex-wrap items-center gap-x-2">
-                      <a href={`mailto:${e.email}`} className="break-all font-medium text-[#0f766e] hover:underline">{e.email}</a>
-                      <span className="text-xs text-slate-500">{e.label}</span>
-                      {e.is_primary && emails.length > 1 && <span className="rounded-full bg-[#d6f3ec] px-2 py-0.5 text-[11px] font-medium text-[#0f766e]">Primary</span>}
-                    </dd>
-                  ))}
-                </div>
-              </dl>
-            </Accordion>
+            </div>
 
-            <Accordion title="Service addresses" count={addresses.length}>
+            <Accordion flat title="Address" count={addresses.length}>
               <AddressManager customerId={c.id} companyId={current.id} addresses={addresses} />
             </Accordion>
 
-            <Accordion title="Notes" action={<PencilLink href={editHref} />}>
-              <p className="whitespace-pre-wrap text-sm text-slate-600">{c.notes || <span className="text-slate-400">No notes.</span>}</p>
+            <Accordion flat title="Other Details" action={<PencilLink href={editHref} />}>
+              <dl className="grid grid-cols-[minmax(0,10rem)_1fr] gap-x-4 gap-y-3 text-sm">
+                <dt className="text-slate-500">Customer Type</dt><dd className="text-slate-800">{c.customer_type === "commercial" ? "Commercial" : "Residential"}</dd>
+                <dt className="text-slate-500">Default Currency</dt><dd className="text-slate-800">{c.currency || "USD"}</dd>
+                <dt className="text-slate-500">Payment Terms</dt><dd className="text-slate-800">{c.payment_terms || "Due on Receipt"}</dd>
+                <dt className="text-slate-500">Portal Status</dt>
+                <dd className={c.portal_enabled ? "text-[#0f766e]" : "text-red-500"}>{c.portal_enabled ? "Enabled" : "Disabled"}</dd>
+                <dt className="text-slate-500">Customer Language</dt><dd className="text-slate-800">{c.language || "English"}</dd>
+                {c.billing_attention && <><dt className="text-slate-500">Billing attention</dt><dd className="text-slate-800">{c.billing_attention}</dd></>}
+                {c.shipping_attention && <><dt className="text-slate-500">Shipping attention</dt><dd className="text-slate-800">{c.shipping_attention}</dd></>}
+              </dl>
             </Accordion>
 
-            <Accordion title="Details" defaultOpen={false} action={<PencilLink href={editHref} />}>
-              <dl className="space-y-3 text-sm">
-                <div className="flex justify-between gap-4"><dt className="text-slate-500">Customer type</dt><dd className="text-slate-700">{c.customer_type === "commercial" ? "Commercial" : "Residential"}</dd></div>
-                <div className="flex justify-between gap-4"><dt className="text-slate-500">Customer since</dt><dd className="text-slate-700">{since}</dd></div>
+            <Accordion flat title="Contact Persons">
+              <p className="py-2 text-center text-sm text-slate-400">No contact persons found.</p>
+            </Accordion>
+
+            <Accordion flat title="Remarks" action={<PencilLink href={editHref} />}>
+              <p className="whitespace-pre-wrap text-sm text-slate-600">{c.notes || <span className="text-slate-400">No remarks.</span>}</p>
+            </Accordion>
+
+            <Accordion flat title="Record Info" defaultOpen={false}>
+              <dl className="grid grid-cols-[minmax(0,10rem)_1fr] gap-x-4 gap-y-3 text-sm">
+                <dt className="text-slate-500">Customer since</dt><dd className="text-slate-800">{since}</dd>
               </dl>
             </Accordion>
 
             {canDeleteCustomers(current.role) && (
-              <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 sm:px-6">
+              <div className="border-t border-slate-200 px-5 py-4">
                 <DeleteCustomerButton id={c.id} name={c.display_name} />
               </div>
             )}
           </div>
 
           {/* DERECHA: historial de actividad */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+          <div className="space-y-6">
+          <div className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
+            <p className="text-sm text-slate-500">Payment due period</p>
+            <p className="mt-0.5 text-[15px] text-[#0b1f3a]">{c.payment_terms || "Due on Receipt"}</p>
+            <h2 className="mt-6 text-base font-semibold text-[#0b1f3a]">Receivables</h2>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[420px] text-sm">
+                <thead><tr className="border-y border-slate-200 bg-[#f8fafb] text-left text-xs font-semibold text-slate-500">
+                  <th className="px-4 py-2.5">Currency</th><th className="px-4 py-2.5 text-right">Outstanding receivables</th><th className="px-4 py-2.5 text-right">Unused credits</th>
+                </tr></thead>
+                <tbody><tr className="border-b border-slate-100">
+                  <td className="px-4 py-3 text-slate-800">{CURRENCIES.find((x) => x.value === (c.currency || "USD"))?.label ?? c.currency}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-slate-800">{money(0)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-slate-800">{money(0)}</td>
+                </tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
             <h2 className="text-base font-semibold text-[#0b1f3a]">Activity</h2>
             <ol className="mt-5 space-y-5">
               <li className="relative flex gap-4 pl-1">
@@ -192,6 +232,7 @@ export default async function CustomerPage({
             <div className="mt-6 rounded-xl bg-[#f6fbfa] px-4 py-5 text-center">
               <p className="text-sm text-slate-500">Quotes, invoices and payments for this customer will show up here once you start creating them.</p>
             </div>
+          </div>
           </div>
         </div>
       </div>

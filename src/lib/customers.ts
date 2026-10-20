@@ -45,6 +45,8 @@ export type Customer = {
   currency?: string | null;
   payment_terms?: string | null;
   portal_enabled?: boolean | null;
+  billing_attention?: string | null;
+  shipping_attention?: string | null;
 };
 
 export const LANGUAGES = ["English", "Spanish", "Portuguese", "French", "Vietnamese", "Chinese", "Korean", "Arabic", "Hindi", "Tagalog", "Russian", "German"];

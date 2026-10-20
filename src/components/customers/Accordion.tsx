@@ -8,15 +8,34 @@ export default function Accordion({
   count,
   action,
   defaultOpen = true,
+  flat = false,
   children,
 }: {
   title: string;
   count?: number;
   action?: React.ReactNode;
   defaultOpen?: boolean;
+  flat?: boolean; // sección dentro de un solo panel (como Zoho)
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  if (flat) {
+    return (
+      <div className="border-t border-slate-200">
+        <div className="flex items-center justify-between gap-2 px-5 py-3">
+          <button type="button" onClick={() => setOpen((v) => !v)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+            <h2 className="truncate text-[13px] font-semibold uppercase tracking-wide text-slate-600">{title}</h2>
+            {count != null && <span className="text-xs font-normal text-slate-400">({count})</span>}
+            <svg viewBox="0 0 20 20" className={`ml-auto h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} fill="currentColor" aria-hidden="true">
+              <path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" />
+            </svg>
+          </button>
+          {action}
+        </div>
+        {open && <div className="px-5 pb-5">{children}</div>}
+      </div>
+    );
+  }
   return (
     <div className="rounded-2xl border border-slate-200 bg-white">
       <div className="flex items-center justify-between gap-2 px-5 py-4">
