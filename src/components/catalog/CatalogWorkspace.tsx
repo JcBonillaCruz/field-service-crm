@@ -8,13 +8,13 @@ import { createClient } from "@/lib/supabase/client";
 import { CouponRow, Item, couponStatus, discountLabel, usd } from "@/lib/catalog";
 import {
   BUILTIN_VIEWS, CatalogModule, DEFAULT_VIEW, FIELDS, MODULE_INFO, Row, SORTS, ViewDef, applyView, colWidthKey,
-  defaultSort, displayValue, favKey, lastViewKey, rawValue, shortViewName,
+  defaultSort, displayValue, favKey, lastViewKey, shortViewName,
 } from "@/lib/catalog-views";
-import { downloadCsv } from "@/lib/csv";
 import { downloadBlob, makeZip } from "@/lib/zip";
 import CatalogActionsMenu, { ACTION_ICONS, ActionGroup } from "@/components/catalog/CatalogActionsMenu";
 import ItemPrefsModal from "@/components/catalog/ItemPrefsModal";
 import BarcodeScanner from "@/components/catalog/BarcodeScanner";
+import ExportModal from "@/components/customers/ExportModal";
 import { NoImage } from "@/components/catalog/DetailBits";
 import BottomSheet from "@/components/customers/BottomSheet";
 import MobileSortSheet from "@/components/customers/MobileSortSheet";
@@ -46,6 +46,8 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
   const [mSheet, setMSheet] = useState<null | "filter" | "sort">(null);
   const [mSearch, setMSearch] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportScope, setExportScope] = useState<"all" | "view">("all");
   const onScan = useCallback((code: string) => {
     setScanOpen(false); setMSearch(true);
     const p = new URLSearchParams(window.location.search); p.set("q", code);
@@ -137,23 +139,8 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
     flash(action === "delete" ? "Deleted." : `Marked as ${action}.`);
   }
 
-  // --- exportar ---
-  function exportAll() {
-    if (module === "items") {
-      const head = ["Item Name", "SKU", "Description", "Rate", "Usage Unit", "Account", "Product Type", "Status", "Image URL", "Created Time"];
-      downloadCsv("items.csv", [head, ...(rows as Item[]).map((it) => [it.name, it.sku ?? "", it.description ?? "", it.selling_price, it.unit ?? "", it.account, it.item_type, it.is_active ? "Active" : "Inactive", it.image_url ?? "", it.created_at])]);
-    } else {
-      const head = ["Coupon Name", "Coupon Code", "Product Name", "Discount By", "Discount Value", "Redemption Type", "Cycles", "Expiration Date", "Maximum Redemption", "Status"];
-      downloadCsv("coupons.csv", [head, ...(rows as CouponRow[]).map((c) => [c.name, c.code, c.catalog_products?.name ?? "", c.discount_type === "percent" ? "Percentage" : "Flat", c.discount_value, c.redemption_type, c.cycles ?? "", c.expires_on ?? "", c.max_redemptions ?? "", c.is_active ? "Active" : "Inactive"])]);
-    }
-  }
-  function exportView() {
-    const name = shortViewName(module, view).toLowerCase().replace(/[^a-z0-9]+/g, "-");
-    downloadCsv(`${module}-${name}.csv`, [columns.map((c) => c.label), ...list.map((r) => columns.map((c) => {
-      const raw = rawValue(module, r, c.key);
-      return c.type === "number" ? raw ?? "" : displayValue(module, r, c.key);
-    }))]);
-  }
+  // --- exportar: siempre con el mismo pop-up de Customers ---
+  function openExport(scope: "all" | "view") { setExportScope(scope); setExportOpen(true); }
   async function exportImages() {
     const withImg = (rows as Item[]).filter((it) => it.image_url);
     if (!withImg.length) return flash("None of your items has an image yet.");
@@ -188,9 +175,9 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
     { kind: "item", label: `Import ${info.plural}`, icon: ACTION_ICONS.import, onClick: () => router.push(`${base}/import`) },
     module === "items"
       ? { kind: "sub", label: "Export", icon: ACTION_ICONS.export, items: [
-        { label: "Export Items", onClick: exportAll }, { label: "Export Current View", onClick: exportView }, { label: "Export Item Images", onClick: exportImages },
+        { label: "Export Items", onClick: () => openExport("all") }, { label: "Export Current View", onClick: () => openExport("view") }, { label: "Export Item Images", onClick: exportImages },
       ] }
-      : { kind: "sub", label: "Export", icon: ACTION_ICONS.export, items: [{ label: "Export Coupons", onClick: exportAll }, { label: "Export Current View", onClick: exportView }] },
+      : { kind: "sub", label: "Export", icon: ACTION_ICONS.export, items: [{ label: "Export Coupons", onClick: () => openExport("all") }, { label: "Export Current View", onClick: () => openExport("view") }] },
     { kind: "divider" },
     ...(module === "items" ? [{ kind: "item" as const, label: "Preferences", icon: ACTION_ICONS.prefs, onClick: () => setPrefsOpen(true) }] : []),
     { kind: "item", label: "Refresh List", icon: ACTION_ICONS.refresh, onClick: () => { router.refresh(); flash("List refreshed."); } },
@@ -413,6 +400,8 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
           onApply={(value, d) => { setParams({ sort: value, dir: d }); setMSheet(null); }} />
       )}
 
+      <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} initialModule={module === "items" ? "Items" : "Coupons"} defaultScope={exportScope}
+        view={{ module: module === "items" ? "Items" : "Coupons", label: shortViewName(module, view), ids: list.map((r) => r.id), columns: view.columns }} />
       {module === "items" && <BarcodeScanner open={scanOpen} onClose={() => setScanOpen(false)} onCode={onScan} />}
       {toast && <div role="status" className="fixed bottom-6 left-1/2 z-[95] -translate-x-1/2 rounded-xl bg-[#0b1f3a] px-4 py-2.5 text-sm text-white shadow-xl animate-[bp-fade_0.2s_ease-out]">{toast}</div>}
       {module === "items" && <ItemPrefsModal open={prefsOpen} companyId={companyId} onClose={() => setPrefsOpen(false)} />}

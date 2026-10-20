@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "@headlessui/react";
 import DatePicker from "@/components/ui/DatePicker";
 
-// Módulos que tendrá el export (solo Customers funciona hoy; el resto llega después)
+// Pop-up único para exportar desde cualquier módulo (Customers, Items, Coupons… el resto llega después)
 const MODULE_GROUPS: { group: string; items: string[] }[] = [
   { group: "Contacts", items: ["Customers", "Contact persons", "Contact's addresses"] },
   { group: "Sales", items: ["Quotes", "Invoices", "Invoice payments", "Subscriptions", "Credit notes", "Credit notes applied to invoices", "Refunds"] },
@@ -12,7 +12,10 @@ const MODULE_GROUPS: { group: string; items: string[] }[] = [
   { group: "Projects", items: ["Projects", "Tasks", "Timesheets"] },
   { group: "Items & other", items: ["Items", "Coupons", "Price lists", "Exchange rates", "Taxes", "Users", "Documents"] },
 ];
-const ENABLED = new Set(["Customers"]);
+const ENDPOINTS: Record<string, string> = { Customers: "/dashboard/customers/export", Items: "/dashboard/items/export", Coupons: "/dashboard/coupons/export" };
+const ENABLED = new Set(Object.keys(ENDPOINTS));
+export type ExportModule = "Customers" | "Items" | "Coupons";
+export type ExportView = { module: ExportModule; label: string; ids: string[]; columns: string[] };
 
 const DECIMALS = ["1,234,567.89", "1234567.89", "1.234.567,89", "1,23,456.78"];
 
@@ -30,11 +33,13 @@ function pwIssues(p: string) {
   return out;
 }
 
-export default function ExportModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [module, setModule] = useState("Customers");
+export default function ExportModal({ open, onClose, initialModule = "Customers", view, defaultScope = "all" }: {
+  open: boolean; onClose: () => void; initialModule?: ExportModule; view?: ExportView; defaultScope?: "all" | "view";
+}) {
+  const [module, setModule] = useState<string>(initialModule);
   const [moduleOpen, setModuleOpen] = useState(false);
   const [moduleQuery, setModuleQuery] = useState("");
-  const [records, setRecords] = useState<"all" | "period">("all");
+  const [records, setRecords] = useState<"all" | "view" | "period">("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [decimal, setDecimal] = useState(DECIMALS[0]);
@@ -44,6 +49,13 @@ export default function ExportModal({ open, onClose }: { open: boolean; onClose:
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const moduleRef = useRef<HTMLDivElement>(null);
+
+  // Cada vez que se abre, empieza en el módulo desde donde lo abriste
+  useEffect(() => {
+    if (!open) return;
+    setModule(initialModule); setRecords(defaultScope === "view" && view ? "view" : "all"); setError(""); setPassword("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -78,11 +90,14 @@ export default function ExportModal({ open, onClose }: { open: boolean; onClose:
 
     setBusy(true);
     try {
-      const res = await fetch("/dashboard/customers/export", {
+      const useView = records === "view" && view && view.module === module;
+      const res = await fetch(ENDPOINTS[module], {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          scope: "all", format, password: password || undefined, decimal,
+          scope: module === "Customers" ? "all" : useView ? "view" : records === "period" ? "period" : "all",
+          ids: useView ? view!.ids : undefined, columns: useView ? view!.columns : undefined,
+          format, password: password || undefined, decimal,
           period: records === "period" ? { from: from || undefined, to: to || undefined } : undefined,
         }),
       });
@@ -93,7 +108,7 @@ export default function ExportModal({ open, onClose }: { open: boolean; onClose:
       }
       const blob = await res.blob();
       const cd = res.headers.get("Content-Disposition") || "";
-      const name = /filename="([^"]+)"/.exec(cd)?.[1] || `customers.${format}`;
+      const name = /filename="([^"]+)"/.exec(cd)?.[1] || `${module.toLowerCase()}.${format}`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
@@ -115,7 +130,7 @@ export default function ExportModal({ open, onClose }: { open: boolean; onClose:
       <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
         {/* Encabezado + X roja animada */}
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-          <h2 className="text-lg font-semibold text-[#0b1f3a]">Export customers</h2>
+          <h2 className="text-lg font-semibold text-[#0b1f3a]">Export {module}</h2>
           <button type="button" onClick={onClose} aria-label="Close" title="Close"
             className="group flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition-all duration-200 hover:rotate-90 hover:bg-red-50 hover:text-red-600">
             <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor" aria-hidden="true">
@@ -149,8 +164,8 @@ export default function ExportModal({ open, onClose }: { open: boolean; onClose:
                           const enabled = ENABLED.has(i);
                           return (
                             <button key={i} type="button" disabled={!enabled}
-                              onClick={() => { setModule(i); setModuleOpen(false); setModuleQuery(""); }}
-                              className={`flex w-full items-center justify-between px-4 py-2 text-left text-sm ${enabled ? "text-slate-700 hover:bg-[#f0faf7]" : "cursor-not-allowed text-slate-300"}`}>
+                              onClick={() => { setModule(i); setModuleOpen(false); setModuleQuery(""); if (records === "view" && view?.module !== i) setRecords("all"); }}
+                              className={`flex w-full items-center justify-between px-4 py-2 text-left text-sm ${enabled ? "text-slate-700 hover:bg-[#d7f1eb]" : "cursor-not-allowed text-slate-300"}`}>
                               {i}
                               {!enabled && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">Soon</span>}
                               {enabled && module === i && <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#0f766e]" fill="currentColor"><path d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0z" /></svg>}
@@ -170,8 +185,14 @@ export default function ExportModal({ open, onClose }: { open: boolean; onClose:
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="radio" name="records" checked={records === "all"} onChange={() => setRecords("all")} className="h-4 w-4 accent-[#0f766e]" />
-                All customers
+                All {module.toLowerCase()}
               </label>
+              {view && view.module === module && (
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input type="radio" name="records" checked={records === "view"} onChange={() => setRecords("view")} className="h-4 w-4 accent-[#0f766e]" />
+                  Current view <span className="text-slate-400">({view.label} · {view.ids.length} {view.ids.length === 1 ? "record" : "records"}, same columns)</span>
+                </label>
+              )}
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="radio" name="records" checked={records === "period"} onChange={() => setRecords("period")} className="h-4 w-4 accent-[#0f766e]" />
                 Specific period <span className="text-slate-400">(by created date)</span>
