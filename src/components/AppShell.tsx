@@ -52,11 +52,6 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
-  const icon = (d: string) => (
-    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] shrink-0 group-hover:animate-[bp-nav-pop_0.5s_ease-out_forwards]" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d={d} />
-    </svg>
-  );
   // Flechita a la izquierda (como Zoho). Los que no tienen grupo dejan el mismo espacio para que todo quede alineado.
   const caret = (isOpen?: boolean) => (
     <span className="flex w-3.5 shrink-0 justify-center">
@@ -68,8 +63,20 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
     </span>
   );
 
+  const mobile = Boolean(onNavigate); // el menú de hamburguesa (celular)
+  const size = mobile ? "text-[15px] py-2.5" : "text-[13px] py-2";
+  const activeCls = mobile
+    ? "bg-[#dff3ee] font-semibold text-[#0f766e]"   // suavecito, como la app de Zoho
+    : "bg-gradient-to-r from-[#0f766e] to-[#14a39a] font-semibold text-white shadow-md shadow-[#0f766e]/25";
+
+  const icon = (d: string) => (
+    <svg viewBox="0 0 24 24" className={`${mobile ? "h-5 w-5" : "h-[18px] w-[18px]"} shrink-0 group-hover:animate-[bp-nav-pop_0.5s_ease-out_forwards]`} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={d} />
+    </svg>
+  );
   function entry(item: NavItem, child = false) {
     const active = isActive(item.href);
+    const showAdd = Boolean(item.addHref) && !mobile;
     const content = (
       <>
         {!child && caret()}
@@ -78,19 +85,19 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
         {!item.href && <span className="shrink-0 rounded-full bg-slate-200/70 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">Soon</span>}
       </>
     );
-    const base = `flex items-center gap-2.5 rounded-lg py-2 text-[13px] transition-all duration-150 ${child ? "pl-[3.35rem] pr-2.5" : "px-2.5"} ${item.addHref ? "pr-10" : ""}`;
+    const base = `flex items-center gap-2.5 rounded-lg transition-all duration-150 ${size} ${child ? (mobile ? "pl-[3.6rem] pr-2.5" : "pl-[3.35rem] pr-2.5") : "px-2.5"} ${showAdd ? "pr-10" : ""}`;
     const singular = item.label.replace(/s$/, "");
     return (
       <li key={item.label} className="group relative">
         {item.href ? (
           <Link href={item.href} onClick={onNavigate}
-            className={`${base} ${active ? "bg-gradient-to-r from-[#0f766e] to-[#14a39a] font-semibold text-white shadow-md shadow-[#0f766e]/25" : "text-slate-700 hover:bg-[#d7f1eb] hover:text-[#0b1f3a] active:bg-[#c3eadf]"}`}>
+            className={`${base} ${active ? activeCls : "text-slate-700 hover:bg-[#d7f1eb] hover:text-[#0b1f3a] active:bg-[#c3eadf]"}`}>
             {content}
           </Link>
         ) : (
           <span className={`${base} cursor-default text-slate-400`} aria-disabled="true">{content}</span>
         )}
-        {item.addHref && (
+        {showAdd && item.addHref && (
           <Link href={item.addHref} onClick={onNavigate} aria-label={`New ${singular}`} title={`New ${singular}`}
             className={`absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md transition-all duration-150 focus:opacity-100 ${
               active
@@ -117,7 +124,7 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
           return (
             <li key={item.label}>
               <button type="button" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [item.label]: !isOpen }))}
-                className={`group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] transition-colors hover:bg-[#d7f1eb] ${inside ? "bg-[#e9f7f4] font-semibold text-[#0f766e]" : "text-slate-700 hover:text-[#0b1f3a]"}`}>
+                className={`group flex w-full items-center gap-2.5 rounded-lg px-2.5 text-left ${size} transition-colors hover:bg-[#d7f1eb] ${inside ? "bg-[#e9f7f4] font-semibold text-[#0f766e]" : "text-slate-700 hover:text-[#0b1f3a]"}`}>
                 {caret(isOpen)}
                 {icon(item.icon)}
                 <span className="min-w-0 flex-1 truncate">{item.label}</span>
@@ -172,7 +179,7 @@ export default function AppShell({
       {menuOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <button type="button" aria-label="Close menu" onClick={() => setMenuOpen(false)} className="absolute inset-0 bg-slate-900/30" />
-          <aside className="absolute inset-y-0 left-0 flex w-[82%] max-w-xs flex-col bg-[#f4f7fa] shadow-2xl">
+          <aside className="absolute inset-y-0 left-0 flex w-[74%] max-w-[290px] flex-col bg-[#f4f7fa] shadow-2xl">
             <div className="flex h-16 items-center justify-between border-b border-[#cde8e0] bg-[#e7f5f1] px-5">
               <Image src="/logo-brightpro.png" alt="BrightPro" width={130} height={36} className="h-7 w-auto" />
               <button type="button" onClick={() => setMenuOpen(false)} aria-label="Close menu" className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700">

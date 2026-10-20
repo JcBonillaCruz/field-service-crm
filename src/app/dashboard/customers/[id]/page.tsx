@@ -83,12 +83,14 @@ export default async function CustomerPage({
         ))}
       </div>
       {/* Pestañas — móvil (3, como Zoho) */}
-      <div className="flex gap-2 border-b border-slate-200 bg-white px-4 lg:hidden">
+      <div className="grid grid-cols-3 border-b border-slate-200 bg-white lg:hidden">
         {MOBILE_TABS.map((t, i) => i === 0 ? (
-          <span key={t} className="whitespace-nowrap border-b-2 border-[#0f766e] px-2 py-3 text-sm font-semibold uppercase tracking-wide text-[#0f766e]">{t}</span>
+          <span key={t} className="relative flex items-center justify-center py-3 text-[13px] font-semibold uppercase tracking-wide text-[#0f766e]">
+            {t}<span className="absolute inset-x-3 bottom-0 h-[3px] rounded-full bg-[#0f766e]" />
+          </span>
         ) : (
-          <span key={t} title="Coming soon" className="flex items-center gap-1.5 whitespace-nowrap px-2 py-3 text-sm uppercase tracking-wide text-slate-400">
-            {t}<span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-medium normal-case">Soon</span>
+          <span key={t} title="Coming soon" className="flex min-w-0 flex-col items-center justify-center py-2 text-[13px] uppercase tracking-wide text-slate-400">
+            <span className="truncate">{t}</span><span className="text-[9px] font-medium normal-case leading-tight">Soon</span>
           </span>
         ))}
       </div>

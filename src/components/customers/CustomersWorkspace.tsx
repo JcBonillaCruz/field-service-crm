@@ -69,7 +69,7 @@ export default function CustomersWorkspace({
   const listPane = selectedId
     ? "hidden w-full shrink-0 flex-col border-r border-slate-200 bg-white lg:flex lg:w-[340px]"
     : "flex w-full flex-col";
-  const detailPane = selectedId ? "flex min-w-0 flex-1 flex-col bg-[#f4f6f8]" : "hidden";
+  const detailPane = selectedId ? "flex w-full min-w-0 flex-1 flex-col overflow-x-hidden bg-[#f4f6f8] lg:w-auto" : "hidden";
 
   return (
     <div className="lg:flex lg:h-[calc(100vh-4rem)] lg:overflow-hidden">

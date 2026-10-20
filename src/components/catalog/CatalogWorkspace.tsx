@@ -14,6 +14,7 @@ import { downloadCsv } from "@/lib/csv";
 import { downloadBlob, makeZip } from "@/lib/zip";
 import CatalogActionsMenu, { ACTION_ICONS, ActionGroup } from "@/components/catalog/CatalogActionsMenu";
 import ItemPrefsModal from "@/components/catalog/ItemPrefsModal";
+import BarcodeScanner from "@/components/catalog/BarcodeScanner";
 import { NoImage } from "@/components/catalog/DetailBits";
 import BottomSheet from "@/components/customers/BottomSheet";
 import MobileSortSheet from "@/components/customers/MobileSortSheet";
@@ -44,6 +45,12 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
   const [toast, setToast] = useState("");
   const [mSheet, setMSheet] = useState<null | "filter" | "sort">(null);
   const [mSearch, setMSearch] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
+  const onScan = useCallback((code: string) => {
+    setScanOpen(false); setMSearch(true);
+    const p = new URLSearchParams(window.location.search); p.set("q", code);
+    router.replace(`${window.location.pathname}?${p.toString()}`, { scroll: false });
+  }, [router]);
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
@@ -258,6 +265,11 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
                 className={`flex h-10 w-10 items-center justify-center rounded-lg ${mSearch || q ? "bg-[#e9f7f4] text-[#0f766e]" : "text-slate-600 active:bg-slate-100"}`}>
                 <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
               </button>
+              {module === "items" && (
+                <button type="button" aria-label="Scan barcode" onClick={() => setScanOpen(true)} className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100">
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M8 8v8M11 8v8M14 8v8M17 8v8" /></svg>
+                </button>
+              )}
               <button type="button" aria-label="Sort" onClick={() => setMSheet("sort")} className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100">
                 <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M8 4v16m0 0-3-3m3 3 3-3M13 6h8M13 11h5M13 16h3" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </button>
@@ -273,7 +285,7 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
           {(mSearch || q) && (
             <div className="mt-3 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 focus-within:border-[#0f766e] focus-within:bg-white">
               <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
-              <input autoFocus defaultValue={q} placeholder={`Search ${info.plural.toLowerCase()}`} autoComplete="off"
+              <input key={q} autoFocus defaultValue={q} placeholder={`Search ${info.plural.toLowerCase()}`} autoComplete="off"
                 onChange={(e) => { const v = e.target.value; clearTimeout(searchTimer.current); searchTimer.current = setTimeout(() => setParams({ q: v.trim() || null }), 300); }}
                 className="w-full bg-transparent py-2.5 text-[15px] focus:outline-none" />
             </div>
@@ -401,6 +413,7 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
           onApply={(value, d) => { setParams({ sort: value, dir: d }); setMSheet(null); }} />
       )}
 
+      {module === "items" && <BarcodeScanner open={scanOpen} onClose={() => setScanOpen(false)} onCode={onScan} />}
       {toast && <div role="status" className="fixed bottom-6 left-1/2 z-[95] -translate-x-1/2 rounded-xl bg-[#0b1f3a] px-4 py-2.5 text-sm text-white shadow-xl animate-[bp-fade_0.2s_ease-out]">{toast}</div>}
       {module === "items" && <ItemPrefsModal open={prefsOpen} companyId={companyId} onClose={() => setPrefsOpen(false)} />}
     </div>

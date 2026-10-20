@@ -309,8 +309,11 @@ function ItemMobile({ item, history, companyId, actions, msg }: { item: Item; hi
 function Card({ title, icon, children }: { title: string; icon: string; children: React.ReactNode }) {
   return (
     <section className="rounded-xl bg-white px-4 py-4 shadow-[0_1px_2px_rgba(15,40,60,0.06)]">
-      <h2 className="mb-3 flex items-center gap-2.5 text-[17px] font-semibold text-[#0b1f3a]">
-        <svg viewBox="0 0 24 24" className="h-5 w-5 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={icon} /></svg>
+      <h2 className="mb-3 flex items-center gap-3 text-[17px] font-semibold text-[#0b1f3a]">
+        <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-[#14a39a] via-[#0f8f7f] to-[#0f766e] text-white shadow-md shadow-[#0f766e]/25">
+          <span className="absolute -right-2 -top-2 h-5 w-5 rounded-full bg-white/20" aria-hidden="true" />
+          <svg viewBox="0 0 24 24" className="relative h-[22px] w-[22px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={icon} /></svg>
+        </span>
         {title}
       </h2>
       {children}
@@ -325,7 +328,7 @@ function MDetails({ item }: { item: Item }) {
   const [desc, setDesc] = useState(false);
   return (
     <>
-      <Card title="Sales Information" icon="M3 8.5V5a2 2 0 0 1 2-2h3.5L20 14.5 14.5 20 3 8.5zM7.5 7.5h.01">
+      <Card title="Sales Information" icon="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8zM7.5 7.5h.01M13.6 10.3c-.3-.6-1-.9-1.8-.9-1 0-1.8.5-1.8 1.3s.8 1.1 1.8 1.3 1.8.6 1.8 1.4-.8 1.3-1.8 1.3c-.9 0-1.6-.4-1.9-1M11.8 8.4v7.4">
         <MInfo label="Selling Price">{usd(item.selling_price)}</MInfo>
         <MInfo label="Sales Account">{item.account}</MInfo>
         {item.description && (
@@ -335,7 +338,7 @@ function MDetails({ item }: { item: Item }) {
           </>
         )}
       </Card>
-      <Card title="Sales Summary" icon="M4 19V5M4 19h16M8 15v-3M12 15V8M16 15v-5">
+      <Card title="Sales Summary" icon="M3 20h18M6 16v-4M10 16V9M14 16v-6M18 16V6M5 9l4-4 4 3 6-5">
         <div className="grid grid-cols-2 gap-2">
           {[["Quotes", "0"], ["Invoices", "0"], ["Units Sold", "0"], ["Total Sold", usd(0)]].map(([l, v]) => (
             <div key={l} className="rounded-lg bg-[#f6fbfa] px-3 py-2.5">
@@ -344,7 +347,7 @@ function MDetails({ item }: { item: Item }) {
           ))}
         </div>
       </Card>
-      <Card title="More Information" icon="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z">
+      <Card title="More Information" icon="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v5M12 7.5h.01">
         <MInfo label="Item Type">Sales Items</MInfo>
         <MInfo label="Type">{item.item_type === "goods" ? "Goods" : "Service"}</MInfo>
         {item.unit && <MInfo label="Unit">{item.unit}</MInfo>}
