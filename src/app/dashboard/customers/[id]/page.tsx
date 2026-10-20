@@ -95,14 +95,14 @@ export default async function CustomerPage({
         ))}
       </div>
 
-      <div className="flex-1 px-4 py-6 sm:px-6">
+      <div className="min-w-0 flex-1 px-3 py-4 sm:px-6 sm:py-6">
         {searchParams.warn === "addresses" && (
           <p className="mb-5 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">The customer was saved, but the addresses weren&apos;t. Add them again below.</p>
         )}
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(340px,400px)_1fr]">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(340px,400px)_minmax(0,1fr)]">
           {/* IZQUIERDA: toda la info del cliente en un solo panel (como Zoho) */}
-          <div className="self-start overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="min-w-0 self-start overflow-hidden rounded-xl border border-slate-200 bg-white">
             <div className="bg-[#f8fafb] px-5 py-5">
               <div className="flex items-start justify-between gap-3">
                 <p className="pt-1 text-[15px] font-medium text-[#0b1f3a]">{contact || c.display_name}</p>
@@ -141,11 +141,11 @@ export default async function CustomerPage({
                     <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="8" r="4" /><path d="M4 20a8 8 0 0 1 16 0" strokeLinecap="round" /></svg>
                   </span>
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <span className="truncate text-[17px] font-semibold text-[#0b1f3a]">{contact || c.display_name}</span>
+                    <span className="truncate text-[16px] font-semibold text-[#0b1f3a]">{contact || c.display_name}</span>
                     <span className="rounded border border-slate-300 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-slate-500">USD</span>
                   </div>
                 </div>
-                <div className="mt-3 space-y-2 pl-1 text-[15px]">
+                <div className="mt-3 min-w-0 space-y-2 pl-1 text-[14px]">
                   {primaryEmail && <a href={`mailto:${primaryEmail.email}`} className="block break-all text-slate-700">{primaryEmail.email}</a>}
                   {phones[0] && (
                     <div className="flex items-center gap-2 text-slate-700">
@@ -202,7 +202,7 @@ export default async function CustomerPage({
           </div>
 
           {/* DERECHA: historial de actividad */}
-          <div className="space-y-6">
+          <div className="min-w-0 space-y-6">
           <div className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
             <p className="text-sm text-slate-500">Payment due period</p>
             <p className="mt-0.5 text-[15px] text-[#0b1f3a]">{c.payment_terms || "Due on Receipt"}</p>
@@ -251,12 +251,12 @@ const ICONS: Record<string, React.ReactNode> = {
 function CallButton({ label, href, kind }: { label: string; href?: string; kind: "mobile" | "phone" | "mail" }) {
   const inner = (
     <>
-      <span className={`flex h-14 w-14 items-center justify-center rounded-full transition-transform ${href ? "bg-[#0f766e] text-white shadow-sm shadow-[#0f766e]/30 active:scale-95" : "bg-[#e9f7f4] text-[#a9ddd4]"}`}>
-        <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">{ICONS[kind]}</svg>
+      <span className={`flex h-12 w-12 items-center justify-center rounded-full transition-transform ${href ? "bg-[#0f766e] text-white shadow-sm shadow-[#0f766e]/30 active:scale-95" : "bg-[#e9f7f4] text-[#a9ddd4]"}`}>
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">{ICONS[kind]}</svg>
       </span>
-      <span className={`text-[13px] font-medium ${href ? "text-[#0f766e]" : "text-[#a9ddd4]"}`}>{label}</span>
+      <span className={`text-[12px] font-medium ${href ? "text-[#0f766e]" : "text-[#a9ddd4]"}`}>{label}</span>
     </>
   );
-  const box = "flex flex-1 flex-col items-center gap-2";
+  const box = "flex min-w-0 flex-1 flex-col items-center gap-1.5";
   return href ? <a href={href} className={box}>{inner}</a> : <div className={box}>{inner}</div>;
 }
