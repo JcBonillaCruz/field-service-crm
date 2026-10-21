@@ -397,7 +397,7 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
         </ul>
       </BottomSheet>
 
-      <SendEmailModal open={modal === "email" || modal === "reminder"} reminder={modal === "reminder"} onClose={close} doc={doc} companyName={companyName} actor={actor} files={data.files} />
+      <SendEmailModal open={modal === "email" || modal === "reminder"} reminder={modal === "reminder"} onClose={close} doc={doc} companyName={companyName} actor={actor} files={data.files} whiteLabel={prefs.white_label} />
       <ShareModal open={modal === "share"} onClose={close} doc={doc} actor={actor} />
       {!isQuote && <PaymentModal open={modal === "payment" || modal === "write_off"} mode={modal === "write_off" ? "write_off" : "payment"} onClose={close} doc={doc} actor={actor} onDone={() => { router.refresh(); flash("Saved."); }} />}
       {!isQuote && <ExpectedDateModal open={modal === "expected"} onClose={close} doc={doc} actor={actor} />}

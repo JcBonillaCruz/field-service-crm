@@ -1,6 +1,15 @@
 import { PdfSettings, SalesDoc, SalesLine, Status, addressLines, balanceOf, discountSummary, fmtD, fmtDT, num2, pdfOf } from "@/lib/sales";
-import { tplOf } from "@/lib/pdf-templates";
+import { TPL_ICONS, tplOf } from "@/lib/pdf-templates";
 import { Ribbon } from "@/components/sales/SalesBits";
+
+// Ícono dentro de un cuadrito suave del color de la plantilla (plantillas ✦)
+function TI({ d, accent }: { d: string; accent: string }) {
+  return (
+    <span className="mr-2 inline-flex h-[1.55em] w-[1.55em] shrink-0 items-center justify-center rounded-md align-middle" style={{ background: `${accent}1a`, color: accent }}>
+      <svg viewBox="0 0 24 24" className="h-[0.95em] w-[0.95em]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
+    </span>
+  );
+}
 
 export type PaperVariant = "full" | "delivery" | "packing";
 export type PaperPrefs = {
@@ -25,13 +34,14 @@ export default function DocPaper({ doc, lines, prefs, companyName, status, varia
   const site = addressLines(doc.site_address);
   const disc = discountSummary(doc, lines);
   const showRibbon = Boolean(ribbon && status && priced);
+  const signed = Boolean(doc.signed_name && doc.signed_at);
   const pad = s.margin === "narrow" ? "px-5 sm:px-8" : s.margin === "wide" ? "px-7 sm:px-16" : "px-6 sm:px-11";
   const padY = s.margin === "narrow" ? "pb-8" : s.margin === "wide" ? "pb-14" : "pb-11";
   // Con cinta, el contenido baja para que la cinta nunca tape el logo (como Zoho)
   const top = tp.header === "band" ? "" : showRibbon ? "pt-20 sm:pt-24" : s.margin === "wide" ? "pt-14" : "pt-10";
   const size = s.font_size === "small" ? "text-[12px]" : s.font_size === "large" ? "text-[14px]" : "text-[13px]";
   const fontCls = tp.font === "serif" ? "font-serif" : tp.font === "mono" ? "font-mono" : "";
-  const logoH = s.logo_size === "small" ? "max-h-14" : s.logo_size === "large" ? "max-h-40" : "max-h-24";
+  const logoH = s.logo_size === "small" ? "max-h-24" : s.logo_size === "large" ? "max-h-60" : "max-h-40";
   const showPowered = !prefs.white_label || s.show_powered;
   const meta = (isQuote
     ? [["Quote Date", fmtD(doc.doc_date)], ["Expiry Date", fmtD(doc.expiry_date)], ["Reference#", doc.reference ?? ""], ["Salesperson", doc.salesperson ?? ""]]
@@ -42,19 +52,20 @@ export default function DocPaper({ doc, lines, prefs, companyName, status, varia
 
   const logo = prefs.logo_url ? (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={prefs.logo_url} alt={companyName} className={`mb-3 ${logoH} max-w-[220px] object-contain ${tp.header === "centered" ? "mx-auto" : tp.header === "reversed" ? "sm:ml-auto" : ""}`} />
+    <img src={prefs.logo_url} alt={companyName} className={`mb-3 ${logoH} max-w-[320px] object-contain ${tp.header === "centered" ? "mx-auto" : tp.header === "reversed" ? "sm:ml-auto" : ""}`} />
   ) : null;
+  const ic = (d: string) => (tp.icons ? <TI d={d} accent={A} /> : null);
+  const orgLine = (d: string, v?: string) => (v ? <p className={tp.icons ? "mt-1 flex items-start" : ""}>{ic(d)}<span className="whitespace-pre-line">{v}</span></p> : null);
   const orgBlock = (
     <>
       {tp.header !== "band" && <p className="text-[1.08em] font-semibold text-[#0b1f3a]">{companyName}</p>}
       {s.show_org_address && <>
-        {org.address && <p className="whitespace-pre-line">{org.address}</p>}
-        {org.phone && <p>{org.phone}</p>}{org.email && <p>{org.email}</p>}{org.website && <p>{org.website}</p>}
+        {orgLine(TPL_ICONS.pin, org.address)}{orgLine(TPL_ICONS.phone, org.phone)}{orgLine(TPL_ICONS.mail, org.email)}{orgLine(TPL_ICONS.globe, org.website)}
       </>}
     </>
   );
   const balance = !isQuote && priced && (
-    <div className="mt-3"><p className="text-[0.9em] font-semibold text-slate-500">Balance Due</p><p className="text-[1.35em] font-semibold text-[#0b1f3a]">${num2(balanceOf(doc))}</p></div>
+    <div className="mt-3"><p className="text-[0.9em] font-semibold text-slate-500">{ic(TPL_ICONS.wallet)}Balance Due</p><p className="text-[1.35em] font-semibold text-[#0b1f3a]">${num2(balanceOf(doc))}</p></div>
   );
   const titleBlock = (align: string) => (
     <div className={align}>
@@ -100,32 +111,32 @@ export default function DocPaper({ doc, lines, prefs, companyName, status, varia
   return (
     <div className={`bp-paper relative mx-auto w-full ${tp.receipt ? "max-w-[460px]" : compact ? "max-w-[740px]" : "max-w-[820px]"} bg-white ${size} ${fontCls} leading-relaxed text-slate-700 shadow-[0_2px_16px_rgba(15,40,60,0.08)] print:max-w-none print:shadow-none ${tp.border ? "border-2 border-slate-300" : "border border-slate-200"}`}>
       {showRibbon && <Ribbon label={status!.label.replace(/^Overdue by .*/, "Overdue")} tone={status!.tone} />}
-      <div className={`${top} ${padY}`}>
+      <div className={`${top} ${padY} ${signed ? "flex min-h-[1040px] flex-col" : ""}`}>
         {header}
         {tp.header === "split" && <div className={`${pad} mt-6`}><div className="h-1 rounded-full" style={{ background: A }} /></div>}
-        <div className={pad}>
+        <div className={`${pad} ${signed ? "flex flex-1 flex-col" : ""}`}>
           {tp.meta === "row" && meta.length > 0 && (
             <div className="mt-6 grid grid-cols-2 border border-slate-200 sm:grid-cols-4">
-              {meta.slice(0, 4).map(([k, v]) => <div key={k} className="border-slate-200 px-3 py-2 [&:not(:last-child)]:border-r"><p className="text-[0.85em] text-slate-500">{k}</p><p className="text-[#0b1f3a]">{v}</p></div>)}
+              {meta.slice(0, 4).map(([k, v]) => <div key={k} className="border-slate-200 px-3 py-2 [&:not(:last-child)]:border-r"><p className="text-[0.85em] text-slate-500">{ic(/Date/.test(k) ? TPL_ICONS.calendar : /Salesperson/.test(k) ? TPL_ICONS.user : TPL_ICONS.hash)}{k}</p><p className="text-[#0b1f3a]">{v}</p></div>)}
             </div>
           )}
           <div className={`mt-8 grid gap-6 ${tp.receipt ? "" : "sm:grid-cols-[minmax(0,1fr)_auto]"}`}>
             <div className={`grid gap-6 ${tp.receipt ? "" : "sm:grid-cols-2"}`}>
               <div className="min-w-0">
-                <p className="text-slate-500">Bill To</p>
+                <p className="text-slate-500">{ic(TPL_ICONS.user)}Bill To</p>
                 <p className="font-semibold" style={{ color: tp.id === "standard" ? "#0f766e" : A }}>{doc.customer_name}</p>
                 {bill.map((l, i) => <p key={i}>{l}</p>)}
               </div>
               {site.length > 0 && (
                 <div className="min-w-0">
-                  <p className="text-slate-500">{doc.site_address?.label ? `Job Site · ${doc.site_address.label}` : "Job Site / Ship To"}</p>
+                  <p className="text-slate-500">{ic(TPL_ICONS.pin)}{doc.site_address?.label ? `Job Site · ${doc.site_address.label}` : "Job Site / Ship To"}</p>
                   {site.map((l, i) => <p key={i}>{l}</p>)}
                 </div>
               )}
             </div>
             {tp.meta === "right" && meta.length > 0 && (
               <table className="self-end">
-                <tbody>{meta.map(([k, v]) => <tr key={k}><td className="py-0.5 pr-6 text-slate-500 sm:text-right">{k} :</td><td className="py-0.5 text-right text-[#0b1f3a]">{v}</td></tr>)}</tbody>
+                <tbody>{meta.map(([k, v]) => <tr key={k}><td className="py-0.5 pr-6 text-slate-500 sm:text-right">{ic(/Date/.test(k) ? TPL_ICONS.calendar : /Salesperson/.test(k) ? TPL_ICONS.user : TPL_ICONS.hash)}{k} :</td><td className="py-0.5 text-right text-[#0b1f3a]">{v}</td></tr>)}</tbody>
               </table>
             )}
           </div>
@@ -181,13 +192,13 @@ export default function DocPaper({ doc, lines, prefs, companyName, status, varia
 
           {(doc.notes || doc.terms) && (
             <div className="mt-10 space-y-5">
-              {doc.notes && <div><p className="text-slate-500">Notes</p><p className="whitespace-pre-line text-[#0b1f3a]">{doc.notes}</p></div>}
-              {doc.terms && <div><p className="text-slate-500">Terms & Conditions</p><p className="whitespace-pre-line text-[#0b1f3a]">{doc.terms}</p></div>}
+              {doc.notes && <div><p className="text-slate-500">{ic(TPL_ICONS.note)}Notes</p><p className="whitespace-pre-line text-[#0b1f3a]">{doc.notes}</p></div>}
+              {doc.terms && <div><p className="text-slate-500">{ic(TPL_ICONS.shield)}Terms & Conditions</p><p className="whitespace-pre-line text-[#0b1f3a]">{doc.terms}</p></div>}
             </div>
           )}
           {tp.receipt && priced && <p className="mt-8 text-center text-[1.1em] text-[#0b1f3a]">Thank you!</p>}
           {doc.signed_name && doc.signed_at && (
-            <div className="mt-10">
+            <div className="mt-auto pt-12">
               <p className="font-semibold text-[#0b1f3a]">Accepted & signed by the customer</p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               {doc.signature_data && <img src={doc.signature_data} alt={`Signature of ${doc.signed_name}`} className="mt-2 max-h-20 max-w-[260px] object-contain" />}

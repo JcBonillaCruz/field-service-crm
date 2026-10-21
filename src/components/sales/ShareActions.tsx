@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { Modal, btnGhost, btnPrimary } from "@/components/sales/SalesBits";
 
 // Panel para firmar con el dedo o el mouse
@@ -49,7 +48,9 @@ export default function ShareActions({ token, canRespond, defaultName }: { token
       if (!agree) return setError("Please confirm you accept the quote.");
     }
     setBusy(true); setError("");
-    const { data } = await createClient().rpc("public_quote_respond", { tok: token, accept, sig: accept ? sig : null, signer: accept ? name.trim() : null });
+    const res = await fetch("/api/share/respond", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, accept, sig: accept ? sig : null, signer: accept ? name.trim() : null }) });
+    const data = (await res.json().catch(() => ({}))).result;
     setBusy(false);
     if (data === "signature_required") return setError("Please sign and type your name.");
     setSign(false);

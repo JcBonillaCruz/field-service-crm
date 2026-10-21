@@ -8,7 +8,7 @@ export type TplDef = {
   font: "sans" | "serif" | "mono";
   totals: "shade" | "accent" | "plain" | "box";
   meta: "right" | "row";
-  border?: boolean; receipt?: boolean; titleWeight?: "light" | "bold";
+  border?: boolean; receipt?: boolean; titleWeight?: "light" | "bold"; icons?: boolean;
 };
 
 export const CATEGORIES: { id: TplCategory; name: string }[] = [
@@ -44,6 +44,12 @@ export const TEMPLATE_DEFS: TplDef[] = [
   t("premium-royal", "Royal", "premium", "#4c1d95", { header: "band", table: "accent", font: "serif", totals: "accent" }),
   t("premium-elegant", "Elegant Serif", "premium", "#7c2d12", { font: "serif", table: "lines", totals: "plain", header: "centered" }),
   t("premium-ocean", "Ocean", "premium", "#0369a1", { header: "split", table: "accent", totals: "shade" }),
+  // Premium con íconos (5)
+  t("icons-navy", "Signature Navy ✦", "premium", "#1a2744", { header: "band", table: "accent", totals: "accent", titleWeight: "bold", icons: true }),
+  t("icons-aurora", "Aurora ✦", "premium", "#0f766e", { header: "split", table: "accent", totals: "accent", icons: true }),
+  t("icons-executive", "Executive Gold ✦", "premium", "#a16207", { header: "classic", table: "dark", font: "serif", totals: "accent", icons: true }),
+  t("icons-sunset", "Sunset ✦", "premium", "#e8713a", { header: "band", table: "light", totals: "accent", titleWeight: "bold", icons: true }),
+  t("icons-sapphire", "Sapphire ✦", "premium", "#1e40af", { header: "split", table: "light", totals: "accent", meta: "row", icons: true }),
   // Universal (6)
   t("universal-lite", "Lite", "universal", "#475569", { table: "light", meta: "row" }),
   t("universal-simple", "Simple", "universal", "#334155", { table: "lines", totals: "plain" }),
@@ -59,3 +65,17 @@ export const TEMPLATE_DEFS: TplDef[] = [
 ];
 
 export const tplOf = (id?: string | null) => TEMPLATE_DEFS.find((x) => x.id === id) ?? TEMPLATE_DEFS[0];
+
+// Íconos de línea (24×24) que usan las plantillas ✦ en pantalla y en el PDF
+export const TPL_ICONS = {
+  user: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20c0-3.3 3.6-6 8-6s8 2.7 8 6",
+  pin: "M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21zM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z",
+  phone: "M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1z",
+  mail: "M3 6h18v12H3zM3 7l9 6 9-6",
+  globe: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18",
+  calendar: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4",
+  note: "M6 3h9l4 4v14H6zM15 3v4h4M9 12h6M9 16h6",
+  shield: "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z M9 12l2 2 4-4",
+  wallet: "M3 7h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H3zM3 7l12-4v4M16 13h2",
+  hash: "M9 4 7 20M17 4l-2 16M4 9h16M3 15h16",
+};

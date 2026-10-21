@@ -45,8 +45,8 @@ function Chips({ value, onChange, placeholder }: { value: string[]; onChange: (v
   );
 }
 
-export function SendEmailModal({ open, onClose, doc, companyName, actor, reminder = false, files = [] }: {
-  open: boolean; onClose: () => void; doc: SalesDoc; companyName: string; actor: string; reminder?: boolean; files?: SalesFile[];
+export function SendEmailModal({ open, onClose, doc, companyName, actor, reminder = false, files = [], whiteLabel = false }: {
+  open: boolean; onClose: () => void; doc: SalesDoc; companyName: string; actor: string; reminder?: boolean; files?: SalesFile[]; whiteLabel?: boolean;
 }) {
   const router = useRouter();
   const noun = doc.kind === "quote" ? "Quote" : "Invoice";
@@ -65,14 +65,17 @@ export function SendEmailModal({ open, onClose, doc, companyName, actor, reminde
   useEffect(() => {
     if (!open) return;
     setTo(doc.emails); setCc([]); setBcc([]); setShowCc(false); setError(""); setFallback(false); setAttachPdf(true); setFileIds([]);
-    setSubject(reminder ? `Payment reminder for Invoice - ${doc.number}` : `${noun} from ${companyName} (${noun}#: ${doc.number})`);
+    // Como Zoho: "Quote - QT-001126 is awaiting your approval - Sent Using BrightPro"
+    const tail = whiteLabel ? "" : " - Sent Using BrightPro";
+    setSubject(reminder ? `Payment reminder: Invoice - ${doc.number} is due${tail}`
+      : doc.kind === "quote" ? `Quote - ${doc.number} is awaiting your approval${tail}` : `Invoice - ${doc.number} from ${companyName}${tail}`);
     const amount = money(doc.kind === "invoice" ? balanceOf(doc) : doc.total);
     setBody(reminder
       ? `Dear ${doc.customer_name},\n\nThis is a friendly reminder that invoice ${doc.number} for ${amount} was due on ${fmtD(doc.due_date)}.\n\nYou can view, print or download the invoice from the link below.\n{link}\n\nThank you,\n${actor || companyName}\n${companyName}`
       : doc.kind === "quote"
         ? `Dear ${doc.customer_name},\n\nThank you for contacting us. Your quote ${doc.number} for **${amount}** is ready.\n\nYou can view, accept and sign the quote from the link below.\n{link}\n\nWe look forward to working with you.\n\nRegards,\n${actor || companyName}\n${companyName}`
         : `Dear ${doc.customer_name},\n\nIt was a pleasure doing business with you. Your invoice ${doc.number} for **${amount}** is due on ${fmtD(doc.due_date)}.\n\nYou can view, print or download the invoice from the link below.\n{link}\n\nRegards,\n${actor || companyName}\n${companyName}`);
-  }, [open, doc, companyName, actor, reminder, noun]);
+  }, [open, doc, companyName, actor, reminder, noun, whiteLabel]);
 
   function wrap(mark: string) {
     const el = ref.current; if (!el) return;
@@ -110,7 +113,7 @@ export function SendEmailModal({ open, onClose, doc, companyName, actor, reminde
       </>}>
       <div className="overflow-hidden rounded-xl border border-slate-200">
         <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-3 border-b border-slate-100 px-4 py-2.5 text-[15px]">
-          <span className="text-slate-500">From</span><span className="truncate text-slate-700">{companyName} <span className="text-slate-400">· replies go to you</span></span>
+          <span className="text-slate-500">From</span><span className="truncate text-slate-700">{whiteLabel ? companyName : <>Bright<span className="text-[#e8713a]">Pro</span></>} <span className="text-slate-400">· replies go to you</span></span>
         </div>
         <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-start gap-3 border-b border-slate-100 px-4 py-2">
           <span className="pt-3 text-[15px] text-slate-500">Send To</span>

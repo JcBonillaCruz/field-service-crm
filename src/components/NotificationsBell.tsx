@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
@@ -11,14 +11,70 @@ const TONE: Record<Notice["kind"], string> = {
   overdue: "bg-[#ffe8ee] text-[#be123c]", due_today: "bg-[#fff0e6] text-[#c2410c]", due_soon: "bg-[#fff6e0] text-[#b45309]", activity: "bg-[#e7f7ec] text-[#15803d]",
 };
 
+// "Ding" suavecito de dos notas cuando llega algo nuevo (con la app abierta)
+function chime() {
+  try {
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = new Ctx();
+    [[880, 0], [1320, 0.16]].forEach(([f, t]) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = "sine"; o.frequency.value = f; o.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.0001, ctx.currentTime + t); g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t + 0.45);
+      o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.5);
+    });
+    setTimeout(() => ctx.close(), 1200);
+  } catch { /* el navegador no deja sonar sin un clic previo */ }
+}
+const b64 = (s: string) => { const p = "=".repeat((4 - (s.length % 4)) % 4); const r = atob((s + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(r, (c) => c.charCodeAt(0)); };
+const VAPID = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
+
 // Campanita: facturas por vencer o vencidas y lo que hizo el cliente (abrió el correo, aceptó y firmó…)
 export default function NotificationsBell() {
   const pathname = usePathname();
   const [items, setItems] = useState<Notice[]>([]);
   const [seen, setSeen] = useState<string[]>([]);
+  const [push, setPush] = useState<"unsupported" | "off" | "on" | "blocked">("off");
+  const [pushMsg, setPushMsg] = useState("");
+  const known = useRef<Set<string> | null>(null);
   const load = useCallback(async () => {
-    try { const r = await fetch("/api/notifications", { cache: "no-store" }); if (r.ok) setItems((await r.json()).items ?? []); } catch { /* sin conexión */ }
+    try {
+      const r = await fetch("/api/notifications", { cache: "no-store" });
+      if (!r.ok) return;
+      const list: Notice[] = (await r.json()).items ?? [];
+      // Sonido solo si apareció algo que no estaba en la carga anterior
+      if (known.current && list.some((n) => !known.current!.has(n.id))) chime();
+      known.current = new Set(list.map((n) => n.id));
+      setItems(list);
+    } catch { /* sin conexión */ }
   }, []);
+  useEffect(() => {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !VAPID) { setPush("unsupported"); return; }
+    if (Notification.permission === "denied") { setPush("blocked"); return; }
+    navigator.serviceWorker.register("/sw.js").then(async (reg) => {
+      const sub = await reg.pushManager.getSubscription();
+      setPush(sub && Notification.permission === "granted" ? "on" : "off");
+    }).catch(() => setPush("unsupported"));
+  }, []);
+  async function enablePush() {
+    setPushMsg("");
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") { setPush(perm === "denied" ? "blocked" : "off"); return; }
+      const reg = await navigator.serviceWorker.register("/sw.js");
+      await navigator.serviceWorker.ready;
+      const sub = (await reg.pushManager.getSubscription()) ?? await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(VAPID) });
+      const res = await fetch("/api/push/subscribe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sub.toJSON()) });
+      if (!res.ok) { setPushMsg((await res.json().catch(() => ({}))).error || "It couldn't be turned on."); return; }
+      setPush("on"); chime();
+    } catch { setPushMsg("This device can't receive alerts. On iPhone, add BrightPro to your Home Screen first."); }
+  }
+  async function disablePush() {
+    const reg = await navigator.serviceWorker.getRegistration("/sw.js");
+    const sub = await reg?.pushManager.getSubscription();
+    if (sub) { await fetch("/api/push/subscribe", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ endpoint: sub.endpoint }) }); await sub.unsubscribe(); }
+    setPush("off");
+  }
   useEffect(() => { try { setSeen(JSON.parse(localStorage.getItem(SEEN) || "[]")); } catch { /* */ } }, []);
   useEffect(() => { load(); const t = setInterval(load, 120000); return () => clearInterval(t); }, [load, pathname]);
   // Los avisos de vencimiento cuentan por día; la actividad por evento
@@ -44,11 +100,22 @@ export default function NotificationsBell() {
               <p className="font-semibold text-[#0b1f3a]">Notifications</p>
               {unread > 0 && <button type="button" onClick={markAll} className="text-[13px] font-medium text-[#0f766e] hover:underline">Mark all as read</button>}
             </div>
+            {push !== "unsupported" && (
+              <div className={`flex items-center gap-3 border-b border-slate-100 px-4 py-2.5 ${push === "on" ? "bg-[#f3fbf8]" : "bg-[#fff7ef]"}`}>
+                <span className="text-lg">{push === "on" ? "🔔" : "🔕"}</span>
+                <p className="min-w-0 flex-1 text-[13px] text-slate-600">
+                  {push === "on" ? "Sound alerts are on for this device." : push === "blocked" ? "Alerts are blocked. Allow notifications for this site in your browser settings." : "Get a sound alert on this phone or computer, even when BrightPro is closed."}
+                  {pushMsg && <span className="block text-red-600">{pushMsg}</span>}
+                </p>
+                {push === "off" && <button type="button" onClick={enablePush} className="shrink-0 rounded-lg bg-[#0f766e] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#0c5f59]">Turn on</button>}
+                {push === "on" && <button type="button" onClick={disablePush} className="shrink-0 text-[12px] text-slate-500 hover:underline">Turn off</button>}
+              </div>
+            )}
             {items.length === 0 ? (
               <div className="px-5 py-8 text-center">
                 <svg viewBox="0 0 24 24" className="mx-auto h-10 w-10 text-slate-200" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /></svg>
                 <p className="mt-3 text-sm text-slate-500">You&apos;re all caught up.</p>
-                <p className="mt-1 text-xs text-slate-400">Invoices about to be due, overdue invoices and what your customers do (open, accept, sign) show up here.</p>
+                <p className="mt-1 text-xs text-slate-400">Invoices about to be due, overdue invoices and what your customers did in the last 30 days (open, accept, sign) show up here.</p>
               </div>
             ) : (
               <ul className="max-h-[26rem] divide-y divide-slate-100 overflow-y-auto">

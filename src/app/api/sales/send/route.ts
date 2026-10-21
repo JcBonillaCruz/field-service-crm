@@ -47,7 +47,8 @@ export async function POST(request: NextRequest) {
   }
   const accent = pdfOf(d.prefs.pdf_settings).accent === "#2f3437" ? "#0f766e" : pdfOf(d.prefs.pdf_settings).accent;
   const html = emailHtml({ body: b.body, link, pixel: `${origin}/api/track/${token}.gif`, doc: d.doc, companyName: d.companyName, logoUrl: d.prefs.logo_url, accent, whiteLabel: d.prefs.white_label });
-  const senderName = (d.companyName || user.fullName || "BrightPro").replace(/[<>"]/g, "");
+  // Sale como "BrightPro"; con marca blanca (plan pagado) sale con el nombre de la compañía
+  const senderName = (d.prefs.white_label ? d.companyName || "BrightPro" : "BrightPro").replace(/[<>"]/g, "");
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",

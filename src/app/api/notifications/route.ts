@@ -14,7 +14,7 @@ export async function GET() {
   const [{ data: inv }, { data: act }] = await Promise.all([
     supabase.from("sales_docs").select("*").eq("company_id", current.id).eq("kind", "invoice").not("status", "in", "(draft,void,paid,written_off)").not("due_date", "is", null).limit(500),
     supabase.from("sales_activity").select("id, entity, entity_id, message, detail, actor_name, created_at").eq("company_id", current.id).eq("actor_name", "Customer")
-      .gte("created_at", new Date(Date.now() - 7 * 86400000).toISOString()).order("created_at", { ascending: false }).limit(30),
+      .gte("created_at", new Date(Date.now() - 30 * 86400000).toISOString()).order("created_at", { ascending: false }).limit(30),
   ]);
   const items: Notice[] = [];
   ((inv ?? []) as SalesDoc[]).filter((d) => balanceOf(d) > 0).forEach((d) => {
@@ -27,7 +27,7 @@ export async function GET() {
   });
   // También los nombres de los firmantes (actor_name = nombre) en firmas
   const { data: signed } = await supabase.from("sales_activity").select("id, entity, entity_id, message, detail, actor_name, created_at").eq("company_id", current.id)
-    .ilike("message", "%by the customer%").gte("created_at", new Date(Date.now() - 7 * 86400000).toISOString()).order("created_at", { ascending: false }).limit(30);
+    .ilike("message", "%by the customer%").gte("created_at", new Date(Date.now() - 30 * 86400000).toISOString()).order("created_at", { ascending: false }).limit(30);
   const seen = new Set<string>();
   [...(act ?? []), ...(signed ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at)).forEach((a) => {
     if (seen.has(a.id)) return; seen.add(a.id);

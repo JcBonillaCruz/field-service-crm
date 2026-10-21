@@ -1,5 +1,5 @@
 import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb } from "pdf-lib";
-import { tplOf } from "@/lib/pdf-templates";
+import { TPL_ICONS, tplOf } from "@/lib/pdf-templates";
 import { AddressSnap, PdfSettings, SalesDoc, SalesLine, addressLines, balanceOf, discountSummary, fmtD, num2, pdfOf } from "@/lib/sales";
 
 export type PdfInput = {
@@ -91,18 +91,28 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
     const xx = o.align === "right" ? x - w : o.align === "center" ? x - w / 2 : x;
     page.drawText(str, { x: xx, y: yy, size, font: f, color: o.color ?? TEXT });
   };
+  // Ícono en cuadrito suave (plantillas ✦). Devuelve cuánto hay que mover el texto
+  const icon = (d: string, x: number, yy: number) => {
+    if (!tp.icons) return 0;
+    page.drawRectangle({ x, y: yy - 3, width: 13, height: 13, color: accent, opacity: 0.12 });
+    page.drawSvgPath(d, { x: x + 1.5, y: yy + 8.5, scale: 10 / 24, borderColor: accent, borderWidth: 2.2 });
+    return 18;
+  };
   const newPage = () => { page = pdf.addPage([W, H]); pages.push(page); y = H - MV; };
   const ensure = (h: number) => { if (y - h < MV + 28) { newPage(); return true; } return false; };
 
   // ---------- Encabezado (izquierda y derecha se miden por separado para que nada se monte) ----------
   const title = variant === "delivery" ? "DELIVERY NOTE" : variant === "packing" ? "PACKING SLIP" : isQuote ? "QUOTE" : "INVOICE";
-  const logoMax = s.logo_size === "small" ? 50 : s.logo_size === "large" ? 120 : 80;
+  const logoMax = s.logo_size === "small" ? 80 : s.logo_size === "large" ? 190 : 135;
   const titleSize = tp.receipt ? 18 : tp.titleWeight === "bold" ? 22 : 26;
   const titleFont = tp.titleWeight === "bold" ? bold : font;
-  const orgLines = s.show_org_address ? [...(org.address ?? "").split("\n"), org.phone ?? "", org.email ?? "", org.website ?? ""].filter((l) => l.trim()) : [];
+  const orgLines: [string, string | null][] = s.show_org_address ? [
+    ...(org.address ?? "").split("\n").filter((l) => l.trim()).map((l, i) => [l, i === 0 ? TPL_ICONS.pin : null] as [string, string | null]),
+    [org.phone ?? "", TPL_ICONS.phone], [org.email ?? "", TPL_ICONS.mail], [org.website ?? "", TPL_ICONS.globe],
+  ].filter(([l]) => (l as string).trim()) as [string, string | null][] : [];
   const drawLogo = (x: number, yTop: number, align: "left" | "right" | "center") => {
     if (!logo) return yTop;
-    const sc = Math.min(logoMax / logo.height, 190 / logo.width);
+    const sc = Math.min(logoMax / logo.height, (tp.receipt ? 200 : 290) / logo.width);
     const w = logo.width * sc, h = logo.height * sc;
     const lx = align === "right" ? x - w : align === "center" ? x - w / 2 : x;
     page.drawImage(logo, { x: lx, y: yTop - h, width: w, height: h });
@@ -111,7 +121,11 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
   const drawOrg = (x: number, yTop: number, align: "left" | "right" | "center", withName = true) => {
     let yy = yTop;
     if (withName) { text(companyName, x, yy - base - 1, { f: bold, size: base + 1.5, color: INK, align }); yy -= base + 7; }
-    orgLines.forEach((l) => { text(l, x, yy - base, { align }); yy -= base + 3; });
+    orgLines.forEach(([l, d]) => {
+      const off = tp.icons && align === "left" ? 18 : 0;
+      if (off && d) icon(d, x, yy - base);
+      text(l, x + off, yy - base, { align }); yy -= base + (tp.icons ? 6 : 3);
+    });
     return yy;
   };
   const drawTitle = (x: number, yTop: number, align: "left" | "right" | "center", color = INK) => {
@@ -120,6 +134,7 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
     yy -= 16; text(`# ${doc.number}`, x, yy, { f: bold, size: base + 0.5, color: INK, align });
     if (!isQuote && priced) {
       yy -= 22; text("Balance Due", x, yy, { f: bold, size: base - 0.5, color: MUTED, align });
+      if (tp.icons && align === "right") icon(TPL_ICONS.wallet, x - bold.widthOfTextAtSize("Balance Due", base - 0.5) - 18, yy);
       yy -= 17; text(`$${num2(balanceOf(doc))}`, x, yy, { f: bold, size: base + 5, color: INK, align });
     }
     return yy - 8;
@@ -161,7 +176,8 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
   const blockTop = y;
   const addr = (label: string, name: string | null, a: AddressSnap, x: number) => {
     let yy = blockTop;
-    text(label, x, yy, { color: MUTED }); yy -= base + 4;
+    const off = icon(label.startsWith("Bill") ? TPL_ICONS.user : TPL_ICONS.pin, x, yy);
+    text(label, x + off, yy, { color: MUTED }); yy -= base + (tp.icons ? 7 : 4);
     if (name) { text(name, x, yy, { f: bold, color: accent }); yy -= base + 4; }
     addressLines(a).forEach((l) => { wrap(l, font, base, 150).forEach((w) => { text(w, x, yy); yy -= base + 3; }); });
     return yy;
@@ -273,17 +289,23 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
     if (!body) return;
     const ls = wrap(body, font, base, right - M);
     ensure(ls.length * (base + 3) + 30);
-    y -= 14; text(label, M, y, { color: MUTED }); y -= base + 5;
+    y -= 14; const off = icon(label === "Notes" ? TPL_ICONS.note : TPL_ICONS.shield, M, y); text(label, M + off, y, { color: MUTED }); y -= base + (tp.icons ? 8 : 5);
     ls.forEach((l) => { if (ensure(base + 3)) y -= 4; text(l, M, y, { color: INK }); y -= base + 3; });
   };
   para("Notes", doc.notes);
   para("Terms & Conditions", doc.terms);
+  // Firma del cliente: abajo, justo arriba del pie de página de la última hoja (se ve más profesional)
   if (doc.signed_name && doc.signed_at) {
-    ensure(sign ? 100 : 50); y -= 20;
-    text("Accepted & signed by the customer", M, y, { f: bold, color: INK }); y -= 8;
-    if (sign) { const sc = Math.min(60 / sign.height, 200 / sign.width); page.drawImage(sign, { x: M, y: y - sign.height * sc, width: sign.width * sc, height: sign.height * sc }); y -= sign.height * sc + 4; }
-    page.drawLine({ start: { x: M, y }, end: { x: M + 210, y }, thickness: 0.6, color: MUTED }); y -= base + 3;
-    text(`${doc.signed_name} - ${fmtD(doc.signed_at)}`, M, y, { color: TEXT }); y -= base + 3;
+    const sc = sign ? Math.min(60 / sign.height, 220 / sign.width) : 0;
+    const sh = sign ? sign.height * sc : 0;
+    const bh = 18 + sh + 8 + base * 2 + 10;
+    if (y - bh < MV + 48) newPage();
+    let sy = MV + 40 + bh;
+    text("Accepted & signed by the customer", M, sy - base, { f: bold, color: INK }); sy -= base + 10;
+    if (sign) { page.drawImage(sign, { x: M, y: sy - sh, width: sign.width * sc, height: sh }); sy -= sh + 4; }
+    page.drawLine({ start: { x: M, y: sy }, end: { x: M + 230, y: sy }, thickness: 0.6, color: MUTED }); sy -= base + 3;
+    text(`${doc.signed_name} - ${fmtD(doc.signed_at)}`, M, sy, { color: TEXT });
+    y = MV + 40;
   }
   if (variant !== "full") {
     ensure(60); y -= 40;

@@ -42,8 +42,14 @@ export default function TemplateGallery({ companyId, prefs, company, sample, sam
     setBusy("");
     if (error) { setToast("It couldn't be saved. Did you run the SQL for Paso 3.31?"); setTimeout(() => setToast(""), 3000); return; }
     setCurrent(t.id); setPreview(null);
-    setToast(`"${t.name}" is now your template for quotes and invoices.`); setTimeout(() => setToast(""), 3000);
-    router.refresh();
+    setToast(`"${t.name}" is now your template.`);
+    // Te regresa solo a donde estabas, ya con el cambio
+    setTimeout(() => {
+      if (window.opener) { window.close(); return; }
+      let back = "/dashboard/settings";
+      try { const r = new URL(document.referrer); if (r.origin === location.origin && !r.pathname.startsWith("/dashboard/settings/pdf-templates")) back = r.pathname + r.search; } catch { /* sin referer */ }
+      window.location.href = back;
+    }, 450);
   }
 
   return (
@@ -77,12 +83,13 @@ export default function TemplateGallery({ companyId, prefs, company, sample, sam
                 const on = current === t.id;
                 return (
                   <div key={t.id} className="group">
-                    <div className={`relative overflow-hidden rounded-xl border-2 bg-white transition-all group-hover:-translate-y-0.5 group-hover:shadow-lg ${on ? "border-[#0f766e] shadow-md" : "border-slate-200"}`}>
+                    <div role="button" tabIndex={0} onClick={() => (on ? setPreview(t) : use(t))} onKeyDown={(e) => { if (e.key === "Enter") (on ? setPreview(t) : use(t)); }}
+                      className={`relative cursor-pointer overflow-hidden rounded-xl border-2 bg-white transition-all group-hover:-translate-y-0.5 group-hover:shadow-lg ${on ? "border-[#0f766e] shadow-md" : "border-slate-200"}`}>
                       <Thumb tpl={t} doc={sample} lines={sampleLines} prefs={prefs} company={company} scale={0.24} />
                       {on && <span className="absolute left-2 top-2 rounded-full bg-[#0f766e] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">★ Selected</span>}
                       <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#0b1f3a]/55 opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:hidden">
-                        <button type="button" onClick={() => setPreview(t)} className="w-28 rounded-lg bg-white py-1.5 text-sm font-medium text-[#0b1f3a] hover:bg-slate-100">Preview</button>
-                        {!on && <button type="button" onClick={() => use(t)} disabled={!!busy} className="w-28 rounded-lg bg-[#0f766e] py-1.5 text-sm font-semibold text-white hover:bg-[#0c5f59]">{busy === t.id ? "Saving..." : "Use this"}</button>}
+                        <button type="button" onClick={(e) => { e.stopPropagation(); setPreview(t); }} className="w-28 rounded-lg bg-white py-1.5 text-sm font-medium text-[#0b1f3a] hover:bg-slate-100">Preview</button>
+                        {!on && <button type="button" onClick={(e) => { e.stopPropagation(); use(t); }} disabled={!!busy} className="w-28 rounded-lg bg-[#0f766e] py-1.5 text-sm font-semibold text-white hover:bg-[#0c5f59]">{busy === t.id ? "Saving..." : "Use this"}</button>}
                       </div>
                     </div>
                     <button type="button" onClick={() => setPreview(t)} className="mt-2 block text-left text-[14px] font-medium text-[#0b1f3a] hover:text-[#0f766e]">{t.name}</button>

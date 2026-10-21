@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_PREFS, PdfSettings, SalesDoc, SalesLine, docStatus, money, balanceOf, fmtD } from "@/lib/sales";
 import DocPaper from "@/components/sales/DocPaper";
+import { docByToken, docUrl, pushToCompany } from "@/lib/push";
 import ShareActions from "@/components/sales/ShareActions";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +16,12 @@ type Payload = {
 // Enlace público para el cliente (no necesita cuenta)
 export default async function SharePage({ params }: { params: { token: string } }) {
   const supabase = createClient();
+  const before = await docByToken(params.token);
   const { data } = await supabase.rpc("public_sales_doc", { tok: params.token });
+  // Primera vez que el cliente abre el enlace: te suena el teléfono
+  if (before && !before.viewed_at) {
+    await pushToCompany(before.company_id, { title: `👀 ${before.customer_name} is viewing your ${before.kind}`, body: `${before.kind === "quote" ? "Quote" : "Invoice"} ${before.number} was opened.`, url: docUrl(before), tag: `v-${before.id}` }).catch(() => 0);
+  }
   const p = data as Payload | null;
   if (!p?.doc) {
     return (

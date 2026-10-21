@@ -33,7 +33,7 @@ export default async function EmailSettingsPage() {
             <div className={`rounded-2xl border p-5 ${ready ? "border-[#bfe7de] bg-[#f3fbf8]" : "border-[#fde2c7] bg-[#fff7ef]"}`}>
               <p className={`text-[13px] font-semibold uppercase tracking-wide ${ready ? "text-[#0f766e]" : "text-[#c2410c]"}`}>{ready ? "● Sending is on" : "● Sending isn't set up yet"}</p>
               <p className="mt-1 text-[15px] text-slate-700">{ready
-                ? <>Emails go out as <b>{current.name} &lt;{from}&gt;</b>. When your customer hits Reply, it goes to <b>{prefs.org_info?.email || user.email}</b>.</>
+                ? <>Emails go out as <b>{prefs.white_label ? current.name : "BrightPro"} &lt;{from}&gt;</b>, with your logo and company name inside. When your customer hits Reply, it goes to <b>{prefs.org_info?.email || user.email}</b>.</>
                 : <>Until it&apos;s connected, the Send button offers to open your email app instead.</>}</p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-5 text-[15px] text-slate-700">
@@ -50,8 +50,8 @@ export default async function EmailSettingsPage() {
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <div className="border-b border-slate-100 px-5 py-3">
               <p className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">Inbox preview</p>
-              <p className="mt-1 truncate text-[14px]"><b className="text-[#0b1f3a]">{current.name}</b> <span className="text-slate-500">&lt;{from}&gt;</span></p>
-              <p className="truncate text-[14px] text-slate-700">Invoice from {current.name} (Invoice#: INV-000123)</p>
+              <p className="mt-1 truncate text-[14px]"><b className="text-[#0b1f3a]">{prefs.white_label ? current.name : "BrightPro"}</b> <span className="text-slate-500">&lt;{from}&gt;</span></p>
+              <p className="truncate text-[14px] text-slate-700">Invoice - INV-000123 from {current.name}{prefs.white_label ? "" : " - Sent Using BrightPro"}</p>
             </div>
             <iframe title="Email preview" srcDoc={html} className="h-[620px] w-full border-0" sandbox="" />
           </div>
