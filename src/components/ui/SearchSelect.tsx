@@ -33,7 +33,7 @@ export const Chevron = () => (
 );
 
 export const panelClass =
-  "z-[60] mt-1 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-[0_12px_40px_rgba(15,40,60,0.14)] " +
+  "z-[100] mt-1 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-[0_12px_40px_rgba(15,40,60,0.14)] " +
   "origin-top transition duration-150 ease-out data-[closed]:scale-95 data-[closed]:opacity-0 empty:invisible";
 
 export const optionClass =

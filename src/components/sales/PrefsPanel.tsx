@@ -40,6 +40,7 @@ export default function PrefsPanel({ open, onClose, module, companyId, prefs }: 
   async function uploadLogo(file?: File) {
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) return setMsg("The logo must be smaller than 2 MB.");
+    if (!["image/png", "image/jpeg"].includes(file.type)) return setMsg("Use a PNG or JPG logo so it also shows in the PDF.");
     setUploading(true);
     const supabase = createClient();
     const path = `${companyId}/logo-${Date.now()}.${(file.name.split(".").pop() || "png").toLowerCase()}`;
@@ -166,14 +167,14 @@ export default function PrefsPanel({ open, onClose, module, companyId, prefs }: 
             </div>
 
             <H>Organization details on PDFs</H>
-            <p className="mb-2 text-[13px] text-slate-500">Your logo and contact info show at the top of every quote and invoice.</p>
+            <p className="mb-2 text-[13px] text-slate-500">Your logo (PNG or JPG) and contact info show at the top of every quote, invoice, PDF and email.</p>
             <div className="flex items-center gap-4 py-1">
               <div className="flex h-20 w-40 items-center justify-center overflow-hidden rounded-lg border border-dashed border-slate-300 bg-slate-50">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 {p.logo_url ? <img src={p.logo_url} alt="Logo" className="max-h-full max-w-full object-contain p-1.5" /> : <span className="text-xs text-slate-400">No logo</span>}
               </div>
               <div className="flex flex-col items-start gap-1">
-                <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" onChange={(e) => { uploadLogo(e.target.files?.[0]); e.target.value = ""; }} />
+                <input ref={fileRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => { uploadLogo(e.target.files?.[0]); e.target.value = ""; }} />
                 <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className="text-sm font-medium text-[#2563eb] hover:underline">{uploading ? "Uploading..." : p.logo_url ? "Change logo" : "Upload logo"}</button>
                 {p.logo_url && <button type="button" onClick={() => setP((x) => ({ ...x, logo_url: null }))} className="text-sm text-red-600 hover:underline">Remove</button>}
               </div>

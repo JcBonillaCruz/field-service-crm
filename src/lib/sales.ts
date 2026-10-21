@@ -28,6 +28,7 @@ export type SalesDoc = {
   sent_at: string | null; viewed_at: string | null; accepted_at: string | null; declined_at: string | null; voided_at: string | null;
   reminders_stopped: boolean; expected_payment_date: string | null; share_token: string | null; share_expires_on: string | null;
   created_by_name: string | null; created_at: string; updated_at: string;
+  signature_data?: string | null; signed_name?: string | null; signed_at?: string | null; last_email_at?: string | null; email_opened_at?: string | null;
 };
 
 export type Subscription = {
@@ -55,14 +56,31 @@ export type QuoteSettings = {
 };
 export type InvoiceSettings = { hide_zero_lines?: boolean; default_notes?: string; default_terms?: string; overdue_reminder_days?: number };
 export type OrgInfo = { address?: string; phone?: string; email?: string; website?: string };
+// Plantilla del PDF (Customize → Change / Edit Template)
+export type PdfTemplate = "standard" | "modern" | "minimal";
+export type PdfSettings = {
+  template?: PdfTemplate; accent?: string; margin?: "narrow" | "normal" | "wide"; font_size?: "small" | "normal" | "large";
+  logo_size?: "small" | "medium" | "large"; show_org_address?: boolean; footer_text?: string; show_powered?: boolean;
+};
+export const TEMPLATES: { id: PdfTemplate; name: string; hint: string }[] = [
+  { id: "standard", name: "Standard", hint: "Classic layout with a dark table header" },
+  { id: "modern", name: "Modern", hint: "Color band at the top in your brand color" },
+  { id: "minimal", name: "Minimal", hint: "Clean, light lines and lots of white space" },
+];
+export const DEFAULT_PDF: Required<PdfSettings> = {
+  template: "standard", accent: "#2f3437", margin: "normal", font_size: "normal", logo_size: "medium", show_org_address: true, footer_text: "", show_powered: false,
+};
+export const pdfOf = (p?: PdfSettings | null): Required<PdfSettings> =>
+  ({ ...DEFAULT_PDF, ...Object.fromEntries(Object.entries(p ?? {}).filter(([, v]) => v !== undefined && v !== null)) }) as Required<PdfSettings>;
 export type SalesPrefs = {
   quote_prefix: string; quote_next: number; quote_auto: boolean; invoice_prefix: string; invoice_next: number; invoice_auto: boolean;
   sub_prefix: string; sub_next: number; quote_settings: QuoteSettings; invoice_settings: InvoiceSettings; org_info: OrgInfo; logo_url: string | null;
+  pdf_settings: PdfSettings; white_label: boolean;
 };
 export const DEFAULT_PREFS: SalesPrefs = {
   quote_prefix: "QT-", quote_next: 1, quote_auto: true, invoice_prefix: "INV-", invoice_next: 1, invoice_auto: true, sub_prefix: "SUB-", sub_next: 1,
-  quote_settings: { default_notes: "Looking forward to your business." }, invoice_settings: { default_notes: "Thank you for the payment. You just made our day." },
-  org_info: {}, logo_url: null,
+  quote_settings: { default_notes: "Looking forward to your business.", allow_customer_respond: true }, invoice_settings: { default_notes: "Thank you for the payment. You just made our day." },
+  org_info: {}, logo_url: null, pdf_settings: {}, white_label: false,
 };
 export const previewNumber = (p: SalesPrefs, k: DocKind | "subscription") =>
   k === "quote" ? `${p.quote_prefix}${String(p.quote_next).padStart(6, "0")}`
@@ -123,6 +141,14 @@ export function computeTotals(lines: Pick<SalesLine, "quantity" | "rate" | "disc
   const adjustment = round2(Number(o.adjustment) || 0);
   return { subtotal, discount, tax, shipping, adjustment, total: round2(subtotal - discount + tax + shipping + adjustment) };
 }
+// Lo que vale sin descuentos y el descuento total (líneas + documento), para mostrarlo abajo en rojo como Zoho
+export const grossOf = (lines: Pick<SalesLine, "quantity" | "rate">[]) => round2(lines.reduce((t, l) => t + (Number(l.quantity) || 0) * (Number(l.rate) || 0), 0));
+export function discountSummary(doc: Pick<SalesDoc, "subtotal" | "total" | "tax_amount" | "shipping" | "adjustment">, lines: Pick<SalesLine, "quantity" | "rate">[]) {
+  const gross = grossOf(lines);
+  const docDisc = round2(Number(doc.subtotal) - Number(doc.total) + Number(doc.tax_amount) + Number(doc.shipping) + Number(doc.adjustment));
+  const itemDisc = round2(gross - Number(doc.subtotal));
+  return { gross, itemDisc: Math.max(0, itemDisc), docDisc: Math.max(0, docDisc), total: round2(Math.max(0, itemDisc) + Math.max(0, docDisc)) };
+}
 export const balanceOf = (d: Pick<SalesDoc, "total" | "amount_paid" | "written_off">) => round2(Number(d.total) - Number(d.amount_paid) - Number(d.written_off));
 
 // ---------- Estados ----------
@@ -176,6 +202,11 @@ export const TONE_RIBBON: Record<Tone, string> = {
   draft: "bg-slate-500", sent: "bg-[#2563eb]", viewed: "bg-[#7c3aed]", accepted: "bg-[#16a34a]", declined: "bg-[#e11d48]",
   expired: "bg-slate-500", invoiced: "bg-[#16a34a]", overdue: "bg-[#ea580c]", partial: "bg-[#d97706]", paid: "bg-[#16a34a]",
   void: "bg-slate-400", live: "bg-[#16a34a]", paused: "bg-[#d97706]", cancelled: "bg-[#e11d48]", future: "bg-[#2563eb]",
+};
+export const TONE_FOLD: Record<Tone, string> = {
+  draft: "bg-slate-700", sent: "bg-[#1e40af]", viewed: "bg-[#5b21b6]", accepted: "bg-[#14532d]", declined: "bg-[#9f1239]",
+  expired: "bg-slate-700", invoiced: "bg-[#14532d]", overdue: "bg-[#9a3412]", partial: "bg-[#92400e]", paid: "bg-[#14532d]",
+  void: "bg-slate-600", live: "bg-[#14532d]", paused: "bg-[#92400e]", cancelled: "bg-[#9f1239]", future: "bg-[#1e40af]",
 };
 export const TONE_PILL: Record<Tone, string> = {
   draft: "bg-slate-100 text-slate-600", sent: "bg-[#e8f0ff] text-[#2563eb]", viewed: "bg-[#f1ebff] text-[#7c3aed]", accepted: "bg-[#e7f7ec] text-[#15803d]",

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
-import { Status, TONE_PILL, TONE_RIBBON, Tone } from "@/lib/sales";
+import { Status, TONE_FOLD, TONE_PILL, TONE_RIBBON, Tone } from "@/lib/sales";
 
 export const I = {
   edit: "M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4zM12 20h9",
@@ -45,11 +45,13 @@ export function StatusPill({ s, small = false }: { s: Status; small?: boolean })
   return <span className={`inline-flex items-center rounded-full font-semibold uppercase tracking-wide ${TONE_PILL[s.tone]} ${small ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-1 text-[11px]"}`}>{s.label}</span>;
 }
 
-// Cintita diagonal (esquina del documento), como Zoho
+// Cinta diagonal que ENVUELVE la esquina del documento (con los dobleces por detrás, como Zoho)
 export function Ribbon({ label, tone }: { label: string; tone: Tone }) {
   return (
-    <div className="pointer-events-none absolute -left-1.5 -top-1.5 z-10 h-28 w-28 overflow-hidden print:hidden" aria-hidden="true">
-      <span className={`absolute left-[-46px] top-[26px] w-[170px] -rotate-45 py-1.5 text-center text-[12px] font-medium text-white shadow-md ${TONE_RIBBON[tone]}`}>{label}</span>
+    <div className="pointer-events-none absolute -left-2 -top-2 z-10 h-28 w-28 overflow-hidden print:hidden" aria-hidden="true">
+      <span className={`absolute right-0 top-0 h-2 w-2 ${TONE_FOLD[tone]}`} />
+      <span className={`absolute bottom-0 left-0 h-2 w-2 ${TONE_FOLD[tone]}`} />
+      <span className={`absolute left-[-29px] top-[43px] w-[170px] -rotate-45 py-[5px] text-center text-[12px] font-medium tracking-wide text-white shadow-[0_3px_6px_rgba(0,0,0,0.18)] ${TONE_RIBBON[tone]}`}>{label}</span>
     </div>
   );
 }
@@ -173,4 +175,38 @@ export const btnGhost = "rounded-lg border border-slate-200 bg-white px-5 py-2.5
 export function Toast({ text }: { text: string }) {
   if (!text) return null;
   return <div role="status" className="fixed bottom-6 left-1/2 z-[95] -translate-x-1/2 rounded-xl bg-[#0b1f3a] px-4 py-2.5 text-sm text-white shadow-xl animate-[bp-fade_0.2s_ease-out]">{text}</div>;
+}
+
+// Historial como Zoho: fecha y hora | ícono | qué pasó + "by Juan"
+function actIcon(m: string): [string, string] {
+  const t = m.toLowerCase();
+  if (t.includes("opened") || t.includes("viewed")) return ["M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "bg-[#f1ebff] text-[#7c3aed]"];
+  if (t.includes("signed") || t.includes("accepted")) return ["M3 17c3 0 4-9 6.5-9S11 16 13 16s2.5-4 4-4 1.5 3 4 3M3 21h18", "bg-[#e7f7ec] text-[#15803d]"];
+  if (t.includes("declined") || t.includes("void") || t.includes("deleted") || t.includes("cancel")) return ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9 9l6 6M15 9l-6 6", "bg-[#ffe8ee] text-[#be123c]"];
+  if (t.includes("payment") || t.includes("written off") || t.includes("paid")) return ["M3.5 7h17v10h-17zM12 14.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z", "bg-[#e7f7ec] text-[#15803d]"];
+  if (t.includes("email") || t.includes("sent") || t.includes("reminder")) return ["M3.5 6.5h17v11h-17zM3.5 7l8.5 6.5L20.5 7", "bg-[#fff6e0] text-[#b45309]"];
+  if (t.includes("convert") || t.includes("invoice created")) return ["M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 13h6M12 10v6", "bg-[#e8f0ff] text-[#2563eb]"];
+  if (t.includes("created")) return ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 8v8M8 12h8", "bg-[#e7f7ec] text-[#15803d]"];
+  return ["M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z", "bg-slate-100 text-slate-500"];
+}
+export function ActivityList({ rows }: { rows: { id: string; message: string; detail: string | null; actor_name: string | null; created_at: string }[] }) {
+  return (
+    <ul className="divide-y divide-slate-100">
+      {rows.map((a) => {
+        const [d, tone] = actIcon(a.message);
+        const when = new Date(a.created_at);
+        return (
+          <li key={a.id} className="grid grid-cols-[2.25rem_minmax(0,1fr)] gap-3 py-4 sm:grid-cols-[11rem_2.25rem_minmax(0,1fr)] sm:gap-5">
+            <p className="hidden pt-1.5 text-[13px] text-slate-500 sm:block">{when.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} {when.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</p>
+            <span className={`flex h-9 w-9 items-center justify-center rounded-full ${tone}`}><Ico d={d} className="h-[18px] w-[18px]" /></span>
+            <div className="min-w-0">
+              <p className="text-[15px] text-[#0b1f3a]">{a.message}</p>
+              {a.detail && <p className="text-[13px] text-slate-500">{a.detail}</p>}
+              <p className="text-[13px] text-slate-500">by <b className="font-medium text-slate-700">{a.actor_name || "a team member"}</b><span className="sm:hidden"> · {when.toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span></p>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
 }

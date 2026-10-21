@@ -8,13 +8,14 @@ import {
   Activity, Comment, Payment, SalesDoc, SalesFile, SalesLine, SalesPrefs, addressLines, balanceOf, docStatus, fmtD, fmtDT, invoiceStatus, money, quoteStatus,
 } from "@/lib/sales";
 import DocPaper from "@/components/sales/DocPaper";
-import { CloseButton, Timeline } from "@/components/catalog/DetailBits";
+import { CloseButton } from "@/components/catalog/DetailBits";
 import BottomSheet from "@/components/customers/BottomSheet";
 import PrefsPanel from "@/components/sales/PrefsPanel";
 import {
   AttachmentsButton, CommentsPanel, ExpectedDateModal, PaymentModal, SendEmailModal, ShareModal,
 } from "@/components/sales/DocModals";
-import { Divider, I, Ico, StatusPill, ToolButton, ToolItem, ToolMenu, Toast } from "@/components/sales/SalesBits";
+import { ActivityList, Divider, I, Ico, StatusPill, ToolButton, ToolItem, ToolMenu, Toast } from "@/components/sales/SalesBits";
+import { CustomizeMenu } from "@/components/sales/TemplateModals";
 
 export type DocData = {
   doc: SalesDoc; lines: SalesLine[]; activity: Activity[]; comments: Comment[]; files: SalesFile[]; payments: Payment[];
@@ -38,7 +39,12 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
   const [busy, setBusy] = useState(false);
   const flash = (t: string) => { setToast(t); setTimeout(() => setToast(""), 2600); };
   const close = () => setModal(null);
-  const locked = isQuote && ["accepted", "invoiced"].includes(doc.status) && !prefs.quote_settings.allow_edit_accepted;
+  // Cotización aceptada (según preferencia) o factura pagada / anulada: ya no se edita
+  const paidOff = !isQuote && Number(doc.total) > 0 && bal <= 0;
+  const locked = (isQuote && ["accepted", "invoiced"].includes(doc.status) && !prefs.quote_settings.allow_edit_accepted)
+    || (!isQuote && (paidOff || doc.status === "void" || doc.status === "written_off"));
+  const lockReason = isQuote ? "Turn on 'Allow editing of accepted quotes' in Quote Preferences" : doc.status === "void" ? "This invoice is void" : "This invoice is paid in full";
+  const [payOpen, setPayOpen] = useState(false);
   const editHref = `${base}/${doc.id}/edit`;
   const sp = useSearchParams();
   // "Save and Send" llega aquí con ?send=1 y abre el correo
@@ -99,15 +105,19 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
     await logActivity(doc.company_id, "invoice", doc.id, `${p.kind === "payment" ? "Payment" : "Write-off"} of ${money(p.amount)} deleted`, actor);
     router.refresh();
   }
-  const openPrint = (v?: string, auto = true) => window.open(`/print/${doc.id}${v ? `?v=${v}${auto ? "&auto=1" : ""}` : auto ? "?auto=1" : ""}`, "_blank");
+  const openPrint = (v?: string) => window.open(`/print/${doc.id}?auto=1${v ? `&v=${v}` : ""}`, "_blank");
+  // PDF real (se descarga) o abrirlo en otra pestaña
+  const downloadPdf = (v?: string) => { window.location.href = `/api/sales/pdf/${doc.id}${v ? `?v=${v}` : ""}`; };
+  const viewPdf = (v?: string) => window.open(`/api/sales/pdf/${doc.id}?inline=1${v ? `&v=${v}` : ""}`, "_blank");
 
   // ---------- Menús (los mismos que Zoho) ----------
   const mailItems: ToolItem[] = [{ label: "Send Email", icon: I.mail, onClick: () => setModal("email") }];
   const pdfItems: ToolItem[] = [
-    { label: "PDF", icon: I.pdf, onClick: () => openPrint(undefined, true) },
-    { label: "Print", icon: I.print, onClick: () => openPrint(undefined, true) },
-    { label: "Print Delivery Note", icon: I.truck, onClick: () => openPrint("delivery"), hidden: isQuote, divider: true },
-    { label: "Print Packing Slip", icon: I.box, onClick: () => openPrint("packing"), hidden: isQuote },
+    { label: "Download PDF", icon: I.download, onClick: () => downloadPdf() },
+    { label: "Open PDF", icon: I.pdf, onClick: () => viewPdf() },
+    { label: "Print", icon: I.print, onClick: () => openPrint() },
+    { label: "Delivery Note (PDF)", icon: I.truck, onClick: () => downloadPdf("delivery"), hidden: isQuote, divider: true },
+    { label: "Packing Slip (PDF)", icon: I.box, onClick: () => downloadPdf("packing"), hidden: isQuote },
   ];
   const reminderItems: ToolItem[] = [
     { label: "Send Reminder Now", icon: I.send, onClick: () => setModal("reminder") },
@@ -150,6 +160,13 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
           <div key={k} className="grid grid-cols-[9rem_minmax(0,1fr)] gap-3"><dt className="text-slate-500">{k}</dt><dd className="text-[#0b1f3a]">{v}</dd></div>
         ))}
       </dl>
+      {doc.signed_name && doc.signed_at && (
+        <div className="flex flex-wrap items-center gap-5 rounded-xl border border-[#cde8e0] bg-[#f3fbf8] p-4">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {doc.signature_data && <img src={doc.signature_data} alt="Customer signature" className="h-16 max-w-[220px] rounded-lg bg-white object-contain p-1" />}
+          <div><p className="text-[12px] font-semibold uppercase tracking-wide text-[#0f766e]">Accepted & signed</p><p className="text-[15px] text-[#0b1f3a]">{doc.signed_name}</p><p className="text-[13px] text-slate-500">{fmtDT(doc.signed_at)}</p></div>
+        </div>
+      )}
       <div className="grid gap-5 sm:grid-cols-2">
         <div className="rounded-xl border border-slate-200 p-4"><p className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-slate-500">Billing Address</p>{addressLines(doc.billing_address).map((l, i) => <p key={i} className="text-[14px] text-slate-700">{l}</p>)}{!doc.billing_address && <p className="text-sm text-slate-400">No address</p>}</div>
         <div className="rounded-xl border border-slate-200 p-4"><p className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-slate-500">Job Site</p>{addressLines(doc.site_address).map((l, i) => <p key={i} className="text-[14px] text-slate-700">{l}</p>)}{!doc.site_address && <p className="text-sm text-slate-400">Same as billing</p>}</div>
@@ -199,23 +216,14 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
           {canPay && <button type="button" onClick={() => setModal("payment")} className="mt-4 rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f59]">Record Payment</button>}
         </div>
       ) : (
-        <table className="w-full text-sm">
-          <thead><tr className="border-b border-slate-200 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500"><th className="py-2.5">Date</th><th>Type</th><th>Mode</th><th>Reference#</th><th className="text-right">Amount</th><th /></tr></thead>
-          <tbody>{data.payments.map((p) => (
-            <tr key={p.id} className="group/p border-b border-slate-100">
-              <td className="py-3">{fmtD(p.paid_on)}</td><td>{p.kind === "payment" ? "Payment" : "Write Off"}</td><td>{p.mode ?? "—"}</td><td>{p.reference ?? "—"}</td>
-              <td className="text-right font-medium tabular-nums">{money(p.amount)}</td>
-              <td className="w-10 text-right"><button type="button" onClick={() => deletePayment(p)} aria-label="Delete" className="text-slate-400 opacity-0 hover:text-red-600 group-hover/p:opacity-100"><Ico d={I.trash} /></button></td>
-            </tr>))}</tbody>
-        </table>
+        <PaymentsTable payments={data.payments} onDelete={deletePayment} />
       )}
     </div>
   );
 
   const activityTab = (
-    <div className="p-5 sm:p-7">
-      <Timeline rows={(data.activity.length ? data.activity : [{ id: "c", message: `${noun} created`, detail: null, actor_name: doc.created_by_name, created_at: doc.created_at }])
-        .map((a) => ({ id: a.id, title: a.message, who: a.actor_name, when: a.created_at, note: a.detail ?? undefined }))} />
+    <div className="px-5 py-2 sm:px-7">
+      <ActivityList rows={data.activity.length ? data.activity : [{ id: "c", message: `${noun} created for ${money(doc.total)}`, detail: null, actor_name: doc.created_by_name, created_at: doc.created_at }]} />
     </div>
   );
 
@@ -229,6 +237,12 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
         <button type="button" onClick={() => setStatus("sent", `${noun} marked as sent`)} disabled={busy} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Mark as Sent</button>
       </span>
     </div>
+  ) : isQuote && doc.status === "accepted" ? (
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-[#cde8e0] bg-[#f3fbf8] px-4 py-3 text-[14px]">
+      <span className="text-[13px] font-semibold uppercase tracking-wide text-[#0f766e]">What&apos;s next?</span>
+      <span className="text-slate-600">{doc.signed_name ? `${doc.signed_name} accepted and signed this quote.` : "The customer accepted this quote."} Create the invoice to bill them.</span>
+      <button type="button" onClick={convert} disabled={busy} className="ml-auto rounded-lg bg-[#0f766e] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#0c5f59]">Convert to Invoice</button>
+    </div>
   ) : canPay && doc.status !== "draft" ? (
     <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-[#cde8e0] bg-[#f3fbf8] px-4 py-3 text-[14px]">
       <span className="text-[13px] font-semibold uppercase tracking-wide text-[#0f766e]">What&apos;s next?</span>
@@ -241,7 +255,8 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
     { label: "Edit", icon: I.edit, href: locked ? undefined : editHref, hidden: locked },
     { label: "Send Email", icon: I.mail, onClick: () => setModal("email") },
     { label: "Share Link", icon: I.share, onClick: () => setModal("share") },
-    { label: "PDF / Print", icon: I.pdf, onClick: () => openPrint() },
+    { label: "Download PDF", icon: I.download, onClick: () => downloadPdf() },
+    { label: "Open PDF", icon: I.pdf, onClick: () => viewPdf() },
     ...(isQuote ? [{ label: "Convert to Invoice", icon: I.convert, onClick: convert, hidden: !canConvert }] : [
       { label: "Record Payment", icon: I.money, onClick: () => setModal("payment"), hidden: !canPay },
       { label: "Send Reminder", icon: I.bell, onClick: () => setModal("reminder"), hidden: !canPay },
@@ -293,7 +308,7 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
         </div>
       </div>
       <div className="hidden flex-wrap items-center gap-0.5 border-y border-slate-200 bg-white px-4 py-1.5 sm:px-6 lg:flex">
-        {locked ? <span title="Turn on 'Allow editing of accepted quotes' in Quote Preferences"><ToolButton icon={I.edit} label="Edit" disabled /></span> : <ToolButton icon={I.edit} label="Edit" href={editHref} />}
+        {locked ? <span title={lockReason}><ToolButton icon={I.edit} label="Edit" disabled /></span> : <ToolButton icon={I.edit} label="Edit" href={editHref} />}
         <Divider />
         <ToolMenu icon={I.mail} label={isQuote ? "Mails" : "Send"} items={mailItems} />
         <Divider />
@@ -324,7 +339,7 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
               ))}
             </div>
             {tab === 0 && (
-              <div className="flex shrink-0 rounded-lg bg-slate-100 p-0.5 text-[13px]">
+              <div className="hidden shrink-0 rounded-lg bg-slate-100 p-0.5 text-[13px] sm:flex">
                 {(["details", "pdf"] as const).map((v) => (
                   <button key={v} type="button" onClick={() => setView(v)}
                     className={`rounded-md px-3 py-1 transition-all ${view === v ? "bg-white font-semibold text-[#0b1f3a] shadow-sm" : "text-slate-500 hover:text-[#0b1f3a]"}`}>{v === "pdf" ? "PDF" : "Details"}</button>
@@ -332,9 +347,31 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
               </div>
             )}
           </div>
+          {tab === 0 && (
+            <div className="flex justify-center border-b border-slate-100 py-2.5 sm:hidden">
+              <div className="flex rounded-lg bg-slate-100 p-0.5 text-[13px]">
+                {(["details", "pdf"] as const).map((v) => (
+                  <button key={v} type="button" onClick={() => setView(v)}
+                    className={`rounded-md px-5 py-1.5 transition-all ${view === v ? "bg-white font-semibold text-[#0b1f3a] shadow-sm" : "text-slate-500"}`}>{v === "pdf" ? "PDF" : "Details"}</button>
+                ))}
+              </div>
+            </div>
+          )}
           {tab === 0 ? (view === "pdf" ? (
-            <div className="bg-[#f4f6f8] px-2 py-6 sm:px-8 sm:py-8">
-              <DocPaper doc={doc} lines={lines} prefs={prefs} companyName={companyName} status={status} />
+            <div className="bg-[#f4f6f8] px-2 py-5 sm:px-8 sm:py-7">
+              {!isQuote && data.payments.length > 0 && (
+                <div className="mx-auto mb-5 max-w-[740px] overflow-hidden rounded-xl border border-slate-200 bg-white">
+                  <button type="button" onClick={() => setPayOpen((v) => !v)} className="flex w-full items-center justify-between px-4 py-3 text-left">
+                    <span className="flex items-center gap-2 text-[14px] font-semibold text-[#0b1f3a]">Payments Received<span className="rounded-full bg-[#e8f0ff] px-2 py-0.5 text-[11px] text-[#2563eb]">{data.payments.length}</span></span>
+                    <svg viewBox="0 0 20 20" className={`h-4 w-4 text-slate-500 transition-transform ${payOpen ? "rotate-90" : ""}`} fill="currentColor"><path d="M7 5l6 5-6 5z" /></svg>
+                  </button>
+                  {payOpen && <div className="border-t border-slate-100 px-2 pb-2 animate-[bp-fade_0.2s_ease-out]"><PaymentsTable payments={data.payments} onDelete={deletePayment} /></div>}
+                </div>
+              )}
+              <div className="mx-auto mb-2 flex max-w-[740px] justify-end">
+                <CustomizeMenu companyId={doc.company_id} pdf={prefs.pdf_settings} whiteLabel={prefs.white_label} onLogo={() => setModal("prefs")} />
+              </div>
+              <DocPaper doc={doc} lines={lines} prefs={prefs} companyName={companyName} status={status} compact />
             </div>
           ) : details) : tab === 1 ? relatedTab : activityTab}
         </div>
@@ -357,7 +394,7 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
         </ul>
       </BottomSheet>
 
-      <SendEmailModal open={modal === "email" || modal === "reminder"} reminder={modal === "reminder"} onClose={close} doc={doc} companyName={companyName} actor={actor} />
+      <SendEmailModal open={modal === "email" || modal === "reminder"} reminder={modal === "reminder"} onClose={close} doc={doc} companyName={companyName} actor={actor} files={data.files} />
       <ShareModal open={modal === "share"} onClose={close} doc={doc} actor={actor} />
       {!isQuote && <PaymentModal open={modal === "payment" || modal === "write_off"} mode={modal === "write_off" ? "write_off" : "payment"} onClose={close} doc={doc} actor={actor} onDone={() => { router.refresh(); flash("Saved."); }} />}
       {!isQuote && <ExpectedDateModal open={modal === "expected"} onClose={close} doc={doc} actor={actor} />}
@@ -365,5 +402,41 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
       <PrefsPanel open={modal === "prefs"} onClose={close} module={isQuote ? "quotes" : "invoices"} companyId={doc.company_id} prefs={prefs} />
       <Toast text={toast} />
     </div>
+  );
+}
+
+// Pagos: tabla en computadora, renglones en el celular
+function PaymentsTable({ payments, onDelete }: { payments: Payment[]; onDelete: (p: Payment) => void }) {
+  const ordered = [...payments].sort((a, b) => a.paid_on.localeCompare(b.paid_on) || a.created_at.localeCompare(b.created_at));
+  const num = new Map(ordered.map((p, i) => [p.id, i + 1]));
+  return (
+    <>
+      <table className="hidden w-full text-sm sm:table">
+        <thead><tr className="border-b border-slate-200 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          <th className="px-2 py-2.5">Date</th><th>Payment #</th><th>Reference#</th><th>Status</th><th>Payment Mode</th><th className="text-right">Amount</th><th /></tr></thead>
+        <tbody>{payments.map((p) => (
+          <tr key={p.id} className="group/p border-b border-slate-100 last:border-0">
+            <td className="px-2 py-3">{fmtD(p.paid_on)}</td><td className="text-[#2563eb]">{num.get(p.id)}</td><td>{p.reference ?? "—"}</td>
+            <td className={p.kind === "payment" ? "text-[#16a34a]" : "text-slate-500"}>{p.kind === "payment" ? "Paid" : "Written Off"}</td><td>{p.mode ?? "—"}</td>
+            <td className="text-right font-medium tabular-nums">{money(p.amount)}</td>
+            <td className="w-10 text-right"><button type="button" onClick={() => onDelete(p)} aria-label="Delete" className="text-slate-400 opacity-0 hover:text-red-600 group-hover/p:opacity-100"><Ico d={I.trash} /></button></td>
+          </tr>))}</tbody>
+      </table>
+      <ul className="divide-y divide-slate-100 sm:hidden">
+        {payments.map((p) => (
+          <li key={p.id} className="flex items-start justify-between gap-3 py-3">
+            <div className="min-w-0 space-y-0.5 text-[14px]">
+              <p className="font-medium text-[#0b1f3a]">{fmtD(p.paid_on)} <span className="font-normal text-slate-400">· #{num.get(p.id)}</span></p>
+              <p className="text-slate-600">{p.kind === "payment" ? "Payment" : "Write Off"}{p.mode ? ` · ${p.mode}` : ""}</p>
+              {p.reference && <p className="text-[13px] text-slate-500">Ref: {p.reference}</p>}
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="font-semibold tabular-nums text-[#0b1f3a]">{money(p.amount)}</p>
+              <button type="button" onClick={() => onDelete(p)} className="mt-1 text-[12px] text-red-500">Delete</button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }

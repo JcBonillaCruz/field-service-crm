@@ -22,68 +22,133 @@ export async function ensureShareToken(doc: SalesDoc): Promise<string | null> {
 }
 export const shareUrl = (token: string) => `${window.location.origin}/share/${token}`;
 
-// ---------- Enviar por correo ----------
-export function SendEmailModal({ open, onClose, doc, companyName, actor, reminder = false }: {
-  open: boolean; onClose: () => void; doc: SalesDoc; companyName: string; actor: string; reminder?: boolean;
+// ---------- Enviar por correo (de verdad, con el PDF adjunto) ----------
+function Chips({ value, onChange, placeholder }: { value: string[]; onChange: (v: string[]) => void; placeholder?: string }) {
+  const [draft, setDraft] = useState("");
+  const add = (raw: string) => {
+    const list = raw.split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean);
+    if (list.length) onChange(Array.from(new Set([...value, ...list])));
+    setDraft("");
+  };
+  return (
+    <div className="flex min-h-[46px] flex-wrap items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 focus-within:border-[#0f766e] focus-within:bg-white">
+      {value.map((e) => (
+        <span key={e} className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-sm ${/^\S+@\S+\.\S+$/.test(e) ? "bg-[#e9f7f4] text-[#0b1f3a]" : "bg-red-50 text-red-600"}`}>
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-semibold uppercase text-[#0f766e]">{e[0]}</span>{e}
+          <button type="button" onClick={() => onChange(value.filter((x) => x !== e))} aria-label={`Remove ${e}`} className="text-slate-400 hover:text-red-600">×</button>
+        </span>
+      ))}
+      <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={value.length ? "" : placeholder}
+        onKeyDown={(e) => { if (["Enter", ",", " ", "Tab"].includes(e.key) && draft.trim()) { e.preventDefault(); add(draft); } if (e.key === "Backspace" && !draft && value.length) onChange(value.slice(0, -1)); }}
+        onBlur={() => draft.trim() && add(draft)} className="min-w-[10rem] flex-1 bg-transparent px-1 py-1 text-[15px] focus:outline-none" />
+    </div>
+  );
+}
+
+export function SendEmailModal({ open, onClose, doc, companyName, actor, reminder = false, files = [] }: {
+  open: boolean; onClose: () => void; doc: SalesDoc; companyName: string; actor: string; reminder?: boolean; files?: SalesFile[];
 }) {
   const router = useRouter();
   const noun = doc.kind === "quote" ? "Quote" : "Invoice";
-  const [to, setTo] = useState("");
-  const [cc, setCc] = useState("");
+  const [to, setTo] = useState<string[]>([]);
+  const [cc, setCc] = useState<string[]>([]);
+  const [bcc, setBcc] = useState<string[]>([]);
+  const [showCc, setShowCc] = useState(false);
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  const [attachPdf, setAttachPdf] = useState(true);
+  const [fileIds, setFileIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [fallback, setFallback] = useState(false);
+  const ref = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     if (!open) return;
-    setTo(doc.emails.join(", ")); setCc(""); setError("");
-    setSubject(reminder ? `Payment reminder for ${noun} - ${doc.number}` : `${noun} - ${doc.number} from ${companyName}`);
+    setTo(doc.emails); setCc([]); setBcc([]); setShowCc(false); setError(""); setFallback(false); setAttachPdf(true); setFileIds([]);
+    setSubject(reminder ? `Payment reminder for Invoice - ${doc.number}` : `${noun} from ${companyName} (${noun}#: ${doc.number})`);
     const amount = money(doc.kind === "invoice" ? balanceOf(doc) : doc.total);
     setBody(reminder
-      ? `Dear ${doc.customer_name},\n\nThis is a friendly reminder that invoice ${doc.number} for ${amount} was due on ${fmtD(doc.due_date)}.\n\nYou can view it here: {link}\n\nThank you,\n${actor || companyName}`
+      ? `Dear ${doc.customer_name},\n\nThis is a friendly reminder that invoice ${doc.number} for ${amount} was due on ${fmtD(doc.due_date)}.\n\nYou can view, print or download the invoice from the link below.\n{link}\n\nThank you,\n${actor || companyName}\n${companyName}`
       : doc.kind === "quote"
-        ? `Dear ${doc.customer_name},\n\nThank you for contacting us. Your quote ${doc.number} for ${amount} is ready.\n\nYou can view it here: {link}\n\nWe look forward to working with you.\n\nRegards,\n${actor || companyName}\n${companyName}`
-        : `Dear ${doc.customer_name},\n\nThank you for your business. Your invoice ${doc.number} for ${amount} is ready.\nDue date: ${fmtD(doc.due_date)}\n\nYou can view it here: {link}\n\nRegards,\n${actor || companyName}\n${companyName}`);
+        ? `Dear ${doc.customer_name},\n\nThank you for contacting us. Your quote ${doc.number} for **${amount}** is ready.\n\nYou can view, accept and sign the quote from the link below.\n{link}\n\nWe look forward to working with you.\n\nRegards,\n${actor || companyName}\n${companyName}`
+        : `Dear ${doc.customer_name},\n\nIt was a pleasure doing business with you. Your invoice ${doc.number} for **${amount}** is due on ${fmtD(doc.due_date)}.\n\nYou can view, print or download the invoice from the link below.\n{link}\n\nRegards,\n${actor || companyName}\n${companyName}`);
   }, [open, doc, companyName, actor, reminder, noun]);
 
+  function wrap(mark: string) {
+    const el = ref.current; if (!el) return;
+    const { selectionStart: a, selectionEnd: b } = el;
+    const sel = body.slice(a, b) || "text";
+    setBody(body.slice(0, a) + mark + sel + mark + body.slice(b));
+  }
   async function send() {
-    const list = to.split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean);
-    if (!list.length) return setError("Add at least one email address.");
-    if (list.some((e) => !/^\S+@\S+\.\S+$/.test(e))) return setError("One of the email addresses isn't valid.");
-    setBusy(true); setError("");
-    const token = await ensureShareToken(doc);
-    if (!token) { setBusy(false); return setError("The link couldn't be created. Did you run the SQL for Paso 3.30?"); }
-    const text = body.replace(/\{link\}/g, shareUrl(token));
-    const href = `mailto:${list.join(",")}?${new URLSearchParams({ ...(cc ? { cc } : {}), subject, body: text }).toString().replace(/\+/g, "%20")}`;
-    const now = new Date().toISOString();
-    await db().from("sales_docs").update({
-      emails: list, sent_at: doc.sent_at ?? now, updated_at: now, ...(doc.status === "draft" ? { status: "sent" } : {}),
-    }).eq("id", doc.id);
-    await logActivity(doc.company_id, doc.kind, doc.id, reminder ? `Payment reminder emailed to ${list.join(", ")}` : `${noun} emailed to ${list.join(", ")}`, actor);
-    window.location.href = href;
+    if (!to.length) return setError("Add at least one email address.");
+    if ([...to, ...cc, ...bcc].some((e) => !/^\S+@\S+\.\S+$/.test(e))) return setError("One of the email addresses isn't valid.");
+    setBusy(true); setError(""); setFallback(false);
+    const res = await fetch("/api/sales/send", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: doc.id, to, cc, bcc, subject, body, attachPdf, fileIds, reminder }) });
+    const j = await res.json().catch(() => ({}));
     setBusy(false);
-    router.refresh();
-    onClose();
+    if (!res.ok) { setError(j.error || "The email couldn't be sent."); if (j.code === "not_configured") setFallback(true); return; }
+    router.refresh(); onClose();
+  }
+  async function openMailApp() {
+    const token = await ensureShareToken(doc);
+    if (!token) return;
+    const text = body.replace(/\{link\}/g, shareUrl(token)).replace(/\*\*|__|\*/g, "");
+    window.location.href = `mailto:${to.join(",")}?${new URLSearchParams({ ...(cc.length ? { cc: cc.join(",") } : {}), subject, body: text }).toString().replace(/\+/g, "%20")}`;
+    await db().from("sales_docs").update({ emails: to, sent_at: doc.sent_at ?? new Date().toISOString(), ...(doc.status === "draft" ? { status: "sent" } : {}) }).eq("id", doc.id);
+    await logActivity(doc.company_id, doc.kind, doc.id, `${noun} sent from the email app to ${to.join(", ")}`, actor);
+    router.refresh(); onClose();
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={reminder ? "Send Reminder" : `Email To ${doc.customer_name}`} width="max-w-2xl"
+    <Modal open={open} onClose={onClose} title={reminder ? "Send Payment Reminder" : `Email To ${doc.customer_name}`} width="max-w-3xl"
       footer={<>
-        <button type="button" onClick={send} disabled={busy} className={btnPrimary}>{busy ? "Preparing..." : "Send"}</button>
+        <button type="button" onClick={send} disabled={busy} className={btnPrimary}>{busy ? "Sending..." : "Send"}</button>
         <button type="button" onClick={onClose} className={btnGhost}>Cancel</button>
-        {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+        {fallback && <button type="button" onClick={openMailApp} className="text-sm font-medium text-[#2563eb] hover:underline">Open in my email app instead</button>}
       </>}>
-      <div className="space-y-4">
-        <div><Label>From</Label><p className="rounded-lg bg-slate-50 px-4 py-2.5 text-[15px] text-slate-600">{actor || companyName}</p></div>
-        <div><Label req>Send To</Label><input value={to} onChange={(e) => setTo(e.target.value)} placeholder="name@example.com, other@example.com" className={inputClass} /></div>
-        <div><Label>Cc</Label><input value={cc} onChange={(e) => setCc(e.target.value)} className={inputClass} /></div>
-        <div><Label req>Subject</Label><input value={subject} onChange={(e) => setSubject(e.target.value)} className={inputClass} /></div>
-        <div><textarea rows={10} value={body} onChange={(e) => setBody(e.target.value)} className={`${inputClass} font-[inherit]`} /></div>
-        <p className="flex items-start gap-2 rounded-lg bg-[#eef6ff] px-4 py-3 text-[13px] text-slate-600">
-          <Ico d={I.share} className="mt-0.5 h-4 w-4 text-[#2563eb]" />
-          <span><b>{"{link}"}</b> becomes a secure link where your customer can see and print the {noun.toLowerCase()}. Send opens your email app; sending straight from BrightPro arrives with the email step.</span>
-        </p>
+      <div className="overflow-hidden rounded-xl border border-slate-200">
+        <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-3 border-b border-slate-100 px-4 py-2.5 text-[15px]">
+          <span className="text-slate-500">From</span><span className="truncate text-slate-700">{companyName} <span className="text-slate-400">· replies go to you</span></span>
+        </div>
+        <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-start gap-3 border-b border-slate-100 px-4 py-2">
+          <span className="pt-3 text-[15px] text-slate-500">Send To</span>
+          <div className="flex items-start gap-2"><div className="min-w-0 flex-1"><Chips value={to} onChange={setTo} placeholder="name@example.com" /></div>
+            {!showCc && <button type="button" onClick={() => setShowCc(true)} className="shrink-0 pt-3 text-sm text-[#2563eb] hover:underline">Cc / Bcc</button>}</div>
+        </div>
+        {showCc && <>
+          <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-start gap-3 border-b border-slate-100 px-4 py-2"><span className="pt-3 text-[15px] text-slate-500">Cc</span><Chips value={cc} onChange={setCc} /></div>
+          <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-start gap-3 border-b border-slate-100 px-4 py-2"><span className="pt-3 text-[15px] text-slate-500">Bcc</span><Chips value={bcc} onChange={setBcc} /></div>
+        </>}
+        <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-3 border-b border-slate-100 px-4 py-1.5">
+          <span className="text-[15px] text-slate-500">Subject</span>
+          <input value={subject} onChange={(e) => setSubject(e.target.value)} className="w-full bg-transparent py-1.5 text-[15px] text-slate-800 focus:outline-none" />
+        </div>
+        <div className="flex gap-1 border-b border-slate-100 bg-[#fafbfc] px-3 py-1.5">
+          {([["**", "B", "font-bold"], ["*", "I", "italic"], ["__", "U", "underline"]] as const).map(([m, l, c]) => (
+            <button key={l} type="button" onClick={() => wrap(m)} className={`h-8 w-8 rounded-md text-sm text-slate-600 hover:bg-white hover:text-[#0f766e] ${c}`}>{l}</button>
+          ))}
+          <span className="ml-auto self-center text-[12px] text-slate-400">{"{link}"} becomes a &quot;View {noun}&quot; button</span>
+        </div>
+        <textarea ref={ref} rows={11} value={body} onChange={(e) => setBody(e.target.value)} className="w-full resize-y px-4 py-3 text-[15px] leading-relaxed text-slate-800 focus:outline-none" />
       </div>
+      <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-xl bg-[#eef6ff] px-4 py-3 text-[15px] text-slate-700">
+        <input type="checkbox" checked={attachPdf} onChange={(e) => setAttachPdf(e.target.checked)} className="h-4 w-4 accent-[#2563eb]" />
+        Attach {noun} PDF
+        <span className="ml-auto flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm"><Ico d={I.pdf} className="h-4 w-4 text-red-500" />{doc.number}</span>
+      </label>
+      {files.length > 0 && (
+        <div className="mt-2 rounded-xl border border-dashed border-slate-200 px-4 py-3">
+          <p className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-[#2563eb]"><Ico d={I.clip} className="h-4 w-4" />Attachments</p>
+          {files.map((f) => (
+            <label key={f.id} className="flex cursor-pointer items-center gap-2.5 py-1 text-sm text-slate-700">
+              <input type="checkbox" checked={fileIds.includes(f.id)} onChange={() => setFileIds((l) => (l.includes(f.id) ? l.filter((x) => x !== f.id) : [...l, f.id]))} className="h-4 w-4 accent-[#2563eb]" />{f.name}
+            </label>
+          ))}
+        </div>
+      )}
+      {error && <p role="alert" className="mt-3 rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-700">{error}</p>}
     </Modal>
   );
 }

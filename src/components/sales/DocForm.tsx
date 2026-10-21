@@ -6,17 +6,20 @@ import { useRouter } from "next/navigation";
 import { Combobox, ComboboxButton, ComboboxInput, ComboboxOption, ComboboxOptions, Menu, MenuButton, MenuItem, MenuItems, Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { db, logActivity, nextNumber, saveLines } from "@/lib/sales-client";
 import {
-  AddressSnap, DiscType, DocKind, SalesDoc, SalesLine, TERMS, addressLines, computeTotals, dueFromTerms, num2, previewNumber, round2, today,
+  AddressSnap, DiscType, DocKind, SalesDoc, SalesLine, TERMS, addressLines, computeTotals, grossOf, dueFromTerms, num2, previewNumber, round2, today,
 } from "@/lib/sales";
 import type { CouponOption, CustomerOption, ItemOption } from "@/lib/sales-server";
+import { TEMPLATES, pdfOf } from "@/lib/sales";
 import type { SalesPrefs } from "@/lib/sales";
+import { ChangeTemplateModal } from "@/components/sales/TemplateModals";
 import { inputClass } from "@/components/customers/ui";
-import SearchSelect, { Check, Chevron, optionClass, panelClass } from "@/components/ui/SearchSelect";
+import { Check, Chevron, optionClass, panelClass } from "@/components/ui/SearchSelect";
 import SelectMenu from "@/components/ui/SelectMenu";
 import DatePicker from "@/components/ui/DatePicker";
 import { FormRow, Tip, InfoIcon } from "@/components/catalog/FormBits";
 import LineItems, { blankLine } from "@/components/sales/LineItems";
 import CustomerDrawer from "@/components/sales/CustomerDrawer";
+import CustomerSelect from "@/components/sales/CustomerSelect";
 import { Modal, btnGhost, btnPrimary } from "@/components/sales/SalesBits";
 
 type Addr = { id: string; label: string | null; street: string; unit: string | null; city: string; state: string | null; zip: string | null; country: string | null; is_primary: boolean };
@@ -108,7 +111,6 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [lines, discValue, discType, coupon, taxRate, shipping, adjustment]);
 
-  const customerOptions = useMemo(() => customers.map((c) => ({ value: c.id, label: c.display_name, hint: c.company_name && c.company_name !== c.display_name ? c.company_name : undefined, search: c.email ?? "" })), [customers]);
 
   function onTerms(t: string) { setTerms(t); if (t !== "Custom") setDue(dueFromTerms(date, t)); }
   function onDate(d: string) { setDate(d); if (!isQuote && terms !== "Custom") setDue(dueFromTerms(d, terms)); }
@@ -200,7 +202,7 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
         <div className="border-b border-slate-200 bg-[#fafbfc] px-5 py-6 sm:px-8">
           <div className="max-w-[1100px] space-y-4">
             <FormRow {...label("Customer Name", true)} htmlFor="d-cust" width="max-w-[560px]">
-              <SearchSelect id="d-cust" ariaLabel="Customer" value={customerId} options={customerOptions} onChange={setCustomerId} placeholder="Select or add a customer" />
+              <CustomerSelect id="d-cust" value={customerId} customers={customers} onChange={setCustomerId} />
               <div className="mt-1 flex flex-wrap items-center gap-x-4">
                 <Link href="/dashboard/customers/new" target="_blank" className="text-[13px] font-medium text-[#2563eb] hover:underline">+ New Customer</Link>
                 <CustomerDrawer customerId={customerId || null} />
@@ -314,7 +316,10 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
               <div className="rounded-xl bg-[#f7f9fa] p-4">
                 {(!simple || showSummary || isQuote) && (
                   <div className="space-y-3 text-[15px]">
-                    <div className="flex justify-between font-semibold text-[#0b1f3a]"><span>Sub Total</span><span className="tabular-nums">{num2(totals.subtotal)}</span></div>
+                    <div className="flex justify-between font-semibold text-[#0b1f3a]"><span>Sub Total</span><span className="tabular-nums">{num2(grossOf(lines))}</span></div>
+                    {grossOf(lines) - totals.subtotal > 0.004 && (
+                      <div className="flex justify-between text-[14px]"><span className="text-slate-600">Item discounts</span><span className="tabular-nums text-[#e11d48]">(-) {num2(grossOf(lines) - totals.subtotal)}</span></div>
+                    )}
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="w-24 text-slate-700">Discount</span>
                       {couponObj ? (
@@ -326,7 +331,7 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
                           <div className="w-20 shrink-0"><SelectMenu value={discType} options={[{ value: "percent", label: "%" }, { value: "flat", label: "$" }]} onChange={(v) => setDiscType(v as DiscType)} ariaLabel="Discount type" /></div>
                         </div>
                       )}
-                      <span className="w-24 text-right tabular-nums text-slate-600">-{num2(totals.discount)}</span>
+                      <span className={`w-24 text-right tabular-nums ${totals.discount > 0 ? "text-[#e11d48]" : "text-slate-600"}`}>(-) {num2(totals.discount)}</span>
                       {coupons.length > 0 && !couponObj && (
                         <Popover className="relative w-full">
                           <PopoverButton className="text-[13px] font-medium text-[#2563eb] hover:underline focus:outline-none">Apply a coupon</PopoverButton>
@@ -417,7 +422,7 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
         </div>
         <Link href={editing ? `${base}/${src!.id}` : base} className={btnGhost}>Cancel</Link>
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-        <span className="ml-auto hidden text-[13px] text-slate-500 sm:block">PDF Template: &apos;Standard Template&apos; <TemplatePicker /></span>
+        <span className="ml-auto hidden text-[13px] text-slate-500 sm:block">PDF Template: &apos;{TEMPLATES.find((t) => t.id === pdfOf(prefs.pdf_settings).template)?.name} Template&apos; <TemplatePicker companyId={companyId} prefs={prefs} /></span>
         {!isQuote && <span className="hidden text-[13px] text-slate-500 xl:block">Total Amount: <b className="text-[#0b1f3a]">${num2(totals.total)}</b> · Total Quantity: {round2(lines.reduce((s, l) => s + (Number(l.quantity) || 0), 0))}</span>}
       </div>
 
@@ -429,30 +434,15 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
 
 const money2 = (v: number) => `$${num2(v)}`;
 
-function TemplatePicker() {
+function TemplatePicker({ companyId, prefs }: { companyId: string; prefs: SalesPrefs }) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} className="font-medium text-[#2563eb] hover:underline">Change</button>
-      <Modal open={open} onClose={() => setOpen(false)} title="Choose Template" width="max-w-md">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="overflow-hidden rounded-xl border-2 border-[#2563eb]">
-            <div className="space-y-1.5 bg-white p-3">
-              <div className="flex justify-between"><span className="h-3 w-8 rounded bg-[#0f766e]/60" /><span className="h-2 w-10 rounded bg-slate-300" /></div>
-              {[...Array(5)].map((_, i) => <span key={i} className="block h-1.5 rounded bg-slate-200" />)}
-              <span className="block h-2 rounded bg-[#2f3437]" />
-              {[...Array(3)].map((_, i) => <span key={i} className="block h-1.5 rounded bg-slate-200" />)}
-            </div>
-            <p className="bg-[#eef6ff] py-1 text-center text-[11px] font-semibold uppercase tracking-wide text-[#2563eb]">★ Selected</p>
-            <p className="px-3 py-2 text-sm text-[#0b1f3a]">Standard Template</p>
-          </div>
-          <div className="flex items-center justify-center rounded-xl border border-dashed border-slate-300 p-4 text-center text-sm text-slate-400">More templates coming soon</div>
-        </div>
-      </Modal>
+      <ChangeTemplateModal open={open} onClose={() => setOpen(false)} companyId={companyId} pdf={prefs.pdf_settings} />
     </>
   );
 }
-
 // "Configure Invoice Number Preferences" (el engranito del número)
 function NumberModal({ open, onClose, kind, companyId, prefs, onSaved }: {
   open: boolean; onClose: () => void; kind: DocKind; companyId: string; prefs: SalesPrefs; onSaved: (p: SalesPrefs, auto: boolean) => void;

@@ -6,13 +6,17 @@ export type ItemOption = { id: string; name: string; sku: string | null; selling
 export type CouponOption = { id: string; name: string; code: string; discount_type: "flat" | "percent"; discount_value: number };
 
 export async function loadPrefs(supabase: SupabaseClient, companyId: string): Promise<SalesPrefs> {
-  const { data } = await supabase.from("sales_prefs").select("*").eq("company_id", companyId).maybeSingle();
-  if (!data) return DEFAULT_PREFS;
+  const [{ data }, { data: plan }] = await Promise.all([
+    supabase.from("sales_prefs").select("*").eq("company_id", companyId).maybeSingle(),
+    supabase.from("company_plans").select("white_label").eq("company_id", companyId).maybeSingle(),
+  ]);
+  const white = Boolean(plan?.white_label);
+  if (!data) return { ...DEFAULT_PREFS, white_label: white };
   return {
     ...DEFAULT_PREFS, ...data,
     quote_settings: { ...DEFAULT_PREFS.quote_settings, ...(data.quote_settings ?? {}) },
     invoice_settings: { ...DEFAULT_PREFS.invoice_settings, ...(data.invoice_settings ?? {}) },
-    org_info: data.org_info ?? {},
+    org_info: data.org_info ?? {}, pdf_settings: data.pdf_settings ?? {}, white_label: white,
   } as SalesPrefs;
 }
 

@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Combobox, ComboboxInput, ComboboxOption, ComboboxOptions, Listbox, ListboxButton, ListboxOption, ListboxOptions } from "@headlessui/react";
+import { Combobox, ComboboxInput, ComboboxOption, ComboboxOptions, Listbox, ListboxButton, ListboxOption, ListboxOptions, Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import { DiscType, SalesLine, lineAmount, money, num2 } from "@/lib/sales";
 import type { ItemOption } from "@/lib/sales-server";
 import { NoImage } from "@/components/catalog/DetailBits";
-import { Modal, btnGhost, btnPrimary, I, Ico } from "@/components/sales/SalesBits";
+import { Modal, btnGhost, btnPrimary } from "@/components/sales/SalesBits";
 import { panelClass } from "@/components/ui/SearchSelect";
 
 export const blankLine = (position = 0): SalesLine => ({
@@ -63,6 +63,7 @@ export default function LineItems({ lines, setLines, items, showDiscount = true,
   const [drag, setDrag] = useState<number | null>(null);
   const [over, setOver] = useState<number | null>(null);
   const [bulk, setBulk] = useState(false);
+  const [bulkAt, setBulkAt] = useState<number | null>(null);
   const set = (i: number, patch: Partial<SalesLine>) => setLines((l) => l.map((x, j) => (j === i ? { ...x, ...patch } : x)));
   const pick = (i: number, it: ItemOption) => set(i, {
     item_id: it.id, name: it.name, description: it.description ?? "", rate: Number(it.selling_price), unit: it.unit, image_url: it.image_url,
@@ -73,31 +74,34 @@ export default function LineItems({ lines, setLines, items, showDiscount = true,
     setDrag(null); setOver(null);
   }
 
+  const insertAt = (i: number, rows: SalesLine[]) => setLines((x) => { const n = [...x]; n.splice(i + 1, 0, ...rows); return n; });
+  const td = "border-b border-slate-200 bg-white";
   return (
     <div>
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <div className="flex items-center justify-between border-b border-slate-200 bg-[#fafbfc] px-4 py-3">
-          <p className="font-semibold text-[#0b1f3a]">Item Table</p>
-        </div>
-        <table className="w-full min-w-[720px] text-sm">
+      {/* La tabla lleva su caja; los botones ⋯ y X quedan AFUERA, a la derecha (como Zoho) */}
+      <div className="overflow-x-auto pb-1">
+        <table className="w-full min-w-[760px] border-separate border-spacing-0 text-sm">
           <thead>
-            <tr className="border-b border-slate-200 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              <th className="w-8" /><th className="px-3 py-2.5">Item Details</th><th className="w-28 px-3 py-2.5 text-right">Quantity</th>
-              <th className="w-32 px-3 py-2.5 text-right">{priceLabel}</th>{showDiscount && <th className="w-36 px-3 py-2.5 text-right">Discount</th>}
-              <th className="w-32 px-3 py-2.5 text-right">Amount</th><th className="w-12" />
+            <tr><th colSpan={showDiscount ? 6 : 5} className="rounded-t-xl border border-slate-200 bg-[#fafbfc] px-4 py-3 text-left text-[15px] font-semibold text-[#0b1f3a]">Item Table</th><th className="w-[72px]" /></tr>
+            <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <th className="w-8 border-b border-l border-slate-200 bg-white" /><th className="border-b border-slate-200 bg-white px-3 py-2.5">Item Details</th>
+              <th className="w-28 border-b border-slate-200 bg-white px-3 py-2.5 text-right">Quantity</th>
+              <th className="w-32 border-b border-slate-200 bg-white px-3 py-2.5 text-right">{priceLabel}</th>
+              {showDiscount && <th className="w-36 border-b border-slate-200 bg-white px-3 py-2.5 text-right">Discount</th>}
+              <th className="w-32 border-b border-r border-slate-200 bg-white px-3 py-2.5 text-right">Amount</th><th />
             </tr>
           </thead>
-          <tbody>
+          <tbody className="[&>tr:last-child>td:first-child]:rounded-bl-xl [&>tr:last-child>td:nth-last-child(2)]:rounded-br-xl">
             {lines.map((l, i) => (
               <tr key={i} onDragOver={(e) => { e.preventDefault(); setOver(i); }} onDrop={() => drop(i)}
-                className={`group/r border-b border-slate-100 align-top transition-colors ${over === i && drag !== null ? "bg-[#e9f7f4]" : ""} ${drag === i ? "opacity-50" : ""}`}>
-                <td className="pl-2 pt-3">
+                className={`group/r align-top transition-colors ${over === i && drag !== null ? "[&>td.cellbg]:bg-[#e9f7f4]" : ""} ${drag === i ? "opacity-50" : ""}`}>
+                <td className={`cellbg ${td} border-l pl-2 pt-3`}>
                   <span draggable onDragStart={() => setDrag(i)} onDragEnd={() => { setDrag(null); setOver(null); }} title="Drag to reorder"
                     className="flex h-7 w-5 cursor-grab items-center justify-center text-slate-300 hover:text-slate-500 active:cursor-grabbing">
                     <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><circle cx="7" cy="5" r="1.4" /><circle cx="13" cy="5" r="1.4" /><circle cx="7" cy="10" r="1.4" /><circle cx="13" cy="10" r="1.4" /><circle cx="7" cy="15" r="1.4" /><circle cx="13" cy="15" r="1.4" /></svg>
                   </span>
                 </td>
-                <td className="px-2 py-2">
+                <td className={`cellbg ${td} px-2 py-2`}>
                   <div className="flex gap-2">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     {l.image_url ? <img src={l.image_url} alt="" className="mt-0.5 h-9 w-9 shrink-0 rounded-md border border-slate-200 object-cover" /> : <span className="mt-0.5"><NoImage /></span>}
@@ -110,25 +114,34 @@ export default function LineItems({ lines, setLines, items, showDiscount = true,
                     </div>
                   </div>
                 </td>
-                <td className="px-2 py-2"><input inputMode="decimal" value={String(l.quantity)} onChange={(e) => set(i, { quantity: e.target.value.replace(/[^0-9.]/g, "") as unknown as number })} className={cell} />
+                <td className={`cellbg ${td} px-2 py-2`}><input inputMode="decimal" value={String(l.quantity)} onChange={(e) => set(i, { quantity: e.target.value.replace(/[^0-9.]/g, "") as unknown as number })} className={cell} />
                   {l.unit && <span className="block pr-2 text-right text-[11px] text-slate-400">{l.unit}</span>}</td>
-                <td className="px-2 py-2"><input inputMode="decimal" value={String(l.rate)} onFocus={(e) => e.currentTarget.select()} onChange={(e) => set(i, { rate: e.target.value.replace(/[^0-9.]/g, "") as unknown as number })} className={cell} /></td>
+                <td className={`cellbg ${td} px-2 py-2`}><input inputMode="decimal" value={String(l.rate)} onFocus={(e) => e.currentTarget.select()} onChange={(e) => set(i, { rate: e.target.value.replace(/[^0-9.]/g, "") as unknown as number })} className={cell} /></td>
                 {showDiscount && (
-                  <td className="px-2 py-2">
+                  <td className={`cellbg ${td} px-2 py-2`}>
                     <div className="flex items-center gap-1">
                       <input inputMode="decimal" value={String(l.discount)} onFocus={(e) => e.currentTarget.select()} onChange={(e) => set(i, { discount: e.target.value.replace(/[^0-9.]/g, "") as unknown as number })} className={cell} />
                       <DiscUnit value={l.discount_type} onChange={(v) => set(i, { discount_type: v })} />
                     </div>
                   </td>
                 )}
-                <td className="px-3 py-3 text-right font-semibold tabular-nums text-[#0b1f3a]">{num2(lineAmount(l))}</td>
-                <td className="py-2 pr-2">
-                  <div className="flex flex-col items-center gap-1 opacity-60 transition-opacity group-hover/r:opacity-100">
-                    <button type="button" title="Clone row" aria-label="Clone row" onClick={() => setLines((x) => { const n = [...x]; n.splice(i + 1, 0, { ...l, id: undefined }); return n; })}
-                      className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-[#e9f7f4] hover:text-[#0f766e]"><Ico d={I.clone} className="h-3.5 w-3.5" /></button>
+                <td className={`cellbg ${td} border-r px-3 py-3 text-right font-semibold tabular-nums text-[#0b1f3a]`}>{num2(lineAmount(l))}</td>
+                <td className="py-2.5 pl-2">
+                  <div className="flex items-center gap-1.5">
+                    <Menu>
+                      <MenuButton aria-label="Row options" title="Row options"
+                        className="flex h-6 w-6 items-center justify-center rounded-full border border-[#93c5fd] text-[#2563eb] transition-colors hover:bg-[#2563eb] hover:text-white data-[open]:bg-[#2563eb] data-[open]:text-white focus:outline-none">
+                        <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="currentColor"><circle cx="5" cy="10" r="1.5" /><circle cx="10" cy="10" r="1.5" /><circle cx="15" cy="10" r="1.5" /></svg>
+                      </MenuButton>
+                      <MenuItems anchor="bottom end" transition className="z-[100] mt-1 w-52 rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_12px_40px_rgba(15,40,60,0.16)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
+                        {([["Clone", () => insertAt(i, [{ ...l, id: undefined }])], ["Insert New Row", () => insertAt(i, [blankLine()])], ["Insert Items in Bulk", () => { setBulkAt(i); setBulk(true); }]] as [string, () => void][]).map(([label, fn]) => (
+                          <MenuItem key={label}><button type="button" onClick={fn} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 data-[focus]:bg-[#2563eb] data-[focus]:text-white">{label}</button></MenuItem>
+                        ))}
+                      </MenuItems>
+                    </Menu>
                     <button type="button" title="Remove row" aria-label="Remove row" onClick={() => setLines((x) => (x.length === 1 ? [blankLine()] : x.filter((_, j) => j !== i)))}
-                      className="group/x flex h-7 w-7 items-center justify-center rounded-full text-red-400 hover:bg-red-50 hover:text-red-600">
-                      <svg viewBox="0 0 20 20" className="h-4 w-4 transition-transform duration-300 group-hover/x:rotate-90" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="10" cy="10" r="7.5" /><path d="m7.5 7.5 5 5M12.5 7.5l-5 5" strokeLinecap="round" /></svg>
+                      className="group/x flex h-6 w-6 items-center justify-center rounded-full text-red-400 hover:bg-red-50 hover:text-red-600">
+                      <svg viewBox="0 0 20 20" className="h-4 w-4 transition-transform duration-300 group-hover/x:rotate-90" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m6.5 6.5 7 7M13.5 6.5l-7 7" strokeLinecap="round" /></svg>
                     </button>
                   </div>
                 </td>
@@ -141,15 +154,16 @@ export default function LineItems({ lines, setLines, items, showDiscount = true,
         <button type="button" onClick={() => setLines((l) => [...l, blankLine(l.length)])} className="flex items-center gap-1.5 rounded-lg bg-[#eef6ff] px-3 py-2 text-sm font-medium text-[#0b1f3a] hover:bg-[#e0edff]">
           <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#2563eb] text-white"><svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M10 5v10M5 10h10" /></svg></span>Add New Row
         </button>
-        <button type="button" onClick={() => setBulk(true)} className="flex items-center gap-1.5 rounded-lg bg-[#eef6ff] px-3 py-2 text-sm font-medium text-[#0b1f3a] hover:bg-[#e0edff]">
+        <button type="button" onClick={() => { setBulkAt(null); setBulk(true); }} className="flex items-center gap-1.5 rounded-lg bg-[#eef6ff] px-3 py-2 text-sm font-medium text-[#0b1f3a] hover:bg-[#e0edff]">
           <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#2563eb] text-white"><svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M10 5v10M5 10h10" /></svg></span>Add Items in Bulk
         </button>
       </div>
       <BulkItems open={bulk} onClose={() => setBulk(false)} items={items}
-        onAdd={(picked) => setLines((l) => {
-          const keep = l.filter((x) => x.name.trim() || x.item_id);
-          return [...keep, ...picked.map(({ it, qty }, k) => ({ ...blankLine(keep.length + k), item_id: it.id, name: it.name, description: it.description ?? "", rate: Number(it.selling_price), unit: it.unit, image_url: it.image_url, quantity: qty }))];
-        })} />
+        onAdd={(picked) => {
+          const rows = picked.map(({ it, qty }, k) => ({ ...blankLine(k), item_id: it.id, name: it.name, description: it.description ?? "", rate: Number(it.selling_price), unit: it.unit, image_url: it.image_url, quantity: qty }));
+          if (bulkAt !== null) insertAt(bulkAt, rows);
+          else setLines((l) => [...l.filter((x) => x.name.trim() || x.item_id), ...rows]);
+        }} />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { DEFAULT_PREFS, SalesDoc, SalesLine, docStatus, money, balanceOf, fmtD } from "@/lib/sales";
+import { DEFAULT_PREFS, PdfSettings, SalesDoc, SalesLine, docStatus, money, balanceOf, fmtD } from "@/lib/sales";
 import DocPaper from "@/components/sales/DocPaper";
 import ShareActions from "@/components/sales/ShareActions";
 
@@ -8,7 +8,8 @@ export const metadata = { title: "Your document", robots: { index: false, follow
 
 type Payload = {
   doc: SalesDoc; lines: SalesLine[]; company: { name: string } | null;
-  prefs: { logo_url: string | null; org_info: Record<string, string> | null; quote_settings: Record<string, unknown> | null } | null;
+  prefs: { logo_url: string | null; org_info: Record<string, string> | null; quote_settings: Record<string, unknown> | null; invoice_settings: Record<string, unknown> | null; pdf_settings: PdfSettings | null } | null;
+  white_label?: boolean;
 };
 
 // Enlace público para el cliente (no necesita cuenta)
@@ -27,9 +28,10 @@ export default async function SharePage({ params }: { params: { token: string } 
   const status = docStatus(doc);
   const prefs = {
     logo_url: p.prefs?.logo_url ?? null, org_info: p.prefs?.org_info ?? {},
-    quote_settings: { ...DEFAULT_PREFS.quote_settings, ...(p.prefs?.quote_settings ?? {}) }, invoice_settings: DEFAULT_PREFS.invoice_settings,
+    quote_settings: { ...DEFAULT_PREFS.quote_settings, ...(p.prefs?.quote_settings ?? {}) }, invoice_settings: { ...DEFAULT_PREFS.invoice_settings, ...(p.prefs?.invoice_settings ?? {}) },
+    pdf_settings: p.prefs?.pdf_settings ?? {}, white_label: Boolean(p.white_label),
   };
-  const canRespond = doc.kind === "quote" && Boolean(p.prefs?.quote_settings?.allow_customer_respond) && ["draft", "sent", "viewed"].includes(doc.status) && status.key !== "expired";
+  const canRespond = doc.kind === "quote" && prefs.quote_settings.allow_customer_respond !== false && ["draft", "sent", "viewed"].includes(doc.status) && status.key !== "expired";
   const company = p.company?.name ?? "";
   return (
     <main className="min-h-screen bg-[#eef1f4] print:bg-white">
@@ -42,13 +44,13 @@ export default async function SharePage({ params }: { params: { token: string } 
               {doc.kind === "invoice" && doc.due_date && <span className="ml-2 text-sm font-normal text-slate-500">due {fmtD(doc.due_date)}</span>}
             </p>
           </div>
-          <ShareActions token={params.token} canRespond={canRespond} />
+          <ShareActions token={params.token} canRespond={canRespond} defaultName={doc.customer_name} />
         </div>
       </div>
       <div className="px-2 py-6 sm:px-6 print:p-0">
         <DocPaper doc={doc} lines={p.lines ?? []} prefs={prefs} companyName={company} status={status} />
       </div>
-      <p className="pb-8 text-center text-xs text-slate-400 print:hidden">Sent with BrightPro</p>
+      {!prefs.white_label && <p className="pb-8 text-center text-xs text-slate-400 print:hidden">Sent with BrightPro</p>}
     </main>
   );
 }

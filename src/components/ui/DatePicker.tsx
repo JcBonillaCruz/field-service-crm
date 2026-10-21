@@ -37,7 +37,7 @@ export default function DatePicker({
         <svg viewBox="0 0 20 20" className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="4" width="14" height="13" rx="2" /><path d="M3 8h14M7 2v3M13 2v3" strokeLinecap="round" /></svg>
       </PopoverButton>
       <PopoverPanel anchor="bottom start" transition
-        className="z-[90] mt-1 w-72 origin-top rounded-xl border border-slate-200 bg-white p-3 shadow-[0_12px_40px_rgba(15,40,60,0.18)] transition duration-150 ease-out data-[closed]:scale-95 data-[closed]:opacity-0">
+        className="z-[100] mt-1 w-72 origin-top rounded-xl border border-slate-200 bg-white p-3 shadow-[0_12px_40px_rgba(15,40,60,0.18)] transition duration-150 ease-out data-[closed]:scale-95 data-[closed]:opacity-0">
         {({ close }) => (
           <>
             <div className="flex items-center justify-between px-1 pb-2">

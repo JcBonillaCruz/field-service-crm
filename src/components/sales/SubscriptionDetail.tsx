@@ -5,11 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { db, invoiceFromSubscription, logActivity } from "@/lib/sales-client";
 import { Activity, Comment, FREQ_LABEL, SalesDoc, SalesLine, SalesPrefs, Subscription, addressLines, balanceOf, fmtD, invoiceStatus, money, subStatus } from "@/lib/sales";
-import { CloseButton, Timeline } from "@/components/catalog/DetailBits";
+import { CloseButton } from "@/components/catalog/DetailBits";
 import BottomSheet from "@/components/customers/BottomSheet";
 import PrefsPanel from "@/components/sales/PrefsPanel";
 import { CommentsPanel } from "@/components/sales/DocModals";
-import { Divider, I, Ico, StatusPill, ToolButton, ToolItem, ToolMenu, Toast } from "@/components/sales/SalesBits";
+import { ActivityList, Divider, I, Ico, StatusPill, ToolButton, ToolItem, ToolMenu, Toast } from "@/components/sales/SalesBits";
 
 export default function SubscriptionDetail({ data, prefs, actor }: {
   data: { sub: Subscription; lines: SalesLine[]; activity: Activity[]; invoices: SalesDoc[]; comments: Comment[] }; prefs: SalesPrefs; actor: string;
@@ -174,8 +174,7 @@ export default function SubscriptionDetail({ data, prefs, actor }: {
           )}
           {tab === 2 && (
             <div className="p-5 sm:p-7">
-              <Timeline rows={(data.activity.length ? data.activity : [{ id: "c", message: "Subscription created", detail: null, actor_name: sub.created_by_name, created_at: sub.created_at }])
-                .map((a) => ({ id: a.id, title: a.message, who: a.actor_name, when: a.created_at, note: a.detail ?? undefined }))} />
+              <ActivityList rows={data.activity.length ? data.activity : [{ id: "c", message: "Subscription created", detail: null, actor_name: sub.created_by_name, created_at: sub.created_at }]} />
             </div>
           )}
         </div>

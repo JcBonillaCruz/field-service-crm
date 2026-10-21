@@ -8,12 +8,13 @@ import { db, logActivity, nextNumber, saveLines } from "@/lib/sales-client";
 import { AddressSnap, DiscType, SalesLine, SalesPrefs, Subscription, TERMS, addressLines, computeTotals, num2, previewNumber, today } from "@/lib/sales";
 import type { CouponOption, CustomerOption, ItemOption } from "@/lib/sales-server";
 import { inputClass } from "@/components/customers/ui";
-import SearchSelect, { Check, Chevron, optionClass, panelClass } from "@/components/ui/SearchSelect";
+import { Check, Chevron, optionClass, panelClass } from "@/components/ui/SearchSelect";
 import SelectMenu from "@/components/ui/SelectMenu";
 import DatePicker from "@/components/ui/DatePicker";
 import { FormRow } from "@/components/catalog/FormBits";
 import LineItems, { blankLine } from "@/components/sales/LineItems";
 import CustomerDrawer from "@/components/sales/CustomerDrawer";
+import CustomerSelect from "@/components/sales/CustomerSelect";
 import { btnGhost, btnPrimary } from "@/components/sales/SalesBits";
 
 type Addr = { id: string; label: string | null; street: string; unit: string | null; city: string; state: string | null; zip: string | null; country: string | null; is_primary: boolean };
@@ -83,7 +84,6 @@ export default function SubscriptionForm({ companyId, actor, customers, items, s
   const totals = useMemo(() => computeTotals(calcLines, mode === "transaction" ? { discount_value: Number(discValue) || 0, discount_type: discType } : {}),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [lines, mode, discValue, discType]);
-  const customerOptions = useMemo(() => customers.map((c) => ({ value: c.id, label: c.display_name, search: c.email ?? "" })), [customers]);
 
   async function submit() {
     setError("");
@@ -138,7 +138,7 @@ export default function SubscriptionForm({ companyId, actor, customers, items, s
           <div className="max-w-[1100px] space-y-4">
             <FormRow label="Customer Name" required htmlFor="s-cust" width="max-w-[620px]">
               <div className="flex items-center gap-2">
-                <div className="min-w-0 flex-1"><SearchSelect id="s-cust" ariaLabel="Customer" value={customerId} options={customerOptions} onChange={setCustomerId} placeholder="Select or add a customer" /></div>
+                <div className="min-w-0 flex-1"><CustomerSelect id="s-cust" value={customerId} customers={customers} onChange={setCustomerId} /></div>
                 {customerId && <span className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-700"><span className="h-2.5 w-2.5 rounded-full bg-[#16a34a]" />{customer?.currency || "USD"}</span>}
               </div>
               <div className="mt-1"><CustomerDrawer customerId={customerId || null} /></div>
