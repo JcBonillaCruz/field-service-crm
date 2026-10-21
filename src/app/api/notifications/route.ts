@@ -36,5 +36,12 @@ export async function GET() {
   });
   const rank = { overdue: 0, due_today: 1, due_soon: 2, activity: 3 };
   items.sort((a, b) => rank[a.kind] - rank[b.kind] || (a.kind === "activity" ? b.when.localeCompare(a.when) : a.when.localeCompare(b.when)));
-  return NextResponse.json({ items: items.slice(0, 40) });
+  // "Versión": si algo cambió (estado, pago, actividad), la pantalla se refresca sola
+  const [{ data: a1 }, { data: d1 }, { data: s1 }] = await Promise.all([
+    supabase.from("sales_activity").select("created_at").eq("company_id", current.id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    supabase.from("sales_docs").select("updated_at, viewed_at, email_opened_at").eq("company_id", current.id).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
+    supabase.from("subscriptions").select("updated_at").eq("company_id", current.id).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
+  ]);
+  const version = [a1?.created_at, d1?.updated_at, s1?.updated_at].filter(Boolean).sort().pop() ?? "";
+  return NextResponse.json({ items: items.slice(0, 40), version });
 }

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 
 type Notice = { id: string; kind: "overdue" | "due_today" | "due_soon" | "activity"; title: string; body: string; href: string; when: string };
@@ -32,6 +32,8 @@ const VAPID = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
 // Campanita: facturas por vencer o vencidas y lo que hizo el cliente (abrió el correo, aceptó y firmó…)
 export default function NotificationsBell() {
   const pathname = usePathname();
+  const router = useRouter();
+  const version = useRef<string | null>(null);
   const [items, setItems] = useState<Notice[]>([]);
   const [seen, setSeen] = useState<string[]>([]);
   const [push, setPush] = useState<"unsupported" | "off" | "on" | "blocked">("off");
@@ -41,13 +43,17 @@ export default function NotificationsBell() {
     try {
       const r = await fetch("/api/notifications", { cache: "no-store" });
       if (!r.ok) return;
-      const list: Notice[] = (await r.json()).items ?? [];
+      const json = await r.json();
+      const list: Notice[] = json.items ?? [];
+      // Algo cambió (el cliente abrió, aceptó, pagaste…): refresca la pantalla sola, menos en formularios
+      if (version.current !== null && json.version && json.version !== version.current && !/\/(new|edit)(\/|$)/.test(window.location.pathname)) router.refresh();
+      if (json.version) version.current = json.version;
       // Sonido solo si apareció algo que no estaba en la carga anterior
       if (known.current && list.some((n) => !known.current!.has(n.id))) chime();
       known.current = new Set(list.map((n) => n.id));
       setItems(list);
     } catch { /* sin conexión */ }
-  }, []);
+  }, [router]);
   useEffect(() => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window) || !VAPID) { setPush("unsupported"); return; }
     if (Notification.permission === "denied") { setPush("blocked"); return; }
@@ -76,7 +82,14 @@ export default function NotificationsBell() {
     setPush("off");
   }
   useEffect(() => { try { setSeen(JSON.parse(localStorage.getItem(SEEN) || "[]")); } catch { /* */ } }, []);
-  useEffect(() => { load(); const t = setInterval(load, 120000); return () => clearInterval(t); }, [load, pathname]);
+  // Revisa cada 20 segundos (solo si la pestaña está a la vista) y al volver a la app
+  useEffect(() => {
+    load();
+    const t = setInterval(() => { if (document.visibilityState === "visible") load(); }, 20000);
+    const onShow = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", onShow); window.addEventListener("focus", onShow);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", onShow); window.removeEventListener("focus", onShow); };
+  }, [load, pathname]);
   // Los avisos de vencimiento cuentan por día; la actividad por evento
   const key = (n: Notice) => (n.kind === "activity" ? n.id : `${n.id}-${new Date().toISOString().slice(0, 10)}`);
   const unread = items.filter((n) => !seen.includes(key(n))).length;
