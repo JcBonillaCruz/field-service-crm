@@ -1,7 +1,9 @@
 import { CouponRow, Item, REDEMPTION_OPTIONS, couponStatus, discountLabel, fmtDate, usd } from "@/lib/catalog";
+import { SalesDoc, SalesModule, Subscription, fmtD, invoiceStatus, money, quoteStatus, salesRaw, subStatus } from "@/lib/sales";
 
 // Vistas personalizadas (como "New View" de Zoho) para Items y Coupons
-export type CatalogModule = "items" | "coupons";
+export type CatalogModule = "items" | "coupons" | SalesModule;
+export const isSales = (m: CatalogModule): m is SalesModule => m === "quotes" || m === "invoices" || m === "subscriptions";
 export type FieldType = "text" | "number" | "choice" | "date";
 export type FieldDef = {
   key: string; label: string; type: FieldType; choices?: { value: string; label: string }[];
@@ -13,9 +15,20 @@ export type ViewDef = {
   id: string; name: string; builtin?: boolean; is_favorite?: boolean; criteria: Criterion[]; match: "all" | "any";
   columns: string[]; visibility?: Visibility; roles?: string[]; user_id?: string;
 };
-export type Row = Item | CouponRow;
+export type Row = Item | CouponRow | SalesDoc | Subscription;
 
 const STATUS = [{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }];
+const Q_STATUS = [
+  { value: "draft", label: "Draft" }, { value: "sent", label: "Sent" }, { value: "viewed", label: "Customer Viewed" }, { value: "accepted", label: "Accepted" },
+  { value: "invoiced", label: "Invoiced" }, { value: "declined", label: "Declined" }, { value: "expired", label: "Expired" },
+];
+const I_STATUS = [
+  { value: "draft", label: "Draft" }, { value: "sent", label: "Sent" }, { value: "viewed", label: "Viewed" }, { value: "partially_paid", label: "Partially Paid" },
+  { value: "overdue", label: "Overdue" }, { value: "paid", label: "Paid" }, { value: "void", label: "Void" }, { value: "written_off", label: "Written Off" },
+];
+const S_STATUS = [
+  { value: "live", label: "Live" }, { value: "future", label: "Future" }, { value: "paused", label: "Paused" }, { value: "cancelled", label: "Cancelled" }, { value: "expired", label: "Expired" },
+];
 
 export const FIELDS: Record<CatalogModule, FieldDef[]> = {
   items: [
@@ -45,11 +58,52 @@ export const FIELDS: Record<CatalogModule, FieldDef[]> = {
     { key: "product", label: "Product Name", type: "text", width: 180 },
     { key: "created", label: "Created Time", type: "date", width: 150 },
   ],
+  quotes: [
+    { key: "name", label: "Quote Number", type: "text", width: 150, locked: true },
+    { key: "date", label: "Date", type: "date", width: 130 },
+    { key: "reference", label: "Reference Number", type: "text", width: 170 },
+    { key: "customer", label: "Customer Name", type: "text", width: 240 },
+    { key: "status", label: "Status", type: "choice", width: 150, choices: Q_STATUS },
+    { key: "amount", label: "Amount", type: "number", align: "right", width: 140 },
+    { key: "expiry", label: "Expiry Date", type: "date", width: 140 },
+    { key: "salesperson", label: "Salesperson", type: "text", width: 150 },
+    { key: "subject", label: "Subject", type: "text", width: 220 },
+    { key: "created", label: "Created Time", type: "date", width: 150 },
+  ],
+  invoices: [
+    { key: "name", label: "Invoice#", type: "text", width: 150, locked: true },
+    { key: "date", label: "Date", type: "date", width: 130 },
+    { key: "order", label: "Order Number", type: "text", width: 150 },
+    { key: "customer", label: "Customer Name", type: "text", width: 240 },
+    { key: "status", label: "Status", type: "choice", width: 170, choices: I_STATUS },
+    { key: "due", label: "Due Date", type: "date", width: 130 },
+    { key: "amount", label: "Amount", type: "number", align: "right", width: 140 },
+    { key: "balance", label: "Balance Due", type: "number", align: "right", width: 140 },
+    { key: "salesperson", label: "Salesperson", type: "text", width: 150 },
+    { key: "subject", label: "Subject", type: "text", width: 220 },
+    { key: "created", label: "Created Time", type: "date", width: 150 },
+  ],
+  subscriptions: [
+    { key: "name", label: "Subscription#", type: "text", width: 150, locked: true },
+    { key: "customer", label: "Customer Name", type: "text", width: 240 },
+    { key: "profile", label: "Profile Name", type: "text", width: 200 },
+    { key: "status", label: "Status", type: "choice", width: 130, choices: S_STATUS },
+    { key: "amount", label: "Amount", type: "number", align: "right", width: 140 },
+    { key: "frequency", label: "Billing Frequency", type: "choice", width: 160, choices: [{ value: "week", label: "Weekly" }, { value: "month", label: "Monthly" }, { value: "year", label: "Yearly" }] },
+    { key: "next", label: "Next Billing Date", type: "date", width: 160 },
+    { key: "start", label: "Start Date", type: "date", width: 130 },
+    { key: "salesperson", label: "Salesperson", type: "text", width: 150 },
+    { key: "created", label: "Created Time", type: "date", width: 150 },
+  ],
 };
 
 const ITEM_COLS = ["name", "sku", "description", "rate", "unit"];
 const COUPON_COLS = ["name", "code", "status", "discount", "discount_by", "redemption", "max", "expires"];
-const v = (id: string, name: string, criteria: Criterion[], columns: string[]): ViewDef => ({ id, name, builtin: true, criteria, match: "all", columns });
+const QUOTE_COLS = ["date", "name", "reference", "customer", "status", "amount"];
+const INVOICE_COLS = ["date", "name", "order", "customer", "status", "due", "amount", "balance"];
+const SUB_COLS = ["name", "customer", "profile", "status", "frequency", "next", "amount"];
+const v = (id: string, name: string, criteria: Criterion[], columns: string[], match: "all" | "any" = "all"): ViewDef => ({ id, name, builtin: true, criteria, match, columns });
+const st = (value: string): Criterion => ({ field: "status", op: "is", value });
 
 export const BUILTIN_VIEWS: Record<CatalogModule, ViewDef[]> = {
   items: [
@@ -66,11 +120,26 @@ export const BUILTIN_VIEWS: Record<CatalogModule, ViewDef[]> = {
     v("inactive", "Inactive Coupons", [{ field: "status", op: "is", value: "inactive" }], COUPON_COLS),
     v("expired", "Expired Coupons", [{ field: "status", op: "is", value: "expired" }], COUPON_COLS),
   ],
+  quotes: [
+    v("all", "All Quotes", [], QUOTE_COLS), v("draft", "Draft", [st("draft")], QUOTE_COLS), v("sent", "Sent", [st("sent")], QUOTE_COLS),
+    v("viewed", "Customer Viewed", [st("viewed")], QUOTE_COLS), v("accepted", "Accepted", [st("accepted")], QUOTE_COLS),
+    v("invoiced", "Invoiced", [st("invoiced")], QUOTE_COLS), v("declined", "Declined", [st("declined")], QUOTE_COLS), v("expired", "Expired", [st("expired")], QUOTE_COLS),
+  ],
+  invoices: [
+    v("all", "All Invoices", [], INVOICE_COLS), v("draft", "Draft", [st("draft")], INVOICE_COLS),
+    v("unpaid", "Unpaid", [st("sent"), st("viewed"), st("partially_paid"), st("overdue")], INVOICE_COLS, "any"),
+    v("sent", "Sent", [st("sent")], INVOICE_COLS), v("overdue", "Overdue", [st("overdue")], INVOICE_COLS),
+    v("partially_paid", "Partially Paid", [st("partially_paid")], INVOICE_COLS), v("paid", "Paid", [st("paid")], INVOICE_COLS), v("void", "Void", [st("void")], INVOICE_COLS),
+  ],
+  subscriptions: [
+    v("all", "All Subscriptions", [], SUB_COLS), v("live", "Live", [st("live")], SUB_COLS), v("future", "Future", [st("future")], SUB_COLS),
+    v("paused", "Paused", [st("paused")], SUB_COLS), v("cancelled", "Cancelled", [st("cancelled")], SUB_COLS), v("expired", "Expired", [st("expired")], SUB_COLS),
+  ],
 };
-export const DEFAULT_VIEW: Record<CatalogModule, string> = { items: "active", coupons: "all" };
+export const DEFAULT_VIEW: Record<CatalogModule, string> = { items: "active", coupons: "all", quotes: "all", invoices: "all", subscriptions: "all" };
 // Etiqueta corta del menú (como Zoho: "All", "Active"...)
 export const shortViewName = (m: CatalogModule, view: ViewDef) =>
-  view.builtin ? view.name.replace(m === "items" ? / Items$/ : / Coupons$/, "") : view.name;
+  view.builtin ? view.name.replace(new RegExp(` ${MODULE_INFO[m].plural}$`), "") : view.name;
 
 export const OPS: Record<FieldType, { value: string; label: string }[]> = {
   text: [
@@ -92,6 +161,7 @@ export const NO_VALUE_OPS = new Set(["empty", "not_empty"]);
 
 // Valor "crudo" de un campo (para filtrar, ordenar y exportar)
 export function rawValue(m: CatalogModule, row: Row, key: string): string | number | null {
+  if (isSales(m)) return salesRaw(m, row as SalesDoc | Subscription, key);
   if (m === "items") {
     const it = row as Item;
     switch (key) {
@@ -118,6 +188,14 @@ export function displayValue(m: CatalogModule, row: Row, key: string): string {
   const f = FIELDS[m].find((x) => x.key === key);
   const raw = rawValue(m, row, key);
   if (raw == null || raw === "") return "";
+  if (isSales(m)) {
+    if (key === "amount" || key === "balance") return money(raw as number);
+    if (key === "status") {
+      if (m === "subscriptions") return subStatus(row as Subscription).label;
+      return m === "quotes" ? quoteStatus(row as SalesDoc).label : invoiceStatus(row as SalesDoc).label;
+    }
+    if (f?.type === "date") return fmtD(String(raw));
+  }
   if (m === "items" && key === "rate") return usd(raw as number);
   if (m === "coupons" && key === "discount") return discountLabel(row as CouponRow);
   if (m === "coupons" && key === "status") return couponStatus(row as CouponRow).label;
@@ -161,6 +239,18 @@ export const SORTS: Record<CatalogModule, { value: string; label: string }[]> = 
   coupons: [
     { value: "code", label: "Coupon Code" }, { value: "name", label: "Name" }, { value: "expires", label: "Expiration Date" }, { value: "created", label: "Created Time" },
   ],
+  quotes: [
+    { value: "date", label: "Date" }, { value: "name", label: "Quote Number" }, { value: "customer", label: "Customer Name" },
+    { value: "amount", label: "Amount" }, { value: "expiry", label: "Expiry Date" }, { value: "created", label: "Created Time" },
+  ],
+  invoices: [
+    { value: "date", label: "Date" }, { value: "name", label: "Invoice#" }, { value: "customer", label: "Customer Name" }, { value: "due", label: "Due Date" },
+    { value: "amount", label: "Amount" }, { value: "balance", label: "Balance Due" }, { value: "created", label: "Created Time" },
+  ],
+  subscriptions: [
+    { value: "name", label: "Subscription#" }, { value: "customer", label: "Customer Name" }, { value: "next", label: "Next Billing Date" },
+    { value: "amount", label: "Amount" }, { value: "created", label: "Created Time" },
+  ],
 };
 
 export function applyView(m: CatalogModule, rows: Row[], view: ViewDef, q: string, sort: string, dir: "asc" | "desc") {
@@ -174,7 +264,9 @@ export function applyView(m: CatalogModule, rows: Row[], view: ViewDef, q: strin
     if (!terms.length) return true;
     const blob = (m === "items"
       ? [(r as Item).name, (r as Item).sku, (r as Item).description]
-      : [(r as CouponRow).name, (r as CouponRow).code, (r as CouponRow).catalog_products?.name]
+      : m === "coupons" ? [(r as CouponRow).name, (r as CouponRow).code, (r as CouponRow).catalog_products?.name]
+        : m === "subscriptions" ? [(r as Subscription).number, (r as Subscription).customer_name, (r as Subscription).profile_name]
+          : [(r as SalesDoc).number, (r as SalesDoc).customer_name, (r as SalesDoc).reference, (r as SalesDoc).order_number, (r as SalesDoc).subject]
     ).filter(Boolean).join(" ").toLowerCase();
     return terms.every((t) => blob.includes(t));
   });
@@ -189,7 +281,7 @@ export function applyView(m: CatalogModule, rows: Row[], view: ViewDef, q: strin
   });
 }
 
-export const defaultSort = (m: CatalogModule) => (m === "items" ? "created" : "created");
+export const defaultSort = (m: CatalogModule) => (m === "quotes" || m === "invoices" ? "date" : "created");
 
 // Favoritos de las vistas que trae el sistema (se guardan en este navegador)
 export const favKey = (m: CatalogModule, companyId: string) => `bp-view-fav:${m}:${companyId}`;
@@ -199,4 +291,7 @@ export const colWidthKey = (m: CatalogModule, companyId: string) => `bp-colw:${m
 export const MODULE_INFO: Record<CatalogModule, { singular: string; plural: string; base: string }> = {
   items: { singular: "Item", plural: "Items", base: "/dashboard/items" },
   coupons: { singular: "Coupon", plural: "Coupons", base: "/dashboard/coupons" },
+  quotes: { singular: "Quote", plural: "Quotes", base: "/dashboard/quotes" },
+  invoices: { singular: "Invoice", plural: "Invoices", base: "/dashboard/invoices" },
+  subscriptions: { singular: "Subscription", plural: "Subscriptions", base: "/dashboard/subscriptions" },
 };

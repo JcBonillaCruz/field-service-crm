@@ -5,7 +5,10 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 // Módulos donde se puede buscar (el resto llega después)
 const MODULES = ["Customers", "Items", "Coupons", "Quotes", "Invoices", "Subscriptions", "Credit notes", "Expenses", "Projects", "Tasks"];
-const ROUTES: Record<string, string> = { Customers: "/dashboard/customers", Items: "/dashboard/items", Coupons: "/dashboard/coupons" };
+const ROUTES: Record<string, string> = {
+  Customers: "/dashboard/customers", Items: "/dashboard/items", Coupons: "/dashboard/coupons",
+  Quotes: "/dashboard/quotes", Invoices: "/dashboard/invoices", Subscriptions: "/dashboard/subscriptions",
+};
 const ENABLED = new Set(Object.keys(ROUTES));
 const moduleFor = (path: string) => Object.entries(ROUTES).find(([, r]) => path.startsWith(r))?.[0] ?? "Customers";
 

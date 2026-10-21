@@ -11,7 +11,7 @@ import { FormHeader, InfoIcon, Tip } from "@/components/catalog/FormBits";
 
 type Target = { key: string; label: string; required?: boolean; aliases: string[]; tip: string };
 
-const TARGETS: Record<CatalogModule, Target[]> = {
+const TARGETS: Record<"items" | "coupons", Target[]> = {
   items: [
     { key: "name", label: "Item Name", required: true, aliases: ["item name", "name", "product name"], tip: "The name that shows on quotes and invoices." },
     { key: "rate", label: "Selling Price", required: true, aliases: ["rate", "selling price", "price", "sales price"], tip: "The rate at which you're going to sell this item." },
@@ -50,7 +50,7 @@ function toDate(s: string): string | null {
 export default function CatalogImport({ module, companyId }: { module: CatalogModule; companyId: string }) {
   const router = useRouter();
   const base = MODULE_INFO[module].base;
-  const targets = TARGETS[module];
+  const targets = TARGETS[module as "items" | "coupons"];
   const fileRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [fileName, setFileName] = useState("");

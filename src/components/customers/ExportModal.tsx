@@ -12,9 +12,12 @@ const MODULE_GROUPS: { group: string; items: string[] }[] = [
   { group: "Projects", items: ["Projects", "Tasks", "Timesheets"] },
   { group: "Items & other", items: ["Items", "Coupons", "Price lists", "Exchange rates", "Taxes", "Users", "Documents"] },
 ];
-const ENDPOINTS: Record<string, string> = { Customers: "/dashboard/customers/export", Items: "/dashboard/items/export", Coupons: "/dashboard/coupons/export" };
+const ENDPOINTS: Record<string, string> = {
+  Customers: "/dashboard/customers/export", Items: "/dashboard/items/export", Coupons: "/dashboard/coupons/export",
+  Quotes: "/dashboard/quotes/export", Invoices: "/dashboard/invoices/export", Subscriptions: "/dashboard/subscriptions/export",
+};
 const ENABLED = new Set(Object.keys(ENDPOINTS));
-export type ExportModule = "Customers" | "Items" | "Coupons";
+export type ExportModule = "Customers" | "Items" | "Coupons" | "Quotes" | "Invoices" | "Subscriptions";
 export type ExportView = { module: ExportModule; label: string; ids: string[]; columns: string[] };
 
 const DECIMALS = ["1,234,567.89", "1234567.89", "1.234.567,89", "1,23,456.78"];

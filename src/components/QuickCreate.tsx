@@ -8,12 +8,12 @@ const COLUMNS: { group: string; icon: string; items: Item[] }[] = [
   {
     group: "General",
     icon: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z",
-    items: [{ label: "Add user" }, { label: "Item" }, { label: "Log time" }, { label: "Weekly log" }],
+    items: [{ label: "Add user" }, { label: "Item", href: "/dashboard/items/new" }, { label: "Log time" }, { label: "Weekly log" }],
   },
   {
     group: "Sales",
     icon: "M3 3h2l2.4 12.3a1 1 0 0 0 1 .7h8.7a1 1 0 0 0 1-.8L21 8H6M9 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM17 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2z",
-    items: [{ label: "Customer", href: "/dashboard/customers/new" }, { label: "Quote" }, { label: "Invoice" }, { label: "Subscription" }, { label: "Customer payment" }],
+    items: [{ label: "Customer", href: "/dashboard/customers/new" }, { label: "Quote", href: "/dashboard/quotes/new" }, { label: "Invoice", href: "/dashboard/invoices/new" }, { label: "Subscription", href: "/dashboard/subscriptions/new" }, { label: "Customer payment" }],
   },
   {
     group: "Expenses",

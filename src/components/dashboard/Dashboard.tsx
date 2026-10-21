@@ -77,9 +77,9 @@ export default function Dashboard({ firstName, companyName, industry, role, coun
             <div className="flex justify-between gap-4">
               {([
                 {l:"Customer",href:"/dashboard/customers/new",i:<><circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" strokeWidth="1.6"/><path d="M4 20a8 8 0 0 1 16 0" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></>},
-                {l:"Invoice",href:"",i:<><rect x="5" y="3" width="14" height="18" rx="2" fill="none" stroke="currentColor" strokeWidth="1.6"/><path d="M9 8h6M9 12h6M9 16h3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></>},
-                {l:"Subscription",href:"",i:<><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.6"/><path d="M9 12l2 2 4-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></>},
-                {l:"Quote",href:"",i:<><rect x="5" y="2" width="14" height="19" rx="2" fill="none" stroke="currentColor" strokeWidth="1.6"/><path d="M9 7h3M9 11h6M9 15h4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><path d="M14 2v4h5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></>},
+                {l:"Invoice",href:"/dashboard/invoices/new",i:<><rect x="5" y="3" width="14" height="18" rx="2" fill="none" stroke="currentColor" strokeWidth="1.6"/><path d="M9 8h6M9 12h6M9 16h3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></>},
+                {l:"Subscription",href:"/dashboard/subscriptions/new",i:<><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.6"/><path d="M9 12l2 2 4-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></>},
+                {l:"Quote",href:"/dashboard/quotes/new",i:<><rect x="5" y="2" width="14" height="19" rx="2" fill="none" stroke="currentColor" strokeWidth="1.6"/><path d="M9 7h3M9 11h6M9 15h4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><path d="M14 2v4h5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></>},
               ]).map(a => {
                 const active = !!a.href;
                 const box = (

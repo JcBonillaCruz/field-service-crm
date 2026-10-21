@@ -24,3 +24,10 @@
   * { transition: none !important; animation: none !important; }
   .bp-line { stroke-dasharray: none; stroke-dashoffset: 0; }
 }
+
+/* Paso 3.30: impresión de Quotes / Invoices (los colores del encabezado de la tabla también salen en papel) */
+@media print {
+  @page { margin: 12mm; }
+  html, body { background: #fff !important; }
+  .bp-paper, .bp-paper * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

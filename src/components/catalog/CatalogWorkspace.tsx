@@ -420,7 +420,7 @@ function Cell({ module, r, k, align, base }: { module: CatalogModule; r: Row; k:
             // eslint-disable-next-line @next/next/no-img-element
             ? <img src={it.image_url} alt="" className="h-9 w-9 shrink-0 rounded-md border border-slate-200 object-cover" />
             : <NoImage />)}
-          <span className="truncate">{r.name}</span>
+          <span className="truncate">{(r as Item).name}</span>
         </Link>
       </td>
     );
@@ -450,7 +450,7 @@ function CompactRow({ module, r, active, base, checked, onCheck }: {
       {onCheck && <input type="checkbox" checked={checked} onChange={onCheck} aria-label="Select" className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded accent-[#0f766e]" />}
       <Link href={`${base}/${r.id}`} className="flex min-w-0 flex-1 items-start justify-between gap-3">
         <span className="min-w-0">
-          <span className={`block truncate font-medium ${active ? "text-[#0f766e]" : "text-[#0b1f3a]"}`}>{r.name}</span>
+          <span className={`block truncate font-medium ${active ? "text-[#0f766e]" : "text-[#0b1f3a]"}`}>{(r as Item).name}</span>
           {isItem ? (
             <span className="block truncate text-xs text-slate-500">{[it.sku, it.item_type === "goods" ? "Goods" : "Service", !it.is_active && "Inactive"].filter(Boolean).join(" · ")}</span>
           ) : (
