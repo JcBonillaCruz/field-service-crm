@@ -48,8 +48,8 @@ export async function POST(request: NextRequest) {
   const accent = pdfOf(d.prefs.pdf_settings).accent === "#2f3437" ? "#0f766e" : pdfOf(d.prefs.pdf_settings).accent;
   const html = emailHtml({ body: b.body, link, pixel: `${origin}/api/track/${token}.gif`, doc: d.doc, companyName: d.companyName, logoUrl: d.prefs.logo_url, accent, whiteLabel: d.prefs.white_label });
   // Sale como "BrightPro"; con marca blanca (plan pagado) sale con el nombre de la compañía
-  // Como Zoho: sale con el nombre de quien lo manda (ej. "Juan Bonilla Cruz"), desde la dirección de BrightPro
-  const senderName = (user.fullName || user.email.split("@")[0] || d.companyName || "BrightPro").replace(/[<>"]/g, "");
+  // Sale con el nombre de la COMPAÑÍA (el cliente reconoce el negocio, no a una persona), desde la dirección de BrightPro
+  const senderName = (d.companyName || "BrightPro").replace(/[<>"]/g, "");
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",

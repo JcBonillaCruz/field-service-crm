@@ -29,14 +29,14 @@ const OPS = [
   { label: "Items low on stock", icon: "M21 8 12 3 3 8v8l9 5 9-5zM3 8l9 5 9-5M12 13v8" },
   { label: "Unread messages", icon: "M21 12a8 8 0 0 1-11.6 7.1L4 20l1.1-4.6A8 8 0 1 1 21 12z" },
 ];
-const FOOTER_SOON = ["Quotes & contracts", "Invoices", "Payments", "Jobs", "Dispatch", "Van inventory"];
+const FOOTER_SOON = ["Payments", "Jobs", "Dispatch", "Van inventory"];
 
 const TABS = ["Dashboard", "Announcements", "Help"] as const;
 type Tab = (typeof TABS)[number];
 type CardKey = "rev" | "mrr" | "active" | "arpu" | "churn" | "ltv" | "subsum" | "inc" | "exp";
 
-export default function DesktopDashboard({ firstName, companyId, companyName, companyIndex, demo = false }: {
-  firstName: string; companyId: string; companyName: string; companyIndex: number; demo?: boolean;
+export default function DesktopDashboard({ firstName, companyId, companyName, companyIndex, demo = false, real = null }: {
+  firstName: string; companyId: string; companyName: string; companyIndex: number; demo?: boolean; real?: DashboardData | null;
 }) {
   const [tab, setTab] = useState<Tab>("Dashboard");
   const [now, setNow] = useState<Date | null>(null);
@@ -44,7 +44,7 @@ export default function DesktopDashboard({ firstName, companyId, companyName, co
   const [own, setOwn] = useState<Partial<Record<CardKey, Period>>>({}); // periodo propio de cada tarjeta
   useEffect(() => setNow(new Date()), []);
 
-  const data = useMemo(() => (now && demo ? demoData(now) : EMPTY_DATA), [now, demo]);
+  const data = useMemo(() => (now && demo ? demoData(now) : real ?? EMPTY_DATA), [now, demo, real]);
   const money = useMemo(() => {
     const f = new Intl.NumberFormat("en-US", { style: "currency", currency: data.currency });
     return (v: number) => f.format(v);

@@ -73,6 +73,14 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
   const [saving, setSaving] = useState<"" | "draft" | "send" | "sent">("");
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const [mobile, setMobile] = useState(false);
+  const [showSubject, setShowSubject] = useState(Boolean(src?.subject));
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const on = () => setMobile(mq.matches); on(); mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  const compactTotals = (simple && !isQuote) || mobile;
 
   useEffect(() => { if (!isQuote) { try { setSimple(localStorage.getItem("bp-inv-simple") === "1"); } catch { /* */ } } }, [isQuote]);
   function toggleSimple() { const v = !simple; setSimple(v); try { localStorage.setItem("bp-inv-simple", v ? "1" : "0"); } catch { /* */ } }
@@ -289,16 +297,20 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
                   </ComboboxOptions>
                 </Combobox>
               </FormRow>
-              <FormRow label="Project Name" width="max-w-[340px]">
+              <div className="hidden sm:block"><FormRow label="Project Name" width="max-w-[340px]">
                 <div className="relative">
                   <input disabled placeholder="Select a project" className={`${inputClass} cursor-not-allowed opacity-70`} />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-slate-200/70 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">Soon</span>
                 </div>
                 <p className="mt-1 text-[13px] text-slate-500">{customerId ? "Projects arrive with Time Tracking." : "Select a customer to associate a project."}</p>
-              </FormRow>
-              <FormRow label="Subject" htmlFor="d-subj" alignTop width="max-w-[460px]" hint={`Let your customer know what this ${noun} is for.`}>
-                <textarea id="d-subj" rows={2} value={subject} onChange={(e) => setSubject(e.target.value)} placeholder={`Let your customer know what this ${noun} is for`} className={inputClass} />
-              </FormRow>
+              </FormRow></div>
+              {mobile && !showSubject ? (
+                <button type="button" onClick={() => setShowSubject(true)} className="text-left text-[14px] font-medium text-[#2563eb]">+ Add a subject</button>
+              ) : (
+                <FormRow label="Subject" htmlFor="d-subj" alignTop width="max-w-[460px]" hint={`Let your customer know what this ${noun} is for.`}>
+                  <textarea id="d-subj" rows={2} value={subject} onChange={(e) => setSubject(e.target.value)} placeholder={`Let your customer know what this ${noun} is for`} className={inputClass} />
+                </FormRow>
+              )}
             </div>
           </div>
         )}
@@ -314,7 +326,7 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
                 <p className="mt-1 text-[12px] text-slate-500">Will be displayed on the {noun.toLowerCase()}</p>
               </div>
               <div className="rounded-xl bg-[#f7f9fa] p-4">
-                {(!simple || showSummary || isQuote) && (
+                {(!compactTotals || showSummary) && (
                   <div className="space-y-3 text-[15px]">
                     <div className="flex justify-between font-semibold text-[#0b1f3a]"><span>Sub Total</span><span className="tabular-nums">{num2(grossOf(lines))}</span></div>
                     {grossOf(lines) - totals.subtotal > 0.004 && (
@@ -361,8 +373,8 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
                     </div>
                   </div>
                 )}
-                <div className={`flex justify-between text-[18px] font-semibold text-[#0b1f3a] ${(!simple || showSummary || isQuote) ? "mt-4 border-t border-slate-200 pt-4" : ""}`}><span>Total ( $ )</span><span className="tabular-nums">{num2(totals.total)}</span></div>
-                {simple && !isQuote && (
+                <div className={`flex justify-between text-[18px] font-semibold text-[#0b1f3a] ${(!compactTotals || showSummary) ? "mt-4 border-t border-slate-200 pt-4" : ""}`}><span>Total ( $ )</span><span className="tabular-nums">{num2(totals.total)}</span></div>
+                {compactTotals && (
                   <button type="button" onClick={() => setShowSummary((v) => !v)} className="mt-2 flex w-full items-center justify-end gap-1 text-sm font-medium text-[#2563eb]">
                     {showSummary ? "Hide Total Summary" : "Show Total Summary"}<svg viewBox="0 0 20 20" className={`h-4 w-4 transition-transform ${showSummary ? "rotate-180" : ""}`} fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
                   </button>
@@ -403,7 +415,7 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
               </div>
             </div>
           )}
-          <p className="mt-6 text-[13px] text-slate-500"><b className="font-medium text-slate-600">Additional Fields:</b> custom fields for {noun.toLowerCase()}s are coming soon.</p>
+          <p className="mt-6 hidden text-[13px] text-slate-500 sm:block"><b className="font-medium text-slate-600">Additional Fields:</b> custom fields for {noun.toLowerCase()}s are coming soon.</p>
         </div>
       </div>
 

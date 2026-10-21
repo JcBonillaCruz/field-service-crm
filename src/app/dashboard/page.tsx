@@ -2,6 +2,7 @@ import CreateCompanyForm from "@/components/CreateCompanyForm";
 import { getSession } from "@/lib/session";
 import Dashboard from "@/components/dashboard/Dashboard"; // celular (sin cambios)
 import DesktopDashboard from "@/components/dashboard/DesktopDashboard"; // computadora
+import { loadDashboard } from "@/lib/dashboard-server";
 
 const TRIAL_DAYS = 14;
 
@@ -34,6 +35,8 @@ export default async function DashboardPage({ searchParams }: { searchParams?: {
     commercial: rows.filter((r) => r.customer_type === "commercial").length,
     residential: rows.filter((r) => r.customer_type === "residential").length,
   };
+  // Lo real de Ventas: facturas, pagos y suscripciones (se refresca solo con la campanita)
+  const dash = await loadDashboard(supabase, current.id).catch(() => null);
   const daysLeft = Math.max(0, TRIAL_DAYS - Math.floor((Date.now() - new Date(current.createdAt).getTime()) / 86400000));
 
   return (
@@ -47,6 +50,7 @@ export default async function DashboardPage({ searchParams }: { searchParams?: {
           role={current.role}
           counts={counts}
           daysLeft={daysLeft}
+          stats={dash?.mobile ?? null}
         />
       </div>
       {/* Computadora (1024 px o más): diseño tipo Zoho. Con ?demo=1 muestra datos de ejemplo */}
@@ -57,6 +61,7 @@ export default async function DashboardPage({ searchParams }: { searchParams?: {
           companyName={current.name}
           companyIndex={Math.max(0, companies.indexOf(current))}
           demo={searchParams?.demo === "1"}
+          real={dash?.data ?? null}
         />
       </div>
     </>

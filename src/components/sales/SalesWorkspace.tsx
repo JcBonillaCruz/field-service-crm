@@ -17,6 +17,7 @@ import BottomSheet from "@/components/customers/BottomSheet";
 import MobileSortSheet from "@/components/customers/MobileSortSheet";
 import PrefsPanel from "@/components/sales/PrefsPanel";
 import { Toast } from "@/components/sales/SalesBits";
+import { sheetItem } from "@/components/ui/sheet";
 
 const EXPORT_NAME: Record<SalesModule, "Quotes" | "Invoices" | "Subscriptions"> = { quotes: "Quotes", invoices: "Invoices", subscriptions: "Subscriptions" };
 const Star = ({ on }: { on: boolean }) => (
@@ -352,28 +353,22 @@ export default function SalesWorkspace({ module, rows, customViews, companyId, p
       </div>
 
       {!selectedId && (
-        <button type="button" onClick={() => (module === "quotes" ? setMSheet("new") : router.push(`${base}/new`))} aria-label={`New ${info.singular}`}
+        <button type="button" onClick={() => router.push(`${base}/new`)} aria-label={`New ${info.singular}`}
           className="fixed bottom-6 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#0f766e] text-white shadow-lg shadow-[#0f766e]/30 transition-transform active:scale-95 lg:hidden">
           <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
         </button>
       )}
 
-      <BottomSheet open={mSheet === "new"} onClose={() => setMSheet(null)} title="New Quote">
-        <div className="space-y-2">
-          <Link href={`${base}/new`} className="block rounded-xl border border-slate-200 px-4 py-3.5 text-[15px] text-slate-700 active:bg-[#f6fbfa]">Quote for a One-Time Invoice</Link>
-          <Link href="/dashboard/subscriptions/new" className="block rounded-xl border border-slate-200 px-4 py-3.5 text-[15px] text-slate-700 active:bg-[#f6fbfa]">Quote for a Subscription</Link>
-        </div>
-      </BottomSheet>
       <BottomSheet open={mSheet === "filter"} onClose={() => setMSheet(null)} title="Filter">
         <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Default filters</p>
-        <ul className="space-y-2">
+        <ul className="space-y-0.5">
           {allViews.map((v, i) => {
             const on = v.id === view.id;
             return (
               <li key={v.id}>
                 {i === BUILTIN_VIEWS[module].length && <p className="mb-2 mt-4 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Custom views</p>}
                 <button type="button" onClick={() => { switchView(v.id); setMSheet(null); }}
-                  className={`flex w-full items-center justify-between rounded-xl border px-4 py-3.5 text-left ${on ? "border-[#0f766e] bg-[#f6fbfa] font-medium text-[#0b1f3a]" : "border-slate-200 text-slate-700"}`}>
+                  className={sheetItem(on)}>
                   {shortViewName(module, v)}
                   {on && <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0f766e] text-white"><svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><path d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0z" /></svg></span>}
                 </button>

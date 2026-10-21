@@ -18,6 +18,7 @@ import ExportModal from "@/components/customers/ExportModal";
 import { NoImage } from "@/components/catalog/DetailBits";
 import BottomSheet from "@/components/customers/BottomSheet";
 import MobileSortSheet from "@/components/customers/MobileSortSheet";
+import { sheetItem } from "@/components/ui/sheet";
 
 const STATUS_TONE: Record<string, string> = { active: "text-[#16a34a]", inactive: "text-slate-400", expired: "text-[#e11d48]", used: "text-[#d97706]" };
 const Star = ({ on }: { on: boolean }) => (
@@ -379,14 +380,14 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
 
       <BottomSheet open={mSheet === "filter"} onClose={() => setMSheet(null)} title="Filter">
         <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Default filters</p>
-        <ul className="space-y-2">
+        <ul className="space-y-0.5">
           {allViews.map((v, i) => {
             const on = v.id === view.id;
             return (
               <li key={v.id}>
                 {i === BUILTIN_VIEWS[module].length && <p className="mb-2 mt-4 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Custom views</p>}
                 <button type="button" onClick={() => { switchView(v.id); setMSheet(null); }}
-                  className={`flex w-full items-center justify-between rounded-xl border px-4 py-3.5 text-left ${on ? "border-[#0f766e] bg-[#f6fbfa] font-medium text-[#0b1f3a]" : "border-slate-200 text-slate-700"}`}>
+                  className={sheetItem(on)}>
                   {shortViewName(module, v)}
                   {on && <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0f766e] text-white"><svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><path d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0z" /></svg></span>}
                 </button>

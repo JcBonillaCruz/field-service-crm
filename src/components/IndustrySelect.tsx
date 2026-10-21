@@ -50,7 +50,7 @@ export default function IndustrySelect({
 
       <ComboboxOptions
         anchor="bottom start"
-        className="z-[60] mt-1 max-h-72 w-[var(--input-width)] overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-[0_12px_40px_rgba(15,40,60,0.14)] empty:invisible"
+        className="z-[100] mt-1 max-h-72 w-[var(--input-width)] overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-[0_12px_40px_rgba(15,40,60,0.14)] empty:invisible"
       >
         {groups.length === 0 && (
           <div className="px-4 py-3 text-sm text-slate-500">

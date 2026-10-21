@@ -18,8 +18,9 @@ export type PaperPrefs = {
 };
 
 // El documento como se ve en "PDF" (mismo diseño que el PDF real), en cualquiera de las 30 plantillas.
-export default function DocPaper({ doc, lines, prefs, companyName, status, variant = "full", ribbon = true, compact = false }: {
+export default function DocPaper({ doc, lines, prefs, companyName, status, variant = "full", ribbon = true, compact = false, stack = true }: {
   doc: SalesDoc; lines: SalesLine[]; prefs: PaperPrefs; companyName: string; status?: Status; variant?: PaperVariant; ribbon?: boolean; compact?: boolean;
+  stack?: boolean; // en el celular, los artículos se ven en renglones (sin deslizar de lado)
 }) {
   const s = pdfOf(prefs.pdf_settings);
   const tp = tplOf(s.template);
@@ -52,7 +53,8 @@ export default function DocPaper({ doc, lines, prefs, companyName, status, varia
 
   const logo = prefs.logo_url ? (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={prefs.logo_url} alt={companyName} className={`mb-3 ${logoH} max-w-[320px] object-contain ${tp.header === "centered" ? "mx-auto" : tp.header === "reversed" ? "sm:ml-auto" : ""}`} />
+    <img src={prefs.logo_url} alt={companyName} style={s.logo_px > 0 ? { maxHeight: s.logo_px, maxWidth: Math.max(320, s.logo_px * 2.2) } : undefined}
+      className={`mb-3 ${s.logo_px > 0 ? "" : `${logoH} max-w-[320px]`} object-contain ${tp.header === "centered" ? "mx-auto" : tp.header === "reversed" ? "sm:ml-auto" : ""}`} />
   ) : null;
   const ic = (d: string) => (tp.icons ? <TI d={d} accent={A} /> : null);
   const orgLine = (d: string, v?: string) => (v ? <p className={tp.icons ? "mt-1 flex items-start" : ""}>{ic(d)}<span className="whitespace-pre-line">{v}</span></p> : null);
@@ -143,7 +145,24 @@ export default function DocPaper({ doc, lines, prefs, companyName, status, varia
 
           {doc.subject && <p className="mt-6"><span className="text-slate-500">Subject :</span><br /><span className="text-[#0b1f3a]">{doc.subject}</span></p>}
 
-          <div className="mt-6 overflow-x-auto">
+          {stack && (
+            <div className="mt-6 sm:hidden print:hidden">
+              <div className="flex justify-between rounded-t-md px-3 py-2 text-[0.92em] font-medium" style={th}><span>Items</span>{priced && <span>Amount</span>}</div>
+              {rows.length === 0 && <p className="px-3 py-6 text-center text-slate-400">No items</p>}
+              {rows.map((l, i) => (
+                <div key={l.id ?? i} className="flex items-start justify-between gap-3 border-b border-slate-200 px-3 py-3">
+                  <div className="min-w-0">
+                    <p className="text-[#0b1f3a]">{i + 1}. {l.name}</p>
+                    {l.description && <p className="whitespace-pre-line text-[0.92em] text-slate-500">{l.description}</p>}
+                    <p className="mt-1 text-[0.92em] text-slate-500 tabular-nums">{num2(l.quantity)}{l.unit ? ` ${l.unit}` : ""}{priced ? ` × ${num2(l.rate)}` : ""}</p>
+                  </div>
+                  {priced && <p className="shrink-0 font-medium tabular-nums text-[#0b1f3a]">{num2((Number(l.quantity) || 0) * (Number(l.rate) || 0))}</p>}
+                  {variant === "packing" && <span className="mt-1 inline-block h-4 w-4 shrink-0 rounded border border-slate-400" />}
+                </div>
+              ))}
+            </div>
+          )}
+          <div className={`mt-6 overflow-x-auto ${stack ? "hidden sm:block print:block" : ""}`}>
             <table className={`w-full border-collapse ${tp.receipt ? "" : "min-w-[460px]"}`}>
               <thead>
                 <tr className="text-left text-[0.92em]" style={th}>
@@ -173,7 +192,7 @@ export default function DocPaper({ doc, lines, prefs, companyName, status, varia
 
           {priced && (
             <div className="mt-2 flex justify-end">
-              <table className={`w-full ${tp.receipt ? "" : "max-w-[330px]"} ${tp.totals === "box" ? "mt-2 border border-slate-300" : ""}`}>
+              <table className={`w-full ${tp.receipt ? "" : "sm:max-w-[330px]"} ${tp.totals === "box" ? "mt-2 border border-slate-300" : ""}`}>
                 <tbody>
                   <tr><td className="py-2 pr-6 text-right">Sub Total</td><td className="py-2 pr-3 text-right tabular-nums">{num2(disc.gross)}</td></tr>
                   {disc.total > 0 && <tr><td className="py-1.5 pr-6 text-right">{discLabel}</td><td className="py-1.5 pr-3 text-right tabular-nums text-[#e11d48]">(-) {num2(disc.total)}</td></tr>}

@@ -1,0 +1,77 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { DashboardData, EMPTY_DATA } from "@/lib/dashboard-data";
+import { SalesDoc, Subscription, balanceOf, daysBetween, today } from "@/lib/sales";
+
+export type MobileStats = {
+  total: number; current: number; overdue: number; aging: number[];
+  months: string[]; income: number[]; receipts: number[];
+  revenue12: number; income12: number; receipts12: number; mrr: number; activeSubs: number; arpu: number;
+};
+
+const ymd = (d: Date) => d.toISOString().slice(0, 10);
+const monthly = (s: Pick<Subscription, "total" | "bill_every" | "bill_unit">) =>
+  (Number(s.total) || 0) / Math.max(1, s.bill_every) * (s.bill_unit === "week" ? 52 / 12 : s.bill_unit === "year" ? 1 / 12 : 1);
+
+// Llena el dashboard con lo que de verdad pasa en Quotes / Invoices / Payments / Subscriptions
+export async function loadDashboard(supabase: SupabaseClient, companyId: string): Promise<{ data: DashboardData; mobile: MobileStats }> {
+  const [{ data: inv }, { data: pays }, { data: subs }] = await Promise.all([
+    supabase.from("sales_docs").select("*").eq("company_id", companyId).eq("kind", "invoice").not("status", "in", "(draft,void)").limit(10000),
+    supabase.from("sales_payments").select("kind, amount, paid_on").eq("company_id", companyId).limit(20000),
+    supabase.from("subscriptions").select("*").eq("company_id", companyId).limit(5000),
+  ]);
+  const invoices = (inv ?? []) as SalesDoc[];
+  const payments = (pays ?? []).filter((p) => p.kind === "payment");
+  const subscriptions = (subs ?? []) as Subscription[];
+  const t = today();
+
+  // Fotos mensuales del MRR y suscripciones activas (24 meses)
+  const mrr: { date: string; amount: number }[] = []; const active: { date: string; amount: number }[] = [];
+  const now = new Date();
+  for (let i = 23; i >= 0; i--) {
+    const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+    const e = i === 0 ? t : ymd(end);
+    const live = subscriptions.filter((s) => s.start_date <= e && (!s.cancelled_at || s.cancelled_at.slice(0, 10) > e) && s.status !== "paused");
+    mrr.push({ date: e, amount: Math.round(live.reduce((a, s) => a + monthly(s), 0) * 100) / 100 });
+    active.push({ date: e, amount: live.length });
+  }
+  const data: DashboardData = {
+    ...EMPTY_DATA,
+    invoices: invoices.map((d) => ({ date: d.doc_date, amount: Number(d.total) })),
+    payments: payments.map((p) => ({ date: p.paid_on, amount: Number(p.amount) })),
+    openInvoices: invoices.filter((d) => balanceOf(d) > 0 && d.status !== "written_off").map((d) => ({ due: d.due_date || d.doc_date, balance: balanceOf(d) })),
+    mrr, activeSubs: active,
+    subEvents: subscriptions.flatMap((s) => [
+      { date: s.created_at.slice(0, 10), type: "signup" as const },
+      ...(s.start_date <= t ? [{ date: s.start_date, type: "activation" as const }] : []),
+      ...(s.cancelled_at ? [{ date: s.cancelled_at.slice(0, 10), type: "cancellation" as const }] : []),
+    ]),
+  };
+
+  // Resumen para el celular
+  const aging = [0, 0, 0, 0, 0];
+  let current = 0, overdue = 0;
+  data.openInvoices.forEach((o) => {
+    const late = daysBetween(o.due, t);
+    if (late <= 0) { current += o.balance; aging[0] += o.balance; }
+    else { overdue += o.balance; aging[late <= 15 ? 1 : late <= 30 ? 2 : late <= 45 ? 3 : 4] += o.balance; }
+  });
+  const months: string[] = []; const income: number[] = []; const receipts: number[] = [];
+  for (let i = 12; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = ymd(d).slice(0, 7);
+    months.push(d.toLocaleDateString("en-US", { month: "short" }));
+    income.push(data.invoices.filter((x) => x.date.startsWith(key)).reduce((a, x) => a + x.amount, 0));
+    receipts.push(data.payments.filter((x) => x.date.startsWith(key)).reduce((a, x) => a + x.amount, 0));
+  }
+  const since = ymd(new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()));
+  const receipts12 = data.payments.filter((x) => x.date >= since).reduce((a, x) => a + x.amount, 0);
+  const income12 = data.invoices.filter((x) => x.date >= since).reduce((a, x) => a + x.amount, 0);
+  const mrrNow = mrr[mrr.length - 1]?.amount ?? 0; const activeNow = active[active.length - 1]?.amount ?? 0;
+  return {
+    data,
+    mobile: {
+      total: current + overdue, current, overdue, aging, months, income, receipts, revenue12: receipts12, income12, receipts12,
+      mrr: mrrNow, activeSubs: activeNow, arpu: activeNow ? mrrNow / activeNow : 0,
+    },
+  };
+}

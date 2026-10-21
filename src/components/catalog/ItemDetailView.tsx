@@ -8,6 +8,7 @@ import { FIELD_LABELS, HistoryRow, Item, usd } from "@/lib/catalog";
 import { CloseButton, HistoryTable, ICONS, MenuAction, MoreMenu, PencilButton, Tabs, Timeline } from "@/components/catalog/DetailBits";
 import BottomSheet from "@/components/customers/BottomSheet";
 import MobileSortSheet from "@/components/customers/MobileSortSheet";
+import { sheetItem } from "@/components/ui/sheet";
 
 const TABS = ["Overview", "Transactions", "History"];
 
@@ -396,10 +397,10 @@ function MTransactions() {
       </div>
 
       <BottomSheet open={sheet === "kind"} onClose={() => setSheet(null)} title="Show">
-        <ul className="space-y-2">
+        <ul className="space-y-0.5">
           {(["Quotes", "Invoices"] as const).map((k) => (
             <li key={k}><button type="button" onClick={() => { setKind(k); setStatus("All"); setSheet(null); }}
-              className={`flex w-full items-center justify-between rounded-xl border px-4 py-3.5 text-left ${kind === k ? "border-[#0f766e] bg-[#f6fbfa] font-medium text-[#0b1f3a]" : "border-slate-200 text-slate-700"}`}>
+              className={sheetItem(kind === k)}>
               {k}{kind === k && <CheckDot />}
             </button></li>
           ))}

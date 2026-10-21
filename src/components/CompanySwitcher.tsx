@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import CompanyBadge from "@/components/CompanyBadge";
+import CompanyEditModal from "@/components/CompanyEditModal";
 import { CompanySummary, ROLE_LABEL } from "@/lib/types";
 
 export default function CompanySwitcher({
@@ -24,6 +25,7 @@ export default function CompanySwitcher({
   const [confirm, setConfirm] = useState<{ id: string; name: string; kind: "delete" | "leave" } | null>(null);
   const [confirmText, setConfirmText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const current = companies.find((c) => c.id === currentId) ?? null;
 
@@ -144,6 +146,9 @@ export default function CompanySwitcher({
                           <div className="flex flex-wrap gap-2 px-4 pb-3">
                             <button type="button" onClick={() => { onSwitch(c.id); close(); }} className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">Open</button>
                             {(c.role === "owner" || c.role === "manager") && (
+                              <button type="button" onClick={() => { setEditId(c.id); setMenuFor(null); }} className="rounded-lg border border-[#bfe7de] bg-[#f3fbf8] px-3 py-1.5 text-sm font-medium text-[#0f766e] hover:bg-[#e9f7f4]">Edit</button>
+                            )}
+                            {(c.role === "owner" || c.role === "manager") && (
                               <button type="button" onClick={() => { setRenameId(c.id); setRenameValue(c.name); setMenuFor(null); }} className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">Rename</button>
                             )}
                             {isOwner ? (
@@ -160,13 +165,27 @@ export default function CompanySwitcher({
               })}
             </ul>
 
-            <button type="button" onClick={() => { close(); onNewCompany(); }}
-              className="flex items-center gap-2 border-t border-slate-200 px-6 py-4 text-sm font-semibold text-[#0f766e] hover:bg-slate-50">
-              <span className="text-lg leading-none">+</span> New organization
-            </button>
+            {/* Nueva organización: tarjeta animada para que se vea a la primera */}
+            <div className="border-t border-slate-200 p-4">
+              <button type="button" onClick={() => { close(); onNewCompany(); }}
+                className="group relative flex w-full items-center gap-3 overflow-hidden rounded-2xl border border-[#bfe7de] bg-gradient-to-r from-[#f3fbf8] via-white to-[#fff6ef] px-4 py-3.5 text-left shadow-[0_6px_20px_rgba(15,118,110,0.10)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(15,118,110,0.18)] active:scale-[0.98]">
+                <span className="pointer-events-none absolute -left-16 top-0 h-full w-12 -skew-x-12 bg-white/80 animate-[bp-shine_3.2s_ease-in-out_infinite]" />
+                <span className="relative flex h-11 w-11 shrink-0 items-center justify-center">
+                  <span className="absolute inset-0 rounded-full bg-[#14a39a]/25 animate-ping" style={{ animationDuration: "2.4s" }} />
+                  <span className="relative flex h-11 w-11 items-center justify-center rounded-full bg-[#0f766e] text-white transition-transform duration-300 group-hover:rotate-90">
+                    <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>
+                  </span>
+                </span>
+                <span className="relative min-w-0">
+                  <span className="block text-[15px] font-semibold text-[#0b1f3a]">New organization</span>
+                  <span className="block text-[12px] text-slate-500">Add another business with its own customers and invoices</span>
+                </span>
+              </button>
+            </div>
           </aside>
         </div>
       )}
+      <CompanyEditModal companyId={editId} open={Boolean(editId)} onClose={() => setEditId(null)} />
     </div>
   );
 }

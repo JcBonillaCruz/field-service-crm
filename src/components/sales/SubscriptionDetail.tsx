@@ -7,6 +7,7 @@ import { db, invoiceFromSubscription, logActivity } from "@/lib/sales-client";
 import { Activity, Comment, FREQ_LABEL, SalesDoc, SalesLine, SalesPrefs, Subscription, addressLines, balanceOf, fmtD, invoiceStatus, money, subStatus } from "@/lib/sales";
 import { CloseButton } from "@/components/catalog/DetailBits";
 import BottomSheet from "@/components/customers/BottomSheet";
+import { sheetAction } from "@/components/ui/sheet";
 import PrefsPanel from "@/components/sales/PrefsPanel";
 import { CommentsPanel } from "@/components/sales/DocModals";
 import { ActivityList, Divider, I, Ico, StatusPill, ToolButton, ToolItem, ToolMenu, Toast } from "@/components/sales/SalesBits";
@@ -181,12 +182,12 @@ export default function SubscriptionDetail({ data, prefs, actor }: {
       </div>
 
       <BottomSheet open={sheet} onClose={() => setSheet(false)} title={sub.number}>
-        <ul className="space-y-1.5">
+        <ul className="space-y-0.5">
           {[{ label: "Edit", icon: I.edit, href: `${base}/${sub.id}/edit` } as ToolItem, { label: "Create Invoice", icon: I.invoice, onClick: createInvoice, hidden: !active }, { label: "Comments", icon: I.comment, onClick: () => setPanel("comments") }, ...more]
             .filter((a) => !a.hidden).map((a) => (
               <li key={a.label}>
-                {a.href ? <Link href={a.href} className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-[15px] text-slate-700">{a.icon && <Ico d={a.icon} className="h-5 w-5 text-[#0f766e]" />}{a.label}</Link> : (
-                  <button type="button" onClick={() => { setSheet(false); a.onClick?.(); }} className={`flex w-full items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-left text-[15px] ${a.danger ? "text-red-600" : "text-slate-700"}`}>
+                {a.href ? <Link href={a.href} className={`${sheetAction} text-slate-700`}>{a.icon && <Ico d={a.icon} className="h-5 w-5 text-[#0f766e]" />}{a.label}</Link> : (
+                  <button type="button" onClick={() => { setSheet(false); a.onClick?.(); }} className={`${sheetAction} ${a.danger ? "text-red-600" : "text-slate-700"}`}>
                     {a.icon && <Ico d={a.icon} className={`h-5 w-5 ${a.danger ? "" : "text-[#0f766e]"}`} />}{a.label}
                   </button>
                 )}

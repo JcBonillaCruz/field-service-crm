@@ -14,6 +14,10 @@ export default function CreateCompanyForm({ onDone }: { onDone?: () => void }) {
   const [name, setName] = useState("");
   const [industry, setIndustry] = useState("");
   const [phone, setPhone] = useState("");
+  const [more, setMore] = useState(false);
+  const [email, setEmail] = useState("");
+  const [website, setWebsite] = useState("");
+  const [address, setAddress] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -33,6 +37,12 @@ export default function CreateCompanyForm({ onDone }: { onDone?: () => void }) {
     setSaving(false);
 
     if (error || !data) return setError("The company couldn't be created. Try again in a moment.");
+    // Datos opcionales: se guardan en la compañía y salen en los PDFs (se pueden editar después)
+    if (email.trim() || website.trim() || address.trim()) {
+      const s = createClient();
+      await s.from("companies").update({ email: email.trim() || null, website: website.trim() || null, address: address.trim() || null }).eq("id", data as string);
+      await s.from("sales_prefs").upsert({ company_id: data as string, org_info: { phone, email: email.trim(), website: website.trim(), address: address.trim() } });
+    }
     setCurrentCompany(data as string);
     onDone?.();
     router.refresh();
@@ -57,6 +67,18 @@ export default function CreateCompanyForm({ onDone }: { onDone?: () => void }) {
           inputMode="tel" maxLength={14}
           onChange={(e) => setPhone(formatPhone(e.target.value))} className={inputClass} />
       </div>
+
+      <button type="button" onClick={() => setMore((v) => !v)} className="flex items-center gap-1.5 text-sm font-medium text-[#0f766e]">
+        <svg viewBox="0 0 20 20" className={`h-4 w-4 transition-transform ${more ? "rotate-90" : ""}`} fill="currentColor"><path d="M7 5l6 5-6 5z" /></svg>
+        More details <span className="font-normal text-slate-400">(optional, you can add them later)</span>
+      </button>
+      {more && (
+        <div className="space-y-3 animate-[bp-fade_0.2s_ease-out]">
+          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Business email" className={inputClass} />
+          <input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="Website" className={inputClass} />
+          <textarea rows={2} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Business address" className={inputClass} />
+        </div>
+      )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 

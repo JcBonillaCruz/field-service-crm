@@ -6,7 +6,7 @@ import NoAccess from "@/components/customers/NoAccess";
 import TemplateGallery from "@/components/settings/TemplateGallery";
 
 // Galería de plantillas del PDF (página completa, no pop-up)
-export default async function PdfTemplatesPage({ searchParams }: { searchParams: { for?: string } }) {
+export default async function PdfTemplatesPage({ searchParams }: { searchParams: { for?: string; back?: string } }) {
   const { supabase, current } = await getSession();
   if (!current) redirect("/dashboard");
   if (!canManageSales(current.role)) return <NoAccess />;
@@ -36,5 +36,6 @@ export default async function PdfTemplatesPage({ searchParams }: { searchParams:
       { position: 2, item_id: null, name: "Labor", description: "Technician hours", quantity: 2, unit: "hr", rate: 125, discount: 0, discount_type: "percent", amount: 250 },
     ];
   }
-  return <TemplateGallery companyId={current.id} prefs={prefs} company={current.name} sample={sample} sampleLines={lines} />;
+    const back = searchParams.back && searchParams.back.startsWith("/dashboard/") && !searchParams.back.startsWith("//") ? searchParams.back : null;
+  return <TemplateGallery companyId={current.id} prefs={prefs} company={current.name} sample={sample} sampleLines={lines} back={back} kind={kind} />;
 }

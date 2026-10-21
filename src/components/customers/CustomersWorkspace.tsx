@@ -12,6 +12,7 @@ import BottomSheet from "@/components/customers/BottomSheet";
 import MobileSortSheet from "@/components/customers/MobileSortSheet";
 import { cityLine } from "@/lib/customers";
 import { ListRow, MOBILE_FILTERS, VIEWS, filterLabel, filterSortCustomers, readListParams } from "@/lib/customer-list";
+import { sheetItem } from "@/components/ui/sheet";
 
 const dash = <span className="text-slate-300">—</span>;
 const COLS = "md:grid-cols-[2fr_1.6fr_2fr_1.3fr_1.4fr]";
@@ -193,13 +194,13 @@ export default function CustomersWorkspace({
       {/* Hoja: Filtro (móvil) */}
       <BottomSheet open={mSheet === "filter"} onClose={() => setMSheet(null)} title="Filter">
         <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Default filters</p>
-        <ul className="space-y-2">
+        <ul className="space-y-0.5">
           {MOBILE_FILTERS.map((v) => {
             const active = v.value === params.view;
             return (
               <li key={v.value}>
                 <button type="button" onClick={() => { switchView(v.value); setMSheet(null); }}
-                  className={`flex w-full items-center justify-between rounded-xl border px-4 py-3.5 text-left ${active ? "border-[#0f766e] bg-[#f6fbfa] font-medium text-[#0b1f3a]" : "border-slate-200 text-slate-700"}`}>
+                  className={sheetItem(active)}>
                   {v.label}
                   {active && (
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0f766e] text-white">

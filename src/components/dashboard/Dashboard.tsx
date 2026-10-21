@@ -1,5 +1,7 @@
 "use client";
 
+import type { MobileStats } from "@/lib/dashboard-server";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Role } from "@/lib/types";
@@ -13,9 +15,11 @@ const TABS: {label:string;icon:string}[] = [
   {label:"Help",icon:"M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"},
 ];
 
-export default function Dashboard({ firstName, companyName, industry, role, counts, daysLeft }: {
-  firstName: string; companyName: string; industry: string; role: Role; counts: Counts; daysLeft: number;
+export default function Dashboard({ firstName, companyName, industry, role, counts, daysLeft, stats }: {
+  firstName: string; companyName: string; industry: string; role: Role; counts: Counts; daysLeft: number; stats?: MobileStats | null;
 }) {
+  const $ = (v: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(v || 0);
+  const st = stats;
   const [tab, setTab] = useState("Dashboard");
   const [m, setM] = useState(false);
   const [recvOpen, setRecvOpen] = useState(false);
@@ -48,21 +52,21 @@ export default function Dashboard({ firstName, companyName, industry, role, coun
               {/* formas decorativas */}
               <svg viewBox="0 0 400 150" className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.08]" preserveAspectRatio="none"><ellipse cx="320" cy="20" rx="200" ry="100" fill="white"/><ellipse cx="100" cy="130" rx="160" ry="70" fill="white"/></svg>
               <p className="relative text-sm font-medium text-white/70">Total Receivables</p>
-              <p className="relative mt-1 text-[42px] font-bold leading-none tracking-tight">$0.00</p>
+              <p className="relative mt-1 text-[42px] font-bold leading-none tracking-tight">{$(st?.total ?? 0)}</p>
             </div>
             {/* Current / Overdue (FUERA de la tarjeta, en blanco) */}
             <div className="rounded-b-2xl border border-t-0 border-slate-200 bg-white">
               <button type="button" onClick={()=>setRecvOpen(!recvOpen)} className="flex w-full items-center justify-between px-6 py-4">
                 <div className="flex gap-8 text-sm">
-                  <span><span className="font-medium text-emerald-600">Current</span> <span className="text-[#0b1f3a]">$0.00</span></span>
-                  <span><span className="font-medium text-red-500">Overdue</span> <span className="text-[#0b1f3a]">$0.00</span></span>
+                  <span><span className="font-medium text-emerald-600">Current</span> <span className="text-[#0b1f3a]">{$(st?.current ?? 0)}</span></span>
+                  <span><span className="font-medium text-red-500">Overdue</span> <span className="text-[#0b1f3a]">{$(st?.overdue ?? 0)}</span></span>
                 </div>
                 <svg viewBox="0 0 20 20" className={`h-4 w-4 text-slate-400 transition-transform ${recvOpen?"rotate-180":""}`} fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z"/></svg>
               </button>
               {recvOpen && (
                 <div className="border-t border-slate-100 px-6 pb-5 pt-3">
-                  <AgingChart mounted={m}/>
-                  <p className="mt-3 text-xs text-slate-400">Aging chart populates with real invoice data.</p>
+                  <AgingChart mounted={m} values={st?.aging ?? [0,0,0,0,0]}/>
+                  <p className="mt-3 text-xs text-slate-400">Unpaid invoices by days overdue.</p>
                 </div>
               )}
             </div>
@@ -98,7 +102,13 @@ export default function Dashboard({ firstName, companyName, industry, role, coun
           {/* ══════ 3. Net Revenue ══════ */}
           <SectionCard style={d(2)} className={fade(2)} title="Net Revenue" icon="M22 12h-4l-3 9L9 3l-3 9H2"
             period={getPeriod("rev")} onPeriod={()=>setPeriodSheet("rev")}>
-            <EmptyChart msg="Once you start to receive or record invoice payments, you can view your total revenue, minus refunds."/>
+            {st && st.revenue12 > 0 ? (
+              <div className="rounded-2xl bg-[#f3fbf8] px-5 py-5">
+                <p className="text-sm text-slate-500">Payments received, last 12 months</p>
+                <p className="mt-1 text-3xl font-bold text-[#0b1f3a]">{$(st.revenue12)}</p>
+                <MiniBars values={st.receipts} labels={st.months} color="#0f766e" mounted={m}/>
+              </div>
+            ) : <EmptyChart msg="Once you start to receive or record invoice payments, you can view your total revenue, minus refunds."/>}
           </SectionCard>
 
           {/* ══════ 4. Subscription Metrics (scroll) ══════ */}
@@ -111,7 +121,7 @@ export default function Dashboard({ firstName, companyName, industry, role, coun
               <button type="button" onClick={()=>setPeriodSheet("sub")} className="text-sm font-medium text-slate-500">{getPeriod("sub")} ▾</button>
             </div>
             <div className="mt-4 flex gap-3 overflow-x-auto px-4 pb-1" style={{scrollbarWidth:"none"}}>
-              {([{l:"MRR",v:"$0.00"},{l:"Active Subscriptions",v:"0"},{l:"ARPU",v:"$0.00"},{l:"Churn Rate",v:"0.00%"},{l:"LTV",v:"$0.00"}]).map(c=>(
+              {([{l:"MRR",v:$(st?.mrr ?? 0)},{l:"Active Subscriptions",v:String(st?.activeSubs ?? 0)},{l:"ARPU",v:$(st?.arpu ?? 0)},{l:"Churn Rate",v:"0.00%"},{l:"LTV",v:$((st?.arpu ?? 0) * 12)}]).map(c=>(
                 <div key={c.l} className="w-56 shrink-0 rounded-2xl border border-slate-200 bg-white p-5">
                   <p className="text-sm font-semibold text-[#0b1f3a]">{c.l}</p>
                   <p className="mt-3 text-3xl font-bold text-[#0b1f3a]">{c.v}</p>
@@ -131,10 +141,10 @@ export default function Dashboard({ firstName, companyName, industry, role, coun
           {/* ══════ 6. Income and Expense ══════ */}
           <SectionCard style={d(5)} className={fade(5)} title="Income and Expense" icon="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
             period={getPeriod("inc")} onPeriod={()=>setPeriodSheet("inc")}>
-            <BarChart mounted={m}/>
+            <BarChart mounted={m} months={st?.months} income={st?.income} receipts={st?.receipts}/>
             <div className="mt-5 grid grid-cols-3 text-center">
-              <div><p className="text-sm font-medium text-blue-600">Income</p><p className="mt-1 text-xl font-bold text-[#0b1f3a]">$0.00</p></div>
-              <div><p className="text-sm font-medium text-teal-600">Receipts</p><p className="mt-1 text-xl font-bold text-[#0b1f3a]">$0.00</p></div>
+              <div><p className="text-sm font-medium text-blue-600">Income</p><p className="mt-1 text-xl font-bold text-[#0b1f3a]">{$(st?.income12 ?? 0)}</p></div>
+              <div><p className="text-sm font-medium text-teal-600">Receipts</p><p className="mt-1 text-xl font-bold text-[#0b1f3a]">{$(st?.receipts12 ?? 0)}</p></div>
               <div><p className="text-sm font-medium text-orange-500">Expense</p><p className="mt-1 text-xl font-bold text-[#0b1f3a]">$0.00</p></div>
             </div>
           </SectionCard>
@@ -209,37 +219,54 @@ function EmptyChart({msg}:{msg:string}){
   );
 }
 
-function AgingChart({mounted}:{mounted:boolean}){
-  const bars = [{l:"Current",v:0},{l:"1–15",v:0},{l:"16–30",v:0},{l:"31–45",v:0},{l:"> 45",v:0}];
+function AgingChart({mounted,values}:{mounted:boolean;values:number[]}){
+  const labels=["Current","1–15","16–30","31–45","> 45"]; const max=Math.max(1,...values);
   return (
     <div className="flex h-32 items-end gap-3 border-b border-slate-100 pb-2">
-      {bars.map((b,i)=>(
-        <div key={b.l} className="flex flex-1 flex-col items-center gap-1">
-          <div className={`mx-auto w-6 rounded-t bg-[#e8a94e] transition-all duration-700`}
-            style={{height:mounted && b.v ? `${(b.v/2000)*100}px` : "3px", transitionDelay:`${i*100}ms`}}/>
-          <span className="text-[10px] text-slate-400">{b.l}</span>
+      {labels.map((l,i)=>(
+        <div key={l} className="flex flex-1 flex-col items-center gap-1">
+          <div className="mx-auto w-6 rounded-t bg-[#e8a94e] transition-all duration-700"
+            style={{height:mounted && values[i] ? `${Math.max(4,(values[i]/max)*96)}px` : "3px", transitionDelay:`${i*100}ms`}} title={`$${values[i].toFixed(2)}`}/>
+          <span className="text-[10px] text-slate-400">{l}</span>
         </div>
       ))}
     </div>
   );
 }
 
-function BarChart({mounted}:{mounted:boolean}){
-  const months = ["Oct","Nov","Dec","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"];
+function MiniBars({values,labels,color,mounted}:{values:number[];labels:string[];color:string;mounted:boolean}){
+  const max=Math.max(1,...values);
+  return (
+    <div className="mt-4 flex h-20 items-end gap-1.5">
+      {values.map((v,i)=>(
+        <div key={i} className="flex flex-1 flex-col items-center gap-1">
+          <div className="w-full rounded-t transition-all duration-700" style={{height:mounted&&v?`${Math.max(3,(v/max)*64)}px`:"2px",background:color,opacity:v?1:0.25,transitionDelay:`${i*40}ms`}}/>
+          <span className="text-[8px] text-slate-400">{labels[i]}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BarChart({mounted,months,income,receipts}:{mounted:boolean;months?:string[];income?:number[];receipts?:number[]}){
+  const mo = months ?? ["Oct","Nov","Dec","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"];
+  const inc = income ?? mo.map(()=>0), rec = receipts ?? mo.map(()=>0);
+  const max = Math.max(1, ...inc, ...rec);
+  const h = (v:number) => mounted && v ? `${Math.max(3,(v/max)*140)}px` : "3px";
   return (
     <div className="overflow-x-auto" style={{scrollbarWidth:"none"}}>
       <div className="flex h-40 items-end gap-2 border-b border-slate-100 pb-1" style={{minWidth:"340px"}}>
-        {months.map((mo,i)=>(
-          <div key={mo+i} className="flex flex-1 flex-col items-center gap-0.5">
-            <div className="flex gap-px">
-              <div className="w-[5px] rounded-t bg-blue-500/30" style={{height:"3px"}}/>
-              <div className="w-[5px] rounded-t bg-teal-500/30" style={{height:"3px"}}/>
+        {mo.map((m,i)=>(
+          <div key={m+i} className="flex flex-1 flex-col items-center gap-0.5">
+            <div className="flex items-end gap-px">
+              <div className={`w-[5px] rounded-t transition-all duration-700 ${inc[i]?"bg-blue-500":"bg-blue-500/30"}`} style={{height:h(inc[i]),transitionDelay:`${i*40}ms`}}/>
+              <div className={`w-[5px] rounded-t transition-all duration-700 ${rec[i]?"bg-teal-500":"bg-teal-500/30"}`} style={{height:h(rec[i]),transitionDelay:`${i*40}ms`}}/>
             </div>
           </div>
         ))}
       </div>
       <div className="mt-1 flex gap-2" style={{minWidth:"340px"}}>
-        {months.map((mo,i)=><span key={mo+i} className="flex-1 text-center text-[9px] text-slate-400">{mo}</span>)}
+        {mo.map((m,i)=><span key={m+i} className="flex-1 text-center text-[9px] text-slate-400">{m}</span>)}
       </div>
     </div>
   );

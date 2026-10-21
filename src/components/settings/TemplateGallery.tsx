@@ -15,14 +15,14 @@ function Thumb({ tpl, doc, lines, prefs, company, scale }: { tpl: TplDef; doc: S
   return (
     <div className="pointer-events-none relative overflow-hidden bg-white" style={{ height: 1060 * scale }}>
       <div className="absolute left-0 top-0 origin-top-left" style={{ width: 820, transform: `scale(${scale})` }}>
-        <DocPaper doc={doc} lines={lines} prefs={p} companyName={company} ribbon={false} />
+        <DocPaper doc={doc} lines={lines} prefs={p} companyName={company} ribbon={false} stack={false} />
       </div>
     </div>
   );
 }
 
-export default function TemplateGallery({ companyId, prefs, company, sample, sampleLines }: {
-  companyId: string; prefs: SalesPrefs; company: string; sample: SalesDoc; sampleLines: SalesLine[];
+export default function TemplateGallery({ companyId, prefs, company, sample, sampleLines, back, kind }: {
+  companyId: string; prefs: SalesPrefs; company: string; sample: SalesDoc; sampleLines: SalesLine[]; back: string | null; kind: "quote" | "invoice";
 }) {
   const router = useRouter();
   const [cat, setCat] = useState<"all" | TplCategory>("all");
@@ -43,12 +43,10 @@ export default function TemplateGallery({ companyId, prefs, company, sample, sam
     if (error) { setToast("It couldn't be saved. Did you run the SQL for Paso 3.31?"); setTimeout(() => setToast(""), 3000); return; }
     setCurrent(t.id); setPreview(null);
     setToast(`"${t.name}" is now your template.`);
-    // Te regresa solo a donde estabas, ya con el cambio
+    // Te regresa solo al documento donde estabas (o a la lista), ya con el cambio
     setTimeout(() => {
-      if (window.opener) { window.close(); return; }
-      let back = "/dashboard/settings";
-      try { const r = new URL(document.referrer); if (r.origin === location.origin && !r.pathname.startsWith("/dashboard/settings/pdf-templates")) back = r.pathname + r.search; } catch { /* sin referer */ }
-      window.location.href = back;
+      if (window.opener && !back) { window.close(); return; }
+      window.location.href = back || (kind === "quote" ? "/dashboard/quotes" : "/dashboard/invoices");
     }, 450);
   }
 
@@ -57,10 +55,10 @@ export default function TemplateGallery({ companyId, prefs, company, sample, sam
       <div className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-3 px-5 pt-4">
           <div>
-            <Link href="/dashboard/settings" className="text-[13px] font-medium text-[#0f766e] hover:underline">← All Settings</Link>
+            <Link href={back || "/dashboard/settings"} className="text-[13px] font-medium text-[#0f766e] hover:underline">← {back ? `Back to ${kind === "quote" ? "quote" : "invoice"}` : "All Settings"}</Link>
             <h1 className="text-xl font-semibold text-[#0b1f3a]">Choose a Template</h1>
           </div>
-          <button type="button" onClick={() => router.back()} aria-label="Close" className="group/x flex h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-red-50 hover:text-red-600">
+          <button type="button" onClick={() => (back ? router.push(back) : router.back())} aria-label="Close" className="group/x flex h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-red-50 hover:text-red-600">
             <svg viewBox="0 0 20 20" className="h-5 w-5 transition-transform duration-300 group-hover/x:rotate-90" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
           </button>
         </div>
@@ -83,7 +81,7 @@ export default function TemplateGallery({ companyId, prefs, company, sample, sam
                 const on = current === t.id;
                 return (
                   <div key={t.id} className="group">
-                    <div role="button" tabIndex={0} onClick={() => (on ? setPreview(t) : use(t))} onKeyDown={(e) => { if (e.key === "Enter") (on ? setPreview(t) : use(t)); }}
+                    <div role="button" tabIndex={0} onClick={() => setPreview(t)} onKeyDown={(e) => { if (e.key === "Enter") setPreview(t); }}
                       className={`relative cursor-pointer overflow-hidden rounded-xl border-2 bg-white transition-all group-hover:-translate-y-0.5 group-hover:shadow-lg ${on ? "border-[#0f766e] shadow-md" : "border-slate-200"}`}>
                       <Thumb tpl={t} doc={sample} lines={sampleLines} prefs={prefs} company={company} scale={0.24} />
                       {on && <span className="absolute left-2 top-2 rounded-full bg-[#0f766e] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">★ Selected</span>}
@@ -103,7 +101,7 @@ export default function TemplateGallery({ companyId, prefs, company, sample, sam
 
       {preview && (
         <div className="fixed inset-0 z-[90] flex flex-col bg-slate-900/60 animate-[bp-fade_0.2s_ease-out]" onMouseDown={(e) => { if (e.target === e.currentTarget) setPreview(null); }}>
-          <div className="flex items-center justify-between gap-3 bg-white px-5 py-3 shadow">
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white px-4 py-3 shadow sm:px-5">
             <p className="font-semibold text-[#0b1f3a]">{preview.name} <span className="text-sm font-normal text-slate-500">· {CATEGORIES.find((c) => c.id === preview.category)?.name}</span></p>
             <div className="flex items-center gap-2">
               {current !== preview.id ? <button type="button" onClick={() => use(preview)} disabled={!!busy} className="rounded-lg bg-[#0f766e] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0c5f59]">{busy ? "Saving..." : "Use this template"}</button>

@@ -78,8 +78,54 @@ export default function LineItems({ lines, setLines, items, showDiscount = true,
   const td = "border-b border-slate-200 bg-white";
   return (
     <div>
-      {/* La tabla lleva su caja; los botones ⋯ y X quedan AFUERA, a la derecha (como Zoho) */}
-      <div className="overflow-x-auto pb-1">
+      {/* Celular: cada artículo es una tarjeta (sin deslizar de lado) */}
+      <div className="space-y-3 sm:hidden">
+        <p className="text-[15px] font-semibold text-[#0b1f3a]">Items</p>
+        {lines.map((l, i) => (
+          <div key={i} className="rounded-xl border border-slate-200 bg-white p-3 shadow-[0_1px_3px_rgba(15,40,60,0.05)]">
+            <div className="flex items-start gap-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {l.image_url ? <img src={l.image_url} alt="" className="mt-0.5 h-9 w-9 shrink-0 rounded-md border border-slate-200 object-cover" /> : <span className="mt-0.5"><NoImage /></span>}
+              <div className="min-w-0 flex-1">
+                <ItemPicker line={l} items={items} onPick={(it) => pick(i, it)} onText={(t) => set(i, { name: t, item_id: null })} />
+                {(l.name || l.description) && (
+                  <textarea rows={Math.min(5, Math.max(1, (l.description ?? "").split("\n").length))} value={l.description ?? ""} onChange={(e) => set(i, { description: e.target.value })}
+                    placeholder="Add a description" className="mt-1 w-full resize-y rounded-md border border-slate-100 bg-slate-50 px-2 py-1 text-[13px] text-slate-600 focus:border-[#0f766e] focus:bg-white focus:outline-none" />
+                )}
+              </div>
+              <button type="button" aria-label="Remove item" onClick={() => setLines((x) => (x.length === 1 ? [blankLine()] : x.filter((_, j) => j !== i)))} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-red-400 active:bg-red-50">
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m6.5 6.5 7 7M13.5 6.5l-7 7" strokeLinecap="round" /></svg>
+              </button>
+            </div>
+            <div className={`mt-2 grid gap-2 ${showDiscount ? "grid-cols-3" : "grid-cols-2"}`}>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Qty
+                <input inputMode="decimal" value={String(l.quantity)} onChange={(e) => set(i, { quantity: e.target.value.replace(/[^0-9.]/g, "") as unknown as number })} className="mt-0.5 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-right text-[15px] font-normal normal-case tracking-normal text-[#0b1f3a] focus:border-[#0f766e] focus:bg-white focus:outline-none" /></label>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{priceLabel}
+                <input inputMode="decimal" value={String(l.rate)} onFocus={(e) => e.currentTarget.select()} onChange={(e) => set(i, { rate: e.target.value.replace(/[^0-9.]/g, "") as unknown as number })} className="mt-0.5 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-right text-[15px] font-normal normal-case tracking-normal text-[#0b1f3a] focus:border-[#0f766e] focus:bg-white focus:outline-none" /></label>
+              {showDiscount && (
+                <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Discount
+                  <span className="mt-0.5 flex items-center gap-1">
+                    <input inputMode="decimal" value={String(l.discount)} onFocus={(e) => e.currentTarget.select()} onChange={(e) => set(i, { discount: e.target.value.replace(/[^0-9.]/g, "") as unknown as number })} className="w-full min-w-0 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-right text-[15px] font-normal normal-case tracking-normal text-[#0b1f3a] focus:border-[#0f766e] focus:bg-white focus:outline-none" />
+                    <DiscUnit value={l.discount_type} onChange={(v) => set(i, { discount_type: v })} />
+                  </span></label>
+              )}
+            </div>
+            <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2">
+              <button type="button" onClick={() => insertAt(i, [{ ...l, id: undefined }])} className="text-[13px] font-medium text-[#2563eb]">Clone</button>
+              <p className="text-[15px] font-semibold tabular-nums text-[#0b1f3a]">{num2(lineAmount(l))}</p>
+            </div>
+          </div>
+        ))}
+        <button type="button" onClick={() => setLines((l) => [...l, blankLine(l.length)])}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#0f766e] bg-white py-3 text-[16px] font-semibold text-[#0f766e] transition-transform active:scale-[0.98]">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0f766e] text-white"><svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M10 5v10M5 10h10" /></svg></span>
+          Add Line Item
+        </button>
+        <button type="button" onClick={() => { setBulkAt(null); setBulk(true); }} className="w-full text-center text-[14px] font-medium text-[#2563eb]">Add items in bulk</button>
+      </div>
+
+      {/* Computadora: la tabla lleva su caja; los botones ⋯ y X quedan AFUERA, a la derecha (como Zoho) */}
+      <div className="hidden overflow-x-auto pb-1 sm:block">
         <table className="w-full min-w-[760px] border-separate border-spacing-0 text-sm">
           <thead>
             <tr><th colSpan={showDiscount ? 6 : 5} className="rounded-t-xl border border-slate-200 bg-[#fafbfc] px-4 py-3 text-left text-[15px] font-semibold text-[#0b1f3a]">Item Table</th><th className="w-[72px]" /></tr>
@@ -150,7 +196,7 @@ export default function LineItems({ lines, setLines, items, showDiscount = true,
           </tbody>
         </table>
       </div>
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-3 hidden flex-wrap gap-2 sm:flex">
         <button type="button" onClick={() => setLines((l) => [...l, blankLine(l.length)])} className="flex items-center gap-1.5 rounded-lg bg-[#eef6ff] px-3 py-2 text-sm font-medium text-[#0b1f3a] hover:bg-[#e0edff]">
           <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#2563eb] text-white"><svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M10 5v10M5 10h10" /></svg></span>Add New Row
         </button>

@@ -61,11 +61,11 @@ export type OrgInfo = { address?: string; phone?: string; email?: string; websit
 export type PdfTemplate = string;
 export type PdfSettings = {
   template?: PdfTemplate; accent?: string; margin?: "narrow" | "normal" | "wide"; font_size?: "small" | "normal" | "large";
-  logo_size?: "small" | "medium" | "large"; show_org_address?: boolean; footer_text?: string; show_powered?: boolean;
+  logo_size?: "small" | "medium" | "large"; logo_px?: number; show_org_address?: boolean; footer_text?: string; show_powered?: boolean;
 };
 export const TEMPLATES = TEMPLATE_DEFS;
 export const DEFAULT_PDF: Required<PdfSettings> = {
-  template: "standard", accent: "", margin: "normal", font_size: "normal", logo_size: "medium", show_org_address: true, footer_text: "", show_powered: false,
+  template: "standard", accent: "", margin: "normal", font_size: "normal", logo_size: "medium", logo_px: 0, show_org_address: true, footer_text: "", show_powered: false,
 };
 export const pdfOf = (p?: PdfSettings | null): Required<PdfSettings> => {
   const merged = { ...DEFAULT_PDF, ...Object.fromEntries(Object.entries(p ?? {}).filter(([, v]) => v !== undefined && v !== null)) } as Required<PdfSettings>;

@@ -10,6 +10,7 @@ import {
 import DocPaper from "@/components/sales/DocPaper";
 import { CloseButton } from "@/components/catalog/DetailBits";
 import BottomSheet from "@/components/customers/BottomSheet";
+import { sheetAction } from "@/components/ui/sheet";
 import PrefsPanel from "@/components/sales/PrefsPanel";
 import {
   AttachmentsButton, CommentsPanel, ExpectedDateModal, PaymentModal, SendEmailModal, ShareModal,
@@ -371,7 +372,8 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
               {/* El menú Customize sale solo al pasar el mouse sobre el documento (como Zoho) */}
               <div className="group/paper relative mx-auto max-w-[740px]">
                 <div className="absolute right-0 top-0 z-20 opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover/paper:opacity-100 has-[[data-open]]:opacity-100 [@media(hover:none)]:opacity-100">
-                  <CustomizeMenu companyId={doc.company_id} pdf={prefs.pdf_settings} whiteLabel={prefs.white_label} onLogo={() => setModal("prefs")} kind={doc.kind} />
+                  <CustomizeMenu companyId={doc.company_id} pdf={prefs.pdf_settings} whiteLabel={prefs.white_label} onLogo={() => setModal("prefs")} kind={doc.kind}
+                    back={`${base}/${doc.id}`} preview={{ doc, lines, prefs, companyName }} />
                 </div>
                 <DocPaper doc={doc} lines={lines} prefs={prefs} companyName={companyName} status={status} compact />
               </div>
@@ -381,14 +383,14 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
       </div>
 
       <BottomSheet open={mActions} onClose={() => setMActions(false)} title={doc.number}>
-        <ul className="space-y-1.5">
+        <ul className="space-y-0.5">
           {mobileActions.filter((a) => !a.hidden).map((a) => (
             <li key={a.label}>
               {a.href ? (
-                <Link href={a.href} className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-[15px] text-slate-700 active:bg-[#f6fbfa]">{a.icon && <Ico d={a.icon} className="h-5 w-5 text-[#0f766e]" />}{a.label}</Link>
+                <Link href={a.href} className={`${sheetAction} text-slate-700`}>{a.icon && <Ico d={a.icon} className="h-5 w-5 text-[#0f766e]" />}{a.label}</Link>
               ) : (
                 <button type="button" onClick={() => { setMActions(false); a.onClick?.(); }}
-                  className={`flex w-full items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-left text-[15px] active:bg-[#f6fbfa] ${a.danger ? "text-red-600" : "text-slate-700"}`}>
+                  className={`${sheetAction} ${a.danger ? "text-red-600" : "text-slate-700"}`}>
                   {a.icon && <Ico d={a.icon} className={`h-5 w-5 ${a.danger ? "" : "text-[#0f766e]"}`} />}{a.label}
                 </button>
               )}

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import BottomSheet from "@/components/customers/BottomSheet";
 import { SORTS } from "@/lib/customer-list";
+import { sheetItem } from "@/components/ui/sheet";
 
 export default function MobileSortSheet({
   open, onClose, sort, dir, onApply, options = SORTS,
@@ -33,13 +34,13 @@ export default function MobileSortSheet({
             className="rounded-lg bg-[#0f766e] px-6 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f58]">Sort</button>
         </div>
       }>
-      <ul className="space-y-2">
+      <ul className="space-y-0.5">
         {options.map((s) => {
           const active = s.value === sel;
           return (
             <li key={s.value}>
               <button type="button" onClick={() => tap(s.value)}
-                className={`flex w-full items-center justify-between rounded-xl border px-4 py-3.5 text-left ${active ? "border-[#0f766e] bg-[#f6fbfa]" : "border-slate-200"}`}>
+                className={sheetItem(active)}>
                 <span className="flex items-center gap-3">
                   <span className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${active ? "border-[#0f766e]" : "border-slate-300"}`}>
                     {active && <span className="h-2.5 w-2.5 rounded-full bg-[#0f766e]" />}

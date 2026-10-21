@@ -19,7 +19,7 @@ type Info = {
 export default function CustomerDrawer({ customerId }: { customerId: string | null }) {
   const [info, setInfo] = useState<Info | null>(null);
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<"details" | "unpaid" | "activity">("details");
+  const [tab, setTab] = useState<"details" | "unpaid" | "address" | "activity">("details");
 
   useEffect(() => {
     setInfo(null);
@@ -60,9 +60,15 @@ export default function CustomerDrawer({ customerId }: { customerId: string | nu
         </span>
         <svg viewBox="0 0 20 20" className={`h-4 w-4 shrink-0 transition-transform duration-300 ${open ? "rotate-180" : "group-hover:translate-x-0.5"}`} fill="currentColor"><path d="M7.3 5.3a1 1 0 0 1 1.4 0l4 4a1 1 0 0 1 0 1.4l-4 4a1 1 0 0 1-1.4-1.4L10.6 10 7.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
       </button>
-      <button type="button" onClick={() => setOpen(true)} className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-[#0f766e] lg:hidden">
-        View customer details · {unpaid.length} unpaid
-      </button>
+      {/* Como Zoho: Unpaid Invoices | Address | Customer Details */}
+      <div className="mt-2 flex flex-wrap items-center text-[13px] font-medium text-[#0f766e]">
+        {([["unpaid", `Unpaid Invoices${unpaid.length ? ` (${unpaid.length})` : ""}`], ["address", "Address"], ["details", "Customer Details"]] as const).map(([k, l], i) => (
+          <span key={k} className="flex items-center">
+            {i > 0 && <span className="mx-2.5 h-4 w-px bg-slate-300" />}
+            <button type="button" onClick={() => { setTab(k); setOpen(true); }} className="rounded px-0.5 transition-colors hover:text-[#0b1f3a] hover:underline">{l}</button>
+          </span>
+        ))}
+      </div>
 
       {open && <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="fixed inset-0 top-16 z-[59] cursor-default bg-slate-900/10" />}
       <aside style={{ width: W, transform: open ? "translateX(0)" : "translateX(100%)" }}
@@ -80,8 +86,8 @@ export default function CustomerDrawer({ customerId }: { customerId: string | nu
           <div className="rounded-xl bg-[#fff6e0] p-3"><p className="text-[12px] text-[#b45309]">Outstanding Receivables</p><p className="text-lg font-semibold text-[#0b1f3a]">{money(owed)}</p></div>
           <div className="rounded-xl bg-[#e9f7f4] p-3"><p className="text-[12px] text-[#0f766e]">Payment Terms</p><p className="text-lg font-semibold text-[#0b1f3a]">{c.payment_terms || "Due on Receipt"}</p></div>
         </div>
-        <div className="flex gap-6 border-b border-slate-200 px-5">
-          {([["details", "Details"], ["unpaid", `Unpaid Invoices (${unpaid.length})`], ["activity", "Activity"]] as const).map(([k, l]) => (
+        <div className="flex gap-5 overflow-x-auto border-b border-slate-200 px-5 [scrollbar-width:none]">
+          {([["details", "Details"], ["unpaid", `Unpaid (${unpaid.length})`], ["address", "Address"], ["activity", "Activity"]] as const).map(([k, l]) => (
             <button key={k} type="button" onClick={() => setTab(k)} className={`relative py-3 text-[14px] ${tab === k ? "font-semibold text-[#0f766e]" : "text-slate-600 hover:text-[#0b1f3a]"}`}>
               {l}<span className={`absolute inset-x-0 bottom-0 h-[3px] rounded-full bg-[#0f766e] transition-transform ${tab === k ? "scale-x-100" : "scale-x-0"}`} />
             </button>
@@ -110,6 +116,17 @@ export default function CustomerDrawer({ customerId }: { customerId: string | nu
                 </div>
               </div>
               <Link href={`/dashboard/customers/${c.id}`} className="inline-block text-sm font-medium text-[#0f766e] hover:underline">Open customer record →</Link>
+            </div>
+          )}
+          {tab === "address" && (
+            <div className="space-y-2">
+              {info.addresses.map((a) => (
+                <div key={a.id} className="rounded-xl border border-slate-200 p-3 text-[14px]">
+                  <p className="mb-0.5 text-[12px] font-medium text-[#0f766e]">{a.is_primary ? "Billing address" : a.label || "Job site"}</p>
+                  {addressLines(a).map((l, i) => <p key={i} className="text-slate-700">{l}</p>)}
+                </div>
+              ))}
+              {!info.addresses.length && <p className="py-6 text-center text-sm text-slate-500">No addresses yet.</p>}
             </div>
           )}
           {tab === "unpaid" && (unpaid.length === 0 ? <p className="py-6 text-center text-sm text-slate-500">No unpaid invoices.</p> : (

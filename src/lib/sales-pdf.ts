@@ -103,7 +103,7 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
 
   // ---------- Encabezado (izquierda y derecha se miden por separado para que nada se monte) ----------
   const title = variant === "delivery" ? "DELIVERY NOTE" : variant === "packing" ? "PACKING SLIP" : isQuote ? "QUOTE" : "INVOICE";
-  const logoMax = s.logo_size === "small" ? 80 : s.logo_size === "large" ? 190 : 135;
+  const logoMax = s.logo_px > 0 ? s.logo_px * 0.75 : s.logo_size === "small" ? 80 : s.logo_size === "large" ? 190 : 135; // px de pantalla → puntos del PDF
   const titleSize = tp.receipt ? 18 : tp.titleWeight === "bold" ? 22 : 26;
   const titleFont = tp.titleWeight === "bold" ? bold : font;
   const orgLines: [string, string | null][] = s.show_org_address ? [
@@ -112,7 +112,7 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
   ].filter(([l]) => (l as string).trim()) as [string, string | null][] : [];
   const drawLogo = (x: number, yTop: number, align: "left" | "right" | "center") => {
     if (!logo) return yTop;
-    const sc = Math.min(logoMax / logo.height, (tp.receipt ? 200 : 290) / logo.width);
+    const sc = Math.min(logoMax / logo.height, (tp.receipt ? 220 : 400) / logo.width);
     const w = logo.width * sc, h = logo.height * sc;
     const lx = align === "right" ? x - w : align === "center" ? x - w / 2 : x;
     page.drawImage(logo, { x: lx, y: yTop - h, width: w, height: h });
