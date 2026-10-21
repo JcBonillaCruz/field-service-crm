@@ -60,6 +60,8 @@ export default function SalesWorkspace({ module, rows, customViews, companyId, p
       setWidths(JSON.parse(localStorage.getItem(colWidthKey(module, companyId)) || "{}"));
     } catch { /* nada guardado */ }
   }, [module, companyId]);
+  // Desde All Settings: /dashboard/quotes?prefs=1 abre las preferencias
+  useEffect(() => { if (sp.get("prefs") === "1") setPrefsOpen(true); }, [sp]);
 
   const allViews = useMemo(() => [...BUILTIN_VIEWS[module], ...customViews], [module, customViews]);
   const viewId = sp.get("view") || fallbackView;
@@ -218,8 +220,8 @@ export default function SalesWorkspace({ module, rows, customViews, companyId, p
             <svg viewBox="0 0 20 20" className="h-4 w-4 transition-transform group-data-[open]:rotate-180" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
           </MenuButton>
           <MenuItems anchor="bottom end" transition className="z-[80] mt-1 w-64 rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_12px_40px_rgba(15,40,60,0.16)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
-            <MenuItem><Link href={`${base}/new`} className="block rounded-lg px-3 py-2 text-sm text-slate-700 data-[focus]:bg-[#0f766e] data-[focus]:text-white">Create Quote for One-Time Invoice</Link></MenuItem>
-            <MenuItem><Link href="/dashboard/subscriptions/new" className="block rounded-lg px-3 py-2 text-sm text-slate-700 data-[focus]:bg-[#0f766e] data-[focus]:text-white">Create Quote for Subscription</Link></MenuItem>
+            <MenuItem><Link href={`${base}/new`} className="block rounded-lg px-3 py-2 text-sm text-slate-700 data-[focus]:bg-[#e9f7f4] data-[focus]:text-[#0b1f3a]">Create Quote for One-Time Invoice</Link></MenuItem>
+            <MenuItem><Link href="/dashboard/subscriptions/new" className="block rounded-lg px-3 py-2 text-sm text-slate-700 data-[focus]:bg-[#e9f7f4] data-[focus]:text-[#0b1f3a]">Create Quote for Subscription</Link></MenuItem>
           </MenuItems>
         </Menu>
       )}

@@ -9,9 +9,9 @@ import {
   AddressSnap, DiscType, DocKind, SalesDoc, SalesLine, TERMS, addressLines, computeTotals, grossOf, dueFromTerms, num2, previewNumber, round2, today,
 } from "@/lib/sales";
 import type { CouponOption, CustomerOption, ItemOption } from "@/lib/sales-server";
-import { TEMPLATES, pdfOf } from "@/lib/sales";
+import { pdfOf } from "@/lib/sales";
+import { tplOf } from "@/lib/pdf-templates";
 import type { SalesPrefs } from "@/lib/sales";
-import { ChangeTemplateModal } from "@/components/sales/TemplateModals";
 import { inputClass } from "@/components/customers/ui";
 import { Check, Chevron, optionClass, panelClass } from "@/components/ui/SearchSelect";
 import SelectMenu from "@/components/ui/SelectMenu";
@@ -416,13 +416,13 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
               <svg viewBox="0 0 20 20" className="h-4 w-4 rotate-180 transition-transform group-data-[open]:rotate-0" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
             </MenuButton>
             <MenuItems anchor="top end" transition className="z-[80] mb-1 w-56 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
-              <MenuItem><button type="button" onClick={() => submit("sent")} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 data-[focus]:bg-[#0f766e] data-[focus]:text-white">Save and Mark as Sent</button></MenuItem>
+              <MenuItem><button type="button" onClick={() => submit("sent")} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 data-[focus]:bg-[#e9f7f4] data-[focus]:text-[#0b1f3a]">Save and Mark as Sent</button></MenuItem>
             </MenuItems>
           </Menu>
         </div>
         <Link href={editing ? `${base}/${src!.id}` : base} className={btnGhost}>Cancel</Link>
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-        <span className="ml-auto hidden text-[13px] text-slate-500 sm:block">PDF Template: &apos;{TEMPLATES.find((t) => t.id === pdfOf(prefs.pdf_settings).template)?.name} Template&apos; <TemplatePicker companyId={companyId} prefs={prefs} /></span>
+        <span className="ml-auto hidden text-[13px] text-slate-500 sm:block">PDF Template: &apos;{tplOf(pdfOf(prefs.pdf_settings).template).name}&apos; <TemplatePicker kind={kind} /></span>
         {!isQuote && <span className="hidden text-[13px] text-slate-500 xl:block">Total Amount: <b className="text-[#0b1f3a]">${num2(totals.total)}</b> · Total Quantity: {round2(lines.reduce((s, l) => s + (Number(l.quantity) || 0), 0))}</span>}
       </div>
 
@@ -434,14 +434,8 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
 
 const money2 = (v: number) => `$${num2(v)}`;
 
-function TemplatePicker({ companyId, prefs }: { companyId: string; prefs: SalesPrefs }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button type="button" onClick={() => setOpen(true)} className="font-medium text-[#2563eb] hover:underline">Change</button>
-      <ChangeTemplateModal open={open} onClose={() => setOpen(false)} companyId={companyId} pdf={prefs.pdf_settings} />
-    </>
-  );
+function TemplatePicker({ kind }: { kind: DocKind }) {
+  return <Link href={`/dashboard/settings/pdf-templates?for=${kind}`} target="_blank" className="font-medium text-[#2563eb] hover:underline">Change</Link>;
 }
 // "Configure Invoice Number Preferences" (el engranito del número)
 function NumberModal({ open, onClose, kind, companyId, prefs, onSaved }: {

@@ -1,4 +1,5 @@
 import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb } from "pdf-lib";
+import { tplOf } from "@/lib/pdf-templates";
 import { AddressSnap, PdfSettings, SalesDoc, SalesLine, addressLines, balanceOf, discountSummary, fmtD, num2, pdfOf } from "@/lib/sales";
 
 export type PdfInput = {
@@ -42,13 +43,18 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
   pdf.setTitle(`${isQuote ? "Quote" : "Invoice"} ${doc.number}`);
   pdf.setAuthor(companyName);
   pdf.setCreator(input.whiteLabel ? companyName : "BrightPro");
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const tp = tplOf(s.template);
+  const fam = tp.font === "serif" ? [StandardFonts.TimesRoman, StandardFonts.TimesRomanBold] : tp.font === "mono" ? [StandardFonts.Courier, StandardFonts.CourierBold] : [StandardFonts.Helvetica, StandardFonts.HelveticaBold];
+  const font = await pdf.embedFont(fam[0]);
+  const bold = await pdf.embedFont(fam[1]);
   const logo = await loadImage(pdf, input.logoUrl);
   const sign = doc.signature_data ? await loadImage(pdf, doc.signature_data) : null;
 
   const W = 612, H = 792;
-  const M = s.margin === "narrow" ? 36 : s.margin === "wide" ? 68 : 50;
+  const M0 = s.margin === "narrow" ? 36 : s.margin === "wide" ? 68 : 50;
+  // Plantillas de recibo: columna angosta al centro
+  const M = tp.receipt ? 160 : M0;
+  const MV = M0; // margen de arriba y abajo
   const base = s.font_size === "small" ? 8.5 : s.font_size === "large" ? 10.5 : 9.5;
   const accent = hex(s.accent);
   const right = W - M;
@@ -78,52 +84,78 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
 
   let page: PDFPage = pdf.addPage([W, H]);
   const pages: PDFPage[] = [page];
-  let y = H - M;
+  let y = H - MV;
   const text = (t: string, x: number, yy: number, o: { f?: PDFFont; size?: number; color?: ReturnType<typeof rgb>; align?: "left" | "right" | "center" } = {}) => {
     const f = o.f ?? font, size = o.size ?? base, str = safe(t);
     const w = f.widthOfTextAtSize(str, size);
     const xx = o.align === "right" ? x - w : o.align === "center" ? x - w / 2 : x;
     page.drawText(str, { x: xx, y: yy, size, font: f, color: o.color ?? TEXT });
   };
-  const newPage = () => { page = pdf.addPage([W, H]); pages.push(page); y = H - M; };
-  const ensure = (h: number) => { if (y - h < M + 28) { newPage(); return true; } return false; };
+  const newPage = () => { page = pdf.addPage([W, H]); pages.push(page); y = H - MV; };
+  const ensure = (h: number) => { if (y - h < MV + 28) { newPage(); return true; } return false; };
 
-  // ---------- Encabezado ----------
+  // ---------- Encabezado (izquierda y derecha se miden por separado para que nada se monte) ----------
   const title = variant === "delivery" ? "DELIVERY NOTE" : variant === "packing" ? "PACKING SLIP" : isQuote ? "QUOTE" : "INVOICE";
-  const logoMax = s.logo_size === "small" ? 60 : s.logo_size === "large" ? 130 : 90;
-  if (s.template === "modern") {
-    page.drawRectangle({ x: 0, y: H - 110, width: W, height: 110, color: accent });
-    text(title, right, H - 60, { f: bold, size: 26, color: rgb(1, 1, 1), align: "right" });
-    text(`# ${doc.number}`, right, H - 80, { f: font, size: base + 1, color: rgb(1, 1, 1), align: "right" });
-    text(companyName, M, H - 60, { f: bold, size: 15, color: rgb(1, 1, 1) });
-    y = H - 130;
-    if (logo) {
-      const sc = Math.min(logoMax / logo.height, 170 / logo.width);
-      page.drawImage(logo, { x: M, y: y - logo.height * sc, width: logo.width * sc, height: logo.height * sc });
-      y -= logo.height * sc + 10;
+  const logoMax = s.logo_size === "small" ? 50 : s.logo_size === "large" ? 120 : 80;
+  const titleSize = tp.receipt ? 18 : tp.titleWeight === "bold" ? 22 : 26;
+  const titleFont = tp.titleWeight === "bold" ? bold : font;
+  const orgLines = s.show_org_address ? [...(org.address ?? "").split("\n"), org.phone ?? "", org.email ?? "", org.website ?? ""].filter((l) => l.trim()) : [];
+  const drawLogo = (x: number, yTop: number, align: "left" | "right" | "center") => {
+    if (!logo) return yTop;
+    const sc = Math.min(logoMax / logo.height, 190 / logo.width);
+    const w = logo.width * sc, h = logo.height * sc;
+    const lx = align === "right" ? x - w : align === "center" ? x - w / 2 : x;
+    page.drawImage(logo, { x: lx, y: yTop - h, width: w, height: h });
+    return yTop - h - 10;
+  };
+  const drawOrg = (x: number, yTop: number, align: "left" | "right" | "center", withName = true) => {
+    let yy = yTop;
+    if (withName) { text(companyName, x, yy - base - 1, { f: bold, size: base + 1.5, color: INK, align }); yy -= base + 7; }
+    orgLines.forEach((l) => { text(l, x, yy - base, { align }); yy -= base + 3; });
+    return yy;
+  };
+  const drawTitle = (x: number, yTop: number, align: "left" | "right" | "center", color = INK) => {
+    let yy = yTop - titleSize;
+    text(title, x, yy, { f: titleFont, size: titleSize, color: tp.header === "split" ? accent : color, align });
+    yy -= 16; text(`# ${doc.number}`, x, yy, { f: bold, size: base + 0.5, color: INK, align });
+    if (!isQuote && priced) {
+      yy -= 22; text("Balance Due", x, yy, { f: bold, size: base - 0.5, color: MUTED, align });
+      yy -= 17; text(`$${num2(balanceOf(doc))}`, x, yy, { f: bold, size: base + 5, color: INK, align });
     }
+    return yy - 8;
+  };
+  if (tp.header === "band") {
+    page.drawRectangle({ x: 0, y: H - 100, width: W, height: 100, color: accent });
+    text(companyName, M, H - 58, { f: bold, size: 15, color: rgb(1, 1, 1) });
+    text(title, right, H - 54, { f: titleFont, size: titleSize, color: rgb(1, 1, 1), align: "right" });
+    text(`# ${doc.number}`, right, H - 74, { size: base + 1, color: rgb(1, 1, 1), align: "right" });
+    let l = drawLogo(M, H - 118, "left");
+    l = drawOrg(M, l, "left", false);
+    let r = H - 118;
+    if (!isQuote && priced) {
+      text("Balance Due", right, r - base, { f: bold, size: base - 0.5, color: MUTED, align: "right" });
+      text(`$${num2(balanceOf(doc))}`, right, r - base - 18, { f: bold, size: base + 5, color: INK, align: "right" });
+      r -= base + 26;
+    }
+    y = Math.min(l, r) - 10;
+  } else if (tp.header === "centered") {
+    let c = drawLogo(W / 2, y, "center");
+    c = drawOrg(W / 2, c, "center");
+    y = drawTitle(W / 2, c - 10, "center");
+  } else if (tp.header === "reversed") {
+    const l = drawTitle(M, y, "left");
+    let r = drawLogo(right, y, "right");
+    r = drawOrg(right, r, "right");
+    y = Math.min(l, r) - 6;
   } else {
-    let top = y;
-    if (logo) {
-      const sc = Math.min(logoMax / logo.height, 200 / logo.width);
-      page.drawImage(logo, { x: M, y: top - logo.height * sc, width: logo.width * sc, height: logo.height * sc });
-      top -= logo.height * sc + 12;
-    }
-    text(title, right, y - (s.template === "minimal" ? 18 : 26), { f: s.template === "minimal" ? bold : font, size: s.template === "minimal" ? 18 : 28, color: INK, align: "right" });
-    text(`# ${doc.number}`, right, y - (s.template === "minimal" ? 34 : 44), { f: bold, size: base + 0.5, color: INK, align: "right" });
-    y = top;
-    text(companyName, M, y - base, { f: bold, size: base + 1.5, color: INK });
-    y -= base + 6;
+    let l = drawLogo(M, y, "left");
+    l = drawOrg(M, l, "left");
+    const r = drawTitle(right, y, "right");
+    y = Math.min(l, r) - 6;
+    if (tp.header === "split") { page.drawRectangle({ x: M, y: y - 4, width: right - M, height: 3, color: accent }); y -= 12; }
   }
-  if (s.show_org_address) {
-    [...(org.address ?? "").split("\n"), org.phone ?? "", org.email ?? "", org.website ?? ""].filter((l) => l.trim()).forEach((l) => { text(l, M, y - base, { size: base }); y -= base + 3; });
-  }
-  if (!isQuote && priced) {
-    const by = s.template === "modern" ? H - 140 : H - M - 70;
-    text("Balance Due", right, by, { f: bold, size: base - 0.5, color: MUTED, align: "right" });
-    text(`$${num2(balanceOf(doc))}`, right, by - 16, { f: bold, size: base + 5, color: INK, align: "right" });
-  }
-  y -= 22;
+  y -= 14;
+  if (tp.border) page.drawRectangle({ x: M - 16, y: MV - 4, width: right - M + 32, height: H - 2 * MV + 24, borderColor: rgb(0.8, 0.82, 0.86), borderWidth: 1.2 });
 
   // ---------- Bill To / Job Site / datos ----------
   const blockTop = y;
@@ -135,14 +167,27 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
     return yy;
   };
   let low = addr("Bill To", doc.customer_name, doc.billing_address, M);
-  if (doc.site_address) low = Math.min(low, addr(doc.site_address.label ? `Job Site - ${doc.site_address.label}` : "Job Site / Ship To", null, doc.site_address, M + 165));
+  if (doc.site_address && !tp.receipt) low = Math.min(low, addr(doc.site_address.label ? `Job Site - ${doc.site_address.label}` : "Job Site / Ship To", null, doc.site_address, M + 165));
   const meta: [string, string][] = (isQuote
     ? [["Quote Date", fmtD(doc.doc_date)], ["Expiry Date", fmtD(doc.expiry_date)], ["Reference#", doc.reference ?? ""], ["Salesperson", doc.salesperson ?? ""]]
     : [["Invoice Date", fmtD(doc.doc_date)], ["Terms", doc.payment_terms ?? ""], ["Due Date", fmtD(doc.due_date)], ["P.O.#", doc.order_number ?? ""], ["Salesperson", doc.salesperson ?? ""]]
   ).filter(([, v]) => v) as [string, string][];
   let my = blockTop - (base + 4);
-  meta.forEach(([k, v]) => { text(`${k} :`, right - 90, my, { color: MUTED, align: "right" }); text(v, right, my, { color: INK, align: "right" }); my -= base + 6; });
+  if (tp.meta === "right" && !tp.receipt) {
+    meta.forEach(([k, v]) => { text(`${k} :`, right - 90, my, { color: MUTED, align: "right" }); text(v, right, my, { color: INK, align: "right" }); my -= base + 6; });
+  }
   y = Math.min(low, my) - 14;
+  if (tp.meta === "row" || tp.receipt) {
+    const cells = meta.slice(0, tp.receipt ? 3 : 4);
+    const cw = (right - M) / Math.max(1, cells.length);
+    page.drawRectangle({ x: M, y: y - 30, width: right - M, height: 32, borderColor: LINE, borderWidth: 0.8 });
+    cells.forEach(([k, v], i) => {
+      text(k, M + i * cw + 6, y - 11, { size: base - 1.5, color: MUTED });
+      text(v, M + i * cw + 6, y - 24, { size: base - 0.5, color: INK });
+      if (i) page.drawLine({ start: { x: M + i * cw, y: y - 30 }, end: { x: M + i * cw, y: y + 2 }, thickness: 0.6, color: LINE });
+    });
+    y -= 46;
+  }
   if (doc.subject) {
     text("Subject :", M, y, { color: MUTED }); y -= base + 3;
     wrap(doc.subject, font, base, right - M).forEach((l) => { text(l, M, y, { color: INK }); y -= base + 3; });
@@ -150,16 +195,21 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
   }
 
   // ---------- Tabla ----------
-  const cQty = priced ? right - 200 : right - 20, cRate = right - 100, cAmt = right - 8;
-  const descMax = (priced ? cQty - 40 : cQty - 60) - (M + 34);
+  const cQty = tp.receipt ? (priced ? right - 120 : right - 8) : priced ? right - 200 : right - 20;
+  const cRate = tp.receipt ? right - 58 : right - 100, cAmt = right - (tp.receipt ? 2 : 8);
+  const cName = tp.receipt ? M + 4 : M + 34;
+  const descMax = (priced ? cQty - (tp.receipt ? 34 : 40) : cQty - 60) - cName;
   const head = () => {
     const h = base + 12;
-    if (s.template === "minimal") page.drawLine({ start: { x: M, y: y - h }, end: { x: right, y: y - h }, thickness: 1, color: accent });
+    const filled = tp.table === "dark" || tp.table === "accent";
+    if (tp.table === "lines") page.drawLine({ start: { x: M, y: y - h }, end: { x: right, y: y - h }, thickness: 1.5, color: accent });
+    else if (tp.table === "light") page.drawRectangle({ x: M, y: y - h, width: right - M, height: h, color: accent, opacity: 0.12 });
+    else if (tp.table === "grid") page.drawRectangle({ x: M, y: y - h, width: right - M, height: h, color: rgb(0.945, 0.96, 0.976), borderColor: rgb(0.8, 0.82, 0.86), borderWidth: 0.8 });
     else page.drawRectangle({ x: M, y: y - h, width: right - M, height: h, color: accent });
-    const c = s.template === "minimal" ? INK : rgb(1, 1, 1);
+    const c = filled ? rgb(1, 1, 1) : INK;
     const ty = y - h + 7;
-    text("#", M + 12, ty, { f: bold, color: c, align: "center" });
-    text("Item & Description", M + 34, ty, { f: bold, color: c });
+    if (!tp.receipt) text("#", M + 12, ty, { f: bold, color: c, align: "center" });
+    text(tp.receipt ? "Item" : "Item & Description", cName, ty, { f: bold, color: c });
     text("Qty", cQty, ty, { f: bold, color: c, align: "right" });
     if (priced) { text("Rate", cRate, ty, { f: bold, color: c, align: "right" }); text("Amount", cAmt, ty, { f: bold, color: c, align: "right" }); }
     if (variant === "packing") text("Packed", cAmt, ty, { f: bold, color: c, align: "right" });
@@ -168,22 +218,24 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
   head();
   lines.forEach((l, i) => {
     const nameL = wrap(l.name, font, base + 0.5, descMax);
-    const descL = l.description ? wrap(l.description, font, base - 0.5, descMax) : [];
+    const descL = l.description && !tp.receipt ? wrap(l.description, font, base - 0.5, descMax) : [];
     const h = nameL.length * (base + 4) + descL.length * (base + 2) + 10;
     if (ensure(h)) head();
     let yy = y - base - 2;
-    text(String(i + 1), M + 12, yy, { align: "center" });
-    nameL.forEach((t) => { text(t, M + 34, yy, { size: base + 0.5, color: INK }); yy -= base + 4; });
-    descL.forEach((t) => { text(t, M + 34, yy, { size: base - 0.5, color: MUTED }); yy -= base + 2; });
+    if (!tp.receipt) text(String(i + 1), M + 12, yy, { align: "center" });
+    nameL.forEach((t) => { text(t, cName, yy, { size: base + 0.5, color: INK }); yy -= base + 4; });
+    descL.forEach((t) => { text(t, cName, yy, { size: base - 0.5, color: MUTED }); yy -= base + 2; });
     text(num2(l.quantity), cQty, y - base - 2, { align: "right" });
-    if (l.unit) text(l.unit, cQty, y - base * 2 - 4, { size: base - 1.5, color: MUTED, align: "right" });
+    if (l.unit && !tp.receipt) text(l.unit, cQty, y - base * 2 - 4, { size: base - 1.5, color: MUTED, align: "right" });
     if (priced) {
       text(num2(l.rate), cRate, y - base - 2, { align: "right" });
       text(num2((Number(l.quantity) || 0) * (Number(l.rate) || 0)), cAmt, y - base - 2, { align: "right" });
     }
     if (variant === "packing") page.drawRectangle({ x: cAmt - 12, y: y - base - 4, width: 10, height: 10, borderColor: MUTED, borderWidth: 0.8 });
+    if (tp.table === "accent" && i % 2) page.drawRectangle({ x: M, y: y - h, width: right - M, height: h, color: rgb(0.973, 0.98, 0.988), opacity: 0.6 });
     y -= h;
-    page.drawLine({ start: { x: M, y }, end: { x: right, y }, thickness: 0.6, color: LINE });
+    if (tp.table === "grid") page.drawRectangle({ x: M, y, width: right - M, height: h, borderColor: rgb(0.8, 0.82, 0.86), borderWidth: 0.6 });
+    else page.drawLine({ start: { x: M, y }, end: { x: right, y }, thickness: 0.6, color: LINE });
   });
   if (!lines.length) { text("No items", (M + right) / 2, y - 16, { color: MUTED, align: "center" }); y -= 28; }
 
@@ -204,9 +256,14 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
     ensure(rows.length * 22 + 10);
     y -= 8;
     rows.forEach((r) => {
-      if (r.shade) page.drawRectangle({ x: right - 230, y: y - 18, width: 230, height: 24, color: SHADE });
-      text(r.k, right - 110, y - 10, { f: r.strong ? bold : font, color: r.strong ? INK : TEXT, align: "right" });
-      text(r.v, cAmt, y - 10, { f: r.strong ? bold : font, color: r.red ? RED : r.strong ? INK : TEXT, align: "right" });
+      const acc = r.shade && tp.totals === "accent";
+      const tw = tp.receipt ? right - M : 230;
+      if (r.shade && tp.totals !== "plain") page.drawRectangle({ x: right - tw, y: y - 18, width: tw, height: 24, color: acc ? accent : SHADE });
+      if (r.shade && tp.totals === "plain") page.drawLine({ start: { x: right - tw, y: y + 6 }, end: { x: right, y: y + 6 }, thickness: 1.2, color: INK });
+      if (tp.totals === "box") page.drawRectangle({ x: right - tw, y: y - 18, width: tw, height: 24, borderColor: LINE, borderWidth: 0.6 });
+      const white = rgb(1, 1, 1);
+      text(r.k, right - 110, y - 10, { f: r.strong ? bold : font, color: acc ? white : r.strong ? INK : TEXT, align: "right" });
+      text(r.v, cAmt, y - 10, { f: r.strong ? bold : font, color: acc ? white : r.red ? RED : r.strong ? INK : TEXT, align: "right" });
       y -= 24;
     });
   }
@@ -238,16 +295,16 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
   // ---------- Pie de página en cada hoja ----------
   pages.forEach((p, i) => {
     page = p;
-    p.drawLine({ start: { x: M, y: M + 18 }, end: { x: right, y: M + 18 }, thickness: 0.5, color: LINE });
+    p.drawLine({ start: { x: M, y: MV + 18 }, end: { x: right, y: MV + 18 }, thickness: 0.5, color: LINE });
     let fx = M;
-    if (s.footer_text) { text(s.footer_text.slice(0, 140), fx, M + 5, { size: base - 1.5, color: MUTED }); fx += widthOf(s.footer_text.slice(0, 140), font, base - 1.5) + 14; }
+    if (s.footer_text) { text(s.footer_text.slice(0, 140), fx, MV + 5, { size: base - 1.5, color: MUTED }); fx += widthOf(s.footer_text.slice(0, 140), font, base - 1.5) + 14; }
     // Sin plan pagado siempre sale "Powered by BrightPro"; con marca blanca la compañía decide
     if (!input.whiteLabel || s.show_powered) {
-      text("POWERED BY", fx, M + 5, { size: base - 2, color: MUTED });
-      text("Bright", fx + widthOf("POWERED BY", font, base - 2) + 5, M + 5, { f: bold, size: base, color: INK });
-      text("Pro", fx + widthOf("POWERED BY", font, base - 2) + 5 + widthOf("Bright", bold, base), M + 5, { f: bold, size: base, color: rgb(0.91, 0.44, 0.23) });
+      text("POWERED BY", fx, MV + 5, { size: base - 2, color: MUTED });
+      text("Bright", fx + widthOf("POWERED BY", font, base - 2) + 5, MV + 5, { f: bold, size: base, color: INK });
+      text("Pro", fx + widthOf("POWERED BY", font, base - 2) + 5 + widthOf("Bright", bold, base), MV + 5, { f: bold, size: base, color: rgb(0.91, 0.44, 0.23) });
     }
-    text(`${i + 1}`, right, M + 5, { size: base - 1.5, color: MUTED, align: "right" });
+    text(`${i + 1}`, right, MV + 5, { size: base - 1.5, color: MUTED, align: "right" });
   });
   return pdf.save();
 }

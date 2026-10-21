@@ -1,4 +1,5 @@
 import { Role } from "@/lib/types";
+import { TEMPLATE_DEFS, tplOf } from "@/lib/pdf-templates";
 
 // =====================================================================
 // Sales (Paso 3.30): Quotes, Invoices y Subscriptions
@@ -57,21 +58,20 @@ export type QuoteSettings = {
 export type InvoiceSettings = { hide_zero_lines?: boolean; default_notes?: string; default_terms?: string; overdue_reminder_days?: number };
 export type OrgInfo = { address?: string; phone?: string; email?: string; website?: string };
 // Plantilla del PDF (Customize → Change / Edit Template)
-export type PdfTemplate = "standard" | "modern" | "minimal";
+export type PdfTemplate = string;
 export type PdfSettings = {
   template?: PdfTemplate; accent?: string; margin?: "narrow" | "normal" | "wide"; font_size?: "small" | "normal" | "large";
   logo_size?: "small" | "medium" | "large"; show_org_address?: boolean; footer_text?: string; show_powered?: boolean;
 };
-export const TEMPLATES: { id: PdfTemplate; name: string; hint: string }[] = [
-  { id: "standard", name: "Standard", hint: "Classic layout with a dark table header" },
-  { id: "modern", name: "Modern", hint: "Color band at the top in your brand color" },
-  { id: "minimal", name: "Minimal", hint: "Clean, light lines and lots of white space" },
-];
+export const TEMPLATES = TEMPLATE_DEFS;
 export const DEFAULT_PDF: Required<PdfSettings> = {
-  template: "standard", accent: "#2f3437", margin: "normal", font_size: "normal", logo_size: "medium", show_org_address: true, footer_text: "", show_powered: false,
+  template: "standard", accent: "", margin: "normal", font_size: "normal", logo_size: "medium", show_org_address: true, footer_text: "", show_powered: false,
 };
-export const pdfOf = (p?: PdfSettings | null): Required<PdfSettings> =>
-  ({ ...DEFAULT_PDF, ...Object.fromEntries(Object.entries(p ?? {}).filter(([, v]) => v !== undefined && v !== null)) }) as Required<PdfSettings>;
+export const pdfOf = (p?: PdfSettings | null): Required<PdfSettings> => {
+  const merged = { ...DEFAULT_PDF, ...Object.fromEntries(Object.entries(p ?? {}).filter(([, v]) => v !== undefined && v !== null)) } as Required<PdfSettings>;
+  // Sin color propio, cada plantilla trae el suyo
+  return { ...merged, accent: /^#[0-9a-f]{6}$/i.test(merged.accent) ? merged.accent : tplOf(merged.template).accent };
+};
 export type SalesPrefs = {
   quote_prefix: string; quote_next: number; quote_auto: boolean; invoice_prefix: string; invoice_next: number; invoice_auto: boolean;
   sub_prefix: string; sub_next: number; quote_settings: QuoteSettings; invoice_settings: InvoiceSettings; org_info: OrgInfo; logo_url: string | null;

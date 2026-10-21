@@ -48,10 +48,9 @@ export function StatusPill({ s, small = false }: { s: Status; small?: boolean })
 // Cinta diagonal que ENVUELVE la esquina del documento (con los dobleces por detrás, como Zoho)
 export function Ribbon({ label, tone }: { label: string; tone: Tone }) {
   return (
-    <div className="pointer-events-none absolute -left-2 -top-2 z-10 h-28 w-28 overflow-hidden print:hidden" aria-hidden="true">
-      <span className={`absolute right-0 top-0 h-2 w-2 ${TONE_FOLD[tone]}`} />
+    <div className="pointer-events-none absolute -left-2 top-0 z-10 h-[104px] w-[104px] overflow-hidden print:hidden" aria-hidden="true">
       <span className={`absolute bottom-0 left-0 h-2 w-2 ${TONE_FOLD[tone]}`} />
-      <span className={`absolute left-[-29px] top-[43px] w-[170px] -rotate-45 py-[5px] text-center text-[12px] font-medium tracking-wide text-white shadow-[0_3px_6px_rgba(0,0,0,0.18)] ${TONE_RIBBON[tone]}`}>{label}</span>
+      <span className={`absolute left-[-36px] top-[30px] w-[160px] -rotate-45 py-[5px] text-center text-[12px] font-medium tracking-wide text-white shadow-[0_2px_4px_rgba(0,0,0,0.15)] ${TONE_RIBBON[tone]}`}>{label}</span>
     </div>
   );
 }
@@ -84,12 +83,12 @@ export function ToolMenu({ icon, label, items, dots = false, align = "start" }: 
             {a.divider && <div className="my-1 border-t border-slate-100" />}
             <MenuItem disabled={a.soon}>
               {a.href ? (
-                <Link href={a.href} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-slate-700 data-[focus]:bg-[#0f766e] data-[focus]:text-white">
+                <Link href={a.href} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-slate-700 data-[focus]:bg-[#e9f7f4] data-[focus]:text-[#0b1f3a]">
                   {a.icon && <Ico d={a.icon} />}{a.label}
                 </Link>
               ) : (
                 <button type="button" onClick={a.onClick}
-                  className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm data-[disabled]:cursor-not-allowed data-[disabled]:text-slate-300 ${a.danger ? "text-red-600 data-[focus]:bg-red-50" : "text-slate-700 data-[focus]:bg-[#0f766e] data-[focus]:text-white"}`}>
+                  className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm data-[disabled]:cursor-not-allowed data-[disabled]:text-slate-300 ${a.danger ? "text-red-600 data-[focus]:bg-red-50" : "text-slate-700 data-[focus]:bg-[#e9f7f4] data-[focus]:text-[#0b1f3a]"}`}>
                   {a.icon && <Ico d={a.icon} />}<span className="flex-1">{a.label}</span>
                   {a.soon && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">Soon</span>}
                 </button>

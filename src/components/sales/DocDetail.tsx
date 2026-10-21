@@ -368,10 +368,13 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
                   {payOpen && <div className="border-t border-slate-100 px-2 pb-2 animate-[bp-fade_0.2s_ease-out]"><PaymentsTable payments={data.payments} onDelete={deletePayment} /></div>}
                 </div>
               )}
-              <div className="mx-auto mb-2 flex max-w-[740px] justify-end">
-                <CustomizeMenu companyId={doc.company_id} pdf={prefs.pdf_settings} whiteLabel={prefs.white_label} onLogo={() => setModal("prefs")} />
+              {/* El menú Customize sale solo al pasar el mouse sobre el documento (como Zoho) */}
+              <div className="group/paper relative mx-auto max-w-[740px]">
+                <div className="absolute right-0 top-0 z-20 opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover/paper:opacity-100 has-[[data-open]]:opacity-100 [@media(hover:none)]:opacity-100">
+                  <CustomizeMenu companyId={doc.company_id} pdf={prefs.pdf_settings} whiteLabel={prefs.white_label} onLogo={() => setModal("prefs")} kind={doc.kind} />
+                </div>
+                <DocPaper doc={doc} lines={lines} prefs={prefs} companyName={companyName} status={status} compact />
               </div>
-              <DocPaper doc={doc} lines={lines} prefs={prefs} companyName={companyName} status={status} compact />
             </div>
           ) : details) : tab === 1 ? relatedTab : activityTab}
         </div>

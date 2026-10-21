@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
@@ -76,15 +77,9 @@ export default function AppHeader({
             <QuickCreate />
             <NotificationsBell />
 
-            <Popover className="relative">
-              <PopoverButton aria-label="Settings" className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-white/70 focus:outline-none data-[open]:bg-[#e9f7f4] data-[open]:text-[#0f766e]">
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.8 1.2V21a2 2 0 1 1-4 0a1.7 1.7 0 0 0-2.8-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.8H3a2 2 0 1 1 0-4a1.7 1.7 0 0 0 1.2-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.8-1.2V3a2 2 0 1 1 4 0a1.7 1.7 0 0 0 2.8 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-1.2 2.8H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg>
-              </PopoverButton>
-              <PopoverPanel anchor="bottom end" transition className={`${popPanel} w-64`}>
-                <p className="font-semibold text-[#0b1f3a]">Settings</p>
-                <p className="mt-1 text-sm text-slate-500">Organization, users &amp; roles, modules and preferences are coming soon.</p>
-              </PopoverPanel>
-            </Popover>
+            <Link href="/dashboard/settings" aria-label="Settings" title="All Settings" className="group flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-white/70 hover:text-[#0f766e]">
+              <span className="transition-transform duration-500 group-hover:rotate-90"><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.8 1.2V21a2 2 0 1 1-4 0a1.7 1.7 0 0 0-2.8-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.8H3a2 2 0 1 1 0-4a1.7 1.7 0 0 0 1.2-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.8-1.2V3a2 2 0 1 1 4 0a1.7 1.7 0 0 0 2.8 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-1.2 2.8H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg></span>
+            </Link>
 
             <AppsMenu role={current?.role ?? null} />
             <button type="button" onClick={onOpenProfile} aria-label="Open my profile" className="shrink-0 rounded-full">

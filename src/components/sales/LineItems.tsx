@@ -28,12 +28,12 @@ function ItemPicker({ line, items, onPick, onText }: { line: SalesLine; items: I
         {list.length === 0 ? (
           <div className="px-4 py-3 text-sm text-slate-500">{items.length ? "No items match. Keep typing to add it as a custom line." : "Your catalog is empty. Type a name to add a custom line."}</div>
         ) : list.map((it) => (
-          <ComboboxOption key={it.id} value={it} className="flex cursor-pointer items-center gap-3 px-3 py-2 data-[focus]:bg-[#0f766e] data-[focus]:text-white group">
+          <ComboboxOption key={it.id} value={it} className="flex cursor-pointer items-center gap-3 px-3 py-2 data-[focus]:bg-[#e9f7f4] group">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             {it.image_url ? <img src={it.image_url} alt="" className="h-9 w-9 shrink-0 rounded-md border border-slate-200 object-cover" /> : <NoImage />}
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[15px] font-medium">{it.name}</span>
-              <span className="block truncate text-xs text-slate-500 group-data-[focus]:text-white/80">{[it.sku && `SKU: ${it.sku}`, it.item_type === "goods" ? "Goods" : "Service"].filter(Boolean).join(" · ")}</span>
+              <span className="block truncate text-xs text-slate-500 ">{[it.sku && `SKU: ${it.sku}`, it.item_type === "goods" ? "Goods" : "Service"].filter(Boolean).join(" · ")}</span>
             </span>
             <span className="shrink-0 text-sm tabular-nums">{money(it.selling_price)}</span>
           </ComboboxOption>
@@ -135,7 +135,7 @@ export default function LineItems({ lines, setLines, items, showDiscount = true,
                       </MenuButton>
                       <MenuItems anchor="bottom end" transition className="z-[100] mt-1 w-52 rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_12px_40px_rgba(15,40,60,0.16)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
                         {([["Clone", () => insertAt(i, [{ ...l, id: undefined }])], ["Insert New Row", () => insertAt(i, [blankLine()])], ["Insert Items in Bulk", () => { setBulkAt(i); setBulk(true); }]] as [string, () => void][]).map(([label, fn]) => (
-                          <MenuItem key={label}><button type="button" onClick={fn} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 data-[focus]:bg-[#2563eb] data-[focus]:text-white">{label}</button></MenuItem>
+                          <MenuItem key={label}><button type="button" onClick={fn} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 data-[focus]:bg-[#e9f7f4] data-[focus]:text-[#0b1f3a]">{label}</button></MenuItem>
                         ))}
                       </MenuItems>
                     </Menu>
