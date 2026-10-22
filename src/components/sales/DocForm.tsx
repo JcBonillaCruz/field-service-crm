@@ -419,10 +419,10 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
         </div>
       </div>
 
-      <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 border-t border-slate-200 bg-white px-5 py-3 sm:px-8">
-        <button type="button" onClick={() => submit("draft")} disabled={!!saving} className={btnGhost}>{saving === "draft" ? "Saving..." : editing ? "Save" : "Save as Draft"}</button>
+      <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 border-t border-slate-200 bg-white px-5 py-3 max-sm:flex-nowrap max-sm:gap-2 max-sm:px-3 max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-8">
+        <button type="button" onClick={() => submit("draft")} disabled={!!saving} className={`${btnGhost} max-sm:px-3 max-sm:py-2 max-sm:text-[13px] max-sm:shrink-0`}>{saving === "draft" ? "Saving..." : editing ? "Save" : "Save as Draft"}</button>
         <div className="flex">
-          <button type="button" onClick={() => submit("send")} disabled={!!saving} className={`${btnPrimary} rounded-r-none`}>{saving === "send" ? "Saving..." : "Save and Send"}</button>
+          <button type="button" onClick={() => submit("send")} disabled={!!saving} className={`${btnPrimary} rounded-r-none max-sm:px-3 max-sm:py-2 max-sm:text-[13px] max-sm:whitespace-nowrap`}>{saving === "send" ? "Saving..." : "Save and Send"}</button>
           <Menu>
             <MenuButton aria-label="More save options" className="group flex items-center rounded-r-lg border-l border-white/25 bg-[#0f766e] px-2 text-white hover:bg-[#0c5f59] focus:outline-none">
               <svg viewBox="0 0 20 20" className="h-4 w-4 rotate-180 transition-transform group-data-[open]:rotate-0" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
@@ -432,8 +432,8 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
             </MenuItems>
           </Menu>
         </div>
-        <Link href={editing ? `${base}/${src!.id}` : base} className={btnGhost}>Cancel</Link>
-        {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+        <Link href={editing ? `${base}/${src!.id}` : base} className={`${btnGhost} max-sm:px-3 max-sm:py-2 max-sm:text-[13px] max-sm:ml-auto max-sm:border-0 max-sm:bg-transparent`}>Cancel</Link>
+        {error && <p role="alert" className="text-sm text-red-600 max-sm:fixed max-sm:inset-x-3 max-sm:bottom-16 max-sm:rounded-lg max-sm:bg-white max-sm:p-2 max-sm:shadow">{error}</p>}
         <span className="ml-auto hidden text-[13px] text-slate-500 sm:block">PDF Template: &apos;{tplOf(pdfOf(prefs.pdf_settings).template).name}&apos; <TemplatePicker kind={kind} /></span>
         {!isQuote && <span className="hidden text-[13px] text-slate-500 xl:block">Total Amount: <b className="text-[#0b1f3a]">${num2(totals.total)}</b> · Total Quantity: {round2(lines.reduce((s, l) => s + (Number(l.quantity) || 0), 0))}</span>}
       </div>

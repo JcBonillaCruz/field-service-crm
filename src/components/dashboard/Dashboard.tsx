@@ -1,7 +1,7 @@
 "use client";
 
 import type { MobileStats } from "@/lib/dashboard-server";
-import { MobileHero, MoneyChart } from "@/components/dashboard/MobileWidgets";
+import { InsightsCard, MobileHero, MoneyChart, ReceivablesCard } from "@/components/dashboard/MobileWidgets";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -11,7 +11,7 @@ import BottomSheet from "@/components/customers/BottomSheet";
 type Counts = { total: number; commercial: number; residential: number };
 const PERIODS = ["Last 3 Months","Last 12 Months","This Quarter","Previous Quarter","This Year","Previous Year","Year To Date","Quarter To Date"];
 const TABS: {label:string;icon:string}[] = [
-  {label:"Dashboard",icon:"M9 12l2 2 4-4M3 11l9-7 9 7v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"},
+  {label:"Dashboard",icon:"M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"},
   {label:"Announcements",icon:"M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.08"},
   {label:"Help",icon:"M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"},
 ];
@@ -39,53 +39,24 @@ export default function Dashboard({ firstName, companyName, industry, role, coun
         {TABS.map(t=>(
           <button key={t.label} type="button" onClick={()=>setTab(t.label)}
             className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-3 text-sm transition-colors ${tab===t.label?"border-[#0f766e] font-semibold text-[#0f766e]":"border-transparent text-slate-500"}`}>
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={t.icon}/></svg>
-            {t.label}
+            <svg viewBox="0 0 24 24" className={t.label==="Dashboard"?"h-5 w-5":"h-4 w-4"} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={t.icon}/></svg>
+            {t.label==="Dashboard" ? <span className="sr-only">Home</span> : t.label}
           </button>
         ))}
       </div>
 
       {tab === "Dashboard" && (
         <div>
-          {/* ══════ 1. Lo ganado en el año, gastos y ganancia (en movimiento) ══════ */}
-          <div style={d(0)} className={`${fade(0)} mx-4 mt-5`}>
-            {st ? <MobileHero st={st} onAging={()=>setRecvOpen(!recvOpen)} agingOpen={recvOpen}/> : (
-              <div className="rounded-3xl bg-[#0b1f3a] px-6 py-6 text-white"><p className="text-sm text-white/70">Total Receivables</p><p className="mt-1 text-[40px] font-bold">$0.00</p></div>
+          {/* ══════ 1. Lo ganado en el año: Earned / Spent / Profit ══════ */}
+          <div style={d(0)} className={`${fade(0)} mx-4 mt-5 space-y-3`}>
+            {st ? <MobileHero st={st}/> : (
+              <div className="rounded-3xl border border-slate-200 bg-white px-6 py-6"><p className="text-sm text-slate-500">Received this year</p><p className="mt-1 text-[38px] font-bold text-[#0b1f3a]">$0.00</p></div>
             )}
-            {recvOpen && (
-              <div className="mt-2 rounded-2xl border border-slate-200 bg-white px-5 pb-4 pt-3 animate-[bp-fade_0.2s_ease-out]">
-                <p className="mb-2 text-[13px] font-semibold text-[#0b1f3a]">Unpaid invoices by days overdue</p>
-                <AgingChart mounted={m} values={st?.aging ?? [0,0,0,0,0]}/>
-              </div>
-            )}
+            {st && <ReceivablesCard st={st} mounted={m}/>}
           </div>
 
-          {/* ══════ 2. Quick Create ══════ */}
-          <div style={d(1)} className={`${fade(1)} mx-4 mt-8`}>
-            <p className="mb-4 flex items-center gap-2 text-lg font-semibold text-[#0b1f3a]">
-              <svg viewBox="0 0 24 24" className="h-5 w-5 text-[#e8713a]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg>
-              Quick Create
-            </p>
-            <div className="flex justify-between gap-4">
-              {([
-                {l:"Customer",href:"/dashboard/customers/new",i:<><circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" strokeWidth="1.6"/><path d="M4 20a8 8 0 0 1 16 0" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></>},
-                {l:"Invoice",href:"/dashboard/invoices/new",i:<><rect x="5" y="3" width="14" height="18" rx="2" fill="none" stroke="currentColor" strokeWidth="1.6"/><path d="M9 8h6M9 12h6M9 16h3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></>},
-                {l:"Subscription",href:"/dashboard/subscriptions/new",i:<><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.6"/><path d="M9 12l2 2 4-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></>},
-                {l:"Quote",href:"/dashboard/quotes/new",i:<><rect x="5" y="2" width="14" height="19" rx="2" fill="none" stroke="currentColor" strokeWidth="1.6"/><path d="M9 7h3M9 11h6M9 15h4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><path d="M14 2v4h5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></>},
-              ]).map(a => {
-                const active = !!a.href;
-                const box = (
-                  <div key={a.l} className="flex flex-col items-center gap-2.5">
-                    <span className={`flex h-16 w-16 items-center justify-center rounded-2xl transition-transform active:scale-95 ${active?"bg-[#e9f7f4]":"bg-slate-50"}`}>
-                      <svg viewBox="0 0 24 24" className={`h-7 w-7 ${active?"text-[#0f766e]":"text-slate-300"}`}>{a.i}</svg>
-                    </span>
-                    <span className={`text-[13px] font-medium ${active?"text-[#0b1f3a]":"text-slate-400"}`}>{a.l}</span>
-                  </div>
-                );
-                return active ? <Link key={a.l} href={a.href!}>{box}</Link> : box;
-              })}
-            </div>
-          </div>
+          {/* ══════ 2. Consejos de finanzas (en vez de accesos directos) ══════ */}
+          {st && <div style={d(1)} className={`${fade(1)} mx-4 mt-3`}><InsightsCard st={st} compact/></div>}
 
           {/* ══════ 3. Net Revenue ══════ */}
           <SectionCard style={d(2)} className={fade(2)} title="Net Revenue" icon="M22 12h-4l-3 9L9 3l-3 9H2"

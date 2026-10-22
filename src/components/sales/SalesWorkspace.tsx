@@ -76,7 +76,7 @@ export default function SalesWorkspace({ module, rows, customViews, companyId, p
 
   const rest = pathname.slice(base.length);
   const seg = rest.split("/").filter(Boolean);
-  const isForm = seg[0] === "new" || seg[0] === "views" || seg[1] === "edit";
+  const isForm = seg[0] === "new" || seg[0] === "views" || seg[0] === "import" || seg[1] === "edit";
   const selectedId = seg.length === 1 && !isForm ? seg[0] : null;
   if (isForm) return <>{children}</>;
 
@@ -151,6 +151,7 @@ export default function SalesWorkspace({ module, rows, customViews, companyId, p
   const groups: ActionGroup[] = [
     { kind: "sub", label: "Sort by", icon: ACTION_ICONS.sort, items: SORTS[module].map((s) => ({ label: s.label, onClick: () => applySort(s.value), active: s.value === sort, dir })) },
     { kind: "divider" },
+    ...(module !== "subscriptions" ? [{ kind: "item" as const, label: `Import ${info.plural}`, icon: ACTION_ICONS.import, onClick: () => router.push(`${base}/import`) }] : []),
     { kind: "sub", label: "Export", icon: ACTION_ICONS.export, items: [
       { label: `Export ${info.plural}`, onClick: () => openExport("all") }, { label: "Export Current View", onClick: () => openExport("view") },
     ] },
@@ -393,6 +394,11 @@ export default function SalesWorkspace({ module, rows, customViews, companyId, p
           <button type="button" onClick={() => { setMSheet(null); openExport("view"); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[15px] text-slate-700 transition-all hover:bg-[#f6fbfa] active:scale-[0.98] active:bg-[#e9f7f4]">
             <svg viewBox="0 0 20 20" className="h-5 w-5 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M10 12V3m0 0L6.5 6.5M10 3l3.5 3.5M4 14v1.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V14" strokeLinecap="round" strokeLinejoin="round" /></svg>Export this view ({list.length})
           </button>
+          {module !== "subscriptions" && (
+          <button type="button" onClick={() => { setMSheet(null); router.push(`${base}/import`); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[15px] text-slate-700 transition-all hover:bg-[#f6fbfa] active:scale-[0.98] active:bg-[#e9f7f4]">
+            <svg viewBox="0 0 20 20" className="h-5 w-5 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M10 3v9m0 0-3.5-3.5M10 12l3.5-3.5M4 14v1.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V14" strokeLinecap="round" strokeLinejoin="round" /></svg>Import {info.plural.toLowerCase()} (CSV)
+          </button>
+          )}
           <p className="px-3 pt-1 text-[13px] text-slate-500">CSV or Excel. Your data is always yours: download it any time.</p>
         </div>
       </BottomSheet>

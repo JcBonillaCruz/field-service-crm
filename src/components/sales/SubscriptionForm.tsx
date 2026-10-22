@@ -281,9 +281,9 @@ export default function SubscriptionForm({ companyId, actor, customers, items, s
         </div>
       </div>
 
-      <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 border-t border-slate-200 bg-white px-5 py-3 sm:px-8">
+      <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 border-t border-slate-200 bg-white px-5 py-3 max-sm:flex-nowrap max-sm:gap-2 max-sm:px-3 max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-8">
         <button type="button" onClick={submit} disabled={saving} className={btnPrimary}>{saving ? "Saving..." : editing ? "Save" : "Continue"}</button>
-        <Link href={editing ? `${base}/${src!.id}` : base} className={btnGhost}>Cancel</Link>
+        <Link href={editing ? `${base}/${src!.id}` : base} className={`${btnGhost} max-sm:px-3 max-sm:py-2 max-sm:text-[13px] max-sm:ml-auto max-sm:border-0 max-sm:bg-transparent`}>Cancel</Link>
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       </div>
     </div>

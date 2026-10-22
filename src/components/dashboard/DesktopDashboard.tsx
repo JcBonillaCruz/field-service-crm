@@ -1,5 +1,8 @@
 "use client";
 
+import FinanceOverview from "@/components/dashboard/FinanceOverview";
+import type { MobileStats } from "@/lib/dashboard-server";
+
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import CompanyBadge from "@/components/CompanyBadge";
@@ -35,8 +38,8 @@ const TABS = ["Dashboard", "Announcements", "Help"] as const;
 type Tab = (typeof TABS)[number];
 type CardKey = "rev" | "mrr" | "active" | "arpu" | "churn" | "ltv" | "subsum" | "inc" | "exp";
 
-export default function DesktopDashboard({ firstName, companyId, companyName, companyIndex, demo = false, real = null }: {
-  firstName: string; companyId: string; companyName: string; companyIndex: number; demo?: boolean; real?: DashboardData | null;
+export default function DesktopDashboard({ firstName, companyId, companyName, companyIndex, demo = false, real = null, stats = null }: {
+  firstName: string; companyId: string; companyName: string; companyIndex: number; demo?: boolean; real?: DashboardData | null; stats?: MobileStats | null;
 }) {
   const [tab, setTab] = useState<Tab>("Dashboard");
   const [now, setNow] = useState<Date | null>(null);
@@ -95,6 +98,8 @@ export default function DesktopDashboard({ firstName, companyId, companyName, co
             <PeriodSelect variant="field" value={period} ariaLabel="Date range for every card"
               onChange={(p) => { setPeriod(p); setOwn({}); }} />
           </div>
+          {/* Resumen de finanzas: lo que entra, lo que sale, lo que te queda y consejos */}
+          {stats && !demo && <div className="mt-6 max-w-[1600px] animate-[bp-fade_0.4s_ease-out]"><FinanceOverview st={stats} /></div>}
           {now ? (
             <Cards now={now} data={data} money={money} per={per} pick={pick} />
           ) : (

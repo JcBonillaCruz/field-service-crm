@@ -44,6 +44,7 @@ const SECTIONS: Section[] = [
     { title: "Custom Modules", icon: ic.module, tone: "bg-[#eef6ff] text-[#2563eb]", items: [{ label: "Overview" }] },
   ] },
   { title: "Extension and Developer Data", cards: [
+    { title: "Tools", icon: ic.module, tone: "bg-[#eef2ff] text-[#4f46e5]", items: [{ label: "QR Code Studio", href: "/dashboard/tools/qr" }] },
     { title: "Integrations & Marketplace", icon: ic.plug, tone: "bg-[#e9f7f4] text-[#0f766e]", items: [{ label: "WhatsApp" }, { label: "SMS Integrations" }, { label: "Accounting" }, { label: "Google Calendar" }, { label: "Marketplace" }] },
     { title: "Developer Data", icon: ic.code, tone: "bg-[#fff6e8] text-[#ea580c]", items: [{ label: "Incoming Webhooks" }, { label: "Connections" }, { label: "API Usage" }, { label: "Data Management" }, { label: "Web Forms" }] },
   ] },

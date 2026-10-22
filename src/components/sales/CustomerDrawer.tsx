@@ -158,15 +158,12 @@ export default function CustomerDrawer({ customerId }: { customerId: string | nu
     </ul>
   );
 
+  // Un solo enlace (solo celular): abre toda la información del cliente
   const links = (
-    <div className="mt-2 flex flex-wrap items-center text-[13px] font-medium text-[#0f766e]">
-      {([["unpaid", `Unpaid Invoices${unpaid.length ? ` (${unpaid.length})` : ""}`], ["address", "Address"], ["details", "Customer Details"]] as const).map(([k, l], i) => (
-        <span key={k} className="flex items-center">
-          {i > 0 && <span className="mx-2.5 h-4 w-px bg-slate-300" />}
-          <button type="button" onClick={() => show(k)} className="rounded px-0.5 transition-colors hover:text-[#0b1f3a] hover:underline">{l}</button>
-        </span>
-      ))}
-    </div>
+    <button type="button" onClick={() => show("unpaid")} className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-[#eef8f5] px-3 py-1.5 text-[13px] font-medium text-[#0f766e] active:scale-[0.98]">
+      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="10" cy="7" r="3" /><path d="M4 17a6 6 0 0 1 12 0" strokeLinecap="round" /></svg>
+      Customer Details{unpaid.length ? <span className="rounded-full bg-[#fff1f2] px-1.5 text-[11px] font-semibold text-[#e11d48]">{unpaid.length} unpaid</span> : null}
+    </button>
   );
 
   // ---------- Celular: hoja de abajo con secciones desplegables ----------
@@ -197,7 +194,6 @@ export default function CustomerDrawer({ customerId }: { customerId: string | nu
         </span>
         <svg viewBox="0 0 20 20" className={`h-4 w-4 shrink-0 transition-transform duration-300 ${open ? "rotate-180" : "group-hover:translate-x-0.5"}`} fill="currentColor"><path d="M7.3 5.3a1 1 0 0 1 1.4 0l4 4a1 1 0 0 1 0 1.4l-4 4a1 1 0 0 1-1.4-1.4L10.6 10 7.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
       </button>
-      {links}
       <aside style={{ width: W, transform: open ? "translateX(0)" : "translateX(100%)" }}
         className="fixed bottom-0 right-0 top-16 z-[60] flex flex-col border-l border-slate-200 bg-[#fbfcfc] shadow-[-12px_0_40px_rgba(15,40,60,0.10)] transition-transform duration-300 ease-out">
         <div className="flex items-start gap-3 border-b border-slate-100 bg-white px-5 py-4">

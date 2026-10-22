@@ -34,6 +34,7 @@ const NAV: NavItem[] = [
       { label: "Subscriptions", href: "/dashboard/subscriptions", addHref: "/dashboard/subscriptions/new", icon: "" },
     ] },
   { label: "Expenses", href: "/dashboard/expenses", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 9h6M9 13h6M12 6v1M12 15v1", roles: ["owner", "manager", "office"] },
+  { label: "QR Codes", href: "/dashboard/tools/qr", icon: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2zM6.5 6.5h1M16.5 6.5h1M6.5 16.5h1" },
   { label: "Payments", icon: "M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 10h18M7 15h3", roles: ["owner", "manager"] },
   { label: "Jobs", icon: "M14.7 6.3a4 4 0 0 0-5.4 5.2l-5.8 5.8a1.8 1.8 0 0 0 2.6 2.6l5.8-5.8a4 4 0 0 0 5.2-5.4l-2.5 2.5-2.4-.4-.4-2.4z" },
   { label: "Dispatch", icon: "M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 1 1 13 0c0 5.4-6.5 11-6.5 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z", roles: ["owner", "manager", "office"] },

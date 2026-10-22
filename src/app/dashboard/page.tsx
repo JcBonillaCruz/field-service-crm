@@ -62,6 +62,7 @@ export default async function DashboardPage({ searchParams }: { searchParams?: {
           companyIndex={Math.max(0, companies.indexOf(current))}
           demo={searchParams?.demo === "1"}
           real={dash?.data ?? null}
+          stats={dash?.mobile ?? null}
         />
       </div>
     </>

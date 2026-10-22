@@ -3,7 +3,8 @@ import { DashboardData, EMPTY_DATA } from "@/lib/dashboard-data";
 import { SalesDoc, Subscription, balanceOf, daysBetween, today } from "@/lib/sales";
 
 export type MobileStats = {
-  total: number; current: number; overdue: number; aging: number[];
+  total: number; current: number; overdue: number; aging: number[]; agingCount: number[];
+  expenseByCat: [string, number][]; quoteStats: { sent: number; accepted: number; declined: number; open: number; openValue: number };
   months: string[]; income: number[]; receipts: number[]; expenses: number[];
   ytdReceived: number; ytdExpenses: number; ytdInvoiced: number;
   revenue12: number; income12: number; receipts12: number; mrr: number; activeSubs: number; arpu: number;
@@ -15,11 +16,12 @@ const monthly = (s: Pick<Subscription, "total" | "bill_every" | "bill_unit">) =>
 
 // Llena el dashboard con lo que de verdad pasa en Quotes / Invoices / Payments / Subscriptions
 export async function loadDashboard(supabase: SupabaseClient, companyId: string): Promise<{ data: DashboardData; mobile: MobileStats }> {
-  const [{ data: inv }, { data: pays }, { data: subs }, { data: exps }] = await Promise.all([
+  const [{ data: inv }, { data: pays }, { data: subs }, { data: exps }, { data: qts }] = await Promise.all([
     supabase.from("sales_docs").select("*").eq("company_id", companyId).eq("kind", "invoice").not("status", "in", "(draft,void)").limit(10000),
     supabase.from("sales_payments").select("kind, amount, paid_on").eq("company_id", companyId).limit(20000),
     supabase.from("subscriptions").select("*").eq("company_id", companyId).limit(5000),
     supabase.from("expenses").select("expense_date, amount, category").eq("company_id", companyId).limit(20000), // sin el SQL 3.36 viene vacío
+    supabase.from("sales_docs").select("status, total, expiry_date").eq("company_id", companyId).eq("kind", "quote").limit(10000),
   ]);
   const invoices = (inv ?? []) as SalesDoc[];
   const payments = (pays ?? []).filter((p) => p.kind === "payment");
@@ -51,12 +53,13 @@ export async function loadDashboard(supabase: SupabaseClient, companyId: string)
   };
 
   // Resumen para el celular
-  const aging = [0, 0, 0, 0, 0];
+  const aging = [0, 0, 0, 0, 0]; const agingCount = [0, 0, 0, 0, 0];
   let current = 0, overdue = 0;
   data.openInvoices.forEach((o) => {
     const late = daysBetween(o.due, t);
-    if (late <= 0) { current += o.balance; aging[0] += o.balance; }
-    else { overdue += o.balance; aging[late <= 15 ? 1 : late <= 30 ? 2 : late <= 45 ? 3 : 4] += o.balance; }
+    const b = late <= 0 ? 0 : late <= 15 ? 1 : late <= 30 ? 2 : late <= 45 ? 3 : 4;
+    if (b === 0) current += o.balance; else overdue += o.balance;
+    aging[b] += o.balance; agingCount[b] += 1;
   });
   const months: string[] = []; const income: number[] = []; const receipts: number[] = []; const expenses: number[] = [];
   for (let i = 12; i >= 0; i--) {
@@ -75,9 +78,20 @@ export async function loadDashboard(supabase: SupabaseClient, companyId: string)
   const receipts12 = data.payments.filter((x) => x.date >= since).reduce((a, x) => a + x.amount, 0);
   const income12 = data.invoices.filter((x) => x.date >= since).reduce((a, x) => a + x.amount, 0);
   const mrrNow = mrr[mrr.length - 1]?.amount ?? 0; const activeNow = active[active.length - 1]?.amount ?? 0;
+  const yr12 = since;
+  const catMap = new Map<string, number>();
+  data.expenses.filter((x) => x.date >= yr12).forEach((x) => catMap.set(x.category ?? "Other", (catMap.get(x.category ?? "Other") ?? 0) + x.amount));
+  const expenseByCat = Array.from(catMap.entries()).sort((a, b) => b[1] - a[1]);
+  const q = (qts ?? []) as { status: string; total: number; expiry_date: string | null }[];
+  const openQ = q.filter((x) => ["sent", "viewed"].includes(x.status) && (!x.expiry_date || x.expiry_date >= t));
+  const quoteStats = {
+    sent: q.filter((x) => x.status !== "draft").length, accepted: q.filter((x) => ["accepted", "invoiced"].includes(x.status)).length,
+    declined: q.filter((x) => x.status === "declined").length, open: openQ.length, openValue: openQ.reduce((a, x) => a + Number(x.total), 0),
+  };
   return {
     data,
     mobile: {
+      agingCount, expenseByCat, quoteStats,
       total: current + overdue, current, overdue, aging, months, income, receipts, expenses, ytdReceived, ytdExpenses, ytdInvoiced, revenue12: receipts12, income12, receipts12,
       mrr: mrrNow, activeSubs: activeNow, arpu: activeNow ? mrrNow / activeNow : 0,
     },
