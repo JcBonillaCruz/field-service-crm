@@ -3,7 +3,7 @@ import { getSession } from "@/lib/session";
 import { canManageSales, pdfOf } from "@/lib/sales";
 import { loadDoc } from "@/lib/sales-server";
 import { buildSalesPdf, pdfFileName } from "@/lib/sales-pdf";
-import { emailHtml, ensureToken, pdfInputFrom } from "@/lib/sales-mail";
+import { emailHtml, ensureToken, loadPhotos, pdfInputFrom } from "@/lib/sales-mail";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
   const link = `${origin}/share/${token}`;
   const attachments: { filename: string; content: string }[] = [];
   if (b.attachPdf !== false) {
-    const bytes = await buildSalesPdf(pdfInputFrom(d));
+    const bytes = await buildSalesPdf({ ...pdfInputFrom(d), photos: await loadPhotos(supabase, d.doc, d.files) });
     attachments.push({ filename: pdfFileName(d.doc), content: Buffer.from(bytes).toString("base64") });
   }
   for (const f of d.files.filter((x) => (b.fileIds ?? []).includes(x.id))) {

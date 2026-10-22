@@ -6,6 +6,7 @@ export type CompanySummary = {
   industry: string | null;
   role: Role;
   createdAt: string;
+  logoUrl?: string | null; // logo de la compañía (Settings → Branding / Edit organization)
 };
 
 export type CurrentUser = {

@@ -3,7 +3,7 @@ import { getSession } from "@/lib/session";
 import { canManageSales } from "@/lib/sales";
 import { loadDoc } from "@/lib/sales-server";
 import { buildSalesPdf, pdfFileName } from "@/lib/sales-pdf";
-import { pdfInputFrom } from "@/lib/sales-mail";
+import { loadPhotos, pdfInputFrom } from "@/lib/sales-mail";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +18,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   if (!d) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const v = request.nextUrl.searchParams.get("v");
   const variant = v === "delivery" ? "delivery" : v === "packing" ? "packing" : "full";
-  const bytes = await buildSalesPdf(pdfInputFrom(d, variant));
+  const photos = variant === "full" ? await loadPhotos(supabase, d.doc, d.files) : [];
+  const bytes = await buildSalesPdf({ ...pdfInputFrom(d, variant), photos });
   const inline = request.nextUrl.searchParams.get("inline") === "1";
   return new NextResponse(Buffer.from(bytes), {
     headers: {

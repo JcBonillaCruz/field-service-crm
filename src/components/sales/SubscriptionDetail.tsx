@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { db, invoiceFromSubscription, logActivity } from "@/lib/sales-client";
 import { Activity, Comment, FREQ_LABEL, SalesDoc, SalesLine, SalesPrefs, Subscription, addressLines, balanceOf, fmtD, invoiceStatus, money, subStatus } from "@/lib/sales";
 import { CloseButton } from "@/components/catalog/DetailBits";
+import { useSwipe } from "@/components/ui/useSwipe";
 import BottomSheet from "@/components/customers/BottomSheet";
 import { sheetAction } from "@/components/ui/sheet";
 import PrefsPanel from "@/components/sales/PrefsPanel";
@@ -19,7 +20,10 @@ export default function SubscriptionDetail({ data, prefs, actor }: {
   const { sub, lines, invoices } = data;
   const s = subStatus(sub);
   const base = "/dashboard/subscriptions";
-  const [tab, setTab] = useState(0);
+  const [tab, setTabRaw] = useState(0);
+  const [dir, setDir] = useState<"l" | "r">("l");
+  const setTab = (i: number) => { setDir(i > tab ? "l" : "r"); setTabRaw(i); };
+  const swipe = useSwipe(() => tab > 0 && setTab(tab - 1), () => tab < 2 && setTab(tab + 1));
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState("");
   const [sheet, setSheet] = useState(false);
@@ -117,6 +121,7 @@ export default function SubscriptionDetail({ data, prefs, actor }: {
             ))}
           </div>
 
+          <div {...swipe} key={tab} className={`lg:animate-none ${dir === "l" ? "animate-[bp-in-left_0.25s_ease-out]" : "animate-[bp-in-right_0.25s_ease-out]"}`}>
           {tab === 0 && (
             <div className="space-y-6 p-5 sm:p-7">
               <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -178,6 +183,7 @@ export default function SubscriptionDetail({ data, prefs, actor }: {
               <ActivityList rows={data.activity.length ? data.activity : [{ id: "c", message: "Subscription created", detail: null, actor_name: sub.created_by_name, created_at: sub.created_at }]} />
             </div>
           )}
+          </div>
         </div>
       </div>
 

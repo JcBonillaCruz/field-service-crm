@@ -73,7 +73,7 @@ export default function CompanySwitcher({
     <div className="min-w-0 max-w-full sm:max-w-[260px]">
       <button type="button" onClick={() => { setOpen(true); reset(); }} aria-expanded={open}
         className="flex w-full min-w-0 items-center gap-2 rounded-lg py-1.5 pl-1.5 pr-2 text-sm hover:bg-slate-100">
-        {current && <CompanyBadge id={current.id} name={current.name} index={companies.indexOf(current)} size={28} />}
+        {current && <CompanyBadge id={current.id} name={current.name} index={companies.indexOf(current)} size={28} logoUrl={current.logoUrl} />}
         <span className="min-w-0 flex-1 truncate text-left font-medium text-slate-800">{current?.name}</span>
         <svg viewBox="0 0 20 20" className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
       </button>
@@ -127,7 +127,7 @@ export default function CompanySwitcher({
                       <div>
                         <div className="flex items-center gap-3 px-4 py-3">
                           <button type="button" onClick={() => { onSwitch(c.id); close(); }} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-                            <CompanyBadge id={c.id} name={c.name} index={i} size={40} />
+                            <CompanyBadge id={c.id} name={c.name} index={i} size={40} logoUrl={c.logoUrl} />
                             <span className="min-w-0 flex-1">
                               <span className="flex items-center gap-2">
                                 <span className="truncate text-sm font-semibold text-slate-800">{c.name}</span>

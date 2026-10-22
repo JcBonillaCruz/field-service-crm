@@ -33,6 +33,7 @@ const NAV: NavItem[] = [
       { label: "Invoices", href: "/dashboard/invoices", addHref: "/dashboard/invoices/new", icon: "" },
       { label: "Subscriptions", href: "/dashboard/subscriptions", addHref: "/dashboard/subscriptions/new", icon: "" },
     ] },
+  { label: "Expenses", href: "/dashboard/expenses", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 9h6M9 13h6M12 6v1M12 15v1", roles: ["owner", "manager", "office"] },
   { label: "Payments", icon: "M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 10h18M7 15h3", roles: ["owner", "manager"] },
   { label: "Jobs", icon: "M14.7 6.3a4 4 0 0 0-5.4 5.2l-5.8 5.8a1.8 1.8 0 0 0 2.6 2.6l5.8-5.8a4 4 0 0 0 5.2-5.4l-2.5 2.5-2.4-.4-.4-2.4z" },
   { label: "Dispatch", icon: "M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 1 1 13 0c0 5.4-6.5 11-6.5 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z", roles: ["owner", "manager", "office"] },
@@ -71,7 +72,7 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
   const size = mobile ? "text-[15px] py-2.5" : "text-[13px] py-2";
   const activeCls = mobile
     ? "bg-[#dff3ee] font-semibold text-[#0f766e]"   // suavecito, como la app de Zoho
-    : "bg-gradient-to-r from-[#0f766e] to-[#14a39a] font-semibold text-white shadow-md shadow-[#0f766e]/25";
+    : "bg-[radial-gradient(120%_140%_at_50%_120%,#2bb3a4_0%,#1a8f84_45%,#167d74_100%)] font-semibold text-white shadow-[0_4px_14px_rgba(15,118,110,0.22)]";
 
   const icon = (d: string) => (
     <svg viewBox="0 0 24 24" className={`${mobile ? "h-5 w-5" : "h-[18px] w-[18px]"} shrink-0 group-hover:animate-[bp-nav-pop_0.5s_ease-out_forwards]`} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

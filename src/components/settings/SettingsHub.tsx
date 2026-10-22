@@ -39,7 +39,7 @@ const SECTIONS: Section[] = [
     { title: "Online Payments", icon: ic.card, tone: "bg-[#fff6e8] text-[#d97706]", items: [{ label: "Payment Gateways" }, { label: "Address Verification Settings" }] },
     { title: "Sales", icon: ic.cart, tone: "bg-[#e9f7f4] text-[#0f766e]", items: [{ label: "Quotes", href: "/dashboard/quotes?prefs=1" }, { label: "Invoices", href: "/dashboard/invoices?prefs=1" }, { label: "Payments Received" }, { label: "Delivery Notes", href: "/dashboard/settings/pdf-templates?for=invoice" }, { label: "Packing Slips", href: "/dashboard/settings/pdf-templates?for=invoice" }] },
     { title: "Subscriptions", icon: ic.repeat, tone: "bg-[#e9f7f4] text-[#0f766e]", items: [{ label: "General", href: "/dashboard/subscriptions?prefs=1" }, { label: "Billing Preferences" }, { label: "Advance Billing" }, { label: "Dunning Management" }, { label: "Cancellation Preferences" }] },
-    { title: "Purchases", icon: ic.bag, tone: "bg-[#e9f7f4] text-[#0f766e]", items: [{ label: "Expenses" }] },
+    { title: "Purchases", icon: ic.bag, tone: "bg-[#e9f7f4] text-[#0f766e]", items: [{ label: "Expenses", href: "/dashboard/expenses" }] },
     { title: "Customer Portal", icon: ic.portal, tone: "bg-[#e9f7f4] text-[#0f766e]", items: [{ label: "General" }, { label: "Subscription Management" }, { label: "Web Tabs" }] },
     { title: "Custom Modules", icon: ic.module, tone: "bg-[#eef6ff] text-[#2563eb]", items: [{ label: "Overview" }] },
   ] },

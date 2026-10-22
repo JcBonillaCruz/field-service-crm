@@ -33,14 +33,14 @@ function Chips({ value, onChange, placeholder }: { value: string[]; onChange: (v
   return (
     <div className="flex min-h-[46px] flex-wrap items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 focus-within:border-[#0f766e] focus-within:bg-white">
       {value.map((e) => (
-        <span key={e} className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-sm ${/^\S+@\S+\.\S+$/.test(e) ? "bg-[#e9f7f4] text-[#0b1f3a]" : "bg-red-50 text-red-600"}`}>
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-semibold uppercase text-[#0f766e]">{e[0]}</span>{e}
+        <span key={e} className={`flex max-w-full items-center gap-1.5 rounded-md px-2 py-1 text-sm ${/^\S+@\S+\.\S+$/.test(e) ? "bg-[#e9f7f4] text-[#0b1f3a]" : "bg-red-50 text-red-600"}`}>
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-semibold uppercase text-[#0f766e]">{e[0]}</span><span className="min-w-0 truncate">{e}</span>
           <button type="button" onClick={() => onChange(value.filter((x) => x !== e))} aria-label={`Remove ${e}`} className="text-slate-400 hover:text-red-600">×</button>
         </span>
       ))}
       <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={value.length ? "" : placeholder}
         onKeyDown={(e) => { if (["Enter", ",", " ", "Tab"].includes(e.key) && draft.trim()) { e.preventDefault(); add(draft); } if (e.key === "Backspace" && !draft && value.length) onChange(value.slice(0, -1)); }}
-        onBlur={() => draft.trim() && add(draft)} className="min-w-[10rem] flex-1 bg-transparent px-1 py-1 text-[15px] focus:outline-none" />
+        onBlur={() => draft.trim() && add(draft)} className="min-w-[6rem] flex-1 bg-transparent px-1 py-1 text-[15px] focus:outline-none" />
     </div>
   );
 }
@@ -112,31 +112,33 @@ export function SendEmailModal({ open, onClose, doc, companyName, actor, reminde
         {fallback && <button type="button" onClick={openMailApp} className="text-sm font-medium text-[#2563eb] hover:underline">Open in my email app instead</button>}
       </>}>
       <div className="overflow-hidden rounded-xl border border-slate-200">
-        <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-3 border-b border-slate-100 px-4 py-2.5 text-[15px]">
+        <div className="grid grid-cols-1 gap-1 border-b border-slate-100 px-4 py-2.5 text-[15px] sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:items-center sm:gap-3">
           <span className="text-slate-500">From</span><span className="truncate text-slate-700">{companyName} <span className="text-slate-400">· replies go to you</span></span>
         </div>
-        <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-start gap-3 border-b border-slate-100 px-4 py-2">
-          <span className="pt-3 text-[15px] text-slate-500">Send To</span>
-          <div className="flex items-start gap-2"><div className="min-w-0 flex-1"><Chips value={to} onChange={setTo} placeholder="name@example.com" /></div>
-            {!showCc && <button type="button" onClick={() => setShowCc(true)} className="shrink-0 pt-3 text-sm text-[#2563eb] hover:underline">Cc / Bcc</button>}</div>
+        <div className="grid grid-cols-1 gap-1 border-b border-slate-100 px-4 py-2.5 sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:items-start sm:gap-3">
+          <span className="text-[13px] font-medium text-slate-500 sm:pt-3 sm:text-[15px] sm:font-normal">Send To</span>
+          <div className="min-w-0">
+            <Chips value={to} onChange={setTo} placeholder="name@example.com" />
+            {!showCc && <button type="button" onClick={() => setShowCc(true)} className="mt-1.5 text-[13px] font-medium text-[#0f766e] hover:underline">+ Add Cc / Bcc</button>}
+          </div>
         </div>
         {showCc && <>
-          <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-start gap-3 border-b border-slate-100 px-4 py-2"><span className="pt-3 text-[15px] text-slate-500">Cc</span><Chips value={cc} onChange={setCc} /></div>
-          <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-start gap-3 border-b border-slate-100 px-4 py-2"><span className="pt-3 text-[15px] text-slate-500">Bcc</span><Chips value={bcc} onChange={setBcc} /></div>
+          <div className="grid grid-cols-1 gap-1 border-b border-slate-100 px-4 py-2.5 sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:items-start sm:gap-3"><span className="text-[13px] font-medium text-slate-500 sm:pt-3 sm:text-[15px] sm:font-normal">Cc <span className="font-normal text-slate-400">(copy)</span></span><Chips value={cc} onChange={setCc} placeholder="Copy someone" /></div>
+          <div className="grid grid-cols-1 gap-1 border-b border-slate-100 px-4 py-2.5 sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:items-start sm:gap-3"><span className="text-[13px] font-medium text-slate-500 sm:pt-3 sm:text-[15px] sm:font-normal">Bcc <span className="font-normal text-slate-400">(hidden copy)</span></span><Chips value={bcc} onChange={setBcc} placeholder="Hidden copy" /></div>
         </>}
-        <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-3 border-b border-slate-100 px-4 py-1.5">
-          <span className="text-[15px] text-slate-500">Subject</span>
+        <div className="grid grid-cols-1 gap-1 border-b border-slate-100 px-4 py-2 sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:items-center sm:gap-3">
+          <span className="text-[13px] font-medium text-slate-500 sm:text-[15px] sm:font-normal">Subject</span>
           <input value={subject} onChange={(e) => setSubject(e.target.value)} className="w-full bg-transparent py-1.5 text-[15px] text-slate-800 focus:outline-none" />
         </div>
         <div className="flex gap-1 border-b border-slate-100 bg-[#fafbfc] px-3 py-1.5">
           {([["**", "B", "font-bold"], ["*", "I", "italic"], ["__", "U", "underline"]] as const).map(([m, l, c]) => (
             <button key={l} type="button" onClick={() => wrap(m)} className={`h-8 w-8 rounded-md text-sm text-slate-600 hover:bg-white hover:text-[#0f766e] ${c}`}>{l}</button>
           ))}
-          <span className="ml-auto self-center text-[12px] text-slate-400">{"{link}"} becomes a &quot;View {noun}&quot; button</span>
+          <span className="ml-auto hidden self-center text-[12px] text-slate-400 sm:block">{"{link}"} becomes a &quot;View {noun}&quot; button</span>
         </div>
         <textarea ref={ref} rows={11} value={body} onChange={(e) => setBody(e.target.value)} className="w-full resize-y px-4 py-3 text-[15px] leading-relaxed text-slate-800 focus:outline-none" />
       </div>
-      <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-xl bg-[#eef6ff] px-4 py-3 text-[15px] text-slate-700">
+      <label className="mt-3 flex cursor-pointer flex-wrap items-center gap-3 rounded-xl bg-[#eef6ff] px-4 py-3 text-[15px] text-slate-700">
         <input type="checkbox" checked={attachPdf} onChange={(e) => setAttachPdf(e.target.checked)} className="h-4 w-4 accent-[#2563eb]" />
         Attach {noun} PDF
         <span className="ml-auto flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm"><Ico d={I.pdf} className="h-4 w-4 text-red-500" />{doc.number}</span>
@@ -157,9 +159,30 @@ export function SendEmailModal({ open, onClose, doc, companyName, actor, reminde
 }
 
 // ---------- Compartir enlace público ----------
-export function ShareModal({ open, onClose, doc, actor }: { open: boolean; onClose: () => void; doc: SalesDoc; actor: string }) {
+export function ShareModal({ open, onClose, doc, actor, companyName = "" }: { open: boolean; onClose: () => void; doc: SalesDoc; actor: string; companyName?: string }) {
   const router = useRouter();
   const [token, setToken] = useState(doc.share_token);
+  const [phone, setPhone] = useState("");
+  // Teléfono del cliente para mandarlo por mensaje o WhatsApp (gente que no usa correo)
+  useEffect(() => {
+    if (!open || !doc.customer_id) return;
+    db().from("customer_phones").select("number").eq("customer_id", doc.customer_id).limit(1).then(({ data }) => { if (data?.[0]?.number) setPhone(data[0].number); });
+  }, [open, doc.customer_id]);
+  async function sendBy(channel: "sms" | "whatsapp" | "native") {
+    let t = token;
+    if (!t) { t = randomToken(); await db().from("sales_docs").update({ share_token: t }).eq("id", doc.id); setToken(t); }
+    const amount = money(doc.kind === "invoice" ? balanceOf(doc) : doc.total);
+    const text = `Hi ${doc.customer_name}, here is your ${doc.kind} ${doc.number} for ${amount}${companyName ? ` from ${companyName}` : ""}. You can view it here: ${shareUrl(t)}`;
+    const digits = phone.replace(/\D/g, "");
+    const intl = digits.length === 10 ? `1${digits}` : digits;
+    if (channel === "native" && navigator.share) { try { await navigator.share({ title: `${noun} ${doc.number}`, text }); } catch { return; } }
+    else if (channel === "whatsapp") window.open(`https://wa.me/${intl}?text=${encodeURIComponent(text)}`, "_blank");
+    else window.location.href = `sms:${digits ? `+${intl}` : ""}${/iPhone|iPad|Mac/.test(navigator.userAgent) ? "&" : "?"}body=${encodeURIComponent(text)}`;
+    const how = channel === "whatsapp" ? "WhatsApp" : channel === "sms" ? "text message" : "the phone's share menu";
+    await db().from("sales_docs").update({ ...(doc.status === "draft" ? { status: "sent", sent_at: new Date().toISOString() } : {}) }).eq("id", doc.id);
+    await logActivity(doc.company_id, doc.kind, doc.id, `${noun} shared by ${how}${digits ? ` to ${phone}` : ""}`, actor);
+    router.refresh();
+  }
   const [expires, setExpires] = useState(doc.share_expires_on ?? "");
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -186,6 +209,22 @@ export function ShareModal({ open, onClose, doc, actor }: { open: boolean; onClo
   return (
     <Modal open={open} onClose={onClose} title={`Share ${noun} Link`}>
       <div className="space-y-4">
+        {/* Por mensaje de texto o WhatsApp */}
+        <div className="rounded-xl border border-slate-200 p-4">
+          <p className="mb-2 text-sm font-semibold text-[#0b1f3a]">Send by text or WhatsApp</p>
+          <input type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Customer phone, e.g. (214) 555-0123" className={inputClass} />
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <button type="button" onClick={() => sendBy("sms")} className="flex items-center justify-center gap-2 rounded-lg bg-[#0f766e] px-3 py-2.5 text-sm font-semibold text-white transition-transform hover:bg-[#0c5f59] active:scale-95">
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 5h16v11H9l-5 4z" strokeLinejoin="round" /></svg>Text message
+            </button>
+            <button type="button" onClick={() => sendBy("whatsapp")} className="flex items-center justify-center gap-2 rounded-lg bg-[#25d366] px-3 py-2.5 text-sm font-semibold text-white transition-transform hover:bg-[#1ebe5b] active:scale-95">
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.7 15l-1.3 5 5.1-1.3A10 10 0 1 0 12 2zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.8s.7-2 1-2.3c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .5l-.3.5-.4.4c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.9-1c.2-.3.4-.2.7-.1l1.9.9c.3.1.5.2.5.3.1.2.1.8-.1 1.4z" /></svg>WhatsApp
+            </button>
+            {typeof navigator !== "undefined" && "share" in navigator && (
+              <button type="button" onClick={() => sendBy("native")} className="col-span-2 flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:col-span-1">More apps…</button>
+            )}
+          </div>
+        </div>
         <p className="text-[15px] text-slate-600">Anyone with the link can view, print and download this {noun.toLowerCase()}. They can't see anything else in your account.</p>
         <div>
           <Label>Link Expiration Date</Label>
@@ -360,7 +399,8 @@ export function AttachmentsButton({ entity, entityId, companyId, files }: { enti
     if (!list?.length) return;
     setError("");
     const arr = Array.from(list);
-    if (files.length + arr.length > 5) return setError("You can upload a maximum of 5 files.");
+    const max = entity === "invoice" ? 15 : 5;
+    if (files.length + arr.length > max) return setError(`You can upload a maximum of ${max} files.`);
     if (arr.some((f) => f.size > 10 * 1024 * 1024)) return setError("Each file must be 10 MB or smaller.");
     setBusy(true);
     const supabase = db();
@@ -409,7 +449,7 @@ export function AttachmentsButton({ entity, entityId, companyId, files }: { enti
             className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 py-3 text-sm font-medium text-[#2563eb] hover:border-[#2563eb] hover:bg-[#f5f9ff]">
             <Ico d={I.download} className="h-4 w-4 rotate-180" />{busy ? "Uploading..." : "Upload your Files"}
           </button>
-          <p className="mt-2 text-[11px] text-slate-400">You can upload a maximum of 5 files, 10MB each</p>
+          <p className="mt-2 text-[11px] text-slate-400">{entity === "invoice" ? "Up to 15 files, 10MB each. JPG/PNG photos go inside the PDF (4 per page, up to 12)." : "You can upload a maximum of 5 files, 10MB each"}</p>
           {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
         </div>
       </PopoverPanel>

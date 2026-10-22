@@ -55,10 +55,11 @@ export function Ribbon({ label, tone }: { label: string; tone: Tone }) {
   );
 }
 
-// Botón plano de la barra de herramientas (Edit, Share, Convert to Invoice…)
+// Botón de la barra de herramientas: ícono en cuadrito menta que salta y gira un poquito al pasar el mouse
+const tbIcon = "flex h-8 w-8 items-center justify-center rounded-lg bg-[#eef8f5] text-[#0f766e] transition-all duration-300 group-hover/tb:-translate-y-0.5 group-hover/tb:-rotate-6 group-hover/tb:scale-110 group-hover/tb:bg-[#d7f1eb] group-hover/tb:shadow-[0_4px_10px_rgba(15,118,110,0.18)] group-active/tb:scale-95";
 export function ToolButton({ icon, label, onClick, href, disabled }: { icon: string; label: string; onClick?: () => void; href?: string; disabled?: boolean }) {
-  const cls = "group/tb flex h-9 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[14px] text-slate-700 transition-colors hover:bg-[#e9f7f4] hover:text-[#0f766e] disabled:cursor-not-allowed disabled:opacity-40";
-  const inner = <><span className="transition-transform duration-200 group-hover/tb:-translate-y-0.5"><Ico d={icon} /></span>{label}</>;
+  const cls = "group/tb flex h-11 shrink-0 items-center gap-2 rounded-xl px-2.5 text-[14px] font-medium text-slate-700 transition-colors hover:bg-[#f3fbf8] hover:text-[#0b3f3b] disabled:cursor-not-allowed disabled:opacity-40";
+  const inner = <><span className={tbIcon}><Ico d={icon} className="h-[18px] w-[18px]" /></span>{label}</>;
   if (href) return <Link href={href} className={cls}>{inner}</Link>;
   return <button type="button" onClick={onClick} disabled={disabled} className={cls}>{inner}</button>;
 }
@@ -71,10 +72,10 @@ export function ToolMenu({ icon, label, items, dots = false, align = "start" }: 
   return (
     <Menu>
       <MenuButton aria-label={label ?? "More"}
-        className={`group flex h-9 shrink-0 items-center gap-1.5 rounded-md text-[14px] text-slate-700 transition-colors hover:bg-[#e9f7f4] hover:text-[#0f766e] data-[open]:bg-[#e9f7f4] data-[open]:text-[#0f766e] focus:outline-none ${dots ? "w-9 justify-center border border-slate-200" : "px-2.5"}`}>
+        className={`group group/tb flex h-11 shrink-0 items-center gap-2 rounded-xl text-[14px] font-medium text-slate-700 transition-colors hover:bg-[#f3fbf8] hover:text-[#0b3f3b] data-[open]:bg-[#f3fbf8] focus:outline-none ${dots ? "w-11 justify-center" : "px-2.5"}`}>
         {dots ? (
-          <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor" aria-hidden="true"><circle cx="4.5" cy="10" r="1.6" /><circle cx="10" cy="10" r="1.6" /><circle cx="15.5" cy="10" r="1.6" /></svg>
-        ) : (<>{icon && <Ico d={icon} />}{label}<Chev /></>)}
+          <span className={tbIcon}><svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor" aria-hidden="true"><circle cx="4.5" cy="10" r="1.6" /><circle cx="10" cy="10" r="1.6" /><circle cx="15.5" cy="10" r="1.6" /></svg></span>
+        ) : (<>{icon && <span className={tbIcon}><Ico d={icon} className="h-[18px] w-[18px]" /></span>}{label}<Chev /></>)}
       </MenuButton>
       <MenuItems anchor={align === "end" ? "bottom end" : "bottom start"} transition
         className="z-[80] mt-1 min-w-[12rem] rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_12px_40px_rgba(15,40,60,0.16)] transition duration-150 ease-out focus:outline-none data-[closed]:scale-95 data-[closed]:opacity-0">
@@ -84,7 +85,7 @@ export function ToolMenu({ icon, label, items, dots = false, align = "start" }: 
             <MenuItem disabled={a.soon}>
               {a.href ? (
                 <Link href={a.href} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-slate-700 data-[focus]:bg-[#e9f7f4] data-[focus]:text-[#0b1f3a]">
-                  {a.icon && <Ico d={a.icon} />}{a.label}
+                  {a.icon && <Ico d={a.icon} className="h-4 w-4 text-[#0f766e]" />}{a.label}
                 </Link>
               ) : (
                 <button type="button" onClick={a.onClick}
@@ -101,7 +102,7 @@ export function ToolMenu({ icon, label, items, dots = false, align = "start" }: 
   );
 }
 
-export const Divider = () => <span className="mx-0.5 h-5 w-px shrink-0 bg-slate-200" aria-hidden="true" />;
+export const Divider = () => <span className="mx-1 h-6 w-px shrink-0 bg-slate-200" aria-hidden="true" />;
 
 function useEsc(open: boolean, onClose: () => void, lock = true) {
   const [shown, setShown] = useState(false);

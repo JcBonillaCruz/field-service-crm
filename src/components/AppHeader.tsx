@@ -91,12 +91,14 @@ export default function AppHeader({
 
       {/* New company dialog */}
       {creating && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
-          <button type="button" aria-label="Close" onClick={() => setCreating(false)} className="absolute inset-0 bg-slate-900/30" />
-          <div role="dialog" aria-modal="true" aria-labelledby="new-company-title" className="relative w-full max-w-md rounded-2xl bg-white p-7 shadow-2xl">
+        <div className="fixed inset-0 z-[70] overflow-y-auto">
+          <button type="button" aria-label="Close" onClick={() => setCreating(false)} className="fixed inset-0 bg-slate-900/30" />
+          <div className="relative flex min-h-full items-center justify-center p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="new-company-title" className="relative w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl sm:p-7 animate-[bp-fade_0.2s_ease-out]">
             <h2 id="new-company-title" className="text-xl font-semibold text-[#0b1f3a]">New company</h2>
             <p className="mt-1 mb-6 text-sm text-slate-500">It gets its own customers, invoices and inventory.</p>
             <CreateCompanyForm onDone={() => setCreating(false)} />
+          </div>
           </div>
         </div>
       )}

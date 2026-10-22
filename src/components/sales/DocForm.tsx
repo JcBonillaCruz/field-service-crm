@@ -179,7 +179,7 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
   const label = (text: string, req = false, hint?: string) => ({ label: text, required: req, hint });
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] flex-col bg-white">
+    <div className="flex min-h-[calc(100vh-4rem)] flex-col bg-white max-sm:bg-[#f4f6f8] max-sm:pb-3">
       <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-3 sm:px-8">
         {isQuote ? (
           <div className="flex gap-6">
@@ -207,12 +207,11 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
 
       <div className="flex-1">
         {/* Cliente */}
-        <div className="border-b border-slate-200 bg-[#fafbfc] px-5 py-6 sm:px-8">
+        <div className="border-b border-slate-200 bg-[#fafbfc] px-5 py-6 sm:px-8 max-sm:mx-3 max-sm:mt-3 max-sm:rounded-2xl max-sm:border max-sm:border-slate-200 max-sm:bg-white max-sm:px-4 max-sm:shadow-[0_1px_4px_rgba(15,40,60,0.06)]">
           <div className="max-w-[1100px] space-y-4">
             <FormRow {...label("Customer Name", true)} htmlFor="d-cust" width="max-w-[560px]">
               <CustomerSelect id="d-cust" value={customerId} customers={customers} onChange={setCustomerId} />
               <div className="mt-1 flex flex-wrap items-center gap-x-4">
-                <Link href="/dashboard/customers/new" target="_blank" className="text-[13px] font-medium text-[#2563eb] hover:underline">+ New Customer</Link>
                 <CustomerDrawer customerId={customerId || null} />
               </div>
             </FormRow>
@@ -248,7 +247,7 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
           </div>
         </div>
 
-        <div className="space-y-5 border-b border-slate-200 px-5 py-6 sm:px-8">
+        <div className="space-y-5 border-b border-slate-200 px-5 py-6 sm:px-8 max-sm:mx-3 max-sm:mt-3 max-sm:rounded-2xl max-sm:border max-sm:border-slate-200 max-sm:bg-white max-sm:px-4 max-sm:shadow-[0_1px_4px_rgba(15,40,60,0.06)]">
           <div className="grid max-w-[1100px] gap-5">
             <FormRow {...label(isQuote ? "Quote#" : "Invoice#", true)} htmlFor="d-num" width="max-w-[340px]">
               <div className="relative">
@@ -284,7 +283,7 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
         </div>
 
         {(isQuote || !simple) && (
-          <div className="space-y-5 border-b border-slate-200 px-5 py-6 sm:px-8">
+          <div className="space-y-5 border-b border-slate-200 px-5 py-6 sm:px-8 max-sm:mx-3 max-sm:mt-3 max-sm:rounded-2xl max-sm:border max-sm:border-slate-200 max-sm:bg-white max-sm:px-4 max-sm:shadow-[0_1px_4px_rgba(15,40,60,0.06)]">
             <div className="grid max-w-[1100px] gap-5">
               <FormRow label="Salesperson" htmlFor="d-sp" width="max-w-[340px]">
                 <Combobox immediate value={salesperson} onChange={(v: string | null) => v != null && setSalesperson(v)}>
@@ -316,7 +315,7 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
         )}
 
         {/* Artículos + totales */}
-        <div className="px-5 py-6 sm:px-8">
+        <div className="px-5 py-6 sm:px-8 max-sm:mx-3 max-sm:mt-3 max-sm:rounded-2xl max-sm:border max-sm:border-slate-200 max-sm:bg-white max-sm:px-4 max-sm:shadow-[0_1px_4px_rgba(15,40,60,0.06)]">
           <div className="max-w-[1100px]">
             <LineItems lines={lines} setLines={setLines} items={items} />
             <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
@@ -385,7 +384,7 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
         </div>
 
         {/* Términos y adjuntos */}
-        <div className="border-t border-slate-200 bg-[#fafbfc] px-5 py-6 sm:px-8">
+        <div className="border-t border-slate-200 bg-[#fafbfc] px-5 py-6 sm:px-8 max-sm:mx-3 max-sm:mt-3 max-sm:rounded-2xl max-sm:border max-sm:border-slate-200 max-sm:bg-white max-sm:px-4 max-sm:shadow-[0_1px_4px_rgba(15,40,60,0.06)]">
           {simple && !isQuote && !showTc ? (
             <div className="space-y-3">
               <button type="button" onClick={() => setShowTc(true)} className="flex items-center gap-2 text-[15px] text-[#0b1f3a]"><span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#2563eb] text-white">+</span>Add Terms and conditions</button>
@@ -401,14 +400,15 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
                 <label className="mb-1.5 block text-[15px] text-slate-700">Attach File(s) to {noun}</label>
                 <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => {
                   const add = Array.from(e.target.files ?? []); e.target.value = "";
-                  if (files.length + add.length > 5) return setError("You can upload a maximum of 5 files.");
+                  const max = isQuote ? 5 : 15;
+                  if (files.length + add.length > max) return setError(`You can upload a maximum of ${max} files.`);
                   if (add.some((f) => f.size > 10 * 1024 * 1024)) return setError("Each file must be 10 MB or smaller.");
                   setFiles((l) => [...l, ...add]);
                 }} />
                 <button type="button" onClick={() => fileRef.current?.click()} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:border-[#14a39a] hover:text-[#0f766e]">
                   <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 15V4m0 0-4 4m4-4 4 4M5 19h14" strokeLinecap="round" strokeLinejoin="round" /></svg>Upload File
                 </button>
-                <p className="mt-1 text-[12px] text-slate-500">You can upload a maximum of 5 files, 10MB each</p>
+                <p className="mt-1 text-[12px] text-slate-500">{isQuote ? "You can upload a maximum of 5 files, 10MB each" : "Up to 15 files, 10MB each. JPG/PNG job photos are added to the invoice PDF (4 per page, up to 12)."}</p>
                 {files.map((f, i) => (
                   <p key={i} className="mt-1 flex items-center gap-2 text-sm text-slate-700">{f.name}<button type="button" onClick={() => setFiles((l) => l.filter((_, j) => j !== i))} className="text-red-500 hover:underline">remove</button></p>
                 ))}

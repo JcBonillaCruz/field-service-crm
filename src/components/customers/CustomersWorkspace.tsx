@@ -226,7 +226,10 @@ export default function CustomersWorkspace({
             <span className="text-slate-700">Total customers</span>
             <span className="text-lg font-semibold text-[#0b1f3a]">{list.length}</span>
           </div>
-          <p className="rounded-xl bg-[#eef6ff] px-4 py-3 text-sm text-slate-600">Importing and exporting customers is available on the desktop version.</p>
+          <button type="button" onClick={() => { setMSheet(null); setExportOpen(true); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[15px] text-slate-700 transition-all hover:bg-[#f6fbfa] active:scale-[0.98] active:bg-[#e9f7f4]">
+            <svg viewBox="0 0 20 20" className="h-5 w-5 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M10 12V3m0 0L6.5 6.5M10 3l3.5 3.5M4 14v1.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V14" strokeLinecap="round" strokeLinejoin="round" /></svg>Export customers (CSV or Excel)
+          </button>
+          <p className="px-1 text-[13px] text-slate-500">Your data is always yours: download it any time.</p>
         </div>
       </BottomSheet>
 

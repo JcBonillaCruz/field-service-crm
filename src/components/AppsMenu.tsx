@@ -16,6 +16,7 @@ const APPS: App[] = [
   { label: "Subscriptions", href: "/dashboard/subscriptions", icon: "M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M18 3v4h-4M6 21v-4h4", tone: ["#e7f7ec", "#c8edd4", "#15803d"], roles: SALES, hint: "Recurring plans" },
   { label: "Items", href: "/dashboard/items", icon: "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9", tone: ["#e8f6fb", "#c9eaf6", "#0369a1"], roles: SALES, hint: "Products & services" },
   { label: "Coupons", href: "/dashboard/coupons", icon: "M3 8V6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v2a2 2 0 0 0 0 4v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6a2 2 0 0 0 0-4zM9 15l6-6M9.5 9.5h.01M14.5 14.5h.01", tone: ["#ffeef3", "#ffd5e1", "#be123c"], roles: SALES, hint: "Discounts" },
+  { label: "Expenses", href: "/dashboard/expenses", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 9h6M9 13h6", tone: ["#fff4e5", "#ffe2bd", "#c2410c"], roles: SALES, hint: "Track spending" },
   { label: "Settings", href: "/dashboard/settings", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 12a8 8 0 0 1 .3-2l-2-1.5 2-3.5 2.3 1a8 8 0 0 1 1.7-1l.3-2.5h4l.3 2.5a8 8 0 0 1 1.7 1l2.3-1 2 3.5-2 1.5a8 8 0 0 1 0 4l2 1.5-2 3.5-2.3-1a8 8 0 0 1-1.7 1l-.3 2.5h-4l-.3-2.5a8 8 0 0 1-1.7-1l-2.3 1-2-3.5 2-1.5a8 8 0 0 1-.3-2z", tone: ["#eef2f6", "#dde4ec", "#334155"], hint: "All settings" },
   { label: "Payments", icon: "M3 7h18v10H3zM3 11h18M7 15h2", tone: ["#f3f5f7", "#f3f5f7", "#cbd5e1"] },
   { label: "Jobs", icon: "M9 6V4h6v2M4 6h16v13H4zM4 12h16", tone: ["#f3f5f7", "#f3f5f7", "#cbd5e1"] },

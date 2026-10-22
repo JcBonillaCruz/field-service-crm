@@ -125,7 +125,7 @@ export default function SubscriptionForm({ companyId, actor, customers, items, s
   const dot = <span className="relative ml-1 flex h-2.5 w-2.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#2563eb] opacity-60" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#2563eb]" /></span>;
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] flex-col bg-white">
+    <div className="flex min-h-[calc(100vh-4rem)] flex-col bg-white max-sm:bg-[#f4f6f8] max-sm:pb-3">
       <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 sm:px-8">
         <h1 className="text-2xl font-semibold tracking-tight text-[#0b1f3a]">{editing ? "Edit Subscription" : clone ? "Clone Subscription" : "New Subscription"}</h1>
         <Link href={editing ? `${base}/${src!.id}` : base} aria-label="Close" className="group/x flex h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-red-50 hover:text-red-600">
@@ -134,7 +134,7 @@ export default function SubscriptionForm({ companyId, actor, customers, items, s
       </div>
 
       <div className="flex-1">
-        <div className="border-b border-slate-200 bg-[#fafbfc] px-5 py-6 sm:px-8">
+        <div className="border-b border-slate-200 bg-[#fafbfc] px-5 py-6 sm:px-8 max-sm:mx-3 max-sm:mt-3 max-sm:rounded-2xl max-sm:border max-sm:border-slate-200 max-sm:bg-white max-sm:px-4 max-sm:shadow-[0_1px_4px_rgba(15,40,60,0.06)]">
           <div className="max-w-[1100px] space-y-4">
             <FormRow label="Customer Name" required htmlFor="s-cust" width="max-w-[620px]">
               <div className="flex items-center gap-2">
@@ -173,7 +173,7 @@ export default function SubscriptionForm({ companyId, actor, customers, items, s
           </div>
         </div>
 
-        <div className="px-5 py-6 sm:px-8">
+        <div className="px-5 py-6 sm:px-8 max-sm:mx-3 max-sm:mt-3 max-sm:rounded-2xl max-sm:border max-sm:border-slate-200 max-sm:bg-white max-sm:px-4 max-sm:shadow-[0_1px_4px_rgba(15,40,60,0.06)]">
           <div className="max-w-[1100px]">
             {/* Descuento: puntito azul animado, como Zoho */}
             <div className="mb-3 flex flex-wrap items-center gap-2">

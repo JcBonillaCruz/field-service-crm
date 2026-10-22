@@ -6,7 +6,9 @@ export type PdfInput = {
   doc: SalesDoc; lines: SalesLine[]; companyName: string; logoUrl: string | null;
   org: { address?: string; phone?: string; email?: string; website?: string }; pdf: PdfSettings; whiteLabel: boolean;
   hideZero?: boolean; variant?: "full" | "delivery" | "packing";
+  photos?: { name: string; bytes: Uint8Array }[]; // fotos del trabajo (4 por hoja)
 };
+export const MAX_PDF_PHOTOS = 12;
 
 const hex = (h: string) => {
   const m = /^#?([0-9a-f]{6})$/i.exec(h.trim());
@@ -312,6 +314,33 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
     page.drawLine({ start: { x: M, y }, end: { x: M + 220, y }, thickness: 0.6, color: MUTED });
     page.drawLine({ start: { x: right - 160, y }, end: { x: right, y }, thickness: 0.6, color: MUTED });
     text("Received by (name & signature)", M, y - 12, { color: MUTED }); text("Date", right - 160, y - 12, { color: MUTED });
+  }
+
+  // ---------- Fotos del trabajo: 4 por hoja (2 × 2), con su margen ----------
+  const photos = (input.photos ?? []).slice(0, MAX_PDF_PHOTOS);
+  const embedded: { img: PDFImage; name: string }[] = [];
+  for (const ph of photos) {
+    try {
+      const b = ph.bytes;
+      const img = b[0] === 0x89 && b[1] === 0x50 ? await pdf.embedPng(b) : b[0] === 0xff && b[1] === 0xd8 ? await pdf.embedJpg(b) : null;
+      if (img) embedded.push({ img, name: ph.name });
+    } catch { /* foto dañada: se salta */ }
+  }
+  for (let i = 0; i < embedded.length; i += 4) {
+    newPage();
+    text(i === 0 ? "Job Photos" : "Job Photos (continued)", M, y - 14, { f: bold, size: base + 4, color: INK });
+    text(`${doc.kind === "quote" ? "Quote" : "Invoice"} # ${doc.number}`, right, y - 14, { color: MUTED, align: "right" });
+    const top = y - 34, gap = 14;
+    const cw = (right - M - gap) / 2, ch = (top - (MV + 40) - gap) / 2;
+    embedded.slice(i, i + 4).forEach((p, k) => {
+      const cx = M + (k % 2) * (cw + gap), cy = top - Math.floor(k / 2) * (ch + gap);
+      page.drawRectangle({ x: cx, y: cy - ch, width: cw, height: ch, color: rgb(0.97, 0.975, 0.98), borderColor: LINE, borderWidth: 0.6 });
+      const sc = Math.min((cw - 12) / p.img.width, (ch - 28) / p.img.height);
+      const w = p.img.width * sc, h = p.img.height * sc;
+      page.drawImage(p.img, { x: cx + (cw - w) / 2, y: cy - 6 - h - ((ch - 28) - h) / 2, width: w, height: h });
+      const label = p.name.length > 48 ? p.name.slice(0, 45) + "..." : p.name;
+      text(label, cx + 6, cy - ch + 8, { size: base - 1.5, color: MUTED });
+    });
   }
 
   // ---------- Pie de página en cada hoja ----------

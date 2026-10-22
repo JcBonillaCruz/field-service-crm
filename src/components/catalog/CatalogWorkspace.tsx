@@ -44,7 +44,7 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
   const [prefsOpen, setPrefsOpen] = useState(false);
   const [busy, setBusy] = useState("");
   const [toast, setToast] = useState("");
-  const [mSheet, setMSheet] = useState<null | "filter" | "sort">(null);
+  const [mSheet, setMSheet] = useState<null | "filter" | "sort" | "more">(null);
   const [mSearch, setMSearch] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -197,19 +197,19 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
         <svg viewBox="0 0 20 20" className="h-5 w-5 shrink-0 text-[#0f766e] transition-transform duration-200 group-data-[open]:rotate-180" fill="currentColor" aria-hidden="true"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
       </PopoverButton>
       <PopoverPanel anchor="bottom start" transition
-        className="z-[70] mt-1 w-64 rounded-xl border border-slate-200 bg-white py-1.5 shadow-[0_12px_40px_rgba(15,40,60,0.16)] transition duration-150 ease-out data-[closed]:scale-95 data-[closed]:opacity-0">
+        className="z-[70] mt-1 w-64 rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_12px_40px_rgba(15,40,60,0.16)] transition duration-150 ease-out data-[closed]:scale-95 data-[closed]:opacity-0">
         {({ close }) => {
           const line = (v: ViewDef) => {
             const on = v.id === view.id;
             return (
-              <div key={v.id} className={`group/v flex items-center gap-1 pr-2 transition-colors ${on ? "bg-[#0f766e] text-white" : "text-slate-700 hover:bg-[#d7f1eb]"}`}>
-                <button type="button" onClick={() => { switchView(v.id); close(); }} className="min-w-0 flex-1 truncate px-4 py-2 text-left text-sm font-medium">{shortViewName(module, v)}</button>
+              <div key={v.id} className={`group/v flex items-center gap-1 rounded-lg pr-2 transition-colors ${on ? "bg-[#cdebe3] font-semibold text-[#0b3f3b]" : "text-slate-700 hover:bg-[#e3f4ef]"}`}>
+                <button type="button" onClick={() => { switchView(v.id); close(); }} className="min-w-0 flex-1 truncate px-3 py-2 text-left text-sm">{shortViewName(module, v)}</button>
                 {!v.builtin && (
-                  <Link href={`${base}/views/${v.id}/edit`} onClick={() => close()} aria-label="Edit view" className={`rounded p-1 opacity-0 transition-opacity group-hover/v:opacity-100 ${on ? "text-white" : "text-slate-500 hover:text-[#0f766e]"}`}>
+                  <Link href={`${base}/views/${v.id}/edit`} onClick={() => close()} aria-label="Edit view" className={`rounded p-1 opacity-0 transition-opacity group-hover/v:opacity-100 "text-slate-500 hover:text-[#0f766e]"`}>
                     <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" strokeLinejoin="round" /></svg>
                   </Link>
                 )}
-                <button type="button" onClick={() => toggleFav(v)} aria-label={isFav(v) ? "Remove from favorites" : "Mark as favorite"} className={`rounded p-1 ${on && !isFav(v) ? "[&_svg]:text-white/80" : ""}`}><Star on={isFav(v)} /></button>
+                <button type="button" onClick={() => toggleFav(v)} aria-label={isFav(v) ? "Remove from favorites" : "Mark as favorite"} className={`rounded p-1 `}><Star on={isFav(v)} /></button>
               </div>
             );
           };
@@ -220,7 +220,7 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
               {BUILTIN_VIEWS[module].map(line)}
               {customViews.length > 0 && (<><div className="my-1 border-t border-slate-100" /><p className="px-4 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Custom views</p>{customViews.map(line)}</>)}
               <div className="mt-1 border-t border-slate-100 pt-1">
-                <Link href={`${base}/views/new`} onClick={() => close()} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#0f766e] transition-colors hover:bg-[#d7f1eb]">
+                <Link href={`${base}/views/new`} onClick={() => close()} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-[#0f766e] transition-colors hover:bg-[#e3f4ef]">
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#0f766e] text-white"><svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M10 5v10M5 10h10" /></svg></span>
                   New View
                 </Link>
@@ -260,6 +260,9 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
               )}
               <button type="button" aria-label="Sort" onClick={() => setMSheet("sort")} className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100">
                 <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M8 4v16m0 0-3-3m3 3 3-3M13 6h8M13 11h5M13 16h3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+              <button type="button" aria-label="More" onClick={() => setMSheet("more")} className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100">
+                <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor"><circle cx="4.5" cy="10" r="1.6" /><circle cx="10" cy="10" r="1.6" /><circle cx="15.5" cy="10" r="1.6" /></svg>
               </button>
             </div>
           </div>
@@ -401,6 +404,17 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
           onApply={(value, d) => { setParams({ sort: value, dir: d }); setMSheet(null); }} />
       )}
 
+      <BottomSheet open={mSheet === "more"} onClose={() => setMSheet(null)} title="More">
+        <div className="space-y-1">
+          <button type="button" onClick={() => { setMSheet(null); openExport("all"); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[15px] text-slate-700 transition-all hover:bg-[#f6fbfa] active:scale-[0.98] active:bg-[#e9f7f4]">
+            <svg viewBox="0 0 20 20" className="h-5 w-5 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M10 12V3m0 0L6.5 6.5M10 3l3.5 3.5M4 14v1.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V14" strokeLinecap="round" strokeLinejoin="round" /></svg>Export all {info.plural.toLowerCase()}
+          </button>
+          <button type="button" onClick={() => { setMSheet(null); openExport("view"); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[15px] text-slate-700 transition-all hover:bg-[#f6fbfa] active:scale-[0.98] active:bg-[#e9f7f4]">
+            <svg viewBox="0 0 20 20" className="h-5 w-5 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M10 12V3m0 0L6.5 6.5M10 3l3.5 3.5M4 14v1.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V14" strokeLinecap="round" strokeLinejoin="round" /></svg>Export this view ({list.length})
+          </button>
+          <p className="px-3 pt-1 text-[13px] text-slate-500">CSV or Excel. Your data is always yours: download it any time.</p>
+        </div>
+      </BottomSheet>
       <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} initialModule={module === "items" ? "Items" : "Coupons"} defaultScope={exportScope}
         view={{ module: module === "items" ? "Items" : "Coupons", label: shortViewName(module, view), ids: list.map((r) => r.id), columns: view.columns }} />
       {module === "items" && <BarcodeScanner open={scanOpen} onClose={() => setScanOpen(false)} onCode={onScan} />}

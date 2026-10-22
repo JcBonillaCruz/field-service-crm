@@ -2,6 +2,18 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { SalesDoc, SalesLine, SalesPrefs, money, balanceOf, fmtD } from "@/lib/sales";
 import { PdfInput } from "@/lib/sales-pdf";
 
+// Descarga las fotos (JPG/PNG) adjuntas a la FACTURA para ponerlas en el PDF
+export async function loadPhotos(supabase: SupabaseClient, doc: SalesDoc, files: { name: string; path: string; mime: string | null }[]) {
+  if (doc.kind !== "invoice") return [];
+  const imgs = files.filter((f) => /^image\/(jpe?g|png)$/i.test(f.mime ?? "") || /\.(jpe?g|png)$/i.test(f.name)).slice(0, 12);
+  const out: { name: string; bytes: Uint8Array }[] = [];
+  for (const f of imgs) {
+    const { data } = await supabase.storage.from("sales-attachments").download(f.path);
+    if (data) out.push({ name: f.name, bytes: new Uint8Array(await data.arrayBuffer()) });
+  }
+  return out;
+}
+
 export const pdfInputFrom = (d: { doc: SalesDoc; lines: SalesLine[]; prefs: SalesPrefs; companyName: string }, variant?: PdfInput["variant"]): PdfInput => ({
   doc: d.doc, lines: d.lines, companyName: d.companyName, logoUrl: d.prefs.logo_url, org: d.prefs.org_info ?? {}, pdf: d.prefs.pdf_settings ?? {},
   whiteLabel: d.prefs.white_label, hideZero: d.doc.kind === "quote" ? d.prefs.quote_settings.hide_zero_lines : d.prefs.invoice_settings.hide_zero_lines, variant,

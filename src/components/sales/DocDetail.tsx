@@ -9,6 +9,7 @@ import {
 } from "@/lib/sales";
 import DocPaper from "@/components/sales/DocPaper";
 import { CloseButton } from "@/components/catalog/DetailBits";
+import { useSwipe } from "@/components/ui/useSwipe";
 import BottomSheet from "@/components/customers/BottomSheet";
 import { sheetAction } from "@/components/ui/sheet";
 import PrefsPanel from "@/components/sales/PrefsPanel";
@@ -32,7 +33,10 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
   const status = docStatus(doc);
   const bal = balanceOf(doc);
   const tabs = isQuote ? ["Quote Details", `Invoices${data.related.length ? ` (${data.related.length})` : ""}`, "Activity"] : ["Invoice Details", `Payments${data.payments.length ? ` (${data.payments.length})` : ""}`, "Activity"];
-  const [tab, setTab] = useState(0);
+  const [tab, setTabRaw] = useState(0);
+  const [dir, setDir] = useState<"l" | "r">("l");
+  const setTab = (i: number) => { setDir(i > tab ? "l" : "r"); setTabRaw(i); };
+  const swipe = useSwipe(() => tab > 0 && setTab(tab - 1), () => tab < 2 && setTab(tab + 1));
   const [view, setView] = useState<"details" | "pdf">("pdf");
   const [modal, setModal] = useState<null | "email" | "reminder" | "share" | "payment" | "write_off" | "expected" | "comments" | "prefs">(null);
   const [mActions, setMActions] = useState(false);
@@ -255,7 +259,7 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
   const mobileActions: ToolItem[] = [
     { label: "Edit", icon: I.edit, href: locked ? undefined : editHref, hidden: locked },
     { label: "Send Email", icon: I.mail, onClick: () => setModal("email") },
-    { label: "Share Link", icon: I.share, onClick: () => setModal("share") },
+    { label: "Share (text, WhatsApp, link)", icon: I.share, onClick: () => setModal("share") },
     { label: "Download PDF", icon: I.download, onClick: () => downloadPdf() },
     { label: "Open PDF", icon: I.pdf, onClick: () => viewPdf() },
     ...(isQuote ? [{ label: "Convert to Invoice", icon: I.convert, onClick: convert, hidden: !canConvert }] : [
@@ -348,6 +352,7 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
               </div>
             )}
           </div>
+          <div {...swipe} key={tab} className={`lg:animate-none ${dir === "l" ? "animate-[bp-in-left_0.25s_ease-out]" : "animate-[bp-in-right_0.25s_ease-out]"}`}>
           {tab === 0 && (
             <div className="flex justify-center border-b border-slate-100 py-2.5 sm:hidden">
               <div className="flex rounded-lg bg-slate-100 p-0.5 text-[13px]">
@@ -379,6 +384,7 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
               </div>
             </div>
           ) : details) : tab === 1 ? relatedTab : activityTab}
+          </div>
         </div>
       </div>
 
@@ -400,7 +406,7 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
       </BottomSheet>
 
       <SendEmailModal open={modal === "email" || modal === "reminder"} reminder={modal === "reminder"} onClose={close} doc={doc} companyName={companyName} actor={actor} files={data.files} whiteLabel={prefs.white_label} />
-      <ShareModal open={modal === "share"} onClose={close} doc={doc} actor={actor} />
+      <ShareModal open={modal === "share"} onClose={close} doc={doc} actor={actor} companyName={companyName} />
       {!isQuote && <PaymentModal open={modal === "payment" || modal === "write_off"} mode={modal === "write_off" ? "write_off" : "payment"} onClose={close} doc={doc} actor={actor} onDone={() => { router.refresh(); flash("Saved."); }} />}
       {!isQuote && <ExpectedDateModal open={modal === "expected"} onClose={close} doc={doc} actor={actor} />}
       <CommentsPanel open={modal === "comments"} onClose={close} entity={doc.kind} entityId={doc.id} companyId={doc.company_id} comments={data.comments} actor={actor} />

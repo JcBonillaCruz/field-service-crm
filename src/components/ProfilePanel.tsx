@@ -88,7 +88,7 @@ export default function ProfilePanel({
                 <button type="button" onClick={() => { switchTo(c.id); onClose(); }}
                   className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left hover:bg-slate-50 ${c.id === currentId ? "bg-[#f0faf7]" : ""}`}>
                   <span className="flex min-w-0 items-center gap-3">
-                    <CompanyBadge id={c.id} name={c.name} index={i} size={32} />
+                    <CompanyBadge id={c.id} name={c.name} index={i} size={32} logoUrl={c.logoUrl} />
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-medium text-slate-800">{c.name}</span>
                       <span className="block text-xs text-slate-500">{c.industry ?? "Business"}</span>

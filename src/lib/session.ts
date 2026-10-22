@@ -28,6 +28,13 @@ export const getSession = cache(async () => {
     .sort((a, b) => a.companies!.created_at.localeCompare(b.companies!.created_at))
     .map((r) => ({ id: r.companies!.id, name: r.companies!.name, industry: r.companies!.industry, role: r.role, createdAt: r.companies!.created_at }));
 
+  // Logos de cada compañía (si ya corrieron el SQL de Sales)
+  if (companies.length) {
+    const { data: logos } = await supabase.from("sales_prefs").select("company_id, logo_url").in("company_id", companies.map((c) => c.id));
+    const map = new Map((logos ?? []).map((l) => [l.company_id as string, l.logo_url as string | null]));
+    companies.forEach((c) => { c.logoUrl = map.get(c.id) ?? null; });
+  }
+
   const saved = cookies().get(COMPANY_COOKIE)?.value;
   const current = companies.find((c) => c.id === saved) ?? companies[0] ?? null;
 

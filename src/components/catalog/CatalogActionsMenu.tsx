@@ -4,15 +4,15 @@ import { useEffect, useRef, useState } from "react";
 
 // Menú "..." de la lista (Sort by, Import, Export, Preferences, Refresh, Reset Column Width)
 const Ico = ({ d }: { d: string }) => (
-  <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-[#0f766e] group-hover/row:text-white" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+  <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-[#0f766e] " fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
     <path d={d} strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 const Caret = () => (
-  <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate-400 group-hover/row:text-white" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="m8 5 5 5-5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+  <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="m8 5 5 5-5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
 );
-const panel = "rounded-xl border border-slate-200 bg-white py-1.5 shadow-[0_12px_40px_rgba(15,40,60,0.16)] animate-[bp-fade_0.15s_ease-out]";
-const rowCls = "group/row flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-[#0f766e] hover:text-white";
+const panel = "rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_12px_40px_rgba(15,40,60,0.16)] animate-[bp-fade_0.15s_ease-out]";
+const rowCls = "group/row flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-[#e3f4ef] hover:text-[#0b3f3b]";
 
 export type ActionGroup =
   | { kind: "item"; label: string; icon: string; onClick: () => void }
@@ -26,14 +26,14 @@ function Flyout({ g, side, onDone }: { g: Extract<ActionGroup, { kind: "sub" }>;
   const hide = () => { t.current = setTimeout(() => setOpen(false), 140); };
   return (
     <div className="relative" onMouseEnter={show} onMouseLeave={hide}>
-      <button type="button" onClick={() => setOpen((v) => !v)} className={`${rowCls} justify-between ${open ? "bg-[#0f766e] text-white" : ""}`}>
+      <button type="button" onClick={() => setOpen((v) => !v)} className={`${rowCls} justify-between ${open ? "bg-[#e3f4ef] text-[#0b3f3b]" : ""}`}>
         <span className="flex items-center gap-3"><Ico d={g.icon} />{g.label}</span><Caret />
       </button>
       {open && (
         <div onMouseEnter={show} onMouseLeave={hide} className={`absolute top-[-6px] z-10 w-56 ${side === "left" ? "right-full mr-1" : "left-full ml-1"} ${panel}`}>
           {g.items.map((it) => (
             <button key={it.label} type="button" onClick={() => { it.onClick(); onDone(); }}
-              className={`${rowCls} justify-between ${it.active ? "bg-[#0f766e] font-medium text-white" : ""}`}>
+              className={`${rowCls} justify-between ${it.active ? "bg-[#cdebe3] font-semibold text-[#0b3f3b]" : ""}`}>
               {it.label}
               {it.active && (
                 <svg viewBox="0 0 20 20" className={`h-4 w-4 transition-transform ${it.dir === "asc" ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M10 4v12m0 0-4-4m4 4 4-4" strokeLinecap="round" strokeLinejoin="round" /></svg>

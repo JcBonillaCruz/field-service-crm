@@ -1,6 +1,7 @@
 "use client";
 
 import type { MobileStats } from "@/lib/dashboard-server";
+import { MobileHero, MoneyChart } from "@/components/dashboard/MobileWidgets";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -46,30 +47,17 @@ export default function Dashboard({ firstName, companyName, industry, role, coun
 
       {tab === "Dashboard" && (
         <div>
-          {/* ══════ 1. Total Receivables (AZUL) ══════ */}
+          {/* ══════ 1. Lo ganado en el año, gastos y ganancia (en movimiento) ══════ */}
           <div style={d(0)} className={`${fade(0)} mx-4 mt-5`}>
-            <div className="relative overflow-hidden rounded-t-2xl bg-gradient-to-br from-[#1a2744] via-[#243555] to-[#1e3a5f] px-6 pb-8 pt-6 text-white">
-              {/* formas decorativas */}
-              <svg viewBox="0 0 400 150" className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.08]" preserveAspectRatio="none"><ellipse cx="320" cy="20" rx="200" ry="100" fill="white"/><ellipse cx="100" cy="130" rx="160" ry="70" fill="white"/></svg>
-              <p className="relative text-sm font-medium text-white/70">Total Receivables</p>
-              <p className="relative mt-1 text-[42px] font-bold leading-none tracking-tight">{$(st?.total ?? 0)}</p>
-            </div>
-            {/* Current / Overdue (FUERA de la tarjeta, en blanco) */}
-            <div className="rounded-b-2xl border border-t-0 border-slate-200 bg-white">
-              <button type="button" onClick={()=>setRecvOpen(!recvOpen)} className="flex w-full items-center justify-between px-6 py-4">
-                <div className="flex gap-8 text-sm">
-                  <span><span className="font-medium text-emerald-600">Current</span> <span className="text-[#0b1f3a]">{$(st?.current ?? 0)}</span></span>
-                  <span><span className="font-medium text-red-500">Overdue</span> <span className="text-[#0b1f3a]">{$(st?.overdue ?? 0)}</span></span>
-                </div>
-                <svg viewBox="0 0 20 20" className={`h-4 w-4 text-slate-400 transition-transform ${recvOpen?"rotate-180":""}`} fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z"/></svg>
-              </button>
-              {recvOpen && (
-                <div className="border-t border-slate-100 px-6 pb-5 pt-3">
-                  <AgingChart mounted={m} values={st?.aging ?? [0,0,0,0,0]}/>
-                  <p className="mt-3 text-xs text-slate-400">Unpaid invoices by days overdue.</p>
-                </div>
-              )}
-            </div>
+            {st ? <MobileHero st={st} onAging={()=>setRecvOpen(!recvOpen)} agingOpen={recvOpen}/> : (
+              <div className="rounded-3xl bg-[#0b1f3a] px-6 py-6 text-white"><p className="text-sm text-white/70">Total Receivables</p><p className="mt-1 text-[40px] font-bold">$0.00</p></div>
+            )}
+            {recvOpen && (
+              <div className="mt-2 rounded-2xl border border-slate-200 bg-white px-5 pb-4 pt-3 animate-[bp-fade_0.2s_ease-out]">
+                <p className="mb-2 text-[13px] font-semibold text-[#0b1f3a]">Unpaid invoices by days overdue</p>
+                <AgingChart mounted={m} values={st?.aging ?? [0,0,0,0,0]}/>
+              </div>
+            )}
           </div>
 
           {/* ══════ 2. Quick Create ══════ */}
@@ -141,12 +129,13 @@ export default function Dashboard({ firstName, companyName, industry, role, coun
           {/* ══════ 6. Income and Expense ══════ */}
           <SectionCard style={d(5)} className={fade(5)} title="Income and Expense" icon="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
             period={getPeriod("inc")} onPeriod={()=>setPeriodSheet("inc")}>
-            <BarChart mounted={m} months={st?.months} income={st?.income} receipts={st?.receipts}/>
-            <div className="mt-5 grid grid-cols-3 text-center">
-              <div><p className="text-sm font-medium text-blue-600">Income</p><p className="mt-1 text-xl font-bold text-[#0b1f3a]">{$(st?.income12 ?? 0)}</p></div>
-              <div><p className="text-sm font-medium text-teal-600">Receipts</p><p className="mt-1 text-xl font-bold text-[#0b1f3a]">{$(st?.receipts12 ?? 0)}</p></div>
-              <div><p className="text-sm font-medium text-orange-500">Expense</p><p className="mt-1 text-xl font-bold text-[#0b1f3a]">$0.00</p></div>
+            {st ? <MoneyChart st={st} mounted={m}/> : <BarChart mounted={m}/>}
+            <div className="mt-4 grid grid-cols-3 text-center">
+              <div><p className="text-sm font-medium text-blue-600">Income</p><p className="mt-1 text-lg font-bold text-[#0b1f3a]">{$(st?.income12 ?? 0)}</p></div>
+              <div><p className="text-sm font-medium text-teal-600">Receipts</p><p className="mt-1 text-lg font-bold text-[#0b1f3a]">{$(st?.receipts12 ?? 0)}</p></div>
+              <div><p className="text-sm font-medium text-orange-500">Expense</p><p className="mt-1 text-lg font-bold text-[#0b1f3a]">{$((st?.expenses ?? []).reduce((a,b)=>a+b,0))}</p></div>
             </div>
+            <Link href="/dashboard/expenses" className="mt-4 flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-orange-300 py-2.5 text-sm font-medium text-orange-600 active:bg-orange-50">+ Add an expense</Link>
           </SectionCard>
 
           {/* ══════ 7. Project Summary ══════ */}

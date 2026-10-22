@@ -4,7 +4,8 @@ import { SalesDoc, Subscription, balanceOf, daysBetween, today } from "@/lib/sal
 
 export type MobileStats = {
   total: number; current: number; overdue: number; aging: number[];
-  months: string[]; income: number[]; receipts: number[];
+  months: string[]; income: number[]; receipts: number[]; expenses: number[];
+  ytdReceived: number; ytdExpenses: number; ytdInvoiced: number;
   revenue12: number; income12: number; receipts12: number; mrr: number; activeSubs: number; arpu: number;
 };
 
@@ -14,10 +15,11 @@ const monthly = (s: Pick<Subscription, "total" | "bill_every" | "bill_unit">) =>
 
 // Llena el dashboard con lo que de verdad pasa en Quotes / Invoices / Payments / Subscriptions
 export async function loadDashboard(supabase: SupabaseClient, companyId: string): Promise<{ data: DashboardData; mobile: MobileStats }> {
-  const [{ data: inv }, { data: pays }, { data: subs }] = await Promise.all([
+  const [{ data: inv }, { data: pays }, { data: subs }, { data: exps }] = await Promise.all([
     supabase.from("sales_docs").select("*").eq("company_id", companyId).eq("kind", "invoice").not("status", "in", "(draft,void)").limit(10000),
     supabase.from("sales_payments").select("kind, amount, paid_on").eq("company_id", companyId).limit(20000),
     supabase.from("subscriptions").select("*").eq("company_id", companyId).limit(5000),
+    supabase.from("expenses").select("expense_date, amount, category").eq("company_id", companyId).limit(20000), // sin el SQL 3.36 viene vacío
   ]);
   const invoices = (inv ?? []) as SalesDoc[];
   const payments = (pays ?? []).filter((p) => p.kind === "payment");
@@ -40,6 +42,7 @@ export async function loadDashboard(supabase: SupabaseClient, companyId: string)
     payments: payments.map((p) => ({ date: p.paid_on, amount: Number(p.amount) })),
     openInvoices: invoices.filter((d) => balanceOf(d) > 0 && d.status !== "written_off").map((d) => ({ due: d.due_date || d.doc_date, balance: balanceOf(d) })),
     mrr, activeSubs: active,
+    expenses: (exps ?? []).map((e) => ({ date: e.expense_date as string, amount: Number(e.amount), category: (e.category as string) || "Other" })),
     subEvents: subscriptions.flatMap((s) => [
       { date: s.created_at.slice(0, 10), type: "signup" as const },
       ...(s.start_date <= t ? [{ date: s.start_date, type: "activation" as const }] : []),
@@ -55,14 +58,19 @@ export async function loadDashboard(supabase: SupabaseClient, companyId: string)
     if (late <= 0) { current += o.balance; aging[0] += o.balance; }
     else { overdue += o.balance; aging[late <= 15 ? 1 : late <= 30 ? 2 : late <= 45 ? 3 : 4] += o.balance; }
   });
-  const months: string[] = []; const income: number[] = []; const receipts: number[] = [];
+  const months: string[] = []; const income: number[] = []; const receipts: number[] = []; const expenses: number[] = [];
   for (let i = 12; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const key = ymd(d).slice(0, 7);
     months.push(d.toLocaleDateString("en-US", { month: "short" }));
     income.push(data.invoices.filter((x) => x.date.startsWith(key)).reduce((a, x) => a + x.amount, 0));
     receipts.push(data.payments.filter((x) => x.date.startsWith(key)).reduce((a, x) => a + x.amount, 0));
+    expenses.push(data.expenses.filter((x) => x.date.startsWith(key)).reduce((a, x) => a + x.amount, 0));
   }
+  const yr = String(now.getFullYear());
+  const ytdReceived = data.payments.filter((x) => x.date.startsWith(yr)).reduce((a, x) => a + x.amount, 0);
+  const ytdExpenses = data.expenses.filter((x) => x.date.startsWith(yr)).reduce((a, x) => a + x.amount, 0);
+  const ytdInvoiced = data.invoices.filter((x) => x.date.startsWith(yr)).reduce((a, x) => a + x.amount, 0);
   const since = ymd(new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()));
   const receipts12 = data.payments.filter((x) => x.date >= since).reduce((a, x) => a + x.amount, 0);
   const income12 = data.invoices.filter((x) => x.date >= since).reduce((a, x) => a + x.amount, 0);
@@ -70,7 +78,7 @@ export async function loadDashboard(supabase: SupabaseClient, companyId: string)
   return {
     data,
     mobile: {
-      total: current + overdue, current, overdue, aging, months, income, receipts, revenue12: receipts12, income12, receipts12,
+      total: current + overdue, current, overdue, aging, months, income, receipts, expenses, ytdReceived, ytdExpenses, ytdInvoiced, revenue12: receipts12, income12, receipts12,
       mrr: mrrNow, activeSubs: activeNow, arpu: activeNow ? mrrNow / activeNow : 0,
     },
   };

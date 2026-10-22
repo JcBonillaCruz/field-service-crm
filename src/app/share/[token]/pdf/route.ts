@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_PREFS, SalesDoc, SalesLine } from "@/lib/sales";
 import { buildSalesPdf, pdfFileName } from "@/lib/sales-pdf";
+import { admin } from "@/lib/push";
+import { loadPhotos } from "@/lib/sales-mail";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,7 +15,15 @@ export async function GET(_req: Request, { params }: { params: { token: string }
     prefs: { logo_url: string | null; org_info: Record<string, string> | null; pdf_settings: Record<string, unknown> | null; quote_settings: { hide_zero_lines?: boolean } | null; invoice_settings: { hide_zero_lines?: boolean } | null } | null } | null;
   if (!p?.doc) return NextResponse.json({ error: "This link isn't available" }, { status: 404 });
   const doc = { ...p.doc, emails: p.doc.emails ?? [] } as SalesDoc;
+  // Fotos de la factura (los archivos son privados: se leen con la llave del servidor)
+  const adm = admin();
+  let photos: { name: string; bytes: Uint8Array }[] = [];
+  if (adm && doc.kind === "invoice") {
+    const { data: files } = await adm.from("sales_files").select("name, path, mime").eq("entity_id", doc.id);
+    photos = await loadPhotos(adm, doc, files ?? []);
+  }
   const bytes = await buildSalesPdf({
+    photos,
     doc, lines: p.lines ?? [], companyName: p.company?.name ?? "", logoUrl: p.prefs?.logo_url ?? null, org: p.prefs?.org_info ?? {},
     pdf: (p.prefs?.pdf_settings ?? {}) as never, whiteLabel: Boolean(p.white_label),
     hideZero: doc.kind === "quote" ? p.prefs?.quote_settings?.hide_zero_lines ?? DEFAULT_PREFS.quote_settings.hide_zero_lines : p.prefs?.invoice_settings?.hide_zero_lines,

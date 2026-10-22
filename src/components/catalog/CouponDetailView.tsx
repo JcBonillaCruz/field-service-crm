@@ -1,5 +1,6 @@
 "use client";
 
+import { useSwipe } from "@/components/ui/useSwipe";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -19,6 +20,8 @@ const RIBBON = {
 export default function CouponDetailView({ coupon, history }: { coupon: CouponRow; history: HistoryRow[] }) {
   const router = useRouter();
   const [tab, setTab] = useState(TABS[0]);
+  const ti = TABS.indexOf(tab);
+  const swipe = useSwipe(() => ti > 0 && setTab(TABS[ti - 1]), () => ti < TABS.length - 1 && setTab(TABS[ti + 1]));
   const [copied, setCopied] = useState(false);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
@@ -110,6 +113,7 @@ export default function CouponDetailView({ coupon, history }: { coupon: CouponRo
         {/* ===== Computadora: pestañas ===== */}
         <div className="hidden rounded-xl border border-slate-200 bg-white lg:block">
           <Tabs tabs={TABS} active={tab} onChange={setTab} />
+          <div {...swipe} key={tab} className="animate-[bp-fade_0.2s_ease-out]">
           {tab === "Coupon Details" && (
             <dl className="grid grid-cols-2 gap-x-10 gap-y-1 px-7 py-5 text-[15px]">
               <Row label="Coupon Name">{coupon.name}</Row>
@@ -140,6 +144,7 @@ export default function CouponDetailView({ coupon, history }: { coupon: CouponRo
               ))}
             </ul>
           )}
+          </div>
         </div>
 
         {/* ===== Celular: todo en una sola pantalla, sin pestañas ===== */}
