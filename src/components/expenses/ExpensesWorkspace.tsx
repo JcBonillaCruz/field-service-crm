@@ -191,13 +191,15 @@ export default function ExpensesWorkspace({ companyId, actor, rows, needsSql }: 
             )}
           </div>
           <div className="order-1 space-y-3 lg:order-2">
-            <div className="relative overflow-hidden rounded-2xl border border-[#ffe1e4] bg-[#fff7f7] p-5">
-              <span className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-[#ffe4e6] blur-xl" />
-              <p className="relative flex items-center gap-1.5 text-sm font-medium text-[#be123c]">
+            {/* Luz azul que nace del centro y se abre hacia afuera; texto blanco y el gasto en rojo */}
+            <div className="relative overflow-hidden rounded-2xl p-5 text-white shadow-[0_10px_30px_rgba(11,31,58,0.25)]"
+              style={{ background: "radial-gradient(130% 120% at 70% 20%, #5ea8ff 0%, #3b82f6 14%, #2563eb 28%, #1d4ed8 42%, #1e3a8a 58%, #172554 74%, #0b1f3a 100%)" }}>
+              <span className="pointer-events-none absolute right-6 top-2 h-24 w-24 rounded-full bg-white/25 blur-2xl animate-[bp-glow_4s_ease-in-out_infinite]" />
+              <p className="relative flex items-center gap-1.5 text-sm font-medium text-white/85">
                 <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12l7 7 7-7" /></svg>Spent · {period}
               </p>
-              <p className="relative mt-1 text-3xl font-bold tabular-nums text-[#e11d48]">-{money(total)}</p>
-              <p className="relative mt-1 text-[13px] text-slate-500">{list.length} {list.length === 1 ? "expense" : "expenses"}</p>
+              <p className="relative mt-1 text-3xl font-bold tabular-nums text-[#ff8a8a]">-{money(total)}</p>
+              <p className="relative mt-1 text-[13px] text-white/70">{list.length} {list.length === 1 ? "expense" : "expenses"}</p>
             </div>
             {byCat.length > 0 && (
               <div className="rounded-2xl border border-slate-200 bg-white p-4">

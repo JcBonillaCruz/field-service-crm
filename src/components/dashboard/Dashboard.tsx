@@ -1,5 +1,7 @@
 "use client";
 
+import { useSwipe } from "@/components/ui/useSwipe";
+
 import type { MobileStats } from "@/lib/dashboard-server";
 import { InsightsCard, MobileHero, MoneyChart, ReceivablesCard } from "@/components/dashboard/MobileWidgets";
 
@@ -22,6 +24,10 @@ export default function Dashboard({ firstName, companyName, industry, role, coun
   const $ = (v: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(v || 0);
   const st = stats;
   const [tab, setTab] = useState("Dashboard");
+  // Deslizar con el dedo: Home → Announcements → Help
+  const names = TABS.map((t) => t.label);
+  const ti = names.indexOf(tab);
+  const swipe = useSwipe(() => ti > 0 && setTab(names[ti - 1]), () => ti < names.length - 1 && setTab(names[ti + 1]));
   const [m, setM] = useState(false);
   const [recvOpen, setRecvOpen] = useState(false);
   const [periodSheet, setPeriodSheet] = useState<string|null>(null);
@@ -33,7 +39,7 @@ export default function Dashboard({ firstName, companyName, industry, role, coun
   const d = (i:number):React.CSSProperties => ({transitionDelay:`${i*60}ms`});
 
   return (
-    <div className="min-h-full bg-[#f4f6f8]">
+    <div className="min-h-full bg-[#f4f6f8]" {...swipe}>
       {/* Pestañas */}
       <div className="sticky top-16 z-10 flex gap-1 border-b border-slate-200 bg-white px-4">
         {TABS.map(t=>(
@@ -56,7 +62,7 @@ export default function Dashboard({ firstName, companyName, industry, role, coun
           </div>
 
           {/* ══════ 2. Consejos de finanzas (en vez de accesos directos) ══════ */}
-          {st && <div style={d(1)} className={`${fade(1)} mx-4 mt-3`}><InsightsCard st={st} compact/></div>}
+          {st && <div style={d(1)} className={`${fade(1)} mx-4 mt-3`}><InsightsCard st={st} compact neutral tip={false}/></div>}
 
           {/* ══════ 3. Net Revenue ══════ */}
           <SectionCard style={d(2)} className={fade(2)} title="Net Revenue" icon="M22 12h-4l-3 9L9 3l-3 9H2"

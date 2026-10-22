@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Combobox, ComboboxInput, ComboboxOption, ComboboxOptions, Listbox, ListboxButton, ListboxOption, ListboxOptions, Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
-import { DiscType, SalesLine, lineAmount, money, num2 } from "@/lib/sales";
+import { DiscType, INCOME_ACCOUNTS, SalesLine, lineAmount, money, num2 } from "@/lib/sales";
 import type { ItemOption } from "@/lib/sales-server";
 import { NoImage } from "@/components/catalog/DetailBits";
 import { Modal, btnGhost, btnPrimary } from "@/components/sales/SalesBits";
@@ -74,54 +74,52 @@ export default function LineItems({ lines, setLines, items, showDiscount = true,
     setDrag(null); setOver(null);
   }
 
+  const [sheet, setSheet] = useState<number | "new" | null>(null);
   const insertAt = (i: number, rows: SalesLine[]) => setLines((x) => { const n = [...x]; n.splice(i + 1, 0, ...rows); return n; });
   const td = "border-b border-slate-200 bg-white";
   return (
     <div>
-      {/* Celular: cada artículo es una tarjeta (sin deslizar de lado) */}
-      <div className="space-y-3 sm:hidden">
-        <p className="text-[15px] font-semibold text-[#0b1f3a]">Items</p>
-        {lines.map((l, i) => (
-          <div key={i} className="rounded-xl border border-slate-200 bg-white p-3 shadow-[0_1px_3px_rgba(15,40,60,0.05)]">
-            <div className="flex items-start gap-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              {l.image_url ? <img src={l.image_url} alt="" className="mt-0.5 h-9 w-9 shrink-0 rounded-md border border-slate-200 object-cover" /> : <span className="mt-0.5"><NoImage /></span>}
-              <div className="min-w-0 flex-1">
-                <ItemPicker line={l} items={items} onPick={(it) => pick(i, it)} onText={(t) => set(i, { name: t, item_id: null })} />
-                {(l.name || l.description) && (
-                  <textarea rows={Math.min(5, Math.max(1, (l.description ?? "").split("\n").length))} value={l.description ?? ""} onChange={(e) => set(i, { description: e.target.value })}
-                    placeholder="Add a description" className="mt-1 w-full resize-y rounded-md border border-slate-100 bg-slate-50 px-2 py-1 text-[13px] text-slate-600 focus:border-[#0f766e] focus:bg-white focus:outline-none" />
-                )}
-              </div>
-              <button type="button" aria-label="Remove item" onClick={() => setLines((x) => (x.length === 1 ? [blankLine()] : x.filter((_, j) => j !== i)))} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-red-400 active:bg-red-50">
-                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m6.5 6.5 7 7M13.5 6.5l-7 7" strokeLinecap="round" /></svg>
+      {/* Celular: lista compacta como Zoho; "Add Line Item" abre una hoja completa */}
+      <div className="sm:hidden">
+        {lines.some((l) => l.name.trim()) && (
+          <div className="mb-2 flex justify-between border-b border-slate-200 pb-2 text-[13px] font-medium text-slate-500"><span>Items</span><span>Amount</span></div>
+        )}
+        <ul className="divide-y divide-slate-100">
+          {lines.map((l, i) => l.name.trim() ? (
+            <li key={i} className="flex items-start gap-3 py-3">
+              <button type="button" aria-label="Remove item" onClick={() => setLines((x) => (x.length === 1 ? [blankLine()] : x.filter((_, j) => j !== i)))}
+                className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-red-300 text-red-500 active:bg-red-50">
+                <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="m6.5 6.5 7 7M13.5 6.5l-7 7" strokeLinecap="round" /></svg>
               </button>
-            </div>
-            <div className={`mt-2 grid gap-2 ${showDiscount ? "grid-cols-3" : "grid-cols-2"}`}>
-              <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Qty
-                <input inputMode="decimal" value={String(l.quantity)} onChange={(e) => set(i, { quantity: e.target.value.replace(/[^0-9.]/g, "") as unknown as number })} className="mt-0.5 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-right text-[15px] font-normal normal-case tracking-normal text-[#0b1f3a] focus:border-[#0f766e] focus:bg-white focus:outline-none" /></label>
-              <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{priceLabel}
-                <input inputMode="decimal" value={String(l.rate)} onFocus={(e) => e.currentTarget.select()} onChange={(e) => set(i, { rate: e.target.value.replace(/[^0-9.]/g, "") as unknown as number })} className="mt-0.5 w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-right text-[15px] font-normal normal-case tracking-normal text-[#0b1f3a] focus:border-[#0f766e] focus:bg-white focus:outline-none" /></label>
-              {showDiscount && (
-                <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Discount
-                  <span className="mt-0.5 flex items-center gap-1">
-                    <input inputMode="decimal" value={String(l.discount)} onFocus={(e) => e.currentTarget.select()} onChange={(e) => set(i, { discount: e.target.value.replace(/[^0-9.]/g, "") as unknown as number })} className="w-full min-w-0 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-right text-[15px] font-normal normal-case tracking-normal text-[#0b1f3a] focus:border-[#0f766e] focus:bg-white focus:outline-none" />
-                    <DiscUnit value={l.discount_type} onChange={(v) => set(i, { discount_type: v })} />
-                  </span></label>
-              )}
-            </div>
-            <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2">
-              <button type="button" onClick={() => insertAt(i, [{ ...l, id: undefined }])} className="text-[13px] font-medium text-[#2563eb]">Clone</button>
-              <p className="text-[15px] font-semibold tabular-nums text-[#0b1f3a]">{num2(lineAmount(l))}</p>
-            </div>
-          </div>
-        ))}
-        <button type="button" onClick={() => setLines((l) => [...l, blankLine(l.length)])}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#0f766e] bg-white py-3 text-[16px] font-semibold text-[#0f766e] transition-transform active:scale-[0.98]">
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0f766e] text-white"><svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M10 5v10M5 10h10" /></svg></span>
-          Add Line Item
-        </button>
-        <button type="button" onClick={() => { setBulkAt(null); setBulk(true); }} className="w-full text-center text-[14px] font-medium text-[#2563eb]">Add items in bulk</button>
+              <button type="button" onClick={() => setSheet(i)} className="min-w-0 flex-1 text-left">
+                <span className="block text-[15px] font-medium text-[#0b1f3a]">{l.name}</span>
+                <span className="text-[13px] text-slate-500 tabular-nums">{num2(l.quantity)} × {num2(l.rate)}{Number(l.discount) ? ` · ${l.discount_type === "percent" ? `${+l.discount}%` : money(l.discount)} off` : ""}</span>
+              </button>
+              <span className="shrink-0 text-[15px] font-semibold tabular-nums text-[#0b1f3a]">{num2(lineAmount(l))}</span>
+            </li>
+          ) : null)}
+        </ul>
+        {lines.some((l) => l.name.trim()) ? (
+          <button type="button" onClick={() => setSheet("new")} className="mt-1 flex items-center gap-2 py-2 text-[15px] font-semibold text-[#0f766e] active:opacity-70">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0f766e] text-white"><svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M10 5v10M5 10h10" /></svg></span>Add Line Item
+          </button>
+        ) : (
+          <button type="button" onClick={() => setSheet("new")}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[#0f766e] bg-white py-3.5 text-[16px] font-semibold text-[#0f766e] transition-transform active:scale-[0.98]">
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#0f766e] text-white"><svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M10 5v10M5 10h10" /></svg></span>
+            Add Line Item
+          </button>
+        )}
+        <LineSheet open={sheet !== null} line={typeof sheet === "number" ? lines[sheet] : null} items={items} showDiscount={showDiscount} priceLabel={priceLabel}
+          onClose={() => setSheet(null)}
+          onSave={(ln, again) => {
+            setLines((x) => {
+              const clean = x.filter((r) => r.name.trim());
+              if (typeof sheet === "number") return x.map((r, j) => (j === sheet ? ln : r));
+              return [...clean, { ...ln, position: clean.length }];
+            });
+            if (again) setSheet("new"); else setSheet(null);
+          }} />
       </div>
 
       {/* Computadora: la tabla lleva su caja; los botones ⋯ y X quedan AFUERA, a la derecha (como Zoho) */}
@@ -246,5 +244,122 @@ function BulkItems({ open, onClose, items, onAdd }: { open: boolean; onClose: ()
         })}
       </div>
     </Modal>
+  );
+}
+
+// Hoja completa (celular) para agregar o editar un artículo: elegir del catálogo con buscador,
+// descripción, cuenta, cantidad, precio y descuento (% o $). "Save and New" sigue agregando sin salir.
+function LineSheet({ open, line, items, showDiscount, priceLabel, onClose, onSave }: {
+  open: boolean; line: SalesLine | null; items: ItemOption[]; showDiscount: boolean; priceLabel: string;
+  onClose: () => void; onSave: (l: SalesLine, again: boolean) => void;
+}) {
+  const [d, setD] = useState<SalesLine>(blankLine());
+  const [picking, setPicking] = useState(false);
+  const [q, setQ] = useState("");
+  const [err, setErr] = useState("");
+  const [key, setKey] = useState("");
+  const k = `${open}-${line ? "edit" : "new"}-${line?.name ?? ""}`;
+  if (open && key !== k) { setKey(k); setD(line ? { ...line } : blankLine()); setPicking(!line); setQ(""); setErr(""); }
+  if (!open && key) setKey("");
+  const list = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    return (t ? items.filter((i) => `${i.name} ${i.sku ?? ""} ${i.description ?? ""}`.toLowerCase().includes(t)) : items).slice(0, 100);
+  }, [items, q]);
+  if (!open) return null;
+  const set = (p: Partial<SalesLine>) => setD((x) => ({ ...x, ...p }));
+  const save = (again: boolean) => {
+    if (!d.name.trim()) return setErr("Choose an item or type a name.");
+    if (!(Number(d.quantity) > 0)) return setErr("Enter the quantity.");
+    onSave({ ...d, quantity: Number(d.quantity) || 1, rate: Number(d.rate) || 0, discount: Number(d.discount) || 0, account: d.account ?? "Sales" }, again);
+    setD(blankLine()); setPicking(again); setQ(""); setErr("");
+  };
+  const lbl = "mb-1 block text-[13px] font-medium text-slate-500";
+  const inp = "w-full border-0 border-b border-slate-200 bg-transparent px-0 py-2 text-[17px] text-[#0b1f3a] placeholder:text-slate-300 focus:border-[#0f766e] focus:outline-none focus:ring-0";
+  return (
+    <div className="fixed inset-0 z-[95] flex flex-col bg-[#f4f6f8] animate-[bp-sheet_0.28s_cubic-bezier(.2,.8,.2,1)] sm:hidden">
+      <div className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <button type="button" onClick={picking && d.name ? () => setPicking(false) : onClose} aria-label="Back" className="flex h-9 w-9 items-center justify-center rounded-full active:bg-slate-100">
+          <svg viewBox="0 0 24 24" className="h-6 w-6 text-[#0b1f3a]" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M11 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </button>
+        <p className="text-[18px] font-semibold text-[#0b1f3a]">{picking ? "Select an Item" : line ? "Edit Line Item" : "Add Line Item"}</p>
+      </div>
+      {picking ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="bg-white px-4 pb-3 pt-2">
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 focus-within:border-[#0f766e] focus-within:bg-white">
+              <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
+              <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search items or type a new one" className="w-full bg-transparent py-3 text-[16px] focus:outline-none" />
+            </div>
+          </div>
+          <ul className="min-h-0 flex-1 overflow-y-auto bg-white">
+            {q.trim() && (
+              <li><button type="button" onClick={() => { set({ ...blankLine(), name: q.trim(), quantity: d.quantity || 1 }); setPicking(false); }} className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left active:bg-[#e9f7f4]">
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#eef8f5] text-[#0f766e]"><svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M10 5v10M5 10h10" /></svg></span>
+                <span className="text-[15px] text-[#0b1f3a]">Add &quot;{q.trim()}&quot; as a custom line</span>
+              </button></li>
+            )}
+            {list.map((it) => (
+              <li key={it.id}><button type="button" onClick={() => {
+                set({ item_id: it.id, name: it.name, description: it.description ?? "", rate: Number(it.selling_price), unit: it.unit, image_url: it.image_url });
+                setPicking(false); setErr("");
+              }} className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-3 text-left active:bg-[#e9f7f4]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {it.image_url ? <img src={it.image_url} alt="" className="h-10 w-10 shrink-0 rounded-lg border border-slate-200 object-cover" /> : <NoImage />}
+                <span className="min-w-0 flex-1"><span className="block truncate text-[15px] font-medium text-[#0b1f3a]">{it.name}</span><span className="block truncate text-[12px] text-slate-500">{[it.sku && `SKU: ${it.sku}`, it.item_type === "goods" ? "Goods" : "Service"].filter(Boolean).join(" · ")}</span></span>
+                <span className="shrink-0 text-[14px] font-semibold tabular-nums text-[#0b1f3a]">{money(it.selling_price)}</span>
+              </button></li>
+            ))}
+            {list.length === 0 && !q.trim() && <li className="px-4 py-10 text-center text-sm text-slate-500">Your catalog is empty. Type a name above to add a custom line.</li>}
+          </ul>
+        </div>
+      ) : (
+        <>
+          <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            <div className="space-y-5 rounded-2xl bg-white p-4 shadow-[0_1px_4px_rgba(15,40,60,0.06)]">
+              <div>
+                <span className={lbl}>Item</span>
+                <div className="flex items-center gap-3">
+                  <button type="button" onClick={() => setPicking(true)} className="min-w-0 flex-1 border-b border-slate-200 py-2 text-left text-[17px] text-[#0b1f3a]">{d.name || <span className="text-slate-300">Select an item</span>}</button>
+                  {d.name && <button type="button" aria-label="Clear item" onClick={() => { setD(blankLine()); setPicking(true); }} className="text-slate-400"><svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg></button>}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {d.image_url && <img src={d.image_url} alt="" className="h-12 w-12 shrink-0 rounded-xl object-cover" />}
+                </div>
+              </div>
+              <label className="block"><span className={lbl}>Description</span>
+                <textarea rows={3} value={d.description ?? ""} onChange={(e) => set({ description: e.target.value })} placeholder="Add a description" className={`${inp} resize-none`} /></label>
+              <label className="block"><span className={lbl}>Account</span>
+                <select value={d.account ?? "Sales"} onChange={(e) => set({ account: e.target.value })} className={`${inp} appearance-none bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22><path fill=%22%2394a3b8%22 d=%22M5 7l5 6 5-6z%22/></svg>')] bg-[length:16px] bg-[right_4px_center] bg-no-repeat`}>
+                  {INCOME_ACCOUNTS.map((a) => <option key={a}>{a}</option>)}
+                </select></label>
+              <label className="block"><span className={lbl}>Quantity <span className="text-red-500">*</span></span>
+                <input inputMode="decimal" value={String(d.quantity)} onFocus={(e) => e.currentTarget.select()} onChange={(e) => set({ quantity: e.target.value.replace(/[^0-9.]/g, "") as unknown as number })} className={inp} /></label>
+              <label className="block"><span className={lbl}>{priceLabel} <span className="text-red-500">*</span></span>
+                <input inputMode="decimal" value={String(d.rate)} onFocus={(e) => e.currentTarget.select()} onChange={(e) => set({ rate: e.target.value.replace(/[^0-9.]/g, "") as unknown as number })} className={inp} /></label>
+              {showDiscount && (
+                <div className="grid grid-cols-2 gap-4">
+                  <label className="block"><span className={lbl}>Discount</span>
+                    <input inputMode="decimal" value={String(d.discount)} onFocus={(e) => e.currentTarget.select()} onChange={(e) => set({ discount: e.target.value.replace(/[^0-9.]/g, "") as unknown as number })} className={inp} /></label>
+                  <div><span className={lbl}>Discount type</span>
+                    <div className="flex gap-5 pt-2.5">
+                      {(["percent", "flat"] as DiscType[]).map((t) => (
+                        <label key={t} className="flex items-center gap-2 text-[17px] text-[#0b1f3a]">
+                          <input type="radio" checked={d.discount_type === t} onChange={() => set({ discount_type: t })} className="h-5 w-5 accent-[#0f766e]" />{t === "percent" ? "%" : "$"}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center justify-between rounded-xl bg-[#f6fbfa] px-3 py-2.5"><span className="text-[14px] text-slate-500">Amount</span><span className="text-[18px] font-bold tabular-nums text-[#0b1f3a]">{num2(lineAmount(d))}</span></div>
+              {err && <p className="text-sm text-red-600">{err}</p>}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3 border-t border-slate-200 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <button type="button" onClick={() => save(true)} className="rounded-xl border-2 border-[#0f766e] py-3 text-[16px] font-semibold text-[#0f766e] active:scale-[0.98]">{line ? "Save & Add New" : "Save and New"}</button>
+            <button type="button" onClick={() => save(false)} className="rounded-xl bg-[#0f766e] py-3 text-[16px] font-semibold text-white active:scale-[0.98]">Save</button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }

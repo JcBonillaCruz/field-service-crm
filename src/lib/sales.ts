@@ -16,7 +16,9 @@ export type AddressSnap = {
 export type SalesLine = {
   id?: string; position: number; item_id: string | null; name: string; description: string | null;
   quantity: number; unit: string | null; rate: number; discount: number; discount_type: DiscType; amount: number; image_url?: string | null;
+  account?: string | null; // cuenta de ingreso (Sales, Labor Income…)
 };
+export const INCOME_ACCOUNTS = ["Sales", "Service Income", "Labor Income", "Materials Income", "General Income", "Other Charges", "Shipping Charge", "Late Fee Income", "Discount"];
 
 export type SalesDoc = {
   id: string; company_id: string; kind: DocKind; number: string; customer_id: string | null; customer_name: string; emails: string[];

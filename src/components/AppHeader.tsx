@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import Avatar from "@/components/Avatar";
@@ -30,6 +30,11 @@ export default function AppHeader({
   const router = useRouter();
   const pathname = usePathname();
   const [creating, setCreating] = useState(false);
+  useEffect(() => {
+    if (!creating) return;
+    const onKey = (e: KeyboardEvent) => { if (creating && e.key === "Escape") setCreating(false); };
+    document.addEventListener("keydown", onKey); return () => document.removeEventListener("keydown", onKey);
+  }, [creating]);
 
   const current = companies.find((c) => c.id === currentId) ?? null;
   const daysLeft = current ? Math.max(0, TRIAL_DAYS - Math.floor((Date.now() - new Date(current.createdAt).getTime()) / 86400000)) : 0;
@@ -95,9 +100,12 @@ export default function AppHeader({
           <button type="button" aria-label="Close" onClick={() => setCreating(false)} className="fixed inset-0 bg-slate-900/30" />
           <div className="relative flex min-h-full items-center justify-center p-4">
           <div role="dialog" aria-modal="true" aria-labelledby="new-company-title" className="relative w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl sm:p-7 animate-[bp-fade_0.2s_ease-out]">
+            <button type="button" onClick={() => setCreating(false)} aria-label="Close" className="group/x absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600">
+              <svg viewBox="0 0 20 20" className="h-5 w-5 transition-transform duration-300 group-hover/x:rotate-90" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
+            </button>
             <h2 id="new-company-title" className="text-xl font-semibold text-[#0b1f3a]">New company</h2>
             <p className="mt-1 mb-6 text-sm text-slate-500">It gets its own customers, invoices and inventory.</p>
-            <CreateCompanyForm onDone={() => setCreating(false)} />
+            <CreateCompanyForm onDone={() => setCreating(false)} onCancel={() => setCreating(false)} />
           </div>
           </div>
         </div>

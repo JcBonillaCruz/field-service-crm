@@ -13,7 +13,7 @@ const Label = ({ children, opt }: { children: React.ReactNode; opt?: boolean }) 
 );
 
 // Nueva compañía: todos los campos a la vista (solo nombre y tipo son obligatorios) + logo
-export default function CreateCompanyForm({ onDone }: { onDone?: () => void }) {
+export default function CreateCompanyForm({ onDone, onCancel }: { onDone?: () => void; onCancel?: () => void }) {
   const router = useRouter();
   const [f, setF] = useState({ name: "", industry: "", phone: "", email: "", website: "", address: "", service_area: "", license_no: "", tax_id: "" });
   const [logo, setLogo] = useState<File | null>(null);
@@ -99,10 +99,13 @@ export default function CreateCompanyForm({ onDone }: { onDone?: () => void }) {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <button type="submit" disabled={saving}
-        className="w-full rounded-lg bg-[#0f766e] py-3 text-[15px] font-semibold text-white transition-colors hover:bg-[#0c5f59] disabled:opacity-60">
-        {saving ? "Creating company..." : "Create company"}
-      </button>
+      <div className="flex gap-3">
+        {onCancel && <button type="button" onClick={onCancel} className="rounded-lg border border-slate-200 bg-white px-5 py-3 text-[15px] font-medium text-slate-700 hover:bg-slate-50">Cancel</button>}
+        <button type="submit" disabled={saving}
+          className="flex-1 rounded-lg bg-[#0f766e] py-3 text-[15px] font-semibold text-white transition-colors hover:bg-[#0c5f59] disabled:opacity-60">
+          {saving ? "Creating company..." : "Create company"}
+        </button>
+      </div>
     </form>
   );
 }

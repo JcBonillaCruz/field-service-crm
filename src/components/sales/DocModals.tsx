@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import UploadChoices from "@/components/ui/UploadChoices";
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { db, logActivity, randomToken } from "@/lib/sales-client";
 import { Comment, PAYMENT_MODES, SalesDoc, SalesFile, balanceOf, fmtD, fmtDT, money, round2, today } from "@/lib/sales";
@@ -444,11 +445,8 @@ export function AttachmentsButton({ entity, entityId, companyId, files }: { enti
           </ul>
         )}
         <div className="p-3">
-          <input ref={input} type="file" multiple className="hidden" onChange={(e) => { upload(e.target.files); e.target.value = ""; }} />
-          <button type="button" onClick={() => input.current?.click()} disabled={busy}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 py-3 text-sm font-medium text-[#2563eb] hover:border-[#2563eb] hover:bg-[#f5f9ff]">
-            <Ico d={I.download} className="h-4 w-4 rotate-180" />{busy ? "Uploading..." : "Upload your Files"}
-          </button>
+          <UploadChoices compact disabled={busy} onFiles={upload} />
+          {busy && <p className="mt-2 text-center text-[12px] font-medium text-[#0f766e]">Uploading…</p>}
           <p className="mt-2 text-[11px] text-slate-400">{entity === "invoice" ? "Up to 15 files, 10MB each. JPG/PNG photos go inside the PDF (4 per page, up to 12)." : "You can upload a maximum of 5 files, 10MB each"}</p>
           {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
         </div>

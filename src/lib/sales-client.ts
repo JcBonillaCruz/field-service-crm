@@ -26,10 +26,12 @@ export async function saveLines(companyId: string, parent: { doc_id?: string; su
     company_id: companyId, doc_id: parent.doc_id ?? null, subscription_id: parent.subscription_id ?? null, position: i,
     item_id: l.item_id, name: l.name.trim(), description: l.description?.trim() || null, quantity: Number(l.quantity) || 0,
     unit: l.unit, rate: round2(Number(l.rate)), discount: round2(Number(l.discount)), discount_type: l.discount_type,
-    amount: lineAmount(l), image_url: l.image_url ?? null,
+    amount: lineAmount(l), image_url: l.image_url ?? null, account: l.account ?? null,
   }));
   if (!rows.length) return null;
-  const { error } = await supabase.from("sales_lines").insert(rows);
+  let { error } = await supabase.from("sales_lines").insert(rows);
+  // Sin el SQL 3.38 (columna "account") se guarda igual, sin la cuenta
+  if (error && /account/i.test(error.message)) ({ error } = await supabase.from("sales_lines").insert(rows.map(({ account: _a, ...r }) => r)));
   return error;
 }
 

@@ -11,6 +11,7 @@ import {
 import type { CouponOption, CustomerOption, ItemOption } from "@/lib/sales-server";
 import { pdfOf } from "@/lib/sales";
 import { tplOf } from "@/lib/pdf-templates";
+import UploadChoices from "@/components/ui/UploadChoices";
 import type { SalesPrefs } from "@/lib/sales";
 import { inputClass } from "@/components/customers/ui";
 import { Check, Chevron, optionClass, panelClass } from "@/components/ui/SearchSelect";
@@ -398,16 +399,13 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
               </div>
               <div>
                 <label className="mb-1.5 block text-[15px] text-slate-700">Attach File(s) to {noun}</label>
-                <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => {
-                  const add = Array.from(e.target.files ?? []); e.target.value = "";
+                <UploadChoices onFiles={(list) => {
+                  const add = Array.from(list ?? []);
                   const max = isQuote ? 5 : 15;
                   if (files.length + add.length > max) return setError(`You can upload a maximum of ${max} files.`);
                   if (add.some((f) => f.size > 10 * 1024 * 1024)) return setError("Each file must be 10 MB or smaller.");
                   setFiles((l) => [...l, ...add]);
                 }} />
-                <button type="button" onClick={() => fileRef.current?.click()} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:border-[#14a39a] hover:text-[#0f766e]">
-                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 15V4m0 0-4 4m4-4 4 4M5 19h14" strokeLinecap="round" strokeLinejoin="round" /></svg>Upload File
-                </button>
                 <p className="mt-1 text-[12px] text-slate-500">{isQuote ? "You can upload a maximum of 5 files, 10MB each" : "Up to 15 files, 10MB each. JPG/PNG job photos are added to the invoice PDF (4 per page, up to 12)."}</p>
                 {files.map((f, i) => (
                   <p key={i} className="mt-1 flex items-center gap-2 text-sm text-slate-700">{f.name}<button type="button" onClick={() => setFiles((l) => l.filter((_, j) => j !== i))} className="text-red-500 hover:underline">remove</button></p>

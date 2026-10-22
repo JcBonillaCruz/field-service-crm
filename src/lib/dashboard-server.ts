@@ -4,7 +4,9 @@ import { SalesDoc, Subscription, balanceOf, daysBetween, today } from "@/lib/sal
 
 export type MobileStats = {
   total: number; current: number; overdue: number; aging: number[]; agingCount: number[];
-  expenseByCat: [string, number][]; quoteStats: { sent: number; accepted: number; declined: number; open: number; openValue: number };
+  expenseByCat: [string, number][];
+  recentPayments: { date: string; amount: number; number: string; customer: string; mode: string | null }[];
+  recentExpenses: { date: string; amount: number; category: string; vendor: string | null }[]; quoteStats: { sent: number; accepted: number; declined: number; open: number; openValue: number };
   months: string[]; income: number[]; receipts: number[]; expenses: number[];
   ytdReceived: number; ytdExpenses: number; ytdInvoiced: number;
   revenue12: number; income12: number; receipts12: number; mrr: number; activeSubs: number; arpu: number;
@@ -18,9 +20,9 @@ const monthly = (s: Pick<Subscription, "total" | "bill_every" | "bill_unit">) =>
 export async function loadDashboard(supabase: SupabaseClient, companyId: string): Promise<{ data: DashboardData; mobile: MobileStats }> {
   const [{ data: inv }, { data: pays }, { data: subs }, { data: exps }, { data: qts }] = await Promise.all([
     supabase.from("sales_docs").select("*").eq("company_id", companyId).eq("kind", "invoice").not("status", "in", "(draft,void)").limit(10000),
-    supabase.from("sales_payments").select("kind, amount, paid_on").eq("company_id", companyId).limit(20000),
+    supabase.from("sales_payments").select("kind, amount, paid_on, invoice_id, mode").eq("company_id", companyId).order("paid_on", { ascending: false }).limit(20000),
     supabase.from("subscriptions").select("*").eq("company_id", companyId).limit(5000),
-    supabase.from("expenses").select("expense_date, amount, category").eq("company_id", companyId).limit(20000), // sin el SQL 3.36 viene vacío
+    supabase.from("expenses").select("expense_date, amount, category, vendor").eq("company_id", companyId).order("expense_date", { ascending: false }).limit(20000), // sin el SQL 3.36 viene vacío
     supabase.from("sales_docs").select("status, total, expiry_date").eq("company_id", companyId).eq("kind", "quote").limit(10000),
   ]);
   const invoices = (inv ?? []) as SalesDoc[];
@@ -92,6 +94,11 @@ export async function loadDashboard(supabase: SupabaseClient, companyId: string)
     data,
     mobile: {
       agingCount, expenseByCat, quoteStats,
+      recentPayments: payments.slice(0, 25).map((p) => {
+        const inv = invoices.find((d) => d.id === (p as { invoice_id?: string }).invoice_id);
+        return { date: p.paid_on as string, amount: Number(p.amount), number: inv?.number ?? "", customer: inv?.customer_name ?? "", mode: (p as { mode?: string | null }).mode ?? null };
+      }),
+      recentExpenses: (exps ?? []).slice(0, 25).map((e) => ({ date: e.expense_date as string, amount: Number(e.amount), category: (e.category as string) || "Other", vendor: (e.vendor as string | null) ?? null })),
       total: current + overdue, current, overdue, aging, months, income, receipts, expenses, ytdReceived, ytdExpenses, ytdInvoiced, revenue12: receipts12, income12, receipts12,
       mrr: mrrNow, activeSubs: activeNow, arpu: activeNow ? mrrNow / activeNow : 0,
     },
