@@ -117,9 +117,9 @@ export default function FinanceOverview({ st }: { st: MobileStats }) {
               <g clipPath="url(#bpReveal)">
                 <path d={area(st.receipts)} fill="url(#bpRec)" />
                 <path d={area(st.expenses)} fill="url(#bpExp)" />
-                <path d={line(st.receipts)} fill="none" stroke="#14b8a6" strokeWidth="3" strokeLinecap="round" />
-                <path d={line(st.expenses)} fill="none" stroke="#f97316" strokeWidth="2.5" strokeLinecap="round" />
-                <path d={line(profitM)} fill="none" stroke="#0b1f3a" strokeWidth="2" strokeDasharray="5 5" />
+                <path d={line(st.receipts)} fill="none" stroke="#14b8a6" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                <path d={line(st.expenses)} fill="none" stroke="#f97316" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
+                <path d={line(profitM)} fill="none" stroke="#0b1f3a" strokeWidth="1" strokeDasharray="4 4" />
               </g>
               {st.months.map((m, i) => (
                 <g key={i}>
@@ -129,7 +129,7 @@ export default function FinanceOverview({ st }: { st: MobileStats }) {
               ))}
               <line x1={x(hi)} x2={x(hi)} y1={T} y2={H - B} stroke="#0f766e" strokeOpacity="0.25" strokeDasharray="3 3" />
               {([[st.receipts[hi], "#14b8a6"], [st.expenses[hi], "#f97316"], [profitM[hi], "#0b1f3a"]] as const).map(([v, c], k) => (
-                <circle key={k} cx={x(hi)} cy={y(v)} r="5" fill="#fff" stroke={c} strokeWidth="2.5" />
+                <circle key={k} cx={x(hi)} cy={y(v)} r="3.5" fill="#fff" stroke={c} strokeWidth="1.4" />
               ))}
             </svg>
             <div className="pointer-events-none absolute top-1 rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-[12px] shadow-lg backdrop-blur"

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
-import { BODY, EYE_FRAME, EYE_INNER, FRAMES, QrOptions, buildQrSvg } from "@/lib/qr-design";
+import { BODY, EYE_FRAME, EYE_INNER, FRAMES, QrOptions, bodyPreviewPath, buildQrSvg } from "@/lib/qr-design";
 
 type Kind = "url" | "phone" | "sms" | "whatsapp" | "review" | "email" | "vcard" | "wifi" | "text";
 const KINDS: { id: Kind; label: string; icon: string; tone: string }[] = [
@@ -40,19 +40,22 @@ async function toDataUrl(src: string): Promise<string | null> {
 const field = "w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-[15px] placeholder:text-slate-400 focus:border-[#0f766e] focus:bg-white focus:outline-none focus:ring-4 focus:ring-[#14a39a]/15";
 const Lbl = ({ children }: { children: React.ReactNode }) => <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">{children}</span>;
 
-function ShapeGrid({ value, opts, kind, onPick }: { value: string; opts: Record<string, { label: string; d: string }>; kind: "body" | "frame" | "inner"; onPick: (k: string) => void }) {
+function ShapeGrid({ value, opts, kind, onPick }: { value: string; opts: Record<string, { label: string; d?: string }>; kind: "body" | "frame" | "inner"; onPick: (k: string) => void }) {
   return (
-    <div className="grid grid-cols-6 gap-2 sm:grid-cols-6">
+    <div className="grid grid-cols-4 gap-2 sm:grid-cols-5 xl:grid-cols-6">
       {Object.entries(opts).map(([k, v]) => (
         <button key={k} type="button" title={v.label} aria-label={v.label} onClick={() => onPick(k)}
-          className={`flex aspect-square items-center justify-center rounded-xl border-2 bg-white transition-all hover:-translate-y-0.5 hover:shadow-md active:scale-90 ${value === k ? "border-[#0f766e] bg-[#f3fbf8] shadow-sm" : "border-slate-200 hover:border-[#14a39a]"}`}>
-          {kind === "body" ? (
-            <svg viewBox="-0.15 -0.15 1.3 1.3" className="h-6 w-6 text-[#0b1f3a]"><path d={v.d} fill="currentColor" /></svg>
-          ) : kind === "frame" ? (
-            <svg viewBox="-0.5 -0.5 8 8" className="h-7 w-7 text-[#0b1f3a]"><path d={v.d} fill="currentColor" fillRule="evenodd" /><rect x="2" y="2" width="3" height="3" fill="currentColor" opacity=".25" /></svg>
-          ) : (
-            <svg viewBox="-0.4 -0.4 3.8 3.8" className="h-6 w-6 text-[#0b1f3a]"><path d={v.d} fill="currentColor" /></svg>
-          )}
+          className={`group flex flex-col items-center gap-1 rounded-xl border-2 bg-white px-1 pb-1.5 pt-2 transition-all hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${value === k ? "border-[#0f766e] bg-[#f3fbf8] shadow-sm" : "border-slate-200 hover:border-[#14a39a]"}`}>
+          <span className="flex h-11 w-11 items-center justify-center">
+            {kind === "body" ? (
+              <svg viewBox="-0.3 -0.3 5.6 5.6" className="h-10 w-10 text-[#0b1f3a]"><path d={bodyPreviewPath(k)} fill="currentColor" /></svg>
+            ) : kind === "frame" ? (
+              <svg viewBox="-0.6 -0.6 8.2 8.2" className="h-10 w-10 text-[#0b1f3a]"><path d={v.d} fill="currentColor" fillRule="evenodd" /><rect x="2" y="2" width="3" height="3" rx=".4" fill="#e8713a" /></svg>
+            ) : (
+              <svg viewBox="-2.6 -2.6 8.2 8.2" className="h-10 w-10 text-[#0b1f3a]"><path d="M-2 -2H5V5H-2ZM-1.2 -1.2V4.2H4.2V-1.2Z" fill="currentColor" fillRule="evenodd" opacity=".18" /><path d={v.d} fill="currentColor" /></svg>
+            )}
+          </span>
+          <span className={`w-full truncate text-center text-[10px] leading-tight ${value === k ? "font-semibold text-[#0b3f3b]" : "text-slate-500"}`}>{v.label}</span>
         </button>
       ))}
     </div>
@@ -117,6 +120,20 @@ export default function QrStudio({ company, logoUrl, phone, website }: { company
   }, [kind, f, company]);
   const svg = useMemo(() => { try { return buildQrSvg({ ...o, text, logo }); } catch { return ""; } }, [o, text, logo]);
   const src = svg ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}` : "";
+  // Miniaturas de cada marco con tus colores y tu texto
+  const thumbs = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const k of Object.keys(FRAMES)) {
+      try { out[k] = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(buildQrSvg({ ...o, ec: "L", margin: 2, body: "square", logo: null, text: "BP", frame: k }))}`; } catch { /* nada */ }
+    }
+    return out;
+  }, [o.frameColor, o.frameTextColor, o.frameText, o.bg, o.fg, o.eyeFrameColor, o.eyeInnerColor, o.transparent]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Al recargar en el celular, empezar arriba (evita que el contenido quede escondido detrás de la vista previa)
+  useEffect(() => {
+    try { if ("scrollRestoration" in history) history.scrollRestoration = "manual"; } catch { /* nada */ }
+    window.scrollTo(0, 0);
+    return () => { try { history.scrollRestoration = "auto"; } catch { /* nada */ } };
+  }, []);
 
   // ---------- Descargas ----------
   const slug = (company || "qr").toLowerCase().replace(/[^a-z0-9]+/g, "-");
@@ -226,20 +243,24 @@ export default function QrStudio({ company, logoUrl, phone, website }: { company
         </button>
         {logo && <>
           <Slider label="Size" value={o.logoSize} min={0.12} max={0.32} step={0.01} fmt={(v) => `${Math.round(v * 100)}%`} on={(v) => up({ logoSize: v })} />
-          <Slider label="Padding" value={o.logoPad} min={0} max={3} step={1} fmt={(v) => `${v * 8}px`} on={(v) => up({ logoPad: v })} />
-          <Slider label="Rounded corners" value={o.logoRadius} min={0} max={1} step={0.05} fmt={(v) => `${Math.round(v * 100)}%`} on={(v) => up({ logoRadius: v })} />
-          <label className="flex items-center gap-2 text-[13px] text-slate-600"><input type="checkbox" checked={o.logoBg} onChange={(e) => up({ logoBg: e.target.checked })} className="h-4 w-4 accent-[#0f766e]" />White plate behind the logo</label>
+          <Slider label="Padding (white space around the logo)" value={o.logoPad} min={0} max={4} step={0.5} fmt={(v) => `${v * 8}px`} on={(v) => up({ logoPad: v })} />
+          <Slider label="Rounded corners (outside)" value={o.logoRadius} min={0} max={1} step={0.05} fmt={(v) => `${Math.round(v * 100)}%`} on={(v) => up({ logoRadius: v })} />
+          <label className="flex items-center gap-2 text-[13px] text-slate-600"><input type="checkbox" checked={o.logoBg} onChange={(e) => up({ logoBg: e.target.checked })} className="h-4 w-4 accent-[#0f766e]" />Solid white plate behind the logo (#FFFFFF)</label>
           {o.logoSize > 0.27 && <p className="rounded-lg bg-[#fff7ed] px-3 py-2 text-[12px] text-[#9a3412]">Big logos can make the code harder to scan. Test it with your phone.</p>}
         </>}
       </div>
     ),
     frame: (
       <div className="space-y-4">
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-5">
           {Object.entries(FRAMES).map(([k, v]) => (
-            <button key={k} type="button" onClick={() => up({ frame: k })}
-              className={`flex flex-col items-center gap-1 rounded-xl border-2 bg-white px-1 py-2 text-[11px] transition-all active:scale-95 ${o.frame === k ? "border-[#0f766e] bg-[#f3fbf8] font-semibold text-[#0b3f3b]" : "border-slate-200 text-slate-600 hover:border-[#14a39a]"}`}>
-              <FrameIcon k={k} />{v.label}
+            <button key={k} type="button" onClick={() => up({ frame: k })} title={v.label}
+              className={`group flex flex-col items-center gap-1.5 rounded-xl border-2 bg-white px-1.5 pb-2 pt-2.5 text-[11px] transition-all hover:-translate-y-0.5 hover:shadow-md active:scale-95 ${o.frame === k ? "border-[#0f766e] bg-[#f3fbf8] font-semibold text-[#0b3f3b] shadow-sm" : "border-slate-200 text-slate-600 hover:border-[#14a39a]"}`}>
+              <span className="flex h-20 w-full items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {thumbs[k] && <img src={thumbs[k]} alt="" className="max-h-full max-w-full object-contain" />}
+              </span>
+              <span className="w-full truncate text-center">{v.label}</span>
             </button>
           ))}
         </div>
@@ -268,10 +289,11 @@ export default function QrStudio({ company, logoUrl, phone, website }: { company
     ),
   };
 
+  // Caja de tamaño fijo (cuadrada) para que nada salte mientras carga la imagen
   const preview = (
-    <div className="mx-auto w-full max-w-[340px] rounded-2xl bg-[repeating-conic-gradient(#f1f5f9_0_25%,#fff_0_50%)] bg-[length:16px_16px] p-3">
+    <div className="mx-auto flex aspect-square w-full items-center justify-center rounded-2xl bg-[repeating-conic-gradient(#f1f5f9_0_25%,#fff_0_50%)] bg-[length:16px_16px] p-3">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      {src && <img key={o.body + o.eyeFrame + o.eyeInner + o.frame} src={src} alt="QR code preview" className="w-full drop-shadow-sm animate-[bp-fade_0.25s_ease-out]" />}
+      {src && <img key={o.body + o.eyeFrame + o.eyeInner + o.frame} src={src} alt="QR code preview" className="max-h-full max-w-full object-contain drop-shadow-sm animate-[bp-fade_0.25s_ease-out]" />}
     </div>
   );
   const dlButtons = (
@@ -295,7 +317,7 @@ export default function QrStudio({ company, logoUrl, phone, website }: { company
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-[#f4f6f8]">
       {/* ---------- Computadora: menú · diseño · vista en vivo ---------- */}
-      <div className="hidden min-h-[calc(100vh-4rem)] lg:grid lg:grid-cols-[230px_minmax(0,1fr)_minmax(360px,440px)]">
+      <div className="hidden min-h-[calc(100vh-4rem)] lg:grid lg:grid-cols-[230px_500px_minmax(0,1fr)] 2xl:grid-cols-[230px_560px_minmax(0,1fr)]">
         <nav className="border-r border-slate-200 bg-white p-3">
           <p className="px-3 pb-3 pt-2 text-lg font-semibold text-[#0b1f3a]">QR Code Studio</p>
           {SECTIONS.map((s) => (
@@ -308,19 +330,22 @@ export default function QrStudio({ company, logoUrl, phone, website }: { company
         <div className="overflow-y-auto p-6">
           <h2 className="mb-1 text-xl font-semibold text-[#0b1f3a]">{SECTIONS.find((s) => s.id === sec)?.label}</h2>
           <p className="mb-5 text-[13px] text-slate-500">Changes show live on the right.</p>
-          <div key={sec} className="max-w-xl animate-[bp-fade_0.2s_ease-out] rounded-2xl border border-slate-200 bg-white p-5">{sections[sec]}</div>
+          <div key={sec} className="animate-[bp-fade_0.2s_ease-out] rounded-2xl border border-slate-200 bg-white p-5">{sections[sec]}</div>
         </div>
-        <div className="border-l border-slate-200 bg-white p-6">
-          <div className="sticky top-20 space-y-4">
-            <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Live preview</p>
-            {preview}{dlButtons}
+        {/* Vista en vivo: ocupa todo el resto de la pantalla, centrada y con aire */}
+        <div className="min-w-0 py-6 pr-6">
+          <div className="sticky top-[5.5rem] flex min-h-[calc(100vh-7.5rem)] flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white px-8 py-8">
+            <p className="mb-5 self-start text-[13px] font-semibold uppercase tracking-wide text-slate-400">Live preview</p>
+            <div className="w-full max-w-[460px] space-y-5">
+              {preview}{dlButtons}
+            </div>
           </div>
         </div>
       </div>
 
       {/* ---------- Celular: el código arriba (fijo) y las secciones abajo, una abierta a la vez ---------- */}
       <div className="lg:hidden">
-        <div className="sticky top-16 z-20 border-b border-slate-200 bg-white/95 px-4 pb-3 pt-3 backdrop-blur">
+        <div className="sticky top-16 z-20 border-b border-slate-200 bg-white px-4 pb-3 pt-2.5 shadow-[0_6px_16px_rgba(15,40,60,0.06)]">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-[17px] font-semibold text-[#0b1f3a]">QR Code Studio</p>
             <Menu>
@@ -342,9 +367,9 @@ export default function QrStudio({ company, logoUrl, phone, website }: { company
               </MenuItems>
             </Menu>
           </div>
-          <div className="mx-auto w-[min(62vw,260px)]">{preview}</div>
+          <div className="mx-auto w-[min(40vw,165px)]">{preview}</div>
         </div>
-        <div className="space-y-2.5 px-3 py-3 pb-10">
+        <div className="relative z-0 space-y-2.5 px-3 pb-10 pt-6">
           {SECTIONS.map((s) => (
             <div key={s.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
               <button type="button" onClick={() => setOpen(open === s.id ? null : s.id)} className="flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-slate-50">
@@ -358,22 +383,5 @@ export default function QrStudio({ company, logoUrl, phone, website }: { company
         </div>
       </div>
     </div>
-  );
-}
-
-// Dibujito de cada marco
-function FrameIcon({ k }: { k: string }) {
-  const q = <rect x="9" y="7" width="14" height="14" rx="1.5" fill="currentColor" opacity=".35" />;
-  return (
-    <svg viewBox="0 0 32 34" className="h-9 w-9 text-[#0b1f3a]">
-      {k === "none" && <rect x="7" y="7" width="18" height="18" rx="2" fill="currentColor" opacity=".35" />}
-      {k === "bottom" && <><rect x="5" y="3" width="22" height="28" rx="3" fill="none" stroke="currentColor" strokeWidth="1.6" />{q}<rect x="5" y="24" width="22" height="7" rx="2" fill="currentColor" /></>}
-      {k === "top" && <><rect x="5" y="3" width="22" height="28" rx="3" fill="none" stroke="currentColor" strokeWidth="1.6" /><rect x="5" y="3" width="22" height="7" rx="2" fill="currentColor" /><rect x="9" y="13" width="14" height="14" rx="1.5" fill="currentColor" opacity=".35" /></>}
-      {k === "outline" && <><rect x="5" y="3" width="22" height="22" rx="3" fill="none" stroke="currentColor" strokeWidth="1.6" />{q}<rect x="9" y="28" width="14" height="3" rx="1.5" fill="currentColor" /></>}
-      {k === "pill" && <>{q}<rect x="7" y="26" width="18" height="6" rx="3" fill="currentColor" /></>}
-      {k === "bubble" && <><rect x="5" y="2" width="22" height="7" rx="2.5" fill="currentColor" /><path d="M14 9l2 3 2-3z" fill="currentColor" /><rect x="9" y="14" width="14" height="14" rx="1.5" fill="currentColor" opacity=".35" /></>}
-      {k === "ticket" && <><rect x="5" y="3" width="22" height="28" rx="2" fill="none" stroke="currentColor" strokeWidth="1.4" strokeDasharray="3 2" />{q}<rect x="9" y="26" width="14" height="2.5" rx="1" fill="currentColor" /></>}
-      {k === "brackets" && <><path d="M5 9V4h5M22 4h5v5M5 21v5h5M22 26h5v-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />{q}<rect x="9" y="29" width="14" height="2.5" rx="1" fill="currentColor" /></>}
-    </svg>
   );
 }

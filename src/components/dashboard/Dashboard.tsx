@@ -9,12 +9,13 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Role } from "@/lib/types";
 import BottomSheet from "@/components/customers/BottomSheet";
+import { AppsGrid } from "@/components/AppsMenu";
 
 type Counts = { total: number; commercial: number; residential: number };
 const PERIODS = ["Last 3 Months","Last 12 Months","This Quarter","Previous Quarter","This Year","Previous Year","Year To Date","Quarter To Date"];
 const TABS: {label:string;icon:string}[] = [
   {label:"Dashboard",icon:"M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"},
-  {label:"Announcements",icon:"M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.08"},
+  {label:"All apps",icon:"M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"},
   {label:"Help",icon:"M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"},
 ];
 
@@ -129,7 +130,12 @@ export default function Dashboard({ firstName, companyName, industry, role, coun
         </div>
       )}
 
-      {tab === "Announcements" && <EmptyTab title="No announcements yet" text="Product updates and tips will appear here."/>}
+      {tab === "All apps" && (
+        <div className="mx-4 mt-5 rounded-3xl border border-slate-200 bg-white p-3 animate-[bp-fade_0.25s_ease-out]">
+          <p className="px-2 pb-1 pt-1 text-xs font-semibold uppercase tracking-wide text-slate-400">All apps</p>
+          <AppsGrid role={role} />
+        </div>
+      )}
       {tab === "Help" && <EmptyTab title="Need help?" text="Documentation and support channels are coming soon."/>}
 
       {/* Period sheet */}

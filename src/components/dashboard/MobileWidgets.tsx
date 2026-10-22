@@ -19,75 +19,66 @@ export function useCountUp(value: number, ms = 900) {
   return v;
 }
 
-// Fondo "tecnológico" suave: cuadrícula gris tenue con pulsos que se mueven (sin colores fuertes)
-function TechBackdrop() {
-  return (
-    <svg className="pointer-events-none absolute inset-0 h-full w-full" preserveAspectRatio="none" aria-hidden="true">
-      <defs>
-        <pattern id="bpGrid" width="22" height="22" patternUnits="userSpaceOnUse"><path d="M22 0H0V22" fill="none" stroke="#e2e8f0" strokeWidth="0.8" /></pattern>
-        <radialGradient id="bpFade" cx="50%" cy="0%" r="90%"><stop offset="0" stopColor="#fff" stopOpacity="0" /><stop offset="1" stopColor="#fff" stopOpacity="0.95" /></radialGradient>
-      </defs>
-      <rect width="100%" height="100%" fill="url(#bpGrid)" />
-      {[[18, 30, 0], [62, 18, 1.2], [82, 64, 2.4], [36, 72, 3.1], [90, 26, 4.2]].map(([x, y, d], i) => (
-        <circle key={i} cx={`${x}%`} cy={`${y}%`} r="2.2" fill="#94a3b8">
-          <animate attributeName="opacity" values="0;.7;0" dur="4.5s" begin={`${d}s`} repeatCount="indefinite" />
-          <animate attributeName="r" values="1.5;3.5;1.5" dur="4.5s" begin={`${d}s`} repeatCount="indefinite" />
-        </circle>
-      ))}
-      <rect width="100%" height="100%" fill="url(#bpFade)" />
-      <rect x="-30%" y="0" width="30%" height="100%" fill="#ffffff" opacity="0.55">
-        <animate attributeName="x" values="-30%;130%" dur="6s" repeatCount="indefinite" />
-      </rect>
-    </svg>
-  );
-}
-
 type Detail = "earned" | "spent" | "profit" | null;
-// Tarjeta principal: lo recibido en el año; Earned / Spent / Profit se tocan y muestran su historial
+const ORDER: Exclude<Detail, null>[] = ["earned", "spent", "profit"];
+// Tarjeta principal (fondo blanco, sin animaciones): lo recibido en el año.
+// Earned / Spent / Profit se abren AQUÍ MISMO hacia abajo; al cambiar de una a otra, el contenido se desliza.
 export function MobileHero({ st }: { st: MobileStats }) {
-  const earned = useCountUp(st.ytdReceived);
   const profit = st.ytdReceived - st.ytdExpenses;
   const year = new Date().getFullYear();
   const [detail, setDetail] = useState<Detail>(null);
+  const [shown, setShown] = useState<Detail>(null);
+  const [dir, setDir] = useState<1 | -1>(1);
+  const pick = (k: Exclude<Detail, null>) => {
+    if (detail === k) { setDetail(null); return; }
+    if (detail) setDir(ORDER.indexOf(k) > ORDER.indexOf(detail) ? 1 : -1);
+    setDetail(k); setShown(k);
+  };
   const tiles: [Exclude<Detail, null>, string, number, string, string][] = [
     ["earned", "Earned", st.ytdReceived, "M12 19V5M5 12l7-7 7 7", "text-[#059669]"],
     ["spent", "Spent", st.ytdExpenses, "M12 5v14M5 12l7 7 7-7", "text-[#e11d48]"],
     ["profit", "Profit", profit, "M3 17l6-6 4 4 8-8M15 7h6v6", profit >= 0 ? "text-[#0f766e]" : "text-[#e11d48]"],
   ];
   return (
-    <>
-      <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white px-5 pb-5 pt-5 shadow-[0_6px_20px_rgba(15,40,60,0.06)]">
-        <TechBackdrop />
-        <div className="relative">
-          <p className="flex items-center gap-2 text-[13px] font-medium text-slate-500">
-            <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#10b981] opacity-60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-[#10b981]" /></span>
-            Received in {year} · live
-          </p>
-          <p className="mt-1 text-[38px] font-bold leading-none tracking-tight tabular-nums text-[#0b1f3a]">{$(earned)}</p>
-          <div className="mt-5 grid grid-cols-3 gap-2">
-            {tiles.map(([k, l, v, d, tone]) => (
-              <button key={k} type="button" onClick={() => setDetail(k)}
-                className="group rounded-2xl border border-slate-200 bg-white/90 px-3 py-2.5 text-left backdrop-blur transition-all active:scale-95">
-                <p className="flex items-center justify-between text-[11px] font-semibold text-slate-500">
-                  <span className="flex items-center gap-1"><svg viewBox="0 0 24 24" className={`h-3.5 w-3.5 ${tone}`} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>{l}</span>
-                  <svg viewBox="0 0 20 20" className="h-3 w-3 text-slate-300 transition-transform group-active:translate-x-0.5" fill="currentColor"><path d="M7.3 5.3a1 1 0 0 1 1.4 0l4 4a1 1 0 0 1 0 1.4l-4 4a1 1 0 0 1-1.4-1.4L10.6 10 7.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
-                </p>
-                <p className={`mt-0.5 text-[16px] font-bold tabular-nums ${k === "spent" || v < 0 ? "text-[#e11d48]" : "text-[#0b1f3a]"}`}>{k === "spent" ? "-" : v < 0 ? "-" : ""}{short(Math.abs(v))}</p>
-              </button>
-            ))}
-          </div>
+    <div className="rounded-3xl border border-slate-200 bg-white px-5 pb-5 pt-5 shadow-[0_6px_20px_rgba(15,40,60,0.05)]">
+      <p className="flex items-center gap-2 text-[14px] font-medium text-slate-500">
+        <span className="inline-flex h-2 w-2 rounded-full bg-[#10b981]" />
+        Received in {year}
+      </p>
+      <p className="mt-1 text-[44px] font-bold leading-none tracking-tight tabular-nums text-[#0b1f3a]">{$(st.ytdReceived)}</p>
+      <div className="mt-5 grid grid-cols-3 gap-2">
+        {tiles.map(([k, l, v, d, tone]) => {
+          const active = detail === k;
+          return (
+            <button key={k} type="button" onClick={() => pick(k)} aria-expanded={active}
+              className={`rounded-2xl border px-3 py-3 text-left transition-all duration-200 active:scale-95 ${active ? "border-[#0f766e] bg-[#f3fbf8] shadow-[0_4px_14px_rgba(15,118,110,0.12)]" : "border-slate-200 bg-white"}`}>
+              <p className="flex items-center justify-between text-[12.5px] font-semibold text-slate-500">
+                <span className="flex items-center gap-1"><svg viewBox="0 0 24 24" className={`h-4 w-4 ${tone}`} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>{l}</span>
+                <svg viewBox="0 0 20 20" className={`h-3.5 w-3.5 transition-transform duration-300 ${active ? "rotate-180 text-[#0f766e]" : "text-slate-300"}`} fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
+              </p>
+              <p className={`mt-1 text-[20px] font-bold tabular-nums ${k === "spent" || v < 0 ? "text-[#e11d48]" : "text-[#0b1f3a]"}`}>{k === "spent" ? "-" : v < 0 ? "-" : ""}{short(Math.abs(v))}</p>
+            </button>
+          );
+        })}
+      </div>
+      {/* Se abre hacia abajo dentro de la misma tarjeta */}
+      <div className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${detail ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+        <div className="min-h-0 overflow-hidden">
+          {shown && (
+            <div key={shown} className={detail ? (dir === 1 ? "animate-[bp-in-left_0.28s_ease-out]" : "animate-[bp-in-right_0.28s_ease-out]") : ""}>
+              <HeroDetail st={st} detail={shown} onClose={() => setDetail(null)} />
+            </div>
+          )}
         </div>
       </div>
-      <HeroDetail st={st} detail={detail} onClose={() => setDetail(null)} />
-    </>
+    </div>
   );
 }
 
-// Hoja de detalle: historial de cobros, gastos o ganancia por mes
-function HeroDetail({ st, detail, onClose }: { st: MobileStats; detail: Detail; onClose: () => void }) {
+// Detalle dentro de la tarjeta: historial de cobros, gastos o ganancia por mes
+function HeroDetail({ st, detail, onClose }: { st: MobileStats; detail: Exclude<Detail, null>; onClose: () => void }) {
   const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(false); if (detail) { const t = setTimeout(() => setMounted(true), 80); return () => clearTimeout(t); } }, [detail]);
-  if (!detail) return null;
+  useEffect(() => { setMounted(false); const t = setTimeout(() => setMounted(true), 60); return () => clearTimeout(t); }, [detail]);
   const profitM = st.receipts.map((r, i) => r - st.expenses[i]);
   const series = detail === "earned" ? st.receipts : detail === "spent" ? st.expenses : profitM;
   const max = Math.max(1, ...series.map(Math.abs));
@@ -96,77 +87,75 @@ function HeroDetail({ st, detail, onClose }: { st: MobileStats; detail: Detail; 
   const total = detail === "earned" ? st.ytdReceived : detail === "spent" ? st.ytdExpenses : st.ytdReceived - st.ytdExpenses;
   const fd = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   return (
-    <div className="fixed inset-0 z-[80] flex items-end bg-slate-900/40 animate-[bp-fade_0.2s_ease-out]" onClick={onClose}>
-      <div className="max-h-[88vh] w-full overflow-y-auto rounded-t-3xl bg-white pb-[max(1.25rem,env(safe-area-inset-bottom))] animate-[bp-sheet_0.3s_cubic-bezier(.2,.8,.2,1)]" onClick={(e) => e.stopPropagation()}>
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-5 py-4">
-          <div><p className="text-[13px] text-slate-500">{title} · {new Date().getFullYear()}</p><p className={`text-[26px] font-bold tabular-nums ${detail === "spent" || total < 0 ? "text-[#e11d48]" : "text-[#0b1f3a]"}`}>{detail === "spent" ? "-" : ""}{$(Math.abs(total))}</p></div>
-          <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500"><svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg></button>
-        </div>
-        <div className="px-5 pt-4">
-          <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-slate-400">Last 12 months</p>
-          <div className="flex h-32 items-end gap-1.5">
-            {series.map((v, i) => (
-              <div key={i} className="flex flex-1 flex-col items-center justify-end gap-1">
-                <span className="text-[8px] font-semibold tabular-nums text-slate-500">{v ? short(v) : ""}</span>
-                <div className="w-full rounded-t-md transition-all duration-700" style={{ height: mounted && v ? `${Math.max(4, (Math.abs(v) / max) * 90)}px` : "2px", background: v < 0 ? "#f43f5e" : color, opacity: v ? 1 : 0.2, transitionDelay: `${i * 35}ms` }} />
-                <span className="text-[8px] text-slate-400">{st.months[i]}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="mt-5 px-5">
-          {detail === "earned" && (
-            <>
-              <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-slate-400">Recent payments</p>
-              {st.recentPayments.length === 0 && <p className="py-4 text-center text-sm text-slate-500">No payments yet.</p>}
-              <ul className="divide-y divide-slate-100">
-                {st.recentPayments.map((p, i) => (
-                  <li key={i} className="flex items-center gap-3 py-2.5 animate-[bp-fade_0.3s_ease-out_both]" style={{ animationDelay: `${i * 30}ms` }}>
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#ecfdf5] text-[#059669]"><svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 19V5M5 12l7-7 7 7" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
-                    <span className="min-w-0 flex-1"><span className="block truncate text-[14px] font-medium text-[#0b1f3a]">{p.customer || "Payment"}</span><span className="text-[12px] text-slate-500">{fd(p.date)}{p.number ? ` · ${p.number}` : ""}{p.mode ? ` · ${p.mode}` : ""}</span></span>
-                    <span className="font-semibold tabular-nums text-[#059669]">+{$(p.amount)}</span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-          {detail === "spent" && (
-            <>
-              {st.expenseByCat.length > 0 && <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-slate-400">Where it went</p>}
-              <ul className="mb-4 space-y-2">
-                {st.expenseByCat.slice(0, 5).map(([n, v]) => (
-                  <li key={n}><div className="flex justify-between text-[13px]"><span className="text-slate-600">{n}</span><span className="font-semibold tabular-nums text-[#e11d48]">-{$(v)}</span></div>
-                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-[#fb7185] transition-all duration-700" style={{ width: mounted ? `${(v / (st.expenseByCat[0][1] || 1)) * 100}%` : "0%" }} /></div></li>
-                ))}
-              </ul>
-              <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-slate-400">Recent expenses</p>
-              {st.recentExpenses.length === 0 && <p className="py-4 text-center text-sm text-slate-500">No expenses yet.</p>}
-              <ul className="divide-y divide-slate-100">
-                {st.recentExpenses.map((e, i) => (
-                  <li key={i} className="flex items-center gap-3 py-2.5"><span className="min-w-0 flex-1"><span className="block truncate text-[14px] font-medium text-[#0b1f3a]">{e.vendor || e.category}</span><span className="text-[12px] text-slate-500">{fd(e.date)} · {e.category}</span></span><span className="font-semibold tabular-nums text-[#e11d48]">-{$(e.amount)}</span></li>
-                ))}
-              </ul>
-              <Link href="/dashboard/expenses" className="mt-3 block rounded-xl border border-slate-200 py-2.5 text-center text-sm font-medium text-[#0f766e]">Open Expenses →</Link>
-            </>
-          )}
-          {detail === "profit" && (
-            <>
-              <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-slate-400">Month by month</p>
-              <ul className="divide-y divide-slate-100">
-                {st.months.map((m, i) => ({ m, i })).reverse().map(({ m, i }) => (
-                  <li key={i} className="grid grid-cols-4 gap-2 py-2 text-[13px]">
-                    <span className="font-medium text-[#0b1f3a]">{m}</span>
-                    <span className="text-right tabular-nums text-[#059669]">+{short(st.receipts[i])}</span>
-                    <span className="text-right tabular-nums text-[#e11d48]">-{short(st.expenses[i])}</span>
-                    <span className={`text-right font-semibold tabular-nums ${profitM[i] >= 0 ? "text-[#0b1f3a]" : "text-[#e11d48]"}`}>{profitM[i] < 0 ? "-" : ""}{short(Math.abs(profitM[i]))}</span>
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-2 text-[11px] text-slate-400">Received · Spent · Profit</p>
-            </>
-          )}
-        </div>
+    <div className="mt-4 border-t border-slate-100 pt-4">
+      <div className="flex items-end justify-between">
+        <div><p className="text-[13px] text-slate-500">{title} · {new Date().getFullYear()}</p><p className={`text-[26px] font-bold leading-tight tabular-nums ${detail === "spent" || total < 0 ? "text-[#e11d48]" : "text-[#0b1f3a]"}`}>{detail === "spent" ? "-" : ""}{$(Math.abs(total))}</p></div>
+        <p className="pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Last 12 months</p>
       </div>
+      <div className="mt-3 flex h-28 items-end gap-1.5">
+        {series.map((v, i) => (
+          <div key={i} className="flex flex-1 flex-col items-center justify-end gap-1">
+            <span className="text-[8px] font-semibold tabular-nums text-slate-500">{v ? short(v) : ""}</span>
+            <div className="w-full rounded-t-md transition-all duration-700" style={{ height: mounted && v ? `${Math.max(4, (Math.abs(v) / max) * 78)}px` : "2px", background: v < 0 ? "#f43f5e" : color, opacity: v ? 1 : 0.2, transitionDelay: `${i * 30}ms` }} />
+            <span className="text-[8px] text-slate-400">{st.months[i]}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4">
+        {detail === "earned" && (
+          <>
+            <p className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-slate-400">Recent payments</p>
+            {st.recentPayments.length === 0 && <p className="py-4 text-center text-sm text-slate-500">No payments yet.</p>}
+            <ul className="divide-y divide-slate-100">
+              {st.recentPayments.map((p, i) => (
+                <li key={i} className="flex items-center gap-3 py-2.5">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#ecfdf5] text-[#059669]"><svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 19V5M5 12l7-7 7 7" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
+                  <span className="min-w-0 flex-1"><span className="block truncate text-[14px] font-medium text-[#0b1f3a]">{p.customer || "Payment"}</span><span className="text-[12px] text-slate-500">{fd(p.date)}{p.number ? ` · ${p.number}` : ""}{p.mode ? ` · ${p.mode}` : ""}</span></span>
+                  <span className="font-semibold tabular-nums text-[#059669]">+{$(p.amount)}</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        {detail === "spent" && (
+          <>
+            {st.expenseByCat.length > 0 && <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-slate-400">Where it went</p>}
+            <ul className="mb-4 space-y-2">
+              {st.expenseByCat.slice(0, 5).map(([n, v]) => (
+                <li key={n}><div className="flex justify-between text-[13px]"><span className="text-slate-600">{n}</span><span className="font-semibold tabular-nums text-[#e11d48]">-{$(v)}</span></div>
+                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-[#fb7185] transition-all duration-700" style={{ width: mounted ? `${(v / (st.expenseByCat[0][1] || 1)) * 100}%` : "0%" }} /></div></li>
+              ))}
+            </ul>
+            <p className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-slate-400">Recent expenses</p>
+            {st.recentExpenses.length === 0 && <p className="py-4 text-center text-sm text-slate-500">No expenses yet.</p>}
+            <ul className="divide-y divide-slate-100">
+              {st.recentExpenses.map((e, i) => (
+                <li key={i} className="flex items-center gap-3 py-2.5"><span className="min-w-0 flex-1"><span className="block truncate text-[14px] font-medium text-[#0b1f3a]">{e.vendor || e.category}</span><span className="text-[12px] text-slate-500">{fd(e.date)} · {e.category}</span></span><span className="font-semibold tabular-nums text-[#e11d48]">-{$(e.amount)}</span></li>
+              ))}
+            </ul>
+            <Link href="/dashboard/expenses" className="mt-3 block rounded-xl border border-slate-200 py-2.5 text-center text-sm font-medium text-[#0f766e]">Open Expenses →</Link>
+          </>
+        )}
+        {detail === "profit" && (
+          <>
+            <div className="mb-1 grid grid-cols-4 gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400"><span>Month</span><span className="text-right">In</span><span className="text-right">Out</span><span className="text-right">Kept</span></div>
+            <ul className="divide-y divide-slate-100">
+              {st.months.map((m, i) => ({ m, i })).reverse().map(({ m, i }) => (
+                <li key={i} className="grid grid-cols-4 gap-2 py-2 text-[13px]">
+                  <span className="font-medium text-[#0b1f3a]">{m}</span>
+                  <span className="text-right tabular-nums text-[#059669]">+{short(st.receipts[i])}</span>
+                  <span className="text-right tabular-nums text-[#e11d48]">-{short(st.expenses[i])}</span>
+                  <span className={`text-right font-semibold tabular-nums ${profitM[i] >= 0 ? "text-[#0b1f3a]" : "text-[#e11d48]"}`}>{profitM[i] < 0 ? "-" : ""}{short(Math.abs(profitM[i]))}</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
+      <button type="button" onClick={onClose} className="mt-3 flex w-full items-center justify-center gap-1 rounded-xl bg-slate-50 py-2 text-[13px] font-medium text-slate-500 active:bg-slate-100">
+        Hide details
+        <svg viewBox="0 0 20 20" className="h-4 w-4 rotate-180" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
+      </button>
     </div>
   );
 }
