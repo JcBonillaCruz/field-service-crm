@@ -60,7 +60,7 @@ const tbIcon = "flex h-8 w-8 items-center justify-center rounded-lg bg-[#eef8f5]
 export function ToolButton({ icon, label, onClick, href, disabled }: { icon: string; label: string; onClick?: () => void; href?: string; disabled?: boolean }) {
   const cls = "group/tb flex h-11 shrink-0 items-center gap-2 rounded-xl px-2.5 text-[14px] font-medium text-slate-700 transition-colors hover:bg-[#f3fbf8] hover:text-[#0b3f3b] disabled:cursor-not-allowed disabled:opacity-40";
   const inner = <><span className={tbIcon}><Ico d={icon} className="h-[18px] w-[18px]" /></span>{label}</>;
-  if (href) return <Link href={href} className={cls}>{inner}</Link>;
+  if (href) return <Link prefetch={false} href={href} className={cls}>{inner}</Link>;
   return <button type="button" onClick={onClick} disabled={disabled} className={cls}>{inner}</button>;
 }
 
@@ -84,7 +84,7 @@ export function ToolMenu({ icon, label, items, dots = false, align = "start" }: 
             {a.divider && <div className="my-1 border-t border-slate-100" />}
             <MenuItem disabled={a.soon}>
               {a.href ? (
-                <Link href={a.href} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-slate-700 data-[focus]:bg-[#e9f7f4] data-[focus]:text-[#0b1f3a]">
+                <Link prefetch={false} href={a.href} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-slate-700 data-[focus]:bg-[#e9f7f4] data-[focus]:text-[#0b1f3a]">
                   {a.icon && <Ico d={a.icon} className="h-4 w-4 text-[#0f766e]" />}{a.label}
                 </Link>
               ) : (

@@ -116,7 +116,7 @@ export default function CustomersActionsMenu({
           {canImport && (
             <Flyout side={submenuSide} icon="M10 3v10m0 0-4-4m4 4 4-4M4 15v1a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-1" label="Import">
               <p className={heading}>Import</p>
-              <Link href="/dashboard/customers/import" className={row} onClick={() => setOpen(false)}>
+              <Link prefetch={false} href="/dashboard/customers/import" className={row} onClick={() => setOpen(false)}>
                 <Ico d="M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
                 Import customers
               </Link>

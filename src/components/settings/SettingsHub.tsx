@@ -68,7 +68,7 @@ export default function SettingsHub({ companyName }: { companyName: string }) {
             <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search settings" className="w-full bg-transparent py-2.5 text-[15px] focus:outline-none" />
           </div>
-          <Link href="/dashboard" className="ml-auto flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:ml-0">
+          <Link prefetch={false} href="/dashboard" className="ml-auto flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:ml-0">
             Close Settings<svg viewBox="0 0 20 20" className="h-4 w-4 text-red-500" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
           </Link>
         </div>
@@ -89,7 +89,7 @@ export default function SettingsHub({ companyName }: { companyName: string }) {
                     {c.items.map((i) => (
                       <li key={i.label}>
                         {i.href ? (
-                          <Link href={i.href} className="group flex items-center justify-between rounded-lg px-3 py-2 text-[15px] text-slate-700 transition-colors hover:bg-[#e9f7f4] hover:text-[#0f766e]">
+                          <Link prefetch={false} href={i.href} className="group flex items-center justify-between rounded-lg px-3 py-2 text-[15px] text-slate-700 transition-colors hover:bg-[#e9f7f4] hover:text-[#0f766e]">
                             {i.label}<svg viewBox="0 0 20 20" className="h-4 w-4 -translate-x-1 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100" fill="currentColor"><path d="M7.3 5.3a1 1 0 0 1 1.4 0l4 4a1 1 0 0 1 0 1.4l-4 4a1 1 0 0 1-1.4-1.4L10.6 10 7.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
                           </Link>
                         ) : (

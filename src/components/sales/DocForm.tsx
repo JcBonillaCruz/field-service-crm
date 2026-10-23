@@ -185,7 +185,7 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
         {isQuote ? (
           <div className="flex gap-6">
             <span className="relative py-2 text-xl font-semibold text-[#0b1f3a]">{editing ? "Edit Quote" : "Quote"}<span className="absolute inset-x-0 bottom-0 h-[3px] rounded-full bg-[#0f766e]" /></span>
-            {!editing && <Link href={`/dashboard/subscriptions/new${customerId ? `?customer=${customerId}` : ""}`} className="py-2 text-xl text-slate-500 transition-colors hover:text-[#0b1f3a]">Subscription Quote</Link>}
+            {!editing && <Link prefetch={false} href={`/dashboard/subscriptions/new${customerId ? `?customer=${customerId}` : ""}`} className="py-2 text-xl text-slate-500 transition-colors hover:text-[#0b1f3a]">Subscription Quote</Link>}
           </div>
         ) : (
           <div className="flex items-center gap-4">
@@ -201,7 +201,7 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
             </label>
           </div>
         )}
-        <Link href={editing ? `${base}/${src!.id}` : base} aria-label="Close" className="group/x flex h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-red-50 hover:text-red-600">
+        <Link prefetch={false} href={editing ? `${base}/${src!.id}` : base} aria-label="Close" className="group/x flex h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-red-50 hover:text-red-600">
           <svg viewBox="0 0 20 20" className="h-5 w-5 transition-transform duration-300 group-hover/x:rotate-90" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
         </Link>
       </div>
@@ -430,7 +430,7 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
             </MenuItems>
           </Menu>
         </div>
-        <Link href={editing ? `${base}/${src!.id}` : base} className={`${btnGhost} max-sm:px-3 max-sm:py-2 max-sm:text-[13px] max-sm:ml-auto max-sm:border-0 max-sm:bg-transparent`}>Cancel</Link>
+        <Link prefetch={false} href={editing ? `${base}/${src!.id}` : base} className={`${btnGhost} max-sm:px-3 max-sm:py-2 max-sm:text-[13px] max-sm:ml-auto max-sm:border-0 max-sm:bg-transparent`}>Cancel</Link>
         {error && <p role="alert" className="text-sm text-red-600 max-sm:fixed max-sm:inset-x-3 max-sm:bottom-16 max-sm:rounded-lg max-sm:bg-white max-sm:p-2 max-sm:shadow">{error}</p>}
         <span className="ml-auto hidden text-[13px] text-slate-500 sm:block">PDF Template: &apos;{tplOf(pdfOf(prefs.pdf_settings).template).name}&apos; <TemplatePicker kind={kind} /></span>
         {!isQuote && <span className="hidden text-[13px] text-slate-500 xl:block">Total Amount: <b className="text-[#0b1f3a]">${num2(totals.total)}</b> · Total Quantity: {round2(lines.reduce((s, l) => s + (Number(l.quantity) || 0), 0))}</span>}
@@ -445,7 +445,7 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
 const money2 = (v: number) => `$${num2(v)}`;
 
 function TemplatePicker({ kind }: { kind: DocKind }) {
-  return <Link href={`/dashboard/settings/pdf-templates?for=${kind}`} target="_blank" className="font-medium text-[#2563eb] hover:underline">Change</Link>;
+  return <Link prefetch={false} href={`/dashboard/settings/pdf-templates?for=${kind}`} target="_blank" className="font-medium text-[#2563eb] hover:underline">Change</Link>;
 }
 // "Configure Invoice Number Preferences" (el engranito del número)
 function NumberModal({ open, onClose, kind, companyId, prefs, onSaved }: {

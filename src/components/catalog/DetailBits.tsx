@@ -6,7 +6,7 @@ import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 // Lápiz animado (crece y se inclina al pasar el mouse)
 export function PencilButton({ href, label = "Edit", withText = false }: { href: string; label?: string; withText?: boolean }) {
   return (
-    <Link href={href} aria-label={label} title={label}
+    <Link prefetch={false} href={href} aria-label={label} title={label}
       className={`group/edit flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-[#14a39a] hover:bg-[#e9f7f4] hover:text-[#0f766e] hover:shadow-md active:translate-y-0 ${withText ? "h-9 px-3 text-sm font-medium" : "h-9 w-9"}`}>
       <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] transition-transform duration-300 ease-out group-hover/edit:-rotate-12 group-hover/edit:scale-110" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
         <path d="M12 20h9" strokeLinecap="round" strokeLinejoin="round" className="origin-left transition-transform duration-300 group-hover/edit:scale-x-110" />
@@ -20,7 +20,7 @@ export function PencilButton({ href, label = "Edit", withText = false }: { href:
 // X que gira y se pone roja
 export function CloseButton({ href, red = false }: { href: string; red?: boolean }) {
   return (
-    <Link href={href} aria-label="Close" title="Close"
+    <Link prefetch={false} href={href} aria-label="Close" title="Close"
       className={`group/x flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-red-50 hover:text-red-600 ${red ? "text-red-500" : "text-slate-500"}`}>
       <svg viewBox="0 0 20 20" className="h-5 w-5 transition-transform duration-300 group-hover/x:rotate-90" fill="currentColor" aria-hidden="true">
         <path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" />
@@ -46,7 +46,7 @@ export function MoreMenu({ actions, label = "More", dots = false }: { actions: M
         {actions.map((a) => (
           <MenuItem key={a.label}>
             {a.href ? (
-              <Link href={a.href} className={`flex w-full items-center gap-2.5 px-4 py-2 text-sm ${a.danger ? "text-red-600 data-[focus]:bg-red-50" : "text-slate-700 data-[focus]:bg-[#0f766e] data-[focus]:text-white"}`}>
+              <Link prefetch={false} href={a.href} className={`flex w-full items-center gap-2.5 px-4 py-2 text-sm ${a.danger ? "text-red-600 data-[focus]:bg-red-50" : "text-slate-700 data-[focus]:bg-[#0f766e] data-[focus]:text-white"}`}>
                 {a.icon && <Ico d={a.icon} />}{a.label}
               </Link>
             ) : (

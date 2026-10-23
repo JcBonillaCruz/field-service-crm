@@ -23,20 +23,17 @@ export default async function DashboardPage({ searchParams }: { searchParams?: {
     );
   }
 
-  // Datos reales que sí tenemos hoy: clientes
-  const { data: typeRows } = await supabase
-    .from("customers")
-    .select("customer_type")
-    .eq("company_id", current.id)
-    .eq("is_archived", false);
+  // Clientes y Ventas en paralelo (antes uno esperaba al otro)
+  const [{ data: typeRows }, dash] = await Promise.all([
+    supabase.from("customers").select("customer_type").eq("company_id", current.id).eq("is_archived", false),
+    loadDashboard(supabase, current.id).catch(() => null),
+  ]);
   const rows = typeRows ?? [];
   const counts = {
     total: rows.length,
     commercial: rows.filter((r) => r.customer_type === "commercial").length,
     residential: rows.filter((r) => r.customer_type === "residential").length,
   };
-  // Lo real de Ventas: facturas, pagos y suscripciones (se refresca solo con la campanita)
-  const dash = await loadDashboard(supabase, current.id).catch(() => null);
   const daysLeft = Math.max(0, TRIAL_DAYS - Math.floor((Date.now() - new Date(current.createdAt).getTime()) / 86400000));
 
   return (

@@ -181,7 +181,7 @@ export default function SalesWorkspace({ module, rows, customViews, companyId, p
               <div key={v.id} className={`group/v flex items-center gap-1 rounded-lg pr-2 transition-colors ${on ? "bg-[#cdebe3] font-semibold text-[#0b3f3b]" : "text-slate-700 hover:bg-[#e3f4ef]"}`}>
                 <button type="button" onClick={() => { switchView(v.id); close(); }} className="min-w-0 flex-1 truncate px-3 py-2 text-left text-sm">{shortViewName(module, v)}</button>
                 {!v.builtin && (
-                  <Link href={`${base}/views/${v.id}/edit`} onClick={() => close()} aria-label="Edit view" className={`rounded p-1 opacity-0 transition-opacity group-hover/v:opacity-100 "text-slate-500 hover:text-[#0f766e]"`}>
+                  <Link prefetch={false} href={`${base}/views/${v.id}/edit`} onClick={() => close()} aria-label="Edit view" className={`rounded p-1 opacity-0 transition-opacity group-hover/v:opacity-100 "text-slate-500 hover:text-[#0f766e]"`}>
                     <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" strokeLinejoin="round" /></svg>
                   </Link>
                 )}
@@ -196,7 +196,7 @@ export default function SalesWorkspace({ module, rows, customViews, companyId, p
               {BUILTIN_VIEWS[module].map(line)}
               {customViews.length > 0 && (<><div className="my-1 border-t border-slate-100" /><p className="px-4 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Custom views</p>{customViews.map(line)}</>)}
               <div className="mt-1 border-t border-slate-100 pt-1">
-                <Link href={`${base}/views/new`} onClick={() => close()} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-[#0f766e] transition-colors hover:bg-[#e3f4ef]">
+                <Link prefetch={false} href={`${base}/views/new`} onClick={() => close()} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-[#0f766e] transition-colors hover:bg-[#e3f4ef]">
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#0f766e] text-white"><svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M10 5v10M5 10h10" /></svg></span>
                   New View
                 </Link>
@@ -212,7 +212,7 @@ export default function SalesWorkspace({ module, rows, customViews, companyId, p
   // Botón "+ New" (en Quotes trae flechita: One-Time o Subscription, como Zoho)
   const newButton = (
     <div className="flex shrink-0">
-      <Link href={`${base}/new`} aria-label={`New ${info.singular}`}
+      <Link prefetch={false} href={`${base}/new`} aria-label={`New ${info.singular}`}
         className={`group/n flex h-10 items-center gap-1.5 bg-[#0f766e] text-[15px] font-semibold text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59] ${module === "quotes" ? "rounded-l-lg" : "rounded-lg"} ${selectedId ? "w-10 justify-center" : "px-4"}`}>
         {plus}{!selectedId && "New"}
       </Link>
@@ -222,8 +222,8 @@ export default function SalesWorkspace({ module, rows, customViews, companyId, p
             <svg viewBox="0 0 20 20" className="h-4 w-4 transition-transform group-data-[open]:rotate-180" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
           </MenuButton>
           <MenuItems anchor="bottom end" transition className="z-[80] mt-1 w-64 rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_12px_40px_rgba(15,40,60,0.16)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
-            <MenuItem><Link href={`${base}/new`} className="block rounded-lg px-3 py-2 text-sm text-slate-700 data-[focus]:bg-[#e9f7f4] data-[focus]:text-[#0b1f3a]">Create Quote for One-Time Invoice</Link></MenuItem>
-            <MenuItem><Link href="/dashboard/subscriptions/new" className="block rounded-lg px-3 py-2 text-sm text-slate-700 data-[focus]:bg-[#e9f7f4] data-[focus]:text-[#0b1f3a]">Create Quote for Subscription</Link></MenuItem>
+            <MenuItem><Link prefetch={false} href={`${base}/new`} className="block rounded-lg px-3 py-2 text-sm text-slate-700 data-[focus]:bg-[#e9f7f4] data-[focus]:text-[#0b1f3a]">Create Quote for One-Time Invoice</Link></MenuItem>
+            <MenuItem><Link prefetch={false} href="/dashboard/subscriptions/new" className="block rounded-lg px-3 py-2 text-sm text-slate-700 data-[focus]:bg-[#e9f7f4] data-[focus]:text-[#0b1f3a]">Create Quote for Subscription</Link></MenuItem>
           </MenuItems>
         </Menu>
       )}
@@ -312,7 +312,7 @@ export default function SalesWorkspace({ module, rows, customViews, companyId, p
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-[#fafbfc] text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                     <th className="border-b border-slate-200 py-3 pl-4">
-                      <Link href={customizeHref} title="Customize columns" aria-label="Customize columns" className="group/c flex h-6 w-6 items-center justify-center rounded text-[#0f766e] transition-colors hover:bg-[#0f766e] hover:text-white">
+                      <Link prefetch={false} href={customizeHref} title="Customize columns" aria-label="Customize columns" className="group/c flex h-6 w-6 items-center justify-center rounded text-[#0f766e] transition-colors hover:bg-[#0f766e] hover:text-white">
                         <svg viewBox="0 0 20 20" className="h-4 w-4 transition-transform duration-300 group-hover/c:rotate-90" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3 6h9M15 6h2M3 14h3M9 14h8M13 4v4M7 12v4" /></svg>
                       </Link>
                     </th>
@@ -415,7 +415,7 @@ function Cell({ module, r, k, align, base }: { module: SalesModule; r: Row; k: s
   if (k === "name") {
     return (
       <td className={td}>
-        <Link href={`${base}/${r.id}`} onClick={(e) => e.stopPropagation()} className="font-medium text-[#0f766e] hover:underline">{(r as SalesDoc).number}</Link>
+        <Link prefetch={false} href={`${base}/${r.id}`} onClick={(e) => e.stopPropagation()} className="font-medium text-[#0f766e] hover:underline">{(r as SalesDoc).number}</Link>
       </td>
     );
   }
@@ -438,7 +438,7 @@ function CompactRow({ module, r, active, base, checked, onCheck }: {
   return (
     <li ref={ref} className={`relative flex items-start gap-3 px-4 py-3 transition-colors ${active ? "bg-[#d7f1eb] before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-[#0f766e]" : "hover:bg-[#f0faf7]"}`}>
       {onCheck && <input type="checkbox" checked={checked} onChange={onCheck} aria-label="Select" className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded accent-[#0f766e]" />}
-      <Link href={`${base}/${r.id}`} className="flex min-w-0 flex-1 items-start justify-between gap-3">
+      <Link prefetch={false} href={`${base}/${r.id}`} className="flex min-w-0 flex-1 items-start justify-between gap-3">
         <span className="min-w-0">
           <span className={`block truncate text-[15px] font-medium ${active ? "text-[#0f766e]" : "text-[#0b1f3a]"}`}>{d.customer_name || "—"}</span>
           <span className="mt-0.5 flex items-center gap-1.5 truncate text-[13px] text-slate-500">
@@ -474,7 +474,7 @@ function Empty({ module, filtered, base }: { module: SalesModule; filtered: bool
         <>
           <p className="text-lg font-semibold text-[#0b1f3a]">{title}</p>
           <p className="mx-auto mt-1 max-w-md text-[15px] text-slate-500">{body}</p>
-          <Link href={`${base}/new`} className="mt-5 inline-block rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f59]">{cta}</Link>
+          <Link prefetch={false} href={`${base}/new`} className="mt-5 inline-block rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f59]">{cta}</Link>
         </>
       )}
     </div>

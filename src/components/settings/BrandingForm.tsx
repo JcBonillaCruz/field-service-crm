@@ -50,7 +50,7 @@ export default function BrandingForm({ companyId, prefs, company }: { companyId:
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-[#f6f8f9] px-4 py-6 sm:px-6">
       <div className="mx-auto max-w-[1100px]">
-        <Link href="/dashboard/settings" className="text-[13px] font-medium text-[#0f766e] hover:underline">← All Settings</Link>
+        <Link prefetch={false} href="/dashboard/settings" className="text-[13px] font-medium text-[#0f766e] hover:underline">← All Settings</Link>
         <h1 className="mb-1 mt-1 text-2xl font-semibold text-[#0b1f3a]">Branding</h1>
         <p className="mb-6 text-[15px] text-slate-500">Your logo, contact details and brand color on every quote, invoice, PDF and email.</p>
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
@@ -94,7 +94,7 @@ export default function BrandingForm({ companyId, prefs, company }: { companyId:
             </div>
             <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-5">
               <button type="button" onClick={save} disabled={busy} className={btnPrimary}>{busy ? "Saving..." : "Save"}</button>
-              <Link href="/dashboard/settings/pdf-templates" className="text-sm font-medium text-[#2563eb] hover:underline">Choose a PDF template →</Link>
+              <Link prefetch={false} href="/dashboard/settings/pdf-templates" className="text-sm font-medium text-[#2563eb] hover:underline">Choose a PDF template →</Link>
               {msg && <p className={`text-sm ${msg.startsWith("Saved") ? "text-[#0f766e]" : "text-red-600"}`}>{msg}</p>}
             </div>
           </div>

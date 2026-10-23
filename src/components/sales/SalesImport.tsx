@@ -129,7 +129,7 @@ export default function SalesImport({ kind, companyId, actor, customers }: { kin
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-[#f6f8f9] px-4 py-6 sm:px-6">
       <div className="mx-auto max-w-2xl">
-        <Link href={base} className="text-[13px] font-medium text-[#0f766e] hover:underline">← Back to {kind === "quote" ? "quotes" : "invoices"}</Link>
+        <Link prefetch={false} href={base} className="text-[13px] font-medium text-[#0f766e] hover:underline">← Back to {kind === "quote" ? "quotes" : "invoices"}</Link>
         <h1 className="mt-1 text-2xl font-semibold text-[#0b1f3a]">Import {noun}s</h1>
         <p className="mt-1 text-[15px] text-slate-500">Upload a CSV with one row per item. Rows with the same {noun.toLowerCase()} number become one {noun.toLowerCase()}. Works with files exported from BrightPro or Zoho.</p>
 
@@ -161,7 +161,7 @@ export default function SalesImport({ kind, companyId, actor, customers }: { kin
           )}
           <div className="flex gap-3">
             <button type="button" onClick={run} disabled={busy || !docs?.length} className={btnPrimary}>{busy ? `Importing ${progress}/${docs?.length ?? 0}…` : "Import"}</button>
-            <Link href={base} className={btnGhost}>{done ? "Done" : "Cancel"}</Link>
+            <Link prefetch={false} href={base} className={btnGhost}>{done ? "Done" : "Cancel"}</Link>
           </div>
         </div>
       </div>

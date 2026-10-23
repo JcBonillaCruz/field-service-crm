@@ -44,7 +44,7 @@ export default function QuickCreate() {
                 {col.items.map((it) => (
                   <li key={it.label}>
                     {it.href ? (
-                      <Link href={it.href} className="flex items-center gap-2 whitespace-nowrap rounded-lg px-2 py-1.5 text-[13px] text-slate-700 hover:bg-[#f0faf7] hover:text-[#0b1f3a]">
+                      <Link prefetch={false} href={it.href} className="flex items-center gap-2 whitespace-nowrap rounded-lg px-2 py-1.5 text-[13px] text-slate-700 hover:bg-[#f0faf7] hover:text-[#0b1f3a]">
                         <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-[#0f766e]" fill="currentColor"><path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm1 7h3v2h-3v3H9v-3H6V9h3V6h2z" /></svg>
                         {it.label}
                       </Link>

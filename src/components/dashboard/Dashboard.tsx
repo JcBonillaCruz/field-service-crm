@@ -113,7 +113,7 @@ export default function Dashboard({ firstName, companyName, industry, role, coun
               <div><p className="text-sm font-medium text-teal-600">Receipts</p><p className="mt-1 text-lg font-bold text-[#0b1f3a]">{$(st?.receipts12 ?? 0)}</p></div>
               <div><p className="text-sm font-medium text-orange-500">Expense</p><p className="mt-1 text-lg font-bold text-[#0b1f3a]">{$((st?.expenses ?? []).reduce((a,b)=>a+b,0))}</p></div>
             </div>
-            <Link href="/dashboard/expenses" className="mt-4 flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-orange-300 py-2.5 text-sm font-medium text-orange-600 active:bg-orange-50">+ Add an expense</Link>
+            <Link prefetch={false} href="/dashboard/expenses" className="mt-4 flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-orange-300 py-2.5 text-sm font-medium text-orange-600 active:bg-orange-50">+ Add an expense</Link>
           </SectionCard>
 
           {/* ══════ 7. Project Summary ══════ */}

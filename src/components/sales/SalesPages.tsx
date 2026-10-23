@@ -17,15 +17,29 @@ async function guard() {
   if (!s.current) redirect("/dashboard");
   return s as typeof s & { current: NonNullable<typeof s.current> };
 }
+const DOC_LIST_COLS = [
+  "id", "company_id", "kind", "number", "customer_id", "customer_name", "emails", "billing_address", "site_address", "address_id",
+  "reference", "order_number", "doc_date", "expiry_date", "due_date", "payment_terms", "salesperson", "project_name", "subject", "status",
+  "discount_value", "discount_type", "coupon_code", "tax_name", "tax_rate", "tax_amount", "shipping", "adjustment", "adjustment_label",
+  "subtotal", "total", "amount_paid", "written_off", "notes", "terms", "quote_id", "subscription_id", "sent_at", "viewed_at", "accepted_at",
+  "declined_at", "voided_at", "reminders_stopped", "expected_payment_date", "share_token", "share_expires_on", "created_by_name",
+  "created_at", "updated_at", "signed_name", "signed_at", "last_email_at", "email_opened_at",
+].join(", ");
 const actorOf = (u: { fullName: string; email: string }) => u.fullName || u.email;
 
 export async function SalesLayout({ module, children }: { module: SalesModule; children: React.ReactNode }) {
   const { supabase, current } = await guard();
   if (!canManageSales(current.role)) return <NoAccess />;
-  const rowsQ = module === "subscriptions"
-    ? supabase.from("subscriptions").select("*").eq("company_id", current.id).order("created_at", { ascending: false }).limit(5000)
-    : supabase.from("sales_docs").select("*").eq("company_id", current.id).eq("kind", module === "quotes" ? "quote" : "invoice").order("created_at", { ascending: false }).limit(5000);
-  const [{ data }, views, prefs] = await Promise.all([rowsQ, loadViews(supabase, current.id, module), loadPrefs(supabase, current.id)]);
+  // La lista NO trae la firma dibujada (signature_data, imagen pesada): solo se carga al abrir el documento.
+  // Si a la base de datos le faltara alguna columna nueva, cae de vuelta a select=* para no romper nada.
+  const kind = module === "quotes" ? "quote" : "invoice";
+  const rowsQ = async () => {
+    if (module === "subscriptions") return supabase.from("subscriptions").select("*").eq("company_id", current.id).order("created_at", { ascending: false }).limit(5000);
+    const r = await supabase.from("sales_docs").select(DOC_LIST_COLS).eq("company_id", current.id).eq("kind", kind).order("created_at", { ascending: false }).limit(5000);
+    if (!r.error) return r;
+    return supabase.from("sales_docs").select("*").eq("company_id", current.id).eq("kind", kind).order("created_at", { ascending: false }).limit(5000);
+  };
+  const [{ data }, views, prefs] = await Promise.all([rowsQ(), loadViews(supabase, current.id, module), loadPrefs(supabase, current.id)]);
   return (
     <SalesWorkspace module={module} rows={(data ?? []) as Row[]} customViews={views} companyId={current.id} prefs={prefs}>
       {children}

@@ -315,7 +315,7 @@ export default function CustomerForm({
       {/* ---------- Barra fija para guardar (como Zoho) ---------- */}
       <div className="sticky bottom-0 z-10 -mx-5 flex flex-wrap items-center gap-3 border-t border-slate-200 bg-white px-5 py-3 sm:-mx-8 sm:px-8">
         <button type="submit" disabled={saving} className={primaryButton}>{saving ? "Saving..." : editing ? "Save changes" : "Save"}</button>
-        <Link href={editing && customer ? `/dashboard/customers/${customer.id}` : "/dashboard/customers"} className={secondaryButton}>Cancel</Link>
+        <Link prefetch={false} href={editing && customer ? `/dashboard/customers/${customer.id}` : "/dashboard/customers"} className={secondaryButton}>Cancel</Link>
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       </div>
     </form>

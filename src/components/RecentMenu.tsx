@@ -27,7 +27,7 @@ export default function RecentMenu() {
           <ul className="max-h-80 overflow-y-auto py-1">
             {items.map((r) => (
               <li key={r.id}>
-                <Link href={`/dashboard/customers/${r.id}`} className="flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-[#f0faf7]">
+                <Link prefetch={false} href={`/dashboard/customers/${r.id}`} className="flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-[#f0faf7]">
                   <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="8" r="4" /><path d="M4 20a8 8 0 0 1 16 0" /></svg>
                   <span className="truncate text-slate-700">{r.name}</span>
                 </Link>

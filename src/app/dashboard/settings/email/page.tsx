@@ -25,7 +25,7 @@ export default async function EmailSettingsPage() {
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-[#f6f8f9] px-4 py-6 sm:px-6">
       <div className="mx-auto max-w-[1100px]">
-        <Link href="/dashboard/settings" className="text-[13px] font-medium text-[#0f766e] hover:underline">← All Settings</Link>
+        <Link prefetch={false} href="/dashboard/settings" className="text-[13px] font-medium text-[#0f766e] hover:underline">← All Settings</Link>
         <h1 className="mb-1 mt-1 text-2xl font-semibold text-[#0b1f3a]">Email Notifications</h1>
         <p className="mb-6 text-[15px] text-slate-500">How quotes, invoices and reminders reach your customers.</p>
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
@@ -44,7 +44,7 @@ export default async function EmailSettingsPage() {
                 <li>When they open it, the quote or invoice shows <b>Viewed</b> and it&apos;s logged in Activity.</li>
                 <li>Quotes can be accepted and signed from the link.</li>
               </ul>
-              <p className="mt-3 text-[13px] text-slate-500">Reply-to address: set it under <Link href="/dashboard/settings/branding" className="font-medium text-[#2563eb] hover:underline">Branding → Email</Link>.</p>
+              <p className="mt-3 text-[13px] text-slate-500">Reply-to address: set it under <Link prefetch={false} href="/dashboard/settings/branding" className="font-medium text-[#2563eb] hover:underline">Branding → Email</Link>.</p>
             </div>
           </div>
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">

@@ -46,7 +46,7 @@ export default function CustomersToolbar({
           <MenuItems anchor="bottom start" transition className={`${menuPanel} w-56`}>
             {VIEWS.map((v) => (
               <MenuItem key={v.value}>
-                <Link href={`/dashboard/customers${listQueryString({ ...params, view: v.value })}`} className={`${menuItem} justify-between`}>
+                <Link prefetch={false} href={`/dashboard/customers${listQueryString({ ...params, view: v.value })}`} className={`${menuItem} justify-between`}>
                   {v.label}
                   {v.value === view.value && (
                     <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#0f766e]" fill="currentColor" aria-hidden="true">
@@ -62,7 +62,7 @@ export default function CustomersToolbar({
       </div>
 
       <div className="flex items-center gap-2">
-        <Link href="/dashboard/customers/new" className={primaryButton}>+ New</Link>
+        <Link prefetch={false} href="/dashboard/customers/new" className={primaryButton}>+ New</Link>
         <Menu>
           <MenuButton aria-label="More actions"
             className="flex h-[42px] w-[42px] items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 focus:outline-none data-[open]:border-[#0f766e] data-[open]:text-[#0f766e]">
@@ -78,7 +78,7 @@ export default function CustomersToolbar({
                 const dir = active ? (params.dir === "asc" ? "desc" : "asc") : s.value === "created" ? "desc" : "asc";
                 return (
                   <MenuItem key={s.value}>
-                    <Link href={`/dashboard/customers${listQueryString({ ...params, sort: s.value, dir })}`}
+                    <Link prefetch={false} href={`/dashboard/customers${listQueryString({ ...params, sort: s.value, dir })}`}
                       className={`${menuItem} justify-between ${active ? "font-semibold text-[#0f766e]" : ""}`}>
                       {s.label}
                       {active && (
@@ -98,7 +98,7 @@ export default function CustomersToolbar({
               <MenuSection>
                 <MenuHeading className={heading}>Import</MenuHeading>
                 <MenuItem>
-                  <Link href="/dashboard/customers/import" className={menuItem}>
+                  <Link prefetch={false} href="/dashboard/customers/import" className={menuItem}>
                     <Icon d="M10 3v10m0 0-4-4m4 4 4-4M4 15v1a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-1" />
                     Import customers
                   </Link>

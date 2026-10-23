@@ -1,47 +1,28 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { SalesDoc, balanceOf, canManageSales, daysBetween, money, today } from "@/lib/sales";
+import { canManageSales } from "@/lib/sales";
+import { Digest, buildNotices } from "@/lib/notifications";
 
 export const dynamic = "force-dynamic";
+export type { Notice } from "@/lib/notifications";
 
-export type Notice = { id: string; kind: "overdue" | "due_today" | "due_soon" | "activity"; title: string; body: string; href: string; when: string };
-
-// Avisos: facturas por vencer / vencidas y lo que hizo el cliente (abrió, aceptó, firmó…)
+// La app ya NO usa esta ruta para vigilar (lo hace el navegador con 1 llamada directa a la función de la base de datos).
+// Se deja por compatibilidad: usa la misma función ligera, sin select * ni 10 consultas.
 export async function GET() {
   const { supabase, current } = await getSession();
   if (!current || !canManageSales(current.role)) return NextResponse.json({ items: [] });
-  const t = today();
-  const [{ data: inv }, { data: act }] = await Promise.all([
-    supabase.from("sales_docs").select("*").eq("company_id", current.id).eq("kind", "invoice").not("status", "in", "(draft,void,paid,written_off)").not("due_date", "is", null).limit(500),
-    supabase.from("sales_activity").select("id, entity, entity_id, message, detail, actor_name, created_at").eq("company_id", current.id).eq("actor_name", "Customer")
-      .gte("created_at", new Date(Date.now() - 30 * 86400000).toISOString()).order("created_at", { ascending: false }).limit(30),
-  ]);
-  const items: Notice[] = [];
-  ((inv ?? []) as SalesDoc[]).filter((d) => balanceOf(d) > 0).forEach((d) => {
-    const days = daysBetween(t, d.due_date!);
-    const href = `/dashboard/invoices/${d.id}`;
-    const who = `${d.number} · ${d.customer_name} · ${money(balanceOf(d))}`;
-    if (days < 0) items.push({ id: `o-${d.id}`, kind: "overdue", title: `Invoice overdue by ${-days} ${days === -1 ? "day" : "days"}`, body: who, href, when: d.due_date! });
-    else if (days === 0) items.push({ id: `t-${d.id}`, kind: "due_today", title: "Invoice due today", body: who, href, when: d.due_date! });
-    else if (days <= 2) items.push({ id: `s-${d.id}`, kind: "due_soon", title: `Invoice due in ${days} ${days === 1 ? "day" : "days"}`, body: who, href, when: d.due_date! });
-  });
-  // También los nombres de los firmantes (actor_name = nombre) en firmas
-  const { data: signed } = await supabase.from("sales_activity").select("id, entity, entity_id, message, detail, actor_name, created_at").eq("company_id", current.id)
-    .ilike("message", "%by the customer%").gte("created_at", new Date(Date.now() - 30 * 86400000).toISOString()).order("created_at", { ascending: false }).limit(30);
-  const seen = new Set<string>();
-  [...(act ?? []), ...(signed ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at)).forEach((a) => {
-    if (seen.has(a.id)) return; seen.add(a.id);
-    items.push({ id: `a-${a.id}`, kind: "activity", title: a.message, body: a.detail ?? (a.entity === "quote" ? "Quote" : "Invoice"),
-      href: `/dashboard/${a.entity === "quote" ? "quotes" : "invoices"}/${a.entity_id}`, when: a.created_at });
-  });
-  const rank = { overdue: 0, due_today: 1, due_soon: 2, activity: 3 };
-  items.sort((a, b) => rank[a.kind] - rank[b.kind] || (a.kind === "activity" ? b.when.localeCompare(a.when) : a.when.localeCompare(b.when)));
-  // "Versión": si algo cambió (estado, pago, actividad), la pantalla se refresca sola
-  const [{ data: a1 }, { data: d1 }, { data: s1 }] = await Promise.all([
-    supabase.from("sales_activity").select("created_at").eq("company_id", current.id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
-    supabase.from("sales_docs").select("updated_at, viewed_at, email_opened_at").eq("company_id", current.id).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
-    supabase.from("subscriptions").select("updated_at").eq("company_id", current.id).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
-  ]);
-  const version = [a1?.created_at, d1?.updated_at, s1?.updated_at].filter(Boolean).sort().pop() ?? "";
-  return NextResponse.json({ items: items.slice(0, 40), version });
+  const { data, error } = await supabase.rpc("get_company_notifications_digest", { p_company_id: current.id });
+  if (error || !data) return NextResponse.json({ items: [], error: error?.message });
+  const d = data as Digest;
+  return NextResponse.json({ items: buildNotices(d), version: d.version });
+}
+
+// Marcar como leídas: { keys: string[] }
+export async function POST(req: Request) {
+  const { supabase, user } = await getSession();
+  const body = await req.json().catch(() => ({}));
+  const keys: string[] = Array.isArray(body.keys) ? body.keys.filter((k: unknown) => typeof k === "string").slice(0, 200) : [];
+  if (!keys.length) return NextResponse.json({ ok: true });
+  const { error } = await supabase.from("notification_reads").upsert(keys.map((key) => ({ user_id: user.id, key })), { onConflict: "user_id,key", ignoreDuplicates: true });
+  return NextResponse.json({ ok: !error, error: error?.message });
 }

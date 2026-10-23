@@ -110,11 +110,11 @@ export default function CustomersWorkspace({
 
               <div className="flex shrink-0 items-center gap-2">
                 {selectedId ? (
-                  <Link href="/dashboard/customers/new" aria-label="New customer" className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#0f766e] text-white hover:bg-[#0c5f58]">
+                  <Link prefetch={false} href="/dashboard/customers/new" aria-label="New customer" className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#0f766e] text-white hover:bg-[#0c5f58]">
                     <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 4v12M4 10h12" strokeLinecap="round" /></svg>
                   </Link>
                 ) : (
-                  <Link href="/dashboard/customers/new" className="rounded-lg bg-[#0f766e] px-4 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f58]">+ New</Link>
+                  <Link prefetch={false} href="/dashboard/customers/new" className="rounded-lg bg-[#0f766e] px-4 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f58]">+ New</Link>
                 )}
                 <CustomersActionsMenu params={params} basePath={pathname} canImport={canImport} canExport={canExport} onExport={() => setExportOpen(true)} submenuSide={selectedId ? "right" : "left"} />
               </div>
@@ -185,7 +185,7 @@ export default function CustomersWorkspace({
 
       {/* Botón flotante (móvil) — solo en la lista de clientes */}
       {onList && (
-        <Link href="/dashboard/customers/new" aria-label="New customer"
+        <Link prefetch={false} href="/dashboard/customers/new" aria-label="New customer"
           className="fixed bottom-6 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#0f766e] text-white shadow-lg shadow-[#0f766e]/30 transition-transform active:scale-95 lg:hidden">
           <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
         </Link>
@@ -229,7 +229,7 @@ export default function CustomersWorkspace({
           <button type="button" onClick={() => { setMSheet(null); setExportOpen(true); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[15px] text-slate-700 transition-all hover:bg-[#f6fbfa] active:scale-[0.98] active:bg-[#e9f7f4]">
             <svg viewBox="0 0 20 20" className="h-5 w-5 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M10 12V3m0 0L6.5 6.5M10 3l3.5 3.5M4 14v1.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V14" strokeLinecap="round" strokeLinejoin="round" /></svg>Export customers (CSV or Excel)
           </button>
-          <Link href="/dashboard/customers/import" onClick={() => setMSheet(null)} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[15px] text-slate-700 transition-all hover:bg-[#f6fbfa] active:scale-[0.98] active:bg-[#e9f7f4]">
+          <Link prefetch={false} href="/dashboard/customers/import" onClick={() => setMSheet(null)} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[15px] text-slate-700 transition-all hover:bg-[#f6fbfa] active:scale-[0.98] active:bg-[#e9f7f4]">
             <svg viewBox="0 0 20 20" className="h-5 w-5 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M10 3v9m0 0-3.5-3.5M10 12l3.5-3.5M4 14v1.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V14" strokeLinecap="round" strokeLinejoin="round" /></svg>Import customers (CSV)
           </Link>
           <p className="px-1 text-[13px] text-slate-500">Your data is always yours: download or bring it in any time.</p>
@@ -250,7 +250,7 @@ function subtitle(c: ListRow) {
 function CompactRow({ c, active }: { c: ListRow; active: boolean }) {
   return (
     <li className="group relative">
-      <Link href={`/dashboard/customers/${c.id}`}
+      <Link prefetch={false} href={`/dashboard/customers/${c.id}`}
         className={`relative flex items-center gap-3 px-4 py-3 transition-colors ${active ? "bg-[#d7f1eb] before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-[#0f766e]" : "hover:bg-[#f0faf7]"}`}>
         <Avatar name={c.display_name} url={null} seed={c.id} size={38} />
         <span className="min-w-0 flex-1 pr-8">
@@ -269,7 +269,7 @@ function WideRow({ c }: { c: ListRow }) {
   const person = [c.first_name, c.last_name].filter(Boolean).join(" ");
   return (
     <li className="group relative">
-      <Link href={`/dashboard/customers/${c.id}`}
+      <Link prefetch={false} href={`/dashboard/customers/${c.id}`}
         className={`grid gap-1 px-5 py-4 transition-colors hover:bg-[#f0faf7] md:items-center md:gap-4 ${COLS}`}>
         <span className="flex min-w-0 items-center gap-3">
           <Avatar name={c.display_name} url={null} seed={c.id} size={36} />
@@ -294,7 +294,7 @@ function WideRow({ c }: { c: ListRow }) {
 // Lápiz de edición rápida que aparece al pasar el mouse por la fila
 function QuickEdit({ id, name, className }: { id: string; name: string; className: string }) {
   return (
-    <Link href={`/dashboard/customers/${id}/edit`} aria-label={`Edit ${name}`} title="Edit"
+    <Link prefetch={false} href={`/dashboard/customers/${id}/edit`} aria-label={`Edit ${name}`} title="Edit"
       className={`group/edit absolute top-1/2 hidden h-9 w-9 -translate-y-1/2 scale-90 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 opacity-0 shadow-sm transition-all duration-200 ease-out hover:scale-110 hover:border-[#14a39a] hover:bg-[#e9f7f4] hover:text-[#0f766e] hover:shadow-md focus-visible:opacity-100 group-hover:scale-100 group-hover:opacity-100 md:flex ${className}`}>
       <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] transition-transform duration-200 group-hover/edit:-rotate-12" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
         <path d="M12 20h9" strokeLinecap="round" strokeLinejoin="round" />
@@ -318,8 +318,8 @@ function EmptyState({ filtered }: { filtered: boolean }) {
             <p className="font-semibold text-[#0b1f3a]">No customers yet</p>
             <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500">Add your first customer, or bring all of them at once from a CSV file.</p>
             <div className="mt-6 flex flex-wrap justify-center gap-3">
-              <Link href="/dashboard/customers/new" className="rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f58]">+ New customer</Link>
-              <Link href="/dashboard/customers/import" className="rounded-lg border border-slate-200 bg-white px-5 py-2.5 text-[15px] font-medium text-slate-700 hover:bg-slate-50">Import from CSV</Link>
+              <Link prefetch={false} href="/dashboard/customers/new" className="rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f58]">+ New customer</Link>
+              <Link prefetch={false} href="/dashboard/customers/import" className="rounded-lg border border-slate-200 bg-white px-5 py-2.5 text-[15px] font-medium text-slate-700 hover:bg-slate-50">Import from CSV</Link>
             </div>
           </>
         )}

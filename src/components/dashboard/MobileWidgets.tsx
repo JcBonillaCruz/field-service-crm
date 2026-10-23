@@ -133,7 +133,7 @@ function HeroDetail({ st, detail, onClose }: { st: MobileStats; detail: Exclude<
                 <li key={i} className="flex items-center gap-3 py-2.5"><span className="min-w-0 flex-1"><span className="block truncate text-[14px] font-medium text-[#0b1f3a]">{e.vendor || e.category}</span><span className="text-[12px] text-slate-500">{fd(e.date)} · {e.category}</span></span><span className="font-semibold tabular-nums text-[#e11d48]">-{$(e.amount)}</span></li>
               ))}
             </ul>
-            <Link href="/dashboard/expenses" className="mt-3 block rounded-xl border border-slate-200 py-2.5 text-center text-sm font-medium text-[#0f766e]">Open Expenses →</Link>
+            <Link prefetch={false} href="/dashboard/expenses" className="mt-3 block rounded-xl border border-slate-200 py-2.5 text-center text-sm font-medium text-[#0f766e]">Open Expenses →</Link>
           </>
         )}
         {detail === "profit" && (
@@ -178,7 +178,7 @@ export function ReceivablesCard({ st, mounted }: { st: MobileStats; mounted: boo
       </button>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <div className="rounded-2xl bg-[#e9f7f4] px-3 py-2"><p className="text-[11px] font-semibold text-[#0f766e]">Current (not due yet)</p><p className="text-[16px] font-bold tabular-nums text-[#0b1f3a]">{$(st.current)}</p></div>
-        <Link href="/dashboard/invoices?view=overdue" className="rounded-2xl bg-[#f43f5e] px-3 py-2 text-white shadow-[0_4px_12px_rgba(244,63,94,0.25)] active:scale-[0.98]"><p className="text-[11px] font-semibold text-white/90">Overdue →</p><p className="text-[16px] font-bold tabular-nums">{$(st.overdue)}</p></Link>
+        <Link prefetch={false} href="/dashboard/invoices?view=overdue" className="rounded-2xl bg-[#f43f5e] px-3 py-2 text-white shadow-[0_4px_12px_rgba(244,63,94,0.25)] active:scale-[0.98]"><p className="text-[11px] font-semibold text-white/90">Overdue →</p><p className="text-[16px] font-bold tabular-nums">{$(st.overdue)}</p></Link>
       </div>
       {open && (
         <div className="mt-4 animate-[bp-fade_0.2s_ease-out]">
@@ -300,7 +300,7 @@ export function InsightsCard({ st, compact = false, neutral = false, tip = true 
               {idx === k && (
                 <div className="animate-[bp-fade_0.2s_ease-out]">
                   <p className={`mt-1 text-[13px] text-slate-600 ${neutral ? "pl-[34px]" : "pl-6"}`}>{x.body}</p>
-                  {x.href && <Link href={x.href} className={`mt-1.5 inline-block text-[13px] font-semibold ${neutral ? "pl-[34px] text-[#0f766e]" : `pl-6 ${fg}`}`}>{x.cta} →</Link>}
+                  {x.href && <Link prefetch={false} href={x.href} className={`mt-1.5 inline-block text-[13px] font-semibold ${neutral ? "pl-[34px] text-[#0f766e]" : `pl-6 ${fg}`}`}>{x.cta} →</Link>}
                 </div>
               )}
             </button>

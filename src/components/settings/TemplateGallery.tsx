@@ -55,7 +55,7 @@ export default function TemplateGallery({ companyId, prefs, company, sample, sam
       <div className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-3 px-5 pt-4">
           <div>
-            <Link href={back || "/dashboard/settings"} className="text-[13px] font-medium text-[#0f766e] hover:underline">← {back ? `Back to ${kind === "quote" ? "quote" : "invoice"}` : "All Settings"}</Link>
+            <Link prefetch={false} href={back || "/dashboard/settings"} className="text-[13px] font-medium text-[#0f766e] hover:underline">← {back ? `Back to ${kind === "quote" ? "quote" : "invoice"}` : "All Settings"}</Link>
             <h1 className="text-xl font-semibold text-[#0b1f3a]">Choose a Template</h1>
           </div>
           <button type="button" onClick={() => (back ? router.push(back) : router.back())} aria-label="Close" className="group/x flex h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-red-50 hover:text-red-600">

@@ -53,7 +53,7 @@ export function FormHeader({ title, closeHref }: { title: string; closeHref: str
   return (
     <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 sm:px-8">
       <h1 className="text-2xl font-semibold tracking-tight text-[#0b1f3a]">{title}</h1>
-      <Link href={closeHref} aria-label="Close" className="flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800">
+      <Link prefetch={false} href={closeHref} aria-label="Close" className="flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800">
         <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor" aria-hidden="true"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
       </Link>
     </div>
@@ -66,7 +66,7 @@ export function SaveBar({ saving, cancelHref, error, onDelete, deleteLabel = "De
   return (
     <div className="sticky bottom-0 z-10 mt-10 flex flex-wrap items-center gap-3 border-t border-slate-200 bg-white px-5 py-3 sm:px-8">
       <button type="submit" disabled={saving} className="rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white transition-colors hover:bg-[#0c5f59] disabled:opacity-60">{saving ? "Saving..." : "Save"}</button>
-      <Link href={cancelHref} className="rounded-lg border border-slate-200 bg-white px-5 py-2.5 text-[15px] font-medium text-slate-700 hover:bg-slate-50">Cancel</Link>
+      <Link prefetch={false} href={cancelHref} className="rounded-lg border border-slate-200 bg-white px-5 py-2.5 text-[15px] font-medium text-slate-700 hover:bg-slate-50">Cancel</Link>
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       {onDelete && <button type="button" onClick={onDelete} className="ml-auto text-sm font-medium text-red-600 hover:underline">{deleteLabel}</button>}
     </div>

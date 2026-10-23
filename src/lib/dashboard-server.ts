@@ -19,9 +19,10 @@ const monthly = (s: Pick<Subscription, "total" | "bill_every" | "bill_unit">) =>
 // Llena el dashboard con lo que de verdad pasa en Quotes / Invoices / Payments / Subscriptions
 export async function loadDashboard(supabase: SupabaseClient, companyId: string): Promise<{ data: DashboardData; mobile: MobileStats }> {
   const [{ data: inv }, { data: pays }, { data: subs }, { data: exps }, { data: qts }] = await Promise.all([
-    supabase.from("sales_docs").select("*").eq("company_id", companyId).eq("kind", "invoice").not("status", "in", "(draft,void)").limit(10000),
+    // Solo las columnas que usan las métricas (antes select=* traía las ~55 columnas, firmas incluidas)
+    supabase.from("sales_docs").select("id, number, customer_name, doc_date, due_date, status, total, amount_paid, written_off").eq("company_id", companyId).eq("kind", "invoice").not("status", "in", "(draft,void)").limit(10000),
     supabase.from("sales_payments").select("kind, amount, paid_on, invoice_id, mode").eq("company_id", companyId).order("paid_on", { ascending: false }).limit(20000),
-    supabase.from("subscriptions").select("*").eq("company_id", companyId).limit(5000),
+    supabase.from("subscriptions").select("total, bill_every, bill_unit, start_date, cancelled_at, status, created_at").eq("company_id", companyId).limit(5000),
     supabase.from("expenses").select("expense_date, amount, category, vendor").eq("company_id", companyId).order("expense_date", { ascending: false }).limit(20000), // sin el SQL 3.36 viene vacío
     supabase.from("sales_docs").select("status, total, expiry_date").eq("company_id", companyId).eq("kind", "quote").limit(10000),
   ]);

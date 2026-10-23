@@ -117,7 +117,7 @@ export default function CustomerImport({ companyId }: { companyId: string }) {
         )}
         {error && <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
         <div className="mt-6 flex flex-wrap gap-3">
-          <Link href="/dashboard/customers" className={primaryButton}>Go to customers</Link>
+          <Link prefetch={false} href="/dashboard/customers" className={primaryButton}>Go to customers</Link>
           <button type="button" onClick={reset} className={secondaryButton}>Import another file</button>
         </div>
       </div>

@@ -80,7 +80,7 @@ export default function SignInPage() {
 
       <p className="mt-8 text-sm text-slate-600">
         Don&apos;t have a BrightPro account?{" "}
-        <Link href="/signup" className="font-semibold text-[#0f766e] hover:underline">Sign up now</Link>
+        <Link prefetch={false} href="/signup" className="font-semibold text-[#0f766e] hover:underline">Sign up now</Link>
       </p>
     </AuthShell>
   );

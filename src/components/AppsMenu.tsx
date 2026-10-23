@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Popover, PopoverBackdrop, PopoverButton, PopoverPanel } from "@headlessui/react";
+import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { Role } from "@/lib/types";
 
 // Cada app con su color suave, su degradado y su ícono. Se actualiza a medida que salen módulos.
@@ -45,9 +45,9 @@ export function AppsGrid({ role, onPick, layout = "grid" }: { role: Role | null;
             <span className={`-mt-1 text-[10px] ${allowed ? "text-slate-400" : "text-slate-300"}`}>{allowed ? a.hint : "Soon"}</span>
           </>
         );
-        const cls = "group/app flex flex-col items-center gap-1.5 rounded-2xl px-1 py-3 text-center transition-colors animate-[bp-fade_0.35s_ease-out_both]";
+        const cls = `group/app flex flex-col items-center gap-1.5 rounded-2xl px-1 ${layout === "wide" ? "py-2" : "py-3"} text-center transition-colors animate-[bp-fade_0.35s_ease-out_both]`;
         return allowed ? (
-          <Link key={a.label} href={a.href!} onClick={() => onPick?.()} style={{ animationDelay: `${i * 20}ms` }} className={`${cls} hover:bg-[#f6fbfa] active:bg-[#eef8f5]`}>{icon}{text}</Link>
+          <Link prefetch={false} key={a.label} href={a.href!} onClick={() => onPick?.()} style={{ animationDelay: `${i * 20}ms` }} className={`${cls} hover:bg-[#f6fbfa] active:bg-[#eef8f5]`}>{icon}{text}</Link>
         ) : (
           <span key={a.label} title="Coming soon" style={{ animationDelay: `${i * 20}ms` }} className={`${cls} cursor-default`}>{icon}{text}</span>
         );
@@ -66,17 +66,17 @@ export default function AppsMenu({ role }: { role: Role | null }) {
           {[5, 12, 19].map((cy) => [5, 12, 19].map((cx) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.8" />))}
         </svg>
       </PopoverButton>
-      <PopoverBackdrop transition className="fixed inset-x-0 bottom-0 top-16 z-40 bg-slate-900/20 transition duration-200 data-[closed]:opacity-0" />
-      <PopoverPanel transition
-        className="fixed inset-x-0 top-16 z-50 origin-top border-b border-slate-200 bg-white shadow-[0_24px_50px_rgba(15,40,60,0.16)] transition duration-200 ease-out data-[closed]:-translate-y-2 data-[closed]:opacity-0">
+      {/* Panel horizontal pegado a la derecha (no de lado a lado): 7 apps por fila, 2 filas */}
+      <PopoverPanel anchor="bottom end" transition
+        className="z-50 mt-2 w-[min(62rem,calc(100vw-2rem))] origin-top-right rounded-3xl border border-slate-200/80 bg-white p-4 shadow-[0_24px_60px_rgba(15,40,60,0.2)] transition duration-200 ease-out data-[closed]:scale-95 data-[closed]:opacity-0">
         {({ close }) => (
-          <div className="mx-auto max-w-6xl px-6 py-5">
-            <div className="flex items-center justify-between px-1 pb-3">
+          <>
+            <div className="flex items-center justify-between px-1 pb-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">All apps</p>
               <span className="text-[11px] text-slate-400">Bright<b className="text-[#e8713a]">Pro</b></span>
             </div>
             <AppsGrid role={role} layout="wide" onPick={() => close()} />
-          </div>
+          </>
         )}
       </PopoverPanel>
     </Popover>

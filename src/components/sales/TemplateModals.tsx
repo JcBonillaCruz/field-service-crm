@@ -165,7 +165,7 @@ export function CustomizeMenu({ companyId, pdf, whiteLabel, onLogo, kind, back, 
         </MenuButton>
         <MenuItems anchor="bottom end" transition className="z-[80] mt-1 w-56 rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_12px_40px_rgba(15,40,60,0.16)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
           <p className="px-3 pb-1 pt-1.5 text-[12px] font-semibold text-slate-400">{name}</p>
-          <MenuItem><Link href={`/dashboard/settings/pdf-templates?for=${kind}${back ? `&back=${encodeURIComponent(back)}` : ""}`} className={item}>Change Template</Link></MenuItem>
+          <MenuItem><Link prefetch={false} href={`/dashboard/settings/pdf-templates?for=${kind}${back ? `&back=${encodeURIComponent(back)}` : ""}`} className={item}>Change Template</Link></MenuItem>
           <MenuItem><button type="button" onClick={() => setEdit(true)} className={item}>Edit Template</button></MenuItem>
           <div className="my-1 border-t border-slate-100" />
           <MenuItem><button type="button" onClick={onLogo} className={item}>Update Logo & Address</button></MenuItem>

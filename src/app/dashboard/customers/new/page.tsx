@@ -13,7 +13,7 @@ export default async function NewCustomerPage() {
   return (
     <section className="min-h-[calc(100vh-4rem)] bg-white">
       <div className="border-b border-slate-200 px-5 py-5 sm:px-8">
-        <Link href="/dashboard/customers" className="text-sm font-medium text-slate-500 hover:text-slate-800">&larr; Customers</Link>
+        <Link prefetch={false} href="/dashboard/customers" className="text-sm font-medium text-slate-500 hover:text-slate-800">&larr; Customers</Link>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight text-[#0b1f3a]">New Customer</h1>
       </div>
       <div className="px-5 pt-6 sm:px-8">

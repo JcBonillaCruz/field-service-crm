@@ -70,7 +70,7 @@ export default function CustomerSelect({ id, value, customers, onChange }: { id?
                 );
               })}
             </div>
-            <Link href="/dashboard/customers/new" target="_blank" className="flex items-center gap-2 border-t border-slate-100 px-4 py-3 text-sm font-medium text-[#0f766e] hover:bg-[#f3fbf8]">
+            <Link prefetch={false} href="/dashboard/customers/new" target="_blank" className="flex items-center gap-2 border-t border-slate-100 px-4 py-3 text-sm font-medium text-[#0f766e] hover:bg-[#f3fbf8]">
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#0f766e] text-white"><svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M10 5v10M5 10h10" /></svg></span>
               New Customer
             </Link>

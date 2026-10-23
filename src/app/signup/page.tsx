@@ -64,7 +64,7 @@ export default function SignUpPage() {
             Open it to activate your BrightPro account.
           </p>
           <p className="mt-4 text-sm text-slate-500">Can&apos;t find it? Look in your spam or promotions folder.</p>
-          <Link href="/" className="mt-8 inline-block text-sm font-semibold text-[#0f766e] hover:underline">Back to sign in</Link>
+          <Link prefetch={false} href="/" className="mt-8 inline-block text-sm font-semibold text-[#0f766e] hover:underline">Back to sign in</Link>
         </div>
       ) : (
         <>
@@ -104,7 +104,7 @@ export default function SignUpPage() {
 
           <p className="mt-8 text-sm text-slate-600">
             Already have an account?{" "}
-            <Link href="/" className="font-semibold text-[#0f766e] hover:underline">Sign in</Link>
+            <Link prefetch={false} href="/" className="font-semibold text-[#0f766e] hover:underline">Sign in</Link>
           </p>
         </>
       )}

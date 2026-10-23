@@ -205,7 +205,7 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
               <div key={v.id} className={`group/v flex items-center gap-1 rounded-lg pr-2 transition-colors ${on ? "bg-[#cdebe3] font-semibold text-[#0b3f3b]" : "text-slate-700 hover:bg-[#e3f4ef]"}`}>
                 <button type="button" onClick={() => { switchView(v.id); close(); }} className="min-w-0 flex-1 truncate px-3 py-2 text-left text-sm">{shortViewName(module, v)}</button>
                 {!v.builtin && (
-                  <Link href={`${base}/views/${v.id}/edit`} onClick={() => close()} aria-label="Edit view" className={`rounded p-1 opacity-0 transition-opacity group-hover/v:opacity-100 "text-slate-500 hover:text-[#0f766e]"`}>
+                  <Link prefetch={false} href={`${base}/views/${v.id}/edit`} onClick={() => close()} aria-label="Edit view" className={`rounded p-1 opacity-0 transition-opacity group-hover/v:opacity-100 "text-slate-500 hover:text-[#0f766e]"`}>
                     <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" strokeLinejoin="round" /></svg>
                   </Link>
                 )}
@@ -220,7 +220,7 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
               {BUILTIN_VIEWS[module].map(line)}
               {customViews.length > 0 && (<><div className="my-1 border-t border-slate-100" /><p className="px-4 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Custom views</p>{customViews.map(line)}</>)}
               <div className="mt-1 border-t border-slate-100 pt-1">
-                <Link href={`${base}/views/new`} onClick={() => close()} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-[#0f766e] transition-colors hover:bg-[#e3f4ef]">
+                <Link prefetch={false} href={`${base}/views/new`} onClick={() => close()} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-[#0f766e] transition-colors hover:bg-[#e3f4ef]">
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#0f766e] text-white"><svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M10 5v10M5 10h10" /></svg></span>
                   New View
                 </Link>
@@ -288,9 +288,9 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
           {viewMenu}
           <div className="flex shrink-0 items-center gap-2">
             {selectedId ? (
-              <Link href={`${base}/new`} aria-label={`New ${info.singular}`} className="group/n flex h-10 w-10 items-center justify-center rounded-lg bg-[#0f766e] text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59]">{plus}</Link>
+              <Link prefetch={false} href={`${base}/new`} aria-label={`New ${info.singular}`} className="group/n flex h-10 w-10 items-center justify-center rounded-lg bg-[#0f766e] text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59]">{plus}</Link>
             ) : (
-              <Link href={`${base}/new`} className="group/n hidden h-10 items-center gap-1.5 rounded-lg bg-[#0f766e] px-4 text-[15px] font-semibold text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59] sm:inline-flex">{plus}New</Link>
+              <Link prefetch={false} href={`${base}/new`} className="group/n hidden h-10 items-center gap-1.5 rounded-lg bg-[#0f766e] px-4 text-[15px] font-semibold text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59] sm:inline-flex">{plus}New</Link>
             )}
             <div className="hidden lg:block"><CatalogActionsMenu groups={groups} side={selectedId ? "right" : "left"} /></div>
           </div>
@@ -327,7 +327,7 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-[#fafbfc] text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                     <th className="border-b border-slate-200 py-3 pl-4">
-                      <Link href={customizeHref} title="Customize columns" aria-label="Customize columns" className="group/c flex h-6 w-6 items-center justify-center rounded text-[#0f766e] transition-colors hover:bg-[#0f766e] hover:text-white">
+                      <Link prefetch={false} href={customizeHref} title="Customize columns" aria-label="Customize columns" className="group/c flex h-6 w-6 items-center justify-center rounded text-[#0f766e] transition-colors hover:bg-[#0f766e] hover:text-white">
                         <svg viewBox="0 0 20 20" className="h-4 w-4 transition-transform duration-300 group-hover/c:rotate-90" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3 6h9M15 6h2M3 14h3M9 14h8M13 4v4M7 12v4" /></svg>
                       </Link>
                     </th>
@@ -375,7 +375,7 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
       </div>
 
       {!selectedId && (
-        <Link href={`${base}/new`} aria-label={`New ${info.singular}`}
+        <Link prefetch={false} href={`${base}/new`} aria-label={`New ${info.singular}`}
           className="fixed bottom-6 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#0f766e] text-white shadow-lg shadow-[#0f766e]/30 transition-transform active:scale-95 lg:hidden">
           <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
         </Link>
@@ -433,7 +433,7 @@ function Cell({ module, r, k, align, base }: { module: CatalogModule; r: Row; k:
     const it = r as Item;
     return (
       <td className={td}>
-        <Link href={`${base}/${r.id}`} onClick={(e) => e.stopPropagation()} className="flex min-w-0 items-center gap-3 font-medium text-[#0f766e] hover:underline">
+        <Link prefetch={false} href={`${base}/${r.id}`} onClick={(e) => e.stopPropagation()} className="flex min-w-0 items-center gap-3 font-medium text-[#0f766e] hover:underline">
           {module === "items" && (it.image_url
             // eslint-disable-next-line @next/next/no-img-element
             ? <img src={it.image_url} alt="" className="h-9 w-9 shrink-0 rounded-md border border-slate-200 object-cover" />
@@ -466,7 +466,7 @@ function CompactRow({ module, r, active, base, checked, onCheck }: {
   return (
     <li ref={ref} className={`relative flex items-start gap-3 px-4 py-3 transition-colors ${active ? "bg-[#d7f1eb] before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-[#0f766e]" : "hover:bg-[#f0faf7]"}`}>
       {onCheck && <input type="checkbox" checked={checked} onChange={onCheck} aria-label="Select" className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded accent-[#0f766e]" />}
-      <Link href={`${base}/${r.id}`} className="flex min-w-0 flex-1 items-start justify-between gap-3">
+      <Link prefetch={false} href={`${base}/${r.id}`} className="flex min-w-0 flex-1 items-start justify-between gap-3">
         <span className="min-w-0">
           <span className={`block truncate font-medium ${active ? "text-[#0f766e]" : "text-[#0b1f3a]"}`}>{(r as Item).name}</span>
           {isItem ? (
@@ -503,8 +503,8 @@ function Empty({ module, filtered, base }: { module: CatalogModule; filtered: bo
             {isItem ? "Save the products and services you sell, like a tune-up, a capacitor or an hour of labor, so quotes and invoices fill in by themselves." : "Give customers a discount code, like $25 off a tune-up or 10% off a maintenance plan."}
           </p>
           <div className="mt-5 flex flex-wrap justify-center gap-3">
-            <Link href={`${base}/new`} className="rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f59]">{isItem ? "New Item" : "New Coupon"}</Link>
-            <Link href={`${base}/import`} className="rounded-lg border border-slate-200 bg-white px-5 py-2.5 text-[15px] font-medium text-slate-700 hover:bg-slate-50">Import from CSV</Link>
+            <Link prefetch={false} href={`${base}/new`} className="rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f59]">{isItem ? "New Item" : "New Coupon"}</Link>
+            <Link prefetch={false} href={`${base}/import`} className="rounded-lg border border-slate-200 bg-white px-5 py-2.5 text-[15px] font-medium text-slate-700 hover:bg-slate-50">Import from CSV</Link>
           </div>
         </>
       )}

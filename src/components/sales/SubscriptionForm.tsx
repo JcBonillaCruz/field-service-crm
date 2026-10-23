@@ -128,7 +128,7 @@ export default function SubscriptionForm({ companyId, actor, customers, items, s
     <div className="flex min-h-[calc(100vh-4rem)] flex-col bg-white max-sm:bg-[#f4f6f8] max-sm:pb-3">
       <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 sm:px-8">
         <h1 className="text-2xl font-semibold tracking-tight text-[#0b1f3a]">{editing ? "Edit Subscription" : clone ? "Clone Subscription" : "New Subscription"}</h1>
-        <Link href={editing ? `${base}/${src!.id}` : base} aria-label="Close" className="group/x flex h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-red-50 hover:text-red-600">
+        <Link prefetch={false} href={editing ? `${base}/${src!.id}` : base} aria-label="Close" className="group/x flex h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-red-50 hover:text-red-600">
           <svg viewBox="0 0 20 20" className="h-5 w-5 transition-transform duration-300 group-hover/x:rotate-90" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
         </Link>
       </div>
@@ -158,7 +158,7 @@ export default function SubscriptionForm({ companyId, actor, customers, items, s
                 <div className="lg:col-span-2">
                   <p className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-slate-500">E-mail To</p>
                   <div className="flex flex-wrap gap-2">
-                    <Link href={`/dashboard/customers/${customerId}/edit`} target="_blank" className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 hover:border-[#14a39a]">
+                    <Link prefetch={false} href={`/dashboard/customers/${customerId}/edit`} target="_blank" className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 hover:border-[#14a39a]">
                       <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#2563eb] text-[11px] text-white">+</span>New Contact Person
                     </Link>
                     {emailOpts.map((e) => (
@@ -283,7 +283,7 @@ export default function SubscriptionForm({ companyId, actor, customers, items, s
 
       <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 border-t border-slate-200 bg-white px-5 py-3 max-sm:flex-nowrap max-sm:gap-2 max-sm:px-3 max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-8">
         <button type="button" onClick={submit} disabled={saving} className={btnPrimary}>{saving ? "Saving..." : editing ? "Save" : "Continue"}</button>
-        <Link href={editing ? `${base}/${src!.id}` : base} className={`${btnGhost} max-sm:px-3 max-sm:py-2 max-sm:text-[13px] max-sm:ml-auto max-sm:border-0 max-sm:bg-transparent`}>Cancel</Link>
+        <Link prefetch={false} href={editing ? `${base}/${src!.id}` : base} className={`${btnGhost} max-sm:px-3 max-sm:py-2 max-sm:text-[13px] max-sm:ml-auto max-sm:border-0 max-sm:bg-transparent`}>Cancel</Link>
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       </div>
     </div>

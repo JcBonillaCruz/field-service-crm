@@ -68,7 +68,7 @@ export default function CustomerDrawer({ customerId }: { customerId: string | nu
         s.from("customer_addresses").select("id, label, street, unit, city, state, zip, country, is_primary").eq("customer_id", customerId).order("is_primary", { ascending: false }),
         s.from("customer_emails").select("email, is_primary").eq("customer_id", customerId),
         s.from("customer_phones").select("number, label").eq("customer_id", customerId),
-        s.from("sales_docs").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }).limit(100),
+        s.from("sales_docs").select("id, kind, number, status, doc_date, due_date, total, amount_paid, written_off, created_at").eq("customer_id", customerId).order("created_at", { ascending: false }).limit(100),
       ]);
       if (alive) setInfo({ customer: customer as Info["customer"], addresses: (addresses ?? []) as Info["addresses"], emails: emails ?? [], phones: phones ?? [], docs: (docs ?? []) as SalesDoc[] });
     })();
@@ -104,7 +104,7 @@ export default function CustomerDrawer({ customerId }: { customerId: string | nu
     <ul className="-mx-1 divide-y divide-slate-100">
       {unpaid.map((d) => (
         <li key={d.id}>
-          <Link href={`/dashboard/invoices/${d.id}`} className="flex items-center justify-between gap-3 rounded-lg px-1 py-2.5 hover:bg-[#f6fbfa]">
+          <Link prefetch={false} href={`/dashboard/invoices/${d.id}`} className="flex items-center justify-between gap-3 rounded-lg px-1 py-2.5 hover:bg-[#f6fbfa]">
             <span><span className="block text-[14px] font-medium text-[#0f766e]">{d.number}</span><span className="text-xs text-slate-500">Due {fmtD(d.due_date)}</span></span>
             <span className="text-right"><span className="block text-[14px] font-semibold tabular-nums">{money(balanceOf(d))}</span><StatusPill s={docStatus(d)} small /></span>
           </Link>
@@ -149,7 +149,7 @@ export default function CustomerDrawer({ customerId }: { customerId: string | nu
     <ul className="divide-y divide-slate-100">
       {info.docs.slice(0, 25).map((d) => (
         <li key={d.id}>
-          <Link href={`/dashboard/${d.kind === "quote" ? "quotes" : "invoices"}/${d.id}`} className="flex items-center justify-between gap-3 py-3 hover:bg-[#f6fbfa]">
+          <Link prefetch={false} href={`/dashboard/${d.kind === "quote" ? "quotes" : "invoices"}/${d.id}`} className="flex items-center justify-between gap-3 py-3 hover:bg-[#f6fbfa]">
             <span><span className="block text-[14px] text-[#0b1f3a]">{d.kind === "quote" ? "Quote" : "Invoice"} <b className="font-medium text-[#0f766e]">{d.number}</b></span><span className="text-xs text-slate-500">{fmtD(d.doc_date)}</span></span>
             <span className="text-right"><span className="block tabular-nums">{money(d.total)}</span><StatusPill s={docStatus(d)} small /></span>
           </Link>
@@ -175,7 +175,7 @@ export default function CustomerDrawer({ customerId }: { customerId: string | nu
           <div className="space-y-3 pb-2">
             {metrics}
             {folds$}
-            <Link href={`/dashboard/customers/${c.id}`} className="block pt-1 text-center text-sm font-medium text-[#0f766e]">Open customer record →</Link>
+            <Link prefetch={false} href={`/dashboard/customers/${c.id}`} className="block pt-1 text-center text-sm font-medium text-[#0f766e]">Open customer record →</Link>
           </div>
         </BottomSheet>
       </>
@@ -200,7 +200,7 @@ export default function CustomerDrawer({ customerId }: { customerId: string | nu
           <Initials name={c.display_name} seed={c.id} size={44} />
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Customer</p>
-            <Link href={`/dashboard/customers/${c.id}`} className="flex items-center gap-1.5 text-[17px] font-semibold text-[#0b1f3a] hover:text-[#0f766e]">
+            <Link prefetch={false} href={`/dashboard/customers/${c.id}`} className="flex items-center gap-1.5 text-[17px] font-semibold text-[#0b1f3a] hover:text-[#0f766e]">
               <span className="truncate">{c.display_name}</span><Svg d={I.ext} cls="h-4 w-4 text-[#0f766e]" />
             </Link>
             {emails[0] && <p className="mt-0.5 flex items-center gap-1.5 truncate text-[13px] text-slate-500"><Svg d={I.mail} cls="h-3.5 w-3.5" />{emails[0]}</p>}

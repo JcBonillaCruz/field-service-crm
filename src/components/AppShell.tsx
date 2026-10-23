@@ -7,6 +7,8 @@ import { usePathname } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
 import ProfilePanel from "@/components/ProfilePanel";
 import Avatar from "@/components/Avatar";
+import NotificationsProvider from "@/components/NotificationsProvider";
+import { canManageSales } from "@/lib/sales";
 import { CompanySummary, CurrentUser, Role } from "@/lib/types";
 
 type NavItem = {
@@ -96,7 +98,7 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
     return (
       <li key={item.label} className="group relative">
         {item.href ? (
-          <Link href={item.href} onClick={onNavigate}
+          <Link prefetch={false} href={item.href} onClick={onNavigate}
             className={`${base} ${active ? activeCls : "text-slate-700 hover:bg-[#d7f1eb] hover:text-[#0b1f3a] active:bg-[#c3eadf]"}`}>
             {content}
           </Link>
@@ -104,7 +106,7 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
           <span className={`${base} cursor-default text-slate-400`} aria-disabled="true">{content}</span>
         )}
         {showAdd && item.addHref && (
-          <Link href={item.addHref} onClick={onNavigate} aria-label={`New ${singular}`} title={`New ${singular}`}
+          <Link prefetch={false} href={item.addHref} onClick={onNavigate} aria-label={`New ${singular}`} title={`New ${singular}`}
             className={`absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md transition-all duration-150 focus:opacity-100 ${
               active
                 ? "bg-white/25 text-white hover:scale-110 hover:bg-white hover:text-[#0f766e] hover:shadow-md"
@@ -172,6 +174,7 @@ export default function AppShell({
   }, [menuOpen]);
 
   return (
+    <NotificationsProvider companyId={currentId} userId={user.id} enabled={Boolean(role && canManageSales(role))}>
     <div className="min-h-screen bg-[#f4f6f8] lg:pl-64">
       {/* Menú fijo en computadora */}
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-[#dfe7ee] bg-[#f4f7fa] lg:flex">
@@ -212,5 +215,6 @@ export default function AppShell({
       <ProfilePanel user={user} companies={companies} currentId={currentId} open={profileOpen} onClose={() => setProfileOpen(false)} />
       <main>{children}</main>
     </div>
+    </NotificationsProvider>
   );
 }

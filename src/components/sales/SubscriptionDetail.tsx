@@ -74,7 +74,7 @@ export default function SubscriptionDetail({ data, prefs, actor }: {
     <div className="flex min-h-full flex-col bg-[#f7f9fa]">
       {/* Celular */}
       <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-3 lg:hidden">
-        <Link href={base} aria-label="Back" className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100">
+        <Link prefetch={false} href={base} aria-label="Back" className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100">
           <svg viewBox="0 0 20 20" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 15 7 10l5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </Link>
         <h1 className="min-w-0 flex-1 truncate text-lg font-semibold text-[#0b1f3a]">{sub.number}</h1>
@@ -192,7 +192,7 @@ export default function SubscriptionDetail({ data, prefs, actor }: {
           {[{ label: "Edit", icon: I.edit, href: `${base}/${sub.id}/edit` } as ToolItem, { label: "Create Invoice", icon: I.invoice, onClick: createInvoice, hidden: !active }, { label: "Comments", icon: I.comment, onClick: () => setPanel("comments") }, ...more]
             .filter((a) => !a.hidden).map((a) => (
               <li key={a.label}>
-                {a.href ? <Link href={a.href} className={`${sheetAction} text-slate-700`}>{a.icon && <Ico d={a.icon} className="h-5 w-5 text-[#0f766e]" />}{a.label}</Link> : (
+                {a.href ? <Link prefetch={false} href={a.href} className={`${sheetAction} text-slate-700`}>{a.icon && <Ico d={a.icon} className="h-5 w-5 text-[#0f766e]" />}{a.label}</Link> : (
                   <button type="button" onClick={() => { setSheet(false); a.onClick?.(); }} className={`${sheetAction} ${a.danger ? "text-red-600" : "text-slate-700"}`}>
                     {a.icon && <Ico d={a.icon} className={`h-5 w-5 ${a.danger ? "" : "text-[#0f766e]"}`} />}{a.label}
                   </button>

@@ -90,7 +90,7 @@ export default function DesktopDashboard({ firstName, companyId, companyName, co
           {demo && (
             <div className="mb-5 flex max-w-[1600px] items-center justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
               <span>You’re viewing sample data. These numbers are examples, not your business.</span>
-              <Link href="/dashboard" className="shrink-0 font-semibold underline-offset-2 hover:underline">Exit sample data</Link>
+              <Link prefetch={false} href="/dashboard" className="shrink-0 font-semibold underline-offset-2 hover:underline">Exit sample data</Link>
             </div>
           )}
           <div className="inline-flex items-stretch rounded-lg border border-slate-200 bg-white">
@@ -390,7 +390,7 @@ function Footer({ onTab }: { onTab: (t: Tab) => void }) {
           <div>
             <h3 className="text-sm font-semibold text-[#0b1f3a]">BrightPro modules</h3>
             <ul className="mt-4 space-y-3">
-              <li><Link href="/dashboard/customers" className={link}>Customers</Link></li>
+              <li><Link prefetch={false} href="/dashboard/customers" className={link}>Customers</Link></li>
               {FOOTER_SOON.map((m) => <li key={m} className="flex items-center gap-2 text-[15px] text-slate-400">{m}<SoonPill /></li>)}
             </ul>
           </div>
@@ -404,8 +404,8 @@ function Footer({ onTab }: { onTab: (t: Tab) => void }) {
           <div>
             <h3 className="text-sm font-semibold text-[#0b1f3a]">Quick links</h3>
             <ul className="mt-4 space-y-3">
-              <li><Link href="/dashboard/customers/new" className={link}>New customer</Link></li>
-              <li><Link href="/dashboard/customers/import" className={link}>Import customers</Link></li>
+              <li><Link prefetch={false} href="/dashboard/customers/new" className={link}>New customer</Link></li>
+              <li><Link prefetch={false} href="/dashboard/customers/import" className={link}>Import customers</Link></li>
             </ul>
           </div>
         </div>

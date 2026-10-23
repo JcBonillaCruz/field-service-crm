@@ -121,7 +121,7 @@ export default function CouponDetailView({ coupon, history }: { coupon: CouponRo
               <Row label="Redemption Type">{redemption}</Row>
               <Row label="Maximum Redemptions" tip="How many times this code can be used in total.">{coupon.max_redemptions ?? "Unlimited"}</Row>
               <Row label="Product Name">
-                <Link href={`/dashboard/coupons?q=${encodeURIComponent(coupon.catalog_products?.name ?? "")}`} className="text-[#2563eb] hover:underline">{coupon.catalog_products?.name ?? "—"}</Link>
+                <Link prefetch={false} href={`/dashboard/coupons?q=${encodeURIComponent(coupon.catalog_products?.name ?? "")}`} className="text-[#2563eb] hover:underline">{coupon.catalog_products?.name ?? "—"}</Link>
               </Row>
               <Row label="Times Used">{coupon.redemptions}{coupon.max_redemptions ? ` of ${coupon.max_redemptions}` : ""}</Row>
               <Row label="Discount">{discountLabel(coupon)} ({coupon.discount_type === "percent" ? "Percentage" : "Flat"})</Row>
@@ -157,7 +157,7 @@ export default function CouponDetailView({ coupon, history }: { coupon: CouponRo
               <MRow label="Redemption Type">{redemption}</MRow>
               <MRow label="Maximum Redemptions" tip="How many times this code can be used in total.">{coupon.max_redemptions ?? "Unlimited"}</MRow>
               <MRow label="Product Name">
-                <Link href={`/dashboard/coupons?q=${encodeURIComponent(coupon.catalog_products?.name ?? "")}`} className="text-[#2563eb] hover:underline">{coupon.catalog_products?.name ?? "—"}</Link>
+                <Link prefetch={false} href={`/dashboard/coupons?q=${encodeURIComponent(coupon.catalog_products?.name ?? "")}`} className="text-[#2563eb] hover:underline">{coupon.catalog_products?.name ?? "—"}</Link>
               </MRow>
               <MRow label="Times Used">{coupon.redemptions}{coupon.max_redemptions ? ` of ${coupon.max_redemptions}` : ""}</MRow>
               <MRow label="Discount">{discountLabel(coupon)} ({coupon.discount_type === "percent" ? "Percentage" : "Flat"})</MRow>
