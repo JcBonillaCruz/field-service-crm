@@ -16,6 +16,7 @@ export const APPS: App[] = [
   { label: "Subscriptions", href: "/dashboard/subscriptions", icon: "M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M18 3v4h-4M6 21v-4h4", tone: ["#e7f7ec", "#c8edd4", "#15803d"], roles: SALES, hint: "Recurring plans" },
   { label: "Items", href: "/dashboard/items", icon: "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9", tone: ["#e8f6fb", "#c9eaf6", "#0369a1"], roles: SALES, hint: "Products & services" },
   { label: "Coupons", href: "/dashboard/coupons", icon: "M3 8V6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v2a2 2 0 0 0 0 4v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6a2 2 0 0 0 0-4zM9 15l6-6M9.5 9.5h.01M14.5 14.5h.01", tone: ["#ffeef3", "#ffd5e1", "#be123c"], roles: SALES, hint: "Discounts" },
+  { label: "Money In", href: "/dashboard/income", icon: "M12 3v18M16.5 7c-.5-1.5-2.2-2.5-4.5-2.5-2.5 0-4.5 1.3-4.5 3.3 0 4.7 9 2.4 9 7.2 0 2-2 3.4-4.6 3.4-2.3 0-4.2-1-4.8-2.8", tone: ["#e7f8ef", "#c6efd9", "#047857"], roles: SALES, hint: "Other income" },
   { label: "Expenses", href: "/dashboard/expenses", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 9h6M9 13h6", tone: ["#fff4e5", "#ffe2bd", "#c2410c"], roles: SALES, hint: "Track spending" },
   { label: "QR Codes", href: "/dashboard/tools/qr", icon: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM14 18h2v2h-2zM18 14h2v2h-2z", tone: ["#eef2ff", "#dfe4ff", "#4f46e5"], hint: "Branded codes" },
   { label: "Settings", href: "/dashboard/settings", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 12a8 8 0 0 1 .3-2l-2-1.5 2-3.5 2.3 1a8 8 0 0 1 1.7-1l.3-2.5h4l.3 2.5a8 8 0 0 1 1.7 1l2.3-1 2 3.5-2 1.5a8 8 0 0 1 0 4l2 1.5-2 3.5-2.3-1a8 8 0 0 1-1.7 1l-.3 2.5h-4l-.3-2.5a8 8 0 0 1-1.7-1l-2.3 1-2-3.5 2-1.5a8 8 0 0 1-.3-2z", tone: ["#eef2f6", "#dde4ec", "#334155"], hint: "All settings" },
@@ -28,7 +29,7 @@ export const APPS: App[] = [
 // Cuadrícula de apps reutilizable (escritorio: súper menú horizontal · celular: pestaña "All apps" del inicio)
 export function AppsGrid({ role, onPick, layout = "grid" }: { role: Role | null; onPick?: () => void; layout?: "grid" | "wide" }) {
   return (
-    <div className={layout === "wide" ? "grid grid-cols-7 gap-1.5" : "grid grid-cols-3 gap-2"}>
+    <div className={layout === "wide" ? "grid grid-cols-8 gap-1.5" : "grid grid-cols-3 gap-2"}>
       {APPS.map((a, i) => {
         const allowed = Boolean(a.href && (!a.roles || (role && a.roles.includes(role))));
         const [bg, bg2, fg] = a.tone;

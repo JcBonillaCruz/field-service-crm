@@ -43,3 +43,4 @@
 @keyframes bp-sheet { from { transform: translateY(100%); } to { transform: none; } }
 @keyframes bp-splash-pulse { 0%, 100% { opacity: .82; transform: scale(.985); } 50% { opacity: 1; transform: scale(1.015); } }
 @keyframes bp-splash-bar { 0% { transform: translateX(-110%); } 100% { transform: translateX(320%); } }
+@keyframes bp-splash-in { from { opacity: 0; } to { opacity: 1; } }

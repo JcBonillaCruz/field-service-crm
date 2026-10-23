@@ -1,55 +1,58 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { hideSplash, splashPending } from "@/lib/splash";
 
 // =====================================================================
 // Pantalla de bienvenida de BrightPro (solo la marca BrightPro, nunca el logo del cliente).
-// Sale en el primer instante al ABRIR la app (web o celular) mientras se valida la sesión
-// y se cargan los datos principales; se desvanece sola cuando todo está listo.
-// No aparece al moverte entre pantallas ni en las páginas públicas que ven tus clientes.
+// Aparece ÚNICAMENTE después de escribir tus datos en el login: mientras se autentica
+// y se cargan los datos del panel. Nunca antes del login ni en las páginas públicas.
 // =====================================================================
-const MIN_MS = 700;    // tiempo mínimo para que se vea elegante (no un parpadeo)
-const MAX_MS = 9000;   // por si algo tarda demasiado: nunca se queda pegada
+const MIN_MS = 700;
+const MAX_MS = 12000;
 const FADE_MS = 450;
-
-const isAppPath = (p: string) => p === "/" || p === "/signup" || p.startsWith("/dashboard");
 
 export default function SplashScreen() {
   const path = usePathname() || "/";
-  const [phase, setPhase] = useState<"on" | "out" | "off">(isAppPath(path) ? "on" : "off");
+  const [phase, setPhase] = useState<"on" | "out" | "off">("off");
+  const shownAt = useRef(0);
 
+  // Encender: al enviar el login (evento) o si la página se recargó a mitad del ingreso
   useEffect(() => {
-    if (phase !== "on") return;
-    const start = performance.now();
-    const inApp = path.startsWith("/dashboard");
-    // Listo = ya se dibujó el panel (data-bp-ready) y no queda ninguna pantalla de carga (data-bp-loading)
-    const ready = () => !inApp || (Boolean(document.querySelector("[data-bp-ready]")) && !document.querySelector("[data-bp-loading]"));
+    const on = () => { shownAt.current = performance.now(); setPhase("on"); };
+    const off = () => setPhase("off");
+    if (splashPending()) on();
+    window.addEventListener("bp-splash:show", on);
+    window.addEventListener("bp-splash:hide", off);
+    return () => { window.removeEventListener("bp-splash:show", on); window.removeEventListener("bp-splash:hide", off); };
+  }, []);
+
+  // Apagar con desvanecido cuando el panel ya está dibujado y sin pantallas de carga
+  useEffect(() => {
+    if (phase !== "on" || !path.startsWith("/dashboard")) return;
+    const ready = () => Boolean(document.querySelector("[data-bp-ready]")) && !document.querySelector("[data-bp-loading]");
     let done = false;
-    let outT: ReturnType<typeof setTimeout> | undefined;
-    let offT: ReturnType<typeof setTimeout> | undefined;
+    let t1: ReturnType<typeof setTimeout> | undefined, t2: ReturnType<typeof setTimeout> | undefined;
     const finish = () => {
       if (done) return;
-      done = true;
-      mo.disconnect();
-      outT = setTimeout(() => {
+      done = true; mo.disconnect();
+      t1 = setTimeout(() => {
         setPhase("out");
-        offT = setTimeout(() => setPhase("off"), FADE_MS);
-      }, Math.max(0, MIN_MS - (performance.now() - start)));
+        t2 = setTimeout(() => { setPhase("off"); hideSplash(); }, FADE_MS);
+      }, Math.max(0, MIN_MS - (performance.now() - shownAt.current)));
     };
     const mo = new MutationObserver(() => { if (ready()) finish(); });
-    if (ready()) finish(); else mo.observe(document.body, { childList: true, subtree: true });
+    if (ready()) finish(); else mo.observe(document.body, { childList: true, subtree: true, attributes: true });
     const maxT = setTimeout(finish, MAX_MS);
-    return () => { mo.disconnect(); clearTimeout(maxT); if (outT) clearTimeout(outT); if (offT) clearTimeout(offT); };
-    // Solo al abrir la app
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => { mo.disconnect(); clearTimeout(maxT); if (t1) clearTimeout(t1); if (t2) clearTimeout(t2); };
+  }, [phase, path]);
 
   if (phase === "off") return null;
   return (
     <div aria-hidden="true"
-      className={`fixed inset-0 z-[300] flex flex-col items-center justify-center bg-white transition-opacity ease-out motion-reduce:transition-none ${phase === "out" ? "pointer-events-none opacity-0" : "opacity-100"}`}
+      className={`fixed inset-0 z-[300] flex flex-col items-center justify-center bg-white transition-opacity ease-out motion-reduce:transition-none ${phase === "out" ? "pointer-events-none opacity-0" : "opacity-100 animate-[bp-splash-in_0.25s_ease-out]"}`}
       style={{ transitionDuration: `${FADE_MS}ms`, backgroundImage: "radial-gradient(70% 55% at 50% 38%, #eaf7f3 0%, rgba(255,255,255,0) 70%)" }}>
       <div className="animate-[bp-splash-pulse_1.8s_ease-in-out_infinite] motion-reduce:animate-none">
         <Image src="/logo-brightpro.png" alt="" width={220} height={44} priority className="h-auto w-[180px] sm:w-[220px]" />

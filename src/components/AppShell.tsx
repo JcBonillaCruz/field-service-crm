@@ -35,7 +35,12 @@ const NAV: NavItem[] = [
       { label: "Invoices", href: "/dashboard/invoices", addHref: "/dashboard/invoices/new", icon: "" },
       { label: "Subscriptions", href: "/dashboard/subscriptions", addHref: "/dashboard/subscriptions/new", icon: "" },
     ] },
-  { label: "Expenses", href: "/dashboard/expenses", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 9h6M9 13h6M12 6v1M12 15v1", roles: ["owner", "manager", "office"] },
+  // Finanzas: el grupo lleva el ícono ($); Money In y Expenses van sin ícono, igual que Sales y Product Catalog
+  { label: "Finances", icon: "M12 2.5v19M16.6 6.6c-.6-1.6-2.4-2.6-4.6-2.6-2.6 0-4.6 1.3-4.6 3.4 0 4.8 9.4 2.5 9.4 7.4 0 2.1-2.1 3.5-4.8 3.5-2.4 0-4.4-1.1-5-2.9", roles: ["owner", "manager", "office"],
+    children: [
+      { label: "Money In", href: "/dashboard/income", icon: "" },
+      { label: "Expenses", href: "/dashboard/expenses", icon: "" },
+    ] },
   { label: "QR Codes", href: "/dashboard/tools/qr", icon: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2zM6.5 6.5h1M16.5 6.5h1M6.5 16.5h1" },
   { label: "Payments", icon: "M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 10h18M7 15h3", roles: ["owner", "manager"] },
   { label: "Jobs", icon: "M14.7 6.3a4 4 0 0 0-5.4 5.2l-5.8 5.8a1.8 1.8 0 0 0 2.6 2.6l5.8-5.8a4 4 0 0 0 5.2-5.4l-2.5 2.5-2.4-.4-.4-2.4z" },

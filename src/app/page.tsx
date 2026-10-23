@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AuthShell from "@/components/AuthShell";
 import SocialButtons from "@/components/SocialButtons";
+import { hideSplash, showSplash } from "@/lib/splash";
 import { createClient } from "@/lib/supabase/client";
 
 const inputClass =
@@ -26,11 +27,13 @@ export default function SignInPage() {
 
     setLoading(true);
     setError("");
+    showSplash(); // la bienvenida de BrightPro sale SOLO aquí, después de escribir tus datos
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
 
     if (error) {
+      hideSplash();
       if (error.message.toLowerCase().includes("email not confirmed")) {
         return setError("Confirm your email first. Check your inbox for the BrightPro link.");
       }

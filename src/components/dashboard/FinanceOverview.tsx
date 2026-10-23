@@ -64,7 +64,7 @@ export default function FinanceOverview({ st }: { st: MobileStats }) {
   const profitM = st.receipts.map((r, i) => r - st.expenses[i]);
   const profitYtd = st.ytdReceived - st.ytdExpenses;
   const margin = st.ytdReceived > 0 ? profitYtd / st.ytdReceived : 0;
-  const collect = st.income12 > 0 ? Math.min(1, st.receipts12 / st.income12) : 0;
+  const collect = st.income12 > 0 ? Math.min(1, (st.invoiceReceipts12 ?? st.receipts12) / st.income12) : 0;
   const decided = st.quoteStats.accepted + st.quoteStats.declined;
   const win = decided ? st.quoteStats.accepted / decided : 0;
 

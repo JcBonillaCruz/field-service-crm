@@ -19,13 +19,11 @@ const COLS = "md:grid-cols-[2fr_1.6fr_2fr_1.3fr_1.4fr]";
 
 export default function CustomersWorkspace({
   customers,
-  money = {},
   canImport,
   canExport,
   children,
 }: {
   customers: ListRow[];
-  money?: Record<string, { receivable: number; credit: number }>;
   canImport: boolean;
   canExport: boolean;
   children: React.ReactNode;
@@ -167,9 +165,9 @@ export default function CustomersWorkspace({
             </ul>
           ) : (
             <div className="px-5 pb-10 sm:px-8">
-              {/* Celular: tarjetas simples estilo Zoho (nombre, correo, por cobrar y crédito) */}
-              <ul className="space-y-3 md:hidden">
-                {list.map((c) => <MobileCard key={c.id} c={c} m={money[c.id]} />)}
+              {/* Celular: filas compactas (avatar + nombre principal + correo), caben más clientes por pantalla */}
+              <ul className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white md:hidden">
+                {list.map((c) => <MobileRow key={c.id} c={c} />)}
               </ul>
               <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white md:block">
                 <div className={`hidden gap-4 border-b border-slate-100 bg-slate-50/70 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500 md:grid ${COLS}`}>
@@ -253,31 +251,18 @@ function subtitle(c: ListRow) {
   return "Residential";
 }
 
-const usd = (v: number) => v.toLocaleString("en-US", { style: "currency", currency: "USD" });
-
-function MobileCard({ c, m }: { c: ListRow; m?: { receivable: number; credit: number } }) {
-  const person = [c.first_name, c.last_name].filter(Boolean).join(" ");
+// Celular: solo el nombre principal (la compañía si es comercial, sin repetir el del dueño) y el correo
+function MobileRow({ c }: { c: ListRow }) {
   const name = c.customer_type === "commercial" && c.company_name ? c.company_name : c.display_name;
-  const sub = c.customer_type === "commercial" && c.company_name && person && person !== c.company_name ? person : null;
-  const rec = m?.receivable ?? 0, cred = m?.credit ?? 0;
   return (
     <li>
-      <Link prefetch={false} href={`/dashboard/customers/${c.id}`}
-        className="block overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_2px_10px_rgba(15,40,60,0.04)] transition-all active:scale-[0.99] active:bg-[#f6fbfa]">
-        <div className="px-4 pb-3 pt-3.5">
-          <p className="truncate text-[16px] font-semibold text-[#0b1f3a]">{name}{sub && <span className="font-normal text-slate-500"> · {sub}</span>}</p>
-          <p className="mt-0.5 truncate text-[13.5px] text-slate-500">{c.email || "No email"}</p>
-        </div>
-        <div className="grid grid-cols-2 border-t border-slate-100 bg-slate-50/60">
-          <div className="px-4 py-2.5">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Receivables</p>
-            <p className={`mt-0.5 text-[15px] font-semibold tabular-nums ${rec > 0 ? "text-[#e8713a]" : "text-[#0b1f3a]"}`}>{usd(rec)}</p>
-          </div>
-          <div className="border-l border-slate-100 px-4 py-2.5">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Unused credits</p>
-            <p className={`mt-0.5 text-[15px] font-semibold tabular-nums ${cred > 0 ? "text-[#0f766e]" : "text-[#0b1f3a]"}`}>{usd(cred)}</p>
-          </div>
-        </div>
+      <Link prefetch={false} href={`/dashboard/customers/${c.id}`} className="flex items-center gap-3 px-4 py-3 transition-colors active:bg-[#e9f7f4]">
+        <Avatar name={name} url={null} seed={c.id} size={40} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[15.5px] font-semibold text-[#0b1f3a]">{name}</span>
+          <span className="block truncate text-[13.5px] text-slate-500">{c.email || "No email"}</span>
+        </span>
+        <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate-300" fill="currentColor"><path d="M7.3 5.3a1 1 0 0 1 1.4 0l4 4a1 1 0 0 1 0 1.4l-4 4a1 1 0 0 1-1.4-1.4L10.6 10 7.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
       </Link>
     </li>
   );
