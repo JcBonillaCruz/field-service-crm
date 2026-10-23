@@ -1,31 +1,57 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { TAG, cached, must } from "@/lib/data-cache";
 import { Activity, Comment, DEFAULT_PREFS, DocKind, Payment, SalesDoc, SalesFile, SalesLine, SalesPrefs, Subscription } from "@/lib/sales";
 
 export type CustomerOption = { id: string; display_name: string; email: string | null; company_name: string | null; payment_terms: string | null; currency: string | null };
 export type ItemOption = { id: string; name: string; sku: string | null; selling_price: number; description: string | null; unit: string | null; image_url: string | null; item_type: string };
 export type CouponOption = { id: string; name: string; code: string; discount_type: "flat" | "percent"; discount_value: number };
 
+// Preferencias: la parte fija (logo, plantillas, datos de la empresa) sale de caché;
+// los contadores de numeración (QT-/INV-/SUB-) SIEMPRE en vivo, para no repetir números.
+const COUNTERS = "quote_prefix, quote_next, quote_auto, invoice_prefix, invoice_next, invoice_auto, sub_prefix, sub_next";
 export async function loadPrefs(supabase: SupabaseClient, companyId: string): Promise<SalesPrefs> {
-  const [{ data }, { data: plan }] = await Promise.all([
-    supabase.from("sales_prefs").select("*").eq("company_id", companyId).maybeSingle(),
-    supabase.from("company_plans").select("white_label").eq("company_id", companyId).maybeSingle(),
+  const uid = await currentUserId();
+  const fixed = () => Promise.all([
+    supabase.from("sales_prefs").select("*").eq("company_id", companyId).maybeSingle().then(must),
+    supabase.from("company_plans").select("white_label").eq("company_id", companyId).maybeSingle().then((r) => r.data),
   ]);
-  const white = Boolean(plan?.white_label);
+  const [[data, plan], live] = await Promise.all([
+    (uid ? cached(["prefs", companyId, uid], [TAG.prefs(companyId)], 300, fixed) : fixed()).catch(() => [null, null] as const),
+    supabase.from("sales_prefs").select(COUNTERS).eq("company_id", companyId).maybeSingle().then((r) => r.data),
+  ]);
+  const white = Boolean((plan as { white_label?: boolean } | null)?.white_label);
   if (!data) return { ...DEFAULT_PREFS, white_label: white };
   return {
-    ...DEFAULT_PREFS, ...data,
+    ...DEFAULT_PREFS, ...data, ...(live ?? {}),
     quote_settings: { ...DEFAULT_PREFS.quote_settings, ...(data.quote_settings ?? {}) },
     invoice_settings: { ...DEFAULT_PREFS.invoice_settings, ...(data.invoice_settings ?? {}) },
     org_info: data.org_info ?? {}, pdf_settings: data.pdf_settings ?? {}, white_label: white,
   } as SalesPrefs;
 }
 
+// Id del usuario de esta petición (para que la caché respete los permisos de cada quien)
+async function currentUserId(): Promise<string | null> {
+  try { const { getSession } = await import("@/lib/session"); return (await getSession()).user.id; } catch { return null; }
+}
+
+// Catálogo para formularios (items activos y cupones): caché corta + se borra al guardar un item o cupón
+async function loadCatalogOptions(supabase: SupabaseClient, companyId: string) {
+  const uid = await currentUserId();
+  const load = async () => {
+    const [items, coupons] = await Promise.all([
+      supabase.from("items").select("id, name, sku, selling_price, description, unit, image_url, item_type").eq("company_id", companyId).eq("is_active", true).order("name").limit(5000).then(must),
+      supabase.from("coupons").select("id, name, code, discount_type, discount_value, expires_on, is_active").eq("company_id", companyId).eq("is_active", true).limit(500).then(must),
+    ]);
+    return { items: items ?? [], coupons: coupons ?? [] };
+  };
+  return (uid ? cached(["catalog-options", companyId, uid], [TAG.catalog(companyId)], 120, load) : load()).catch(() => ({ items: [], coupons: [] }));
+}
+
 // Lo que necesita el formulario de Quote / Invoice / Subscription
 export async function loadFormData(supabase: SupabaseClient, companyId: string) {
-  const [{ data: customers }, { data: items }, { data: coupons }, { data: people }, prefs] = await Promise.all([
+  const [{ data: customers }, { items, coupons }, { data: people }, prefs] = await Promise.all([
     supabase.from("customers").select("id, display_name, email, company_name, payment_terms, currency").eq("company_id", companyId).order("display_name").limit(5000),
-    supabase.from("items").select("id, name, sku, selling_price, description, unit, image_url, item_type").eq("company_id", companyId).eq("is_active", true).order("name").limit(5000),
-    supabase.from("coupons").select("id, name, code, discount_type, discount_value, expires_on, is_active").eq("company_id", companyId).eq("is_active", true).limit(500),
+    loadCatalogOptions(supabase, companyId),
     supabase.from("sales_docs").select("salesperson").eq("company_id", companyId).not("salesperson", "is", null).limit(500),
     loadPrefs(supabase, companyId),
   ]);

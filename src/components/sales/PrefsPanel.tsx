@@ -1,5 +1,6 @@
 "use client";
 
+import { bustCache } from "@/lib/cache-client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -59,7 +60,7 @@ export default function PrefsPanel({ open, onClose, module, companyId, prefs }: 
     });
     setSaving(false);
     if (error) return setMsg("Preferences couldn't be saved. Did you run the SQL for Paso 3.30?");
-    router.refresh();
+    await bustCache("prefs"); router.refresh();
     onClose();
   }
 

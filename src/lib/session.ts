@@ -3,6 +3,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { KEY_HEADER, USER_HEADER, internalKey } from "@/lib/auth-headers";
+import { TAG, cached, must } from "@/lib/data-cache";
 import { COMPANY_COOKIE, CompanySummary, CurrentUser, Role } from "@/lib/types";
 
 // Usuario ya verificado por el middleware en esta misma petición (evita otro GET /auth/v1/user)
@@ -30,11 +31,15 @@ export const getSession = cache(async () => {
   if (!user) redirect("/");
   const uid = user.id;
 
-  const [{ data: profile }, { data: rows }, { data: logos }] = await Promise.all([
-    supabase.from("profiles").select("full_name, avatar_url").eq("id", uid).maybeSingle(),
+  // Perfil y logos: caché (casi no cambian; se borra al guardar). Membresías y roles: SIEMPRE en vivo (son permisos).
+  const [profile, { data: rows }, logos] = await Promise.all([
+    cached(["profile", uid], [TAG.profile(uid)], 300, async () =>
+      must(await supabase.from("profiles").select("full_name, avatar_url").eq("id", uid).maybeSingle()) as { full_name: string | null; avatar_url: string | null } | null)
+      .catch(() => null),
     supabase.from("company_members").select("role, companies ( id, name, industry, created_at )").eq("user_id", uid).eq("is_active", true),
     // RLS ya limita sales_prefs a las compañías de este usuario
-    supabase.from("sales_prefs").select("company_id, logo_url").limit(200),
+    cached(["logos", uid], [TAG.logos(uid)], 300, async () =>
+      must(await supabase.from("sales_prefs").select("company_id, logo_url").limit(200))).catch(() => null),
   ]);
 
   type Row = { role: Role; companies: { id: string; name: string; industry: string | null; created_at: string } | null };

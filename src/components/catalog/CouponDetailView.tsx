@@ -1,5 +1,6 @@
 "use client";
 
+import { bustCache } from "@/lib/cache-client";
 import { useSwipe } from "@/components/ui/useSwipe";
 import { useState } from "react";
 import Link from "next/link";
@@ -35,13 +36,13 @@ export default function CouponDetailView({ coupon, history }: { coupon: CouponRo
     const { error } = await createClient().from("coupons").update({ is_active: !coupon.is_active }).eq("id", coupon.id);
     setBusy(false);
     if (error) return setMsg("The status couldn't be changed.");
-    router.refresh();
+    await bustCache("catalog"); router.refresh();
   }
   async function remove() {
     if (!window.confirm(`Delete the coupon "${coupon.code}"? This can't be undone.`)) return;
     const { error } = await createClient().from("coupons").delete().eq("id", coupon.id);
     if (error) return setMsg("The coupon couldn't be deleted.");
-    router.push("/dashboard/coupons");
+    await bustCache("catalog"); router.push("/dashboard/coupons");
     router.refresh();
   }
   async function copy() {

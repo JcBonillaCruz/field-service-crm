@@ -1,5 +1,6 @@
 "use client";
 
+import { bustCache } from "@/lib/cache-client";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -126,7 +127,7 @@ export default function CatalogImport({ module, companyId }: { module: CatalogMo
           else ok++;
         }
       }
-      setResult({ ok, skipped }); setStep(3); router.refresh();
+      setResult({ ok, skipped }); setStep(3); await bustCache("catalog"); router.refresh();
     } catch {
       setError(`The import stopped after ${ok} rows. Did you run the SQL for Paso 3.24?`);
     }

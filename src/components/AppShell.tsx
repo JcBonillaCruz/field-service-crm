@@ -175,7 +175,7 @@ export default function AppShell({
 
   return (
     <NotificationsProvider companyId={currentId} userId={user.id} enabled={Boolean(role && canManageSales(role))}>
-    <div className="min-h-screen bg-[#f4f6f8] lg:pl-64">
+    <div data-bp-ready className="min-h-screen bg-[#f4f6f8] lg:pl-64">
       {/* Menú fijo en computadora */}
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-[#dfe7ee] bg-[#f4f7fa] lg:flex">
         <div className="flex h-16 items-center border-b border-[#cde8e0] bg-[#e7f5f1] px-6">

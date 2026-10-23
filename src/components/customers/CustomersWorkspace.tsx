@@ -19,11 +19,13 @@ const COLS = "md:grid-cols-[2fr_1.6fr_2fr_1.3fr_1.4fr]";
 
 export default function CustomersWorkspace({
   customers,
+  money = {},
   canImport,
   canExport,
   children,
 }: {
   customers: ListRow[];
+  money?: Record<string, { receivable: number; credit: number }>;
   canImport: boolean;
   canExport: boolean;
   children: React.ReactNode;
@@ -165,7 +167,11 @@ export default function CustomersWorkspace({
             </ul>
           ) : (
             <div className="px-5 pb-10 sm:px-8">
-              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              {/* Celular: tarjetas simples estilo Zoho (nombre, correo, por cobrar y crédito) */}
+              <ul className="space-y-3 md:hidden">
+                {list.map((c) => <MobileCard key={c.id} c={c} m={money[c.id]} />)}
+              </ul>
+              <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white md:block">
                 <div className={`hidden gap-4 border-b border-slate-100 bg-slate-50/70 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500 md:grid ${COLS}`}>
                   <span>Name</span><span>Company name</span><span>Email</span><span>Phone</span><span>Location</span>
                 </div>
@@ -245,6 +251,36 @@ function subtitle(c: ListRow) {
   const person = [c.first_name, c.last_name].filter(Boolean).join(" ");
   if (c.customer_type === "commercial") return c.company_name || person || "Commercial";
   return "Residential";
+}
+
+const usd = (v: number) => v.toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+function MobileCard({ c, m }: { c: ListRow; m?: { receivable: number; credit: number } }) {
+  const person = [c.first_name, c.last_name].filter(Boolean).join(" ");
+  const name = c.customer_type === "commercial" && c.company_name ? c.company_name : c.display_name;
+  const sub = c.customer_type === "commercial" && c.company_name && person && person !== c.company_name ? person : null;
+  const rec = m?.receivable ?? 0, cred = m?.credit ?? 0;
+  return (
+    <li>
+      <Link prefetch={false} href={`/dashboard/customers/${c.id}`}
+        className="block overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_2px_10px_rgba(15,40,60,0.04)] transition-all active:scale-[0.99] active:bg-[#f6fbfa]">
+        <div className="px-4 pb-3 pt-3.5">
+          <p className="truncate text-[16px] font-semibold text-[#0b1f3a]">{name}{sub && <span className="font-normal text-slate-500"> · {sub}</span>}</p>
+          <p className="mt-0.5 truncate text-[13.5px] text-slate-500">{c.email || "No email"}</p>
+        </div>
+        <div className="grid grid-cols-2 border-t border-slate-100 bg-slate-50/60">
+          <div className="px-4 py-2.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Receivables</p>
+            <p className={`mt-0.5 text-[15px] font-semibold tabular-nums ${rec > 0 ? "text-[#e8713a]" : "text-[#0b1f3a]"}`}>{usd(rec)}</p>
+          </div>
+          <div className="border-l border-slate-100 px-4 py-2.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Unused credits</p>
+            <p className={`mt-0.5 text-[15px] font-semibold tabular-nums ${cred > 0 ? "text-[#0f766e]" : "text-[#0b1f3a]"}`}>{usd(cred)}</p>
+          </div>
+        </div>
+      </Link>
+    </li>
+  );
 }
 
 function CompactRow({ c, active }: { c: ListRow; active: boolean }) {

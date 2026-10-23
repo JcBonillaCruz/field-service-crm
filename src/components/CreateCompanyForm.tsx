@@ -1,5 +1,6 @@
 "use client";
 
+import { bustCache } from "@/lib/cache-client";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -54,6 +55,7 @@ export default function CreateCompanyForm({ onDone, onCancel }: { onDone?: () =>
     await s.from("sales_prefs").upsert({ company_id: id, logo_url: logoUrl, org_info: { phone: f.phone, email: f.email.trim(), website: f.website.trim(), address: f.address.trim() } });
     setSaving(false);
     setCurrentCompany(id);
+    await bustCache("prefs");
     onDone?.();
     router.refresh();
   }

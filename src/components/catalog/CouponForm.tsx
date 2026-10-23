@@ -1,5 +1,6 @@
 "use client";
 
+import { bustCache } from "@/lib/cache-client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "@headlessui/react";
@@ -56,7 +57,7 @@ export default function CouponForm({ companyId, products: initialProducts, coupo
       setSaving(false);
       return setError(dbErr?.code === "23505" ? "That coupon code is already in use." : "The coupon couldn't be saved. Did you run the SQL for Paso 3.24?");
     }
-    router.push(`/dashboard/coupons/${saved.id}`);
+    await bustCache("catalog"); router.push(`/dashboard/coupons/${saved.id}`);
     router.refresh();
   }
 
@@ -64,7 +65,7 @@ export default function CouponForm({ companyId, products: initialProducts, coupo
     if (!coupon || !window.confirm(`Delete the coupon "${coupon.code}"?`)) return;
     const { error: dbErr } = await createClient().from("coupons").delete().eq("id", coupon.id);
     if (dbErr) return setError("The coupon couldn't be deleted.");
-    router.push("/dashboard/coupons");
+    await bustCache("catalog"); router.push("/dashboard/coupons");
     router.refresh();
   }
 

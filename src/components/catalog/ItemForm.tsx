@@ -1,5 +1,6 @@
 "use client";
 
+import { bustCache } from "@/lib/cache-client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Combobox, ComboboxButton, ComboboxInput, ComboboxOption, ComboboxOptions } from "@headlessui/react";
@@ -76,7 +77,7 @@ export default function ItemForm({ companyId, item, clone }: { companyId: string
       ? await supabase.from("items").update(row).eq("id", item.id).select("id").single()
       : await supabase.from("items").insert({ ...row, company_id: companyId }).select("id").single();
     if (dbErr || !saved) { setSaving(false); return setError("The item couldn't be saved. Did you run the SQL for Paso 3.24?"); }
-    router.push(`/dashboard/items/${saved.id}`);
+    await bustCache("catalog"); router.push(`/dashboard/items/${saved.id}`);
     router.refresh();
   }
 
@@ -84,7 +85,7 @@ export default function ItemForm({ companyId, item, clone }: { companyId: string
     if (!item || !window.confirm(`Delete "${item.name}"?`)) return;
     const { error: dbErr } = await createClient().from("items").delete().eq("id", item.id);
     if (dbErr) return setError("The item couldn't be deleted.");
-    router.push("/dashboard/items");
+    await bustCache("catalog"); router.push("/dashboard/items");
     router.refresh();
   }
 

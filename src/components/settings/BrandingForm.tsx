@@ -1,5 +1,6 @@
 "use client";
 
+import { bustCache } from "@/lib/cache-client";
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -44,7 +45,7 @@ export default function BrandingForm({ companyId, prefs, company }: { companyId:
     });
     setBusy(false);
     if (error) return setMsg("It couldn't be saved. Did you run the SQL for Paso 3.31?");
-    setMsg("Saved ✓"); router.refresh();
+    setMsg("Saved ✓"); await bustCache("prefs"); router.refresh();
   }
 
   return (

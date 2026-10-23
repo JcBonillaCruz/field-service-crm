@@ -1,5 +1,6 @@
 "use client";
 
+import { bustCache } from "@/lib/cache-client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
@@ -14,7 +15,9 @@ import { Modal, btnGhost, btnPrimary } from "@/components/sales/SalesBits";
 const SWATCHES = ["#2f3437", "#1a2744", "#e8713a", "#0f766e", "#2563eb", "#7c3aed", "#be123c", "#15803d"];
 
 export async function savePdf(companyId: string, pdf: PdfSettings) {
-  return createClient().from("sales_prefs").upsert({ company_id: companyId, pdf_settings: pdf, updated_at: new Date().toISOString() });
+  const r = await createClient().from("sales_prefs").upsert({ company_id: companyId, pdf_settings: pdf, updated_at: new Date().toISOString() });
+  await bustCache("prefs");
+  return r;
 }
 
 // Mini dibujo de una plantilla (para el editor)
@@ -69,7 +72,7 @@ export function EditTemplateModal({ open, onClose, companyId, pdf, whiteLabel, p
     const { error: e } = await createClient().from("sales_prefs").upsert({ company_id: companyId, pdf_settings: p, logo_url: logo, updated_at: new Date().toISOString() });
     setBusy(false);
     if (e) return setError("It couldn't be saved. Did you run the SQL for Paso 3.31?");
-    router.refresh(); onClose();
+    await bustCache("prefs"); router.refresh(); onClose();
   }
   const seg = <T extends string>(value: T, opts: [T, string][], on: (v: T) => void) => (
     <div className="inline-flex rounded-lg bg-slate-100 p-0.5 text-sm">

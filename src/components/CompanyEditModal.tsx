@@ -1,5 +1,6 @@
 "use client";
 
+import { bustCache } from "@/lib/cache-client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -73,7 +74,7 @@ export default function CompanyEditModal({ companyId, open, onClose }: { company
     });
     setBusy(false);
     if (error) return setMsg("It couldn't be saved. Try again.");
-    router.refresh(); onClose();
+    await bustCache("prefs"); router.refresh(); onClose();
   }
 
   const L = ({ children, opt }: { children: React.ReactNode; opt?: boolean }) => <label className="mb-1.5 block text-sm font-medium text-slate-700">{children}{opt && <span className="font-normal text-slate-400"> (optional)</span>}</label>;

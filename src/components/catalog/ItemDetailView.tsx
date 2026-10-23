@@ -1,5 +1,6 @@
 "use client";
 
+import { bustCache } from "@/lib/cache-client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
@@ -23,13 +24,13 @@ export default function ItemDetailView({ item, history, companyId }: { item: Ite
     const { error } = await createClient().from("items").update({ is_active: !item.is_active, updated_at: new Date().toISOString() }).eq("id", item.id);
     setBusy(false);
     if (error) return setMsg("The status couldn't be changed.");
-    router.refresh();
+    await bustCache("catalog"); router.refresh();
   }
   async function remove() {
     if (!window.confirm(`Delete "${item.name}"? This can't be undone.`)) return;
     const { error } = await createClient().from("items").delete().eq("id", item.id);
     if (error) return setMsg("The item couldn't be deleted. It may be used in a quote or invoice.");
-    router.push("/dashboard/items");
+    await bustCache("catalog"); router.push("/dashboard/items");
     router.refresh();
   }
 
@@ -128,7 +129,7 @@ function useItemImage(item: Item, companyId: string) {
   async function save(url: string | null) {
     const { error } = await createClient().from("items").update({ image_url: url, updated_at: new Date().toISOString() }).eq("id", item.id);
     if (error) return setErr("The image couldn't be saved.");
-    router.refresh();
+    await bustCache("catalog"); router.refresh();
   }
   async function upload(file?: File) {
     if (!file) return;

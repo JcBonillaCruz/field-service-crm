@@ -1,5 +1,6 @@
 "use client";
 
+import { bustCache } from "@/lib/cache-client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -135,6 +136,7 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
     setBusy("");
     if (error) return flash(action === "delete" ? "Some records couldn't be deleted." : "The status couldn't be changed.");
     setChecked(new Set());
+    await bustCache("catalog");
     if (action === "delete" && selectedId && ids.includes(selectedId)) router.push(base);
     router.refresh();
     flash(action === "delete" ? "Deleted." : `Marked as ${action}.`);
@@ -181,7 +183,7 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
       : { kind: "sub", label: "Export", icon: ACTION_ICONS.export, items: [{ label: "Export Coupons", onClick: () => openExport("all") }, { label: "Export Current View", onClick: () => openExport("view") }] },
     { kind: "divider" },
     ...(module === "items" ? [{ kind: "item" as const, label: "Preferences", icon: ACTION_ICONS.prefs, onClick: () => setPrefsOpen(true) }] : []),
-    { kind: "item", label: "Refresh List", icon: ACTION_ICONS.refresh, onClick: () => { router.refresh(); flash("List refreshed."); } },
+    { kind: "item", label: "Refresh List", icon: ACTION_ICONS.refresh, onClick: async () => { await bustCache("catalog"); router.refresh(); flash("List refreshed."); } },
     { kind: "item", label: "Reset Column Width", icon: ACTION_ICONS.reset, onClick: resetWidths },
   ];
 

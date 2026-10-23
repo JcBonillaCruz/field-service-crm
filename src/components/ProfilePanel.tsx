@@ -1,5 +1,6 @@
 "use client";
 
+import { bustCache } from "@/lib/cache-client";
 import { useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -47,6 +48,7 @@ export default function ProfilePanel({
     if (upErr) { setUploading(false); return setUploadError("The photo couldn't be uploaded. Try again."); }
     const { data } = supabase.storage.from("avatars").getPublicUrl(path);
     const { error: dbErr } = await supabase.from("profiles").update({ avatar_url: data.publicUrl }).eq("id", user.id);
+    await bustCache("profile");
     setUploading(false);
     if (dbErr) return setUploadError("The photo uploaded but couldn't be saved to your profile.");
     router.refresh();

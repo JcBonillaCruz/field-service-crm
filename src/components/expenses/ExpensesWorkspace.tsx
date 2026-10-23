@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import { Listbox, ListboxButton, ListboxOption, ListboxOptions, Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
+import { useMemo, useRef, useState, useTransition } from "react";
+import { Listbox, ListboxButton, ListboxOption, ListboxOptions, Menu, MenuButton, MenuItem, MenuItems, Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { parseCsv } from "@/lib/csv";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { RANGES, RangeKey, short } from "@/lib/expense-range";
 import { createClient } from "@/lib/supabase/client";
 import { PAYMENT_MODES, fmtD, money, round2, today } from "@/lib/sales";
 import { inputClass } from "@/components/customers/ui";
@@ -38,19 +39,6 @@ export const CATEGORIES: { name: string; icon: string; color: string }[] = [
   { name: "Other", icon: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM8 12h.01M12 12h.01M16 12h.01", color: "#64748b" },
 ];
 const catOf = (n: string) => CATEGORIES.find((c) => c.name === n) ?? CATEGORIES[CATEGORIES.length - 1];
-const PERIODS = ["This Month", "Last Month", "This Year", "Last Year", "All"] as const;
-type Period = (typeof PERIODS)[number];
-
-function inPeriod(d: string, p: Period) {
-  const now = new Date(); const y = now.getFullYear(), m = now.getMonth();
-  const ym = (yy: number, mm: number) => `${yy}-${String(mm + 1).padStart(2, "0")}`;
-  if (p === "This Month") return d.startsWith(ym(y, m));
-  if (p === "Last Month") { const lm = new Date(y, m - 1, 1); return d.startsWith(ym(lm.getFullYear(), lm.getMonth())); }
-  if (p === "This Year") return d.startsWith(String(y));
-  if (p === "Last Year") return d.startsWith(String(y - 1));
-  return true;
-}
-
 function CatIcon({ name, size = 36 }: { name: string; size?: number }) {
   const c = catOf(name);
   return (
@@ -60,23 +48,46 @@ function CatIcon({ name, size = 36 }: { name: string; size?: number }) {
   );
 }
 
-export default function ExpensesWorkspace({ companyId, actor, rows, needsSql }: { companyId: string; actor: string; rows: Expense[]; needsSql: boolean }) {
+export default function ExpensesWorkspace({ companyId, actor, rows, needsSql, range }: {
+  companyId: string; actor: string; rows: Expense[]; needsSql: boolean; range: { key: RangeKey; from: string; to: string; label: string };
+}) {
   const router = useRouter();
-  const [period, setPeriod] = useState<Period>("This Month");
+  const pathname = usePathname();
+  const [pending, startTransition] = useTransition();
   const [q, setQ] = useState("");
   const [edit, setEdit] = useState<Expense | "new" | null>(null);
   const [toast, setToast] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [custom, setCustom] = useState({ from: range.from, to: range.to, month: range.from.slice(0, 7) });
   const importRef = useRef<HTMLInputElement>(null);
-  const list = useMemo(() => rows.filter((r) => inPeriod(r.expense_date, period)
-    && (!q.trim() || `${r.vendor ?? ""} ${r.category} ${r.notes ?? ""}`.toLowerCase().includes(q.trim().toLowerCase()))), [rows, period, q]);
+  // El rango ya viene filtrado desde la base de datos; aquí solo se aplica la búsqueda
+  const list = useMemo(() => rows.filter((r) => !q.trim() || `${r.vendor ?? ""} ${r.category} ${r.notes ?? ""}`.toLowerCase().includes(q.trim().toLowerCase())), [rows, q]);
   const total = round2(list.reduce((s, r) => s + Number(r.amount), 0));
   const byCat = useMemo(() => {
     const m = new Map<string, number>();
     list.forEach((r) => m.set(r.category, (m.get(r.category) ?? 0) + Number(r.amount)));
     return Array.from(m.entries()).sort((a, b) => b[1] - a[1]);
   }, [list]);
+  // Agrupados por fecha (encabezado de fecha + gastos de ese día)
+  const byDay = useMemo(() => {
+    const m = new Map<string, Expense[]>();
+    list.forEach((r) => m.set(r.expense_date, [...(m.get(r.expense_date) ?? []), r]));
+    return Array.from(m.entries());
+  }, [list]);
   const flash = (t: string) => { setToast(t); setTimeout(() => setToast(""), 2600); };
+
+  // Cambiar de rango: nueva consulta al servidor (sin bloquear la pantalla)
+  function go(key: RangeKey, from?: string, to?: string) {
+    const sp = new URLSearchParams({ range: key });
+    if (key === "custom" && from && to) { sp.set("from", from); sp.set("to", to); }
+    startTransition(() => router.replace(`${pathname}?${sp.toString()}`, { scroll: false }));
+  }
+  function applyMonth(month: string) {
+    if (!/^\d{4}-\d{2}$/.test(month)) return;
+    const [y, m] = month.split("-").map(Number);
+    const last = new Date(y, m, 0).getDate();
+    go("custom", `${month}-01`, `${month}-${String(last).padStart(2, "0")}`);
+  }
 
   function exportCsv() {
     const esc = (v: string | number | null) => `"${String(v ?? "").replace(/"/g, '""')}"`;
@@ -84,7 +95,7 @@ export default function ExpensesWorkspace({ companyId, actor, rows, needsSql }: 
       ...list.map((r) => [r.expense_date, r.category, r.vendor, Number(r.amount).toFixed(2), r.payment_mode, r.reference, r.notes].map(esc).join(","))].join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = `expenses-${period.toLowerCase().replace(/\s/g, "-")}.csv`; a.click();
+    a.download = `expenses-${range.from}-to-${range.to}.csv`; a.click();
   }
 
   function templateCsv() {
@@ -115,6 +126,8 @@ export default function ExpensesWorkspace({ companyId, actor, rows, needsSql }: 
     router.refresh(); flash(`${data.length} expenses imported.`);
   }
 
+  const chip = (on: boolean) => `shrink-0 rounded-full border px-3.5 py-2 text-[13.5px] font-semibold transition-all active:scale-95 ${on ? "border-[#0f766e] bg-[#0f766e] text-white shadow-[0_4px_12px_rgba(15,118,110,0.25)]" : "border-slate-200 bg-white text-slate-600 hover:border-[#14a39a] hover:text-[#0b1f3a]"}`;
+
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-[#f6f8f9]">
       <div className="mx-auto max-w-[1100px] px-4 py-5 sm:px-6 sm:py-7">
@@ -129,85 +142,116 @@ export default function ExpensesWorkspace({ companyId, actor, rows, needsSql }: 
         </div>
         {needsSql && <p className="mt-4 rounded-xl bg-[#fff7ef] px-4 py-3 text-sm text-[#9a3412]">Run the SQL for Paso 3.36 in Supabase to start saving expenses.</p>}
 
-        {/* Barra: periodo ▾ · buscar · ⋯ (exportar / importar) */}
+        {/* Filtros de tiempo: Este mes · 3 meses · 6 meses · Este año · Personalizado */}
         <div className="mt-5 flex items-center gap-2">
-          <Menu>
-            <MenuButton className="group flex h-10 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[14px] font-semibold text-[#0b1f3a] hover:border-[#14a39a] focus:outline-none data-[open]:border-[#0f766e]">
-              <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4.5" width="14" height="12" rx="2" /><path d="M3 8h14M7 3v3M13 3v3" strokeLinecap="round" /></svg>
-              {period}
-              <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-400 transition-transform group-data-[open]:rotate-180" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
-            </MenuButton>
-            <MenuItems anchor="bottom start" transition className="z-[80] mt-1 w-48 rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_12px_40px_rgba(15,40,60,0.16)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
-              {PERIODS.map((p) => (
-                <MenuItem key={p}><button type="button" onClick={() => setPeriod(p)} className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm data-[focus]:bg-[#e3f4ef] ${period === p ? "bg-[#cdebe3] font-semibold text-[#0b3f3b]" : "text-slate-700"}`}>
-                  {p}{period === p && <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#0f766e]" fill="currentColor"><path d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0z" /></svg>}
-                </button></MenuItem>
-              ))}
-            </MenuItems>
-          </Menu>
-          <div className={`flex h-10 min-w-0 items-center gap-2 rounded-lg border bg-white px-3 transition-all ${searchOpen || q ? "flex-1 border-[#0f766e]" : "w-10 justify-center border-slate-200"}`}>
-            <button type="button" aria-label="Search" onClick={() => setSearchOpen((v) => !v)} className="shrink-0 text-slate-500"><svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg></button>
-            {(searchOpen || q) && <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search vendor, category or notes" className="min-w-0 flex-1 bg-transparent text-[15px] focus:outline-none" />}
+          <div className="-mx-1 flex min-w-0 flex-1 gap-2 overflow-x-auto px-1 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {RANGES.filter((x) => x.key !== "custom").map((x) => (
+              <button key={x.key} type="button" onClick={() => go(x.key)} className={chip(range.key === x.key)}>{x.label}</button>
+            ))}
+            <Popover className="shrink-0">
+              <PopoverButton className={`${chip(range.key === "custom")} flex items-center gap-1.5 focus:outline-none`}>
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4.5" width="14" height="12" rx="2" /><path d="M3 8h14M7 3v3M13 3v3" strokeLinecap="round" /></svg>
+                {range.key === "custom" ? range.label : "Custom"}
+              </PopoverButton>
+              <PopoverPanel anchor="bottom start" transition className="z-[80] mt-2 w-[19rem] rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_16px_44px_rgba(15,40,60,0.18)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0">
+                {({ close }) => (
+                  <div className="space-y-4">
+                    <div>
+                      <p className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-slate-400">Pick a month</p>
+                      <input type="month" value={custom.month} onChange={(e) => setCustom((c) => ({ ...c, month: e.target.value }))}
+                        className={`${inputClass} w-full`} />
+                      <button type="button" onClick={() => { applyMonth(custom.month); close(); }} className="mt-2 w-full rounded-lg border border-[#0f766e] py-2 text-[14px] font-semibold text-[#0f766e] hover:bg-[#f0faf7]">Show this month</button>
+                    </div>
+                    <div className="border-t border-slate-100 pt-4">
+                      <p className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-slate-400">Or a date range</p>
+                      <div className="space-y-2">
+                        <div><span className="mb-1 block text-[13px] text-slate-500">From</span><DatePicker value={custom.from} onChange={(v) => setCustom((c) => ({ ...c, from: v }))} /></div>
+                        <div><span className="mb-1 block text-[13px] text-slate-500">To</span><DatePicker value={custom.to} onChange={(v) => setCustom((c) => ({ ...c, to: v }))} /></div>
+                      </div>
+                      <button type="button" disabled={!custom.from || !custom.to} onClick={() => { go("custom", custom.from, custom.to); close(); }}
+                        className="mt-3 w-full rounded-lg bg-[#0f766e] py-2.5 text-[14px] font-semibold text-white hover:bg-[#0c5f59] disabled:opacity-50">Apply range</button>
+                    </div>
+                  </div>
+                )}
+              </PopoverPanel>
+            </Popover>
           </div>
+          <button type="button" aria-label="Search" onClick={() => setSearchOpen((v) => !v)}
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border bg-white text-slate-500 ${searchOpen || q ? "border-[#0f766e] text-[#0f766e]" : "border-slate-200"}`}>
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
+          </button>
           <Menu>
-            <MenuButton aria-label="More" className="ml-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 focus:outline-none data-[open]:border-[#14a39a]">
+            <MenuButton aria-label="More" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 focus:outline-none data-[open]:border-[#14a39a]">
               <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor"><circle cx="4.5" cy="10" r="1.6" /><circle cx="10" cy="10" r="1.6" /><circle cx="15.5" cy="10" r="1.6" /></svg>
             </MenuButton>
             <MenuItems anchor="bottom end" transition className="z-[80] mt-1 w-56 rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_12px_40px_rgba(15,40,60,0.16)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
-              <MenuItem><button type="button" onClick={exportCsv} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-slate-700 data-[focus]:bg-[#e3f4ef]">Export {period.toLowerCase()} (CSV)</button></MenuItem>
+              <MenuItem><button type="button" onClick={exportCsv} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-slate-700 data-[focus]:bg-[#e3f4ef]">Export this range (CSV)</button></MenuItem>
               <MenuItem><button type="button" onClick={() => importRef.current?.click()} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-slate-700 data-[focus]:bg-[#e3f4ef]">Import from CSV</button></MenuItem>
               <MenuItem><button type="button" onClick={templateCsv} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-slate-500 data-[focus]:bg-[#e3f4ef]">Download import template</button></MenuItem>
             </MenuItems>
           </Menu>
           <input ref={importRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { importCsv(e.target.files?.[0]); e.target.value = ""; }} />
         </div>
-
-        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="order-2 overflow-hidden rounded-2xl border border-slate-200 bg-white lg:order-1">
-            {list.length === 0 ? (
-              <div className="px-6 py-16 text-center">
-                <p className="text-lg font-semibold text-[#0b1f3a]">No expenses {period === "All" ? "yet" : `for ${period.toLowerCase()}`}</p>
-                <p className="mx-auto mt-1 max-w-sm text-[15px] text-slate-500">Add supplies, payroll, fuel, materials… everything you spend to see your real profit.</p>
-                <button type="button" onClick={() => setEdit("new")} className="mt-5 rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f59]">Add your first expense</button>
-              </div>
-            ) : (
-              <ul className="divide-y divide-slate-100">
-                {list.map((r) => (
-                  <li key={r.id}>
-                    <button type="button" onClick={() => setEdit(r)} className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[#f6fbfa] active:bg-[#e9f7f4]">
-                      <CatIcon name={r.category} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[15px] font-medium text-[#0b1f3a]">{r.vendor || r.category}</span>
-                        <span className="block truncate text-[13px] text-slate-500">{fmtD(r.expense_date)} · {r.category}{r.notes ? ` · ${r.notes}` : ""}</span>
-                      </span>
-                      <span className="shrink-0 text-right">
-                        <span className="block font-semibold tabular-nums text-[#be123c]">-{money(r.amount)}</span>
-                        {r.payment_mode && <span className="block text-[12px] text-slate-400">{r.payment_mode}</span>}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+        {(searchOpen || q) && (
+          <div className="mt-2 flex h-10 items-center gap-2 rounded-lg border border-[#0f766e] bg-white px-3 animate-[bp-fade_0.2s_ease-out]">
+            <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
+            <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search vendor, category or notes" className="min-w-0 flex-1 bg-transparent text-[15px] focus:outline-none" />
+            {q && <button type="button" onClick={() => setQ("")} className="text-[13px] font-medium text-slate-400">Clear</button>}
           </div>
-          <div className="order-1 space-y-3 lg:order-2">
-            {/* Luz azul que nace del centro y se abre hacia afuera; texto blanco y el gasto en rojo */}
-            <div className="relative overflow-hidden rounded-2xl p-5 text-white shadow-[0_10px_30px_rgba(11,31,58,0.25)]"
-              style={{ background: "radial-gradient(130% 120% at 70% 20%, #5ea8ff 0%, #3b82f6 14%, #2563eb 28%, #1d4ed8 42%, #1e3a8a 58%, #172554 74%, #0b1f3a 100%)" }}>
-              <span className="pointer-events-none absolute right-6 top-2 h-24 w-24 rounded-full bg-white/25 blur-2xl animate-[bp-glow_4s_ease-in-out_infinite]" />
-              <p className="relative flex items-center gap-1.5 text-sm font-medium text-white/85">
-                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12l7 7 7-7" /></svg>Spent · {period}
-              </p>
-              <p className="relative mt-1 text-3xl font-bold tabular-nums text-[#ff8a8a]">-{money(total)}</p>
-              <p className="relative mt-1 text-[13px] text-white/70">{list.length} {list.length === 1 ? "expense" : "expenses"}</p>
+        )}
+
+        <div className={`transition-opacity duration-200 ${pending ? "opacity-50" : "opacity-100"}`}>
+          {/* Tarjeta blanca (igual que el Home): total gastado en rojo, sin botones ni flechas */}
+          <div className="mt-4 rounded-3xl border border-slate-200 bg-white px-5 py-5 shadow-[0_6px_20px_rgba(15,40,60,0.05)]">
+            <p className="flex items-center gap-2 text-[14px] font-medium text-slate-500">
+              <span className="inline-flex h-2 w-2 rounded-full bg-[#e11d48]" />Spent · {range.label}
+            </p>
+            <p className="mt-1 text-[40px] font-bold leading-none tracking-tight tabular-nums text-[#e11d48] sm:text-[44px]">-{money(total)}</p>
+            <p className="mt-2 text-[13px] text-slate-500">{list.length} {list.length === 1 ? "expense" : "expenses"} · {short(range.from)} – {short(range.to)}</p>
+          </div>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              {list.length === 0 ? (
+                <div className="px-6 py-16 text-center">
+                  <p className="text-lg font-semibold text-[#0b1f3a]">{q ? "No expenses match your search" : `No expenses for ${range.label.toLowerCase()}`}</p>
+                  <p className="mx-auto mt-1 max-w-sm text-[15px] text-slate-500">Add supplies, payroll, fuel, materials… everything you spend to see your real profit.</p>
+                  <button type="button" onClick={() => setEdit("new")} className="mt-5 rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f59]">Add an expense</button>
+                </div>
+              ) : (
+                <ul>
+                  {byDay.map(([day, items]) => (
+                    <li key={day}>
+                      <p className="sticky top-16 z-[1] flex items-center justify-between border-b border-slate-100 bg-slate-50/95 px-4 py-2 text-[12px] font-semibold uppercase tracking-wide text-slate-500 lg:static">
+                        <span>{fmtD(day)}</span>
+                        <span className="tabular-nums text-[#e11d48]">-{money(items.reduce((a, r) => a + Number(r.amount), 0))}</span>
+                      </p>
+                      <ul className="divide-y divide-slate-100">
+                        {items.map((r) => (
+                          <li key={r.id}>
+                            <button type="button" onClick={() => setEdit(r)} className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[#f6fbfa] active:bg-[#e9f7f4]">
+                              <CatIcon name={r.category} />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-[15px] font-medium text-[#0b1f3a]">{r.category}</span>
+                                <span className="block truncate text-[13px] text-slate-500">{[r.vendor, r.payment_mode, r.notes].filter(Boolean).join(" · ") || "—"}</span>
+                              </span>
+                              <span className="shrink-0 font-semibold tabular-nums text-[#e11d48]">-{money(r.amount)}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
             {byCat.length > 0 && (
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="h-fit rounded-2xl border border-slate-200 bg-white p-4">
                 <p className="mb-3 text-[13px] font-semibold uppercase tracking-wide text-slate-500">By category</p>
                 <ul className="space-y-3">
-                  {byCat.slice(0, 6).map(([name, v]) => (
+                  {byCat.slice(0, 8).map(([name, v]) => (
                     <li key={name}>
-                      <div className="flex items-center gap-2.5 text-[14px]"><CatIcon name={name} size={28} /><span className="flex-1 truncate text-slate-700">{name}</span><span className="font-semibold tabular-nums text-[#0b1f3a]">{money(v)}</span></div>
+                      <div className="flex items-center gap-2.5 text-[14px]"><CatIcon name={name} size={28} /><span className="flex-1 truncate text-slate-700">{name}</span><span className="font-semibold tabular-nums text-[#e11d48]">-{money(v)}</span></div>
                       <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full transition-all duration-700" style={{ width: `${(v / (byCat[0][1] || 1)) * 100}%`, background: catOf(name).color }} /></div>
                     </li>
                   ))}
