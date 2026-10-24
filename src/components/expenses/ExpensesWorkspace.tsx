@@ -177,6 +177,19 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
     return Array.from(m.entries());
   }, [list]);
   const flash = (t: string) => { setToast(t); setTimeout(() => setToast(""), 2600); };
+  const [removing, setRemoving] = useState<string | null>(null);
+  // Borrar directo desde la lista (con la advertencia de siempre)
+  async function removeEntry(r: Entry) {
+    if (!(await confirmDelete({ title: `Delete this ${cfg.one} of ${money(r.amount)}?`, message: `${r.category}${r.party ? ` · ${r.party}` : ""} · ${fmtD(r.date)}. Once it's deleted, it can't be recovered.`,
+      download: { filename: `${cfg.folder}-${r.date}`, data: r } }))) return;
+    setRemoving(r.id);
+    const s = createClient();
+    if (r.receipt_path) await s.storage.from("sales-attachments").remove([r.receipt_path]);
+    const { error } = await s.from(cfg.table).delete().eq("id", r.id);
+    setRemoving(null);
+    if (error) return flash("It couldn't be deleted. Try again.");
+    router.refresh(); flash("Deleted.");
+  }
   const amt = (v: number) => `${cfg.sign}${money(v)}`;
 
   function go(key: RangeKey, from?: string, to?: string) {
@@ -291,14 +304,22 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
                       </div>
                       <ul className="divide-y divide-slate-100">
                         {items.map((r) => (
-                          <li key={r.id}>
-                            <button type="button" onClick={() => setEdit(r)} className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[#f6fbfa] active:bg-[#e9f7f4]">
+                          <li key={r.id} className={`group/row flex items-center transition-colors hover:bg-[#f6fbfa] ${removing === r.id ? "pointer-events-none opacity-40" : ""}`}>
+                            <button type="button" onClick={() => setEdit(r)} className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-4 text-left active:bg-[#e9f7f4]">
                               <CatIcon cats={cats} name={r.category} />
                               <span className="min-w-0 flex-1">
                                 <span className="block truncate text-[15px] font-medium text-[#0b1f3a]">{r.category}</span>
                                 <span className="block truncate text-[13px] text-slate-500">{[r.party, r.payment_mode, r.notes].filter(Boolean).join(" · ") || "—"}</span>
                               </span>
                               <span className="shrink-0 pl-2 font-semibold tabular-nums" style={{ color: cfg.color }}>{amt(r.amount)}</span>
+                            </button>
+                            {/* Borrar directo (papelera roja con la tapa que se levanta) */}
+                            <button type="button" onClick={() => removeEntry(r)} aria-label={`Delete this ${cfg.one}`} title="Delete"
+                              className="group/trash mx-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#fff1f2] hover:text-[#e11d48] active:scale-90">
+                              <svg viewBox="0 0 24 24" className="h-[19px] w-[19px]" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path className="origin-[18px_6px] transition-transform duration-300 group-hover/trash:-translate-y-[1.5px] group-hover/trash:-rotate-[20deg]" d="M4 6.5h16M9.5 6.5V4.8c0-.7.6-1.3 1.3-1.3h2.4c.7 0 1.3.6 1.3 1.3v1.7" />
+                                <path className="transition-transform duration-300 group-hover/trash:translate-y-[0.5px]" d="M6 6.5l.9 12.4c.1 1 .9 1.6 1.8 1.6h6.6c.9 0 1.7-.7 1.8-1.6L18 6.5M10 10.5v6M14 10.5v6" />
+                              </svg>
                             </button>
                           </li>
                         ))}

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import ColorPicker from "@/components/ui/ColorPicker";
-import { BODY, EYE_FRAME, EYE_INNER, FRAMES, QrOptions, bodyPreviewPath, buildQrSvg } from "@/lib/qr-design";
+import { BODY, EYE_FRAME, EYE_INNER, FRAMES, QrOptions, bodyPreviewPath, buildQrSvg, logoWasReduced } from "@/lib/qr-design";
 
 type Kind = "url" | "phone" | "sms" | "whatsapp" | "review" | "email" | "vcard" | "wifi" | "text";
 const KINDS: { id: Kind; label: string; icon: string; tone: string }[] = [
@@ -130,6 +130,8 @@ export default function QrStudio({ company, logoUrl, phone, website }: { company
     }
   }, [kind, f, company]);
   const svg = useMemo(() => { try { return buildQrSvg({ ...o, text, logo }); } catch { return ""; } }, [o, text, logo]);
+  // Si el logo era muy grande, se achica solo para que el código SIEMPRE escanee
+  const logoReduced = useMemo(() => logoWasReduced({ ...o, text, logo } as QrOptions), [o, text, logo]);
   const src = svg ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}` : "";
   // Miniaturas de cada marco con tus colores y tu texto
   const thumbs = useMemo(() => {
@@ -254,6 +256,7 @@ export default function QrStudio({ company, logoUrl, phone, website }: { company
         </button>
         {logo && <>
           <Slider label="Size" value={o.logoSize} min={0.12} max={0.32} step={0.01} fmt={(v) => `${Math.round(v * 100)}%`} on={(v) => up({ logoSize: v })} />
+          {logoReduced && <p className="rounded-lg bg-[#fff7ef] px-3 py-2 text-[12.5px] text-[#9a3412]">We made the logo area a bit smaller so your code always scans. Big logos cover too much of the code.</p>}
           <Slider label="Padding (white space around the logo)" value={o.logoPad} min={0} max={4} step={0.5} fmt={(v) => `${v * 8}px`} on={(v) => up({ logoPad: v })} />
           <Slider label="Rounded corners (outside)" value={o.logoRadius} min={0} max={1} step={0.05} fmt={(v) => `${Math.round(v * 100)}%`} on={(v) => up({ logoRadius: v })} />
           <label className="flex items-center gap-2 text-[13px] text-slate-600"><input type="checkbox" checked={o.logoBg} onChange={(e) => up({ logoBg: e.target.checked })} className="h-4 w-4 accent-[#0f766e]" />Solid white plate behind the logo (#FFFFFF)</label>

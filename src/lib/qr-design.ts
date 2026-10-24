@@ -1,4 +1,8 @@
 import QRCode from "qrcode";
+// @ts-expect-error módulo interno sin tipos (tablas de corrección de errores)
+import ECCode from "qrcode/lib/core/error-correction-code";
+// @ts-expect-error módulo interno sin tipos
+import QRUtils from "qrcode/lib/core/utils";
 
 /* =====================================================================
    Diseños de código QR: cuerpo (módulos), marco del ojo, centro del ojo
@@ -289,19 +293,87 @@ function inRound(px: number, py: number, x: number, y: number, w: number, h: num
   return dx * dx + dy * dy <= r * r;
 }
 
+// =====================================================================
+// GARANTÍA DE ESCANEO con logo.
+// El logo tapa módulos del código. Cada pedazo de información (codeword) pertenece a un
+// "bloque" y cada bloque solo aguanta cierta cantidad de daño. Aquí calculamos EXACTAMENTE
+// cuántos codewords tapa el logo en cada bloque y, si alguno se pasa del límite seguro,
+// achicamos primero el espacio blanco y luego el logo hasta que el código sí se pueda leer.
+// =====================================================================
+type QrLike = { modules: { size: number; get: (r: number, c: number) => number; isReserved?: (r: number, c: number) => boolean | number }; version: number; errorCorrectionLevel: unknown };
+function codewordBlocks(qr: QrLike) {
+  const n = qr.modules.size, mods = qr.modules;
+  const total: number = QRUtils.getSymbolTotalCodewords(qr.version);
+  const ecTotal: number = ECCode.getTotalCodewordsCount(qr.version, qr.errorCorrectionLevel);
+  const nb: number = ECCode.getBlocksCount(qr.version, qr.errorCorrectionLevel);
+  const ecPer = ecTotal / nb, dataTotal = total - ecTotal;
+  const g2 = dataTotal % nb, d1 = Math.floor(dataTotal / nb);
+  const dataLen = (b: number) => (b < nb - g2 ? d1 : d1 + 1);
+  // codeword -> bloque (orden intercalado del estándar)
+  const blockOf: number[] = [];
+  for (let i = 0; i <= d1; i++) for (let b = 0; b < nb; b++) if (i < dataLen(b)) blockOf.push(b);
+  for (let i = 0; i < ecPer; i++) for (let b = 0; b < nb; b++) blockOf.push(b);
+  // módulo -> codeword (mismo recorrido en zigzag con el que se dibuja el código)
+  const cwAt = new Int32Array(n * n).fill(-1);
+  let bit = 0, row = n - 1, inc = -1;
+  for (let col = n - 1; col > 0; col -= 2) {
+    if (col === 6) col--;
+    for (;;) {
+      for (let c = 0; c < 2; c++) {
+        if (!mods.isReserved?.(row, col - c)) { const k = bit >> 3; if (k < total) cwAt[row * n + col - c] = k; bit++; }
+      }
+      row += inc;
+      if (row < 0 || row >= n) { row -= inc; inc = -inc; break; }
+    }
+  }
+  return { n, nb, ecPer, blockOf, cwAt };
+}
+// ¿El área tapada deja el código legible? (margen de seguridad: 75% de lo que cada bloque puede corregir)
+function logoIsSafe(map: ReturnType<typeof codewordBlocks>, covered: (r: number, c: number) => boolean) {
+  const hit = new Set<number>();
+  for (let r = 0; r < map.n; r++) for (let c = 0; c < map.n; c++) { const k = map.cwAt[r * map.n + c]; if (k >= 0 && covered(r, c)) hit.add(k); }
+  const per = new Array(map.nb).fill(0);
+  hit.forEach((k) => { per[map.blockOf[k]]++; });
+  const limit = Math.floor((map.ecPer / 2) * 0.75);
+  return Math.max(...per) <= limit;
+}
+// Medidas finales del logo (en módulos) ya ajustadas para que el código siempre escanee
+export function fitLogo(qr: QrLike, size: number, pad: number, radius: number) {
+  const n = qr.modules.size;
+  let map: ReturnType<typeof codewordBlocks> | null = null;
+  try { map = codewordBlocks(qr); } catch { map = null; }
+  let lm = Math.max(3, Math.round(n * size)), p = pad;
+  const asked = { lm, p };
+  for (let guard = 0; guard < 120; guard++) {
+    const lo = (n - lm) / 2, bx = lo - p, bs = lm + p * 2, pr = (bs * Math.min(1, Math.max(0, radius))) / 2, g = 0.2;
+    const covered = (r: number, c: number) => inRound(c + 0.5, r + 0.5, bx - g, bx - g, bs + 2 * g, bs + 2 * g, pr + g);
+    if (!map || logoIsSafe(map, covered) || (p === 0 && lm <= 3)) return { lm, pad: p, lo, bx, bs, pr, covered, reduced: lm !== asked.lm || p !== asked.p };
+    if (p > 0) p = Math.max(0, p - 0.5); else lm -= 1;
+  }
+  const lo = (n - lm) / 2;
+  return { lm, pad: p, lo, bx: lo - p, bs: lm + 2 * p, pr: 0, covered: () => false, reduced: true };
+}
+// Para la pantalla: avisar si el logo se achicó para que el código funcione
+export function logoWasReduced(o: QrOptions) {
+  if (!o.logo) return false;
+  try {
+    const qr = QRCode.create(o.text || " ", { errorCorrectionLevel: "H" }) as unknown as QrLike;
+    return fitLogo(qr, o.logoSize, o.logoPad, o.logoRadius).reduced;
+  } catch { return false; }
+}
+
 // Arma el SVG completo (cuerpo, ojos, colores, logo y marco)
 export function buildQrSvg(o: QrOptions) {
-  const qr = QRCode.create(o.text || " ", { errorCorrectionLevel: o.logo ? (o.ec === "L" || o.ec === "M" ? "Q" : o.ec) : o.ec });
+  // Con logo SIEMPRE nivel H (el más fuerte), para aguantar lo que el logo tapa
+  const qr = QRCode.create(o.text || " ", { errorCorrectionLevel: o.logo ? "H" : o.ec });
   const n = qr.modules.size, m = o.margin, U = 10, S = (n + 2 * m) * U;
   const isEye = (r: number, c: number) => (r < 7 && c < 7) || (r < 7 && c >= n - 7) || (r >= n - 7 && c < 7);
 
-  // ----- Logo: caja del logo + placa blanca (redondeada por fuera) -----
-  const lm = o.logo ? Math.max(3, Math.round(n * o.logoSize)) : 0;
-  const lo = (n - lm) / 2, pad = o.logo ? o.logoPad : 0;
-  const bx = lo - pad, bs = lm + pad * 2;                 // placa en unidades de módulo
-  const pr = (bs * Math.min(1, Math.max(0, o.logoRadius))) / 2; // radio de la placa
-  const g = 0.2;                                          // aire alrededor de la placa
-  const inLogo = (r: number, c: number) => !!o.logo && inRound(c + 0.5, r + 0.5, bx - g, bx - g, bs + 2 * g, bs + 2 * g, pr + g);
+  // ----- Logo: caja del logo + placa blanca (redondeada por fuera), ajustada para que SIEMPRE escanee -----
+  const fit = o.logo ? fitLogo(qr as unknown as QrLike, o.logoSize, o.logoPad, o.logoRadius) : null;
+  const lm = fit ? fit.lm : 0, lo = fit ? fit.lo : n / 2, pad = fit ? fit.pad : 0;
+  const bx = fit ? fit.bx : 0, bs = fit ? fit.bs : 0, pr = fit ? fit.pr : 0;
+  const inLogo = (r: number, c: number) => Boolean(fit && fit.covered(r, c));
 
   const on = (r: number, c: number) => r >= 0 && c >= 0 && r < n && c < n && qr.modules.get(r, c) === 1 && !isEye(r, c) && !inLogo(r, c);
   const shape = BODY[o.body] ?? BODY.square;

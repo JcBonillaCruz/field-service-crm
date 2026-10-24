@@ -10,6 +10,7 @@ import ProfilePanel from "@/components/ProfilePanel";
 import Avatar from "@/components/Avatar";
 import NotificationsProvider from "@/components/NotificationsProvider";
 import { AppsGrid } from "@/components/AppsMenu";
+import { useInstallApp } from "@/components/InstallPrompt";
 import { FinanceArt, QrArt } from "@/components/AppIcons";
 import { canManageSales } from "@/lib/sales";
 import { CompanySummary, CurrentUser, Role } from "@/lib/types";
@@ -79,6 +80,7 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
   const isActive = (href?: string) => Boolean(href && (href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href)));
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [appsOpen, setAppsOpen] = useState(false);
+  const installApp = useInstallApp();
   useEffect(() => setAppsOpen(false), [app]);
   const leaveTimer = useRef<ReturnType<typeof setTimeout>>();
   // Solo queda abierto el grupo donde estás. Al ir a Home, Customers, etc. se vuelve a cerrar.
@@ -209,6 +211,14 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
           );
         })}
       </ul>
+      {/* Celular: opción discreta para instalar la app (solo si Chrome lo permite y aún no está instalada) */}
+      {mobile && installApp.can && (
+        <button type="button" onClick={installApp.install}
+          className="group mt-3 flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-left text-[15px] text-[#0f766e] transition-colors hover:bg-[#d7f1eb]">
+          <svg viewBox="0 0 24 24" className="h-5 w-5 transition-transform duration-300 group-hover:translate-y-0.5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v11M7.5 9.5 12 14l4.5-4.5M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" /></svg>
+          Install BrightPro app
+        </button>
+      )}
     </nav>
   );
 }
