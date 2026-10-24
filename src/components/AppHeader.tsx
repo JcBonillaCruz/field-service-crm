@@ -12,7 +12,6 @@ import QuickCreate from "@/components/QuickCreate";
 import NotificationsBell from "@/components/NotificationsBell";
 import RecentMenu from "@/components/RecentMenu";
 import CreateCompanyForm from "@/components/CreateCompanyForm";
-import { createClient } from "@/lib/supabase/client";
 import { CompanySummary, CurrentUser, setCurrentCompany } from "@/lib/types";
 
 const TRIAL_DAYS = 14;
@@ -40,12 +39,6 @@ export default function AppHeader({
   const current = companies.find((c) => c.id === currentId) ?? null;
   const daysLeft = current ? Math.max(0, TRIAL_DAYS - Math.floor((Date.now() - new Date(current.createdAt).getTime()) / 86400000)) : 0;
 
-  async function signOut() {
-    if (!window.confirm("Sign out of BrightPro?")) return;
-    await createClient().auth.signOut();
-    window.location.href = "/";
-  }
-
   function switchTo(id: string) {
     setCurrentCompany(id);
     const section = pathname.match(/^\/dashboard\/[^/]+/)?.[0];
@@ -65,14 +58,7 @@ export default function AppHeader({
         <div className="flex min-w-0 flex-1 items-center lg:hidden">
           <CompanySwitcher companies={companies} currentId={currentId} userId={user.id} onSwitch={switchTo} onNewCompany={() => setCreating(true)} />
         </div>
-        <div className="flex items-center lg:hidden">
-          <NotificationsBell />
-          {/* Cerrar sesión, visible en el celular */}
-          <button type="button" onClick={signOut} aria-label="Sign out" title="Sign out"
-            className="group flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-[#fff1f2] hover:text-[#e11d48] active:scale-90">
-            <svg viewBox="0 0 24 24" className="h-[22px] w-[22px] transition-transform duration-300 group-hover:rotate-12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v8M7.1 6.3a7.5 7.5 0 1 0 9.8 0" /></svg>
-          </button>
-        </div>
+        <div className="lg:hidden"><NotificationsBell /></div>
 
         {/* ===== Escritorio: barra completa ===== */}
         <div className="hidden min-w-0 flex-1 items-center gap-2 lg:flex">

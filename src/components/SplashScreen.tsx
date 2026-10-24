@@ -19,8 +19,9 @@ export default function SplashScreen() {
   const path = usePathname() || "/";
   // Al ABRIR o RECARGAR la app con la sesión ya iniciada (entra directo al panel), también sale.
   // Se dibuja desde el primer instante (antes de que lleguen los datos), así nunca se ve la pantalla en blanco.
-  const [phase, setPhase] = useState<"on" | "out" | "off">(() => (path.startsWith("/dashboard") ? "on" : "off"));
+  const [phase, setPhase] = useState<"on" | "out" | "off">(() => (path.startsWith("/dashboard") || path === "/app" ? "on" : "off"));
   const shownAt = useRef(0);
+  const fromLaunch = useRef(path === "/app"); // abierta desde el ícono de la app instalada
   // Al abrir la app, el tiempo mínimo cuenta desde que la animación aparece en pantalla
   useEffect(() => { if (phase === "on") shownAt.current = performance.now(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -36,7 +37,10 @@ export default function SplashScreen() {
 
   // Apagar con desvanecido cuando el panel ya está dibujado y sin pantallas de carga
   useEffect(() => {
-    if (phase !== "on" || !path.startsWith("/dashboard")) return;
+    if (phase !== "on") return;
+    // Si la sesión no estaba abierta y terminó en el login, se quita enseguida
+    if (fromLaunch.current && (path === "/" || path === "/signup")) { fromLaunch.current = false; setPhase("off"); hideSplash(); return; }
+    if (!path.startsWith("/dashboard")) return;
     const ready = () => Boolean(document.querySelector("[data-bp-ready]")) && !document.querySelector("[data-bp-loading]");
     let done = false;
     let t1: ReturnType<typeof setTimeout> | undefined, t2: ReturnType<typeof setTimeout> | undefined;

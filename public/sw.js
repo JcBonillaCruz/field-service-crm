@@ -1,6 +1,17 @@
 // BrightPro · alertas en el teléfono y la computadora (Web Push)
-self.addEventListener("install", () => self.skipWaiting());
+const OFFLINE = "bp-offline-v1";
+self.addEventListener("install", (e) => {
+  self.skipWaiting();
+  e.waitUntil(caches.open(OFFLINE).then((c) => c.add("/offline.html")).catch(() => undefined));
+});
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
+
+// Necesario para que Chrome ofrezca "Instalar app". Solo se encarga de abrir páginas:
+// todo se pide a internet como siempre; si no hay conexión, muestra un aviso bonito.
+self.addEventListener("fetch", (event) => {
+  if (event.request.mode !== "navigate") return;
+  event.respondWith(fetch(event.request).catch(() => caches.match("/offline.html")));
+});
 
 self.addEventListener("push", (event) => {
   let d = { title: "BrightPro", body: "You have a new notification", url: "/dashboard", tag: undefined };

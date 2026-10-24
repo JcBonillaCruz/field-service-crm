@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -151,23 +152,41 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
       onMouseEnter={() => clearTimeout(leaveTimer.current)}
       // Si abriste un grupo y sacas el mouse del menú sin elegir nada, se vuelve a cerrar
       onMouseLeave={() => { leaveTimer.current = setTimeout(() => setOpen(insideGroups()), 700); }}>
-      {/* App actual: al tocarla se abre el menú de apps (aquí mismo, optimizado para celular) */}
-      <div className="mb-2 px-1">
-        <button type="button" onClick={() => setAppsOpen((v) => !v)} aria-expanded={appsOpen}
-          className={`group flex w-full items-center gap-2.5 rounded-xl px-1.5 py-1.5 text-left transition-colors hover:bg-[#e3f5f0] ${appsOpen ? "bg-[#e3f5f0]" : ""}`}>
-          {app === "finance" ? <FinanceArt size={32} /> : <QrArt size={32} />}
-          <span className="min-w-0 flex-1">
-            <span className="block text-[12px] font-semibold uppercase tracking-wide text-slate-600">{APP_TITLE[app].label}</span>
-            <span className="block text-[11px] text-slate-400">Switch app</span>
-          </span>
-          <svg viewBox="0 0 20 20" className={`h-4 w-4 text-slate-400 transition-transform duration-200 ${appsOpen ? "rotate-180 text-[#0f766e]" : ""}`} fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
-        </button>
-        {appsOpen && (
-          <div className="mt-2 animate-[bp-fade_0.2s_ease-out]">
-            <AppsGrid layout="stack" onPick={() => { setAppsOpen(false); onNavigate?.(); }} />
-          </div>
+      {/* Ícono de la app actual (sencillo, sin borde ni sombreado).
+          Celular: al lado, "Apps" abre la pantalla completa para cambiar de app.
+          Computadora: solo el ícono (allá se cambia con los 9 puntos de arriba). */}
+      <div className="mb-2 flex items-center gap-2 px-2">
+        <span title={APP_TITLE[app].label} aria-label={APP_TITLE[app].label} className="flex">
+          {app === "finance" ? <FinanceArt size={mobile ? 40 : 34} /> : <QrArt size={mobile ? 40 : 34} />}
+        </span>
+        {mobile && (
+          <button type="button" onClick={() => setAppsOpen(true)}
+            className="group ml-1 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[15px] font-semibold text-[#0f766e] transition-colors active:bg-[#d7f1eb]">
+            <svg viewBox="0 0 24 24" className="h-5 w-5 transition-transform duration-300 group-active:scale-90" fill="currentColor" aria-hidden="true">
+              {[5, 12, 19].map((cy) => [5, 12, 19].map((cx) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.9" />))}
+            </svg>
+            Apps
+          </button>
         )}
       </div>
+      {mobile && appsOpen && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[95] flex flex-col bg-white animate-[bp-sheet-up_0.25s_ease-out]">
+          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+            <div>
+              <p className="text-[19px] font-semibold text-[#0b1f3a]">Apps</p>
+              <p className="text-[13px] text-slate-500">Choose where you want to work</p>
+            </div>
+            <button type="button" onClick={() => setAppsOpen(false)} aria-label="Close"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
+              <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto px-4 py-4">
+            <AppsGrid onPick={() => { setAppsOpen(false); onNavigate?.(); }} />
+          </div>
+        </div>,
+        document.body,
+      )}
       <ul className="space-y-0.5">
         {items.map((item) => {
           if (!item.children) return entry(item);

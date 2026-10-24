@@ -2,7 +2,7 @@
   "name": "BrightPro",
   "short_name": "BrightPro",
   "description": "CRM for field service companies",
-  "start_url": "/dashboard",
+  "start_url": "/app",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#0f766e",
