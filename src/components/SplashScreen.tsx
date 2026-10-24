@@ -7,8 +7,9 @@ import { hideSplash, splashPending } from "@/lib/splash";
 
 // =====================================================================
 // Pantalla de bienvenida de BrightPro (solo la marca BrightPro, nunca el logo del cliente).
-// Aparece ÚNICAMENTE después de escribir tus datos en el login: mientras se autentica
-// y se cargan los datos del panel. Nunca antes del login ni en las páginas públicas.
+// Aparece después de escribir tus datos en el login, y también al abrir/recargar la app con la
+// sesión ya iniciada, mientras se cargan los datos del panel. Nunca en la pantalla de login
+// ni en las páginas públicas que ven tus clientes, ni al moverte entre pantallas.
 // =====================================================================
 const MIN_MS = 700;
 const MAX_MS = 12000;
@@ -16,7 +17,9 @@ const FADE_MS = 450;
 
 export default function SplashScreen() {
   const path = usePathname() || "/";
-  const [phase, setPhase] = useState<"on" | "out" | "off">("off");
+  // Al ABRIR o RECARGAR la app con la sesión ya iniciada (entra directo al panel), también sale.
+  // Se dibuja desde el primer instante (antes de que lleguen los datos), así nunca se ve la pantalla en blanco.
+  const [phase, setPhase] = useState<"on" | "out" | "off">(() => (path.startsWith("/dashboard") ? "on" : "off"));
   const shownAt = useRef(0);
 
   // Encender: al enviar el login (evento) o si la página se recargó a mitad del ingreso

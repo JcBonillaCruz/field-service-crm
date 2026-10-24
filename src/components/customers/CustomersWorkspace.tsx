@@ -19,11 +19,13 @@ const COLS = "md:grid-cols-[2fr_1.6fr_2fr_1.3fr_1.4fr]";
 
 export default function CustomersWorkspace({
   customers,
+  money = {},
   canImport,
   canExport,
   children,
 }: {
   customers: ListRow[];
+  money?: Record<string, { receivable: number; credit: number }>;
   canImport: boolean;
   canExport: boolean;
   children: React.ReactNode;
@@ -167,7 +169,7 @@ export default function CustomersWorkspace({
             <div className="px-5 pb-10 sm:px-8">
               {/* Celular: filas compactas (avatar + nombre principal + correo), caben más clientes por pantalla */}
               <ul className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white md:hidden">
-                {list.map((c) => <MobileRow key={c.id} c={c} />)}
+                {list.map((c) => <MobileRow key={c.id} c={c} m={money[c.id]} />)}
               </ul>
               <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white md:block">
                 <div className={`hidden gap-4 border-b border-slate-100 bg-slate-50/70 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500 md:grid ${COLS}`}>
@@ -252,17 +254,33 @@ function subtitle(c: ListRow) {
 }
 
 // Celular: solo el nombre principal (la compañía si es comercial, sin repetir el del dueño) y el correo
-function MobileRow({ c }: { c: ListRow }) {
+const usd = (v: number) => v.toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+// Celular: fila compacta (avatar + nombre principal + correo) con Receivables y Unused credits debajo
+function MobileRow({ c, m }: { c: ListRow; m?: { receivable: number; credit: number } }) {
   const name = c.customer_type === "commercial" && c.company_name ? c.company_name : c.display_name;
+  const rec = m?.receivable ?? 0, cred = m?.credit ?? 0;
   return (
     <li>
-      <Link prefetch={false} href={`/dashboard/customers/${c.id}`} className="flex items-center gap-3 px-4 py-3 transition-colors active:bg-[#e9f7f4]">
-        <Avatar name={name} url={null} seed={c.id} size={40} />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[15.5px] font-semibold text-[#0b1f3a]">{name}</span>
-          <span className="block truncate text-[13.5px] text-slate-500">{c.email || "No email"}</span>
+      <Link prefetch={false} href={`/dashboard/customers/${c.id}`} className="block px-4 pb-2.5 pt-3 transition-colors active:bg-[#e9f7f4]">
+        <span className="flex items-center gap-3">
+          <Avatar name={name} url={null} seed={c.id} size={40} />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[15.5px] font-semibold text-[#0b1f3a]">{name}</span>
+            <span className="block truncate text-[13.5px] text-slate-500">{c.email || "No email"}</span>
+          </span>
+          <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate-300" fill="currentColor"><path d="M7.3 5.3a1 1 0 0 1 1.4 0l4 4a1 1 0 0 1 0 1.4l-4 4a1 1 0 0 1-1.4-1.4L10.6 10 7.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
         </span>
-        <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate-300" fill="currentColor"><path d="M7.3 5.3a1 1 0 0 1 1.4 0l4 4a1 1 0 0 1 0 1.4l-4 4a1 1 0 0 1-1.4-1.4L10.6 10 7.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
+        <span className="ml-[52px] mt-2 grid grid-cols-2 overflow-hidden rounded-xl bg-slate-50">
+          <span className="px-3 py-1.5">
+            <span className="block text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Receivables</span>
+            <span className={`block text-[14px] font-semibold tabular-nums ${rec > 0 ? "text-[#e8713a]" : "text-[#0b1f3a]"}`}>{usd(rec)}</span>
+          </span>
+          <span className="border-l border-white px-3 py-1.5">
+            <span className="block text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Unused credits</span>
+            <span className={`block text-[14px] font-semibold tabular-nums ${cred > 0 ? "text-[#0f766e]" : "text-[#0b1f3a]"}`}>{usd(cred)}</span>
+          </span>
+        </span>
       </Link>
     </li>
   );

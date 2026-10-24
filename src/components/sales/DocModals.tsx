@@ -214,15 +214,33 @@ export function ShareModal({ open, onClose, doc, actor, companyName = "" }: { op
         <div className="rounded-xl border border-slate-200 p-4">
           <p className="mb-2 text-sm font-semibold text-[#0b1f3a]">Send by text or WhatsApp</p>
           <input type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Customer phone, e.g. (214) 555-0123" className={inputClass} />
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-            <button type="button" onClick={() => sendBy("sms")} className="flex items-center justify-center gap-2 rounded-lg bg-[#0f766e] px-3 py-2.5 text-sm font-semibold text-white transition-transform hover:bg-[#0c5f59] active:scale-95">
-              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 5h16v11H9l-5 4z" strokeLinejoin="round" /></svg>Text message
+          {/* Solo íconos (profesionales, con animación al pasar el mouse) */}
+          <div className="mt-4 flex items-center justify-center gap-5">
+            <button type="button" onClick={() => sendBy("sms")} aria-label="Send by text message" title="Text message"
+              className="group/sh relative flex h-14 w-14 items-center justify-center rounded-full bg-[#0f766e] text-white shadow-[0_6px_16px_rgba(15,118,110,0.3)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_26px_rgba(15,118,110,0.4)] active:scale-90">
+              <span className="absolute inset-0 rounded-full ring-2 ring-[#0f766e]/40 opacity-0 group-hover/sh:animate-[bp-share-ring_1.2s_ease-out_infinite]" />
+              <svg viewBox="0 0 24 24" className="h-7 w-7 transition-transform duration-300 group-hover/sh:-rotate-6 group-hover/sh:scale-110" fill="none" aria-hidden="true">
+                <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H10l-4.2 3.4c-.5.4-1.3 0-1.3-.6V16A2.5 2.5 0 0 1 4 13.5z" fill="currentColor" />
+                <circle cx="8.5" cy="10" r="1.15" fill="#0f766e" className="group-hover/sh:animate-[bp-dot_1s_ease-in-out_infinite]" />
+                <circle cx="12" cy="10" r="1.15" fill="#0f766e" className="group-hover/sh:animate-[bp-dot_1s_ease-in-out_0.15s_infinite]" />
+                <circle cx="15.5" cy="10" r="1.15" fill="#0f766e" className="group-hover/sh:animate-[bp-dot_1s_ease-in-out_0.3s_infinite]" />
+              </svg>
             </button>
-            <button type="button" onClick={() => sendBy("whatsapp")} className="flex items-center justify-center gap-2 rounded-lg bg-[#25d366] px-3 py-2.5 text-sm font-semibold text-white transition-transform hover:bg-[#1ebe5b] active:scale-95">
-              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.7 15l-1.3 5 5.1-1.3A10 10 0 1 0 12 2zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.8s.7-2 1-2.3c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .5l-.3.5-.4.4c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.9-1c.2-.3.4-.2.7-.1l1.9.9c.3.1.5.2.5.3.1.2.1.8-.1 1.4z" /></svg>WhatsApp
+            <button type="button" onClick={() => sendBy("whatsapp")} aria-label="Send by WhatsApp" title="WhatsApp"
+              className="group/sh relative flex h-14 w-14 items-center justify-center rounded-full bg-[#25d366] text-white shadow-[0_6px_16px_rgba(37,211,102,0.35)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_26px_rgba(37,211,102,0.45)] active:scale-90">
+              <span className="absolute inset-0 rounded-full ring-2 ring-[#25d366]/45 opacity-0 group-hover/sh:animate-[bp-share-ring_1.2s_ease-out_infinite]" />
+              <svg viewBox="0 0 24 24" className="h-7 w-7 transition-transform duration-300 group-hover/sh:rotate-[8deg] group-hover/sh:scale-110" aria-hidden="true">
+                <path d="M12 2.4a9.6 9.6 0 0 0-8.3 14.4L2.4 21.6l4.9-1.3A9.6 9.6 0 1 0 12 2.4z" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" />
+                <path className="origin-center group-hover/sh:animate-[bp-ring_0.9s_ease-in-out]" d="M8.7 7.3c.3-.3.8-.3 1 .1l1.1 1.6c.2.3.2.7-.1 1l-.6.6c.5 1.2 1.5 2.2 2.7 2.8l.6-.6c.3-.3.7-.3 1-.1l1.6 1.1c.4.2.4.7.1 1l-.6.7c-.6.6-1.5.8-2.3.5-2.4-.9-4.2-2.7-5.1-5.1-.3-.8-.1-1.7.5-2.3z" fill="currentColor" />
+              </svg>
             </button>
             {typeof navigator !== "undefined" && "share" in navigator && (
-              <button type="button" onClick={() => sendBy("native")} className="col-span-2 flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:col-span-1">More apps…</button>
+              <button type="button" onClick={() => sendBy("native")} aria-label="Share with other apps" title="More apps"
+                className="group/sh relative flex h-14 w-14 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-[#14a39a] hover:text-[#0f766e] hover:shadow-[0_10px_22px_rgba(15,40,60,0.12)] active:scale-90">
+                <svg viewBox="0 0 24 24" className="h-6 w-6 transition-transform duration-300 group-hover/sh:-translate-y-0.5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 15V3.5M7.5 8 12 3.5 16.5 8M5 12.5v6A2 2 0 0 0 7 20.5h10a2 2 0 0 0 2-2v-6" />
+                </svg>
+              </button>
             )}
           </div>
         </div>

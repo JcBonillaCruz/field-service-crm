@@ -21,7 +21,16 @@ type NavItem = {
 };
 
 // Íconos de línea (24 px). "roles": quién ve cada opción. Sin "roles", la ven todos.
-const NAV: NavItem[] = [
+// La app se divide en APPS: cada app tiene su propio menú lateral.
+//   · Finances: clientes, ventas, catálogo y dinero (todo lo que hay hoy)
+//   · QR Studio: su propio menú
+// Cuando hagamos Trabajos/Seguimiento o Inventario, cada uno será otra app con su menú.
+export type AppId = "finance" | "qr";
+export const appOf = (path: string): AppId => (path.startsWith("/dashboard/tools/qr") ? "qr" : "finance");
+
+const SETTINGS: NavItem = { label: "Settings", href: "/dashboard/settings", icon: "M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1M15 5v4M9 10v4M17 15v4", roles: ["owner", "manager"] };
+
+const FINANCE_NAV: NavItem[] = [
   { label: "Home", href: "/dashboard", icon: "M4 10.2 12 4l8 6.2V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z" },
   { label: "Customers", href: "/dashboard/customers", addHref: "/dashboard/customers/new", icon: "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2.5 20a6.5 6.5 0 0 1 13 0M16 4.3a3.5 3.5 0 0 1 0 6.4M18.5 14.2a6.5 6.5 0 0 1 3 5.8", roles: ["owner", "manager", "office"] },
   { label: "Product Catalog", icon: "M5 8.5h14l-1.2 11a1.5 1.5 0 0 1-1.5 1.3H7.7a1.5 1.5 0 0 1-1.5-1.3zM9 8.5V7a3 3 0 0 1 6 0v1.5M9.5 13h5", roles: ["owner", "manager", "office"],
@@ -41,19 +50,28 @@ const NAV: NavItem[] = [
       { label: "Money In", href: "/dashboard/income", icon: "" },
       { label: "Expenses", href: "/dashboard/expenses", icon: "" },
     ] },
-  { label: "QR Codes", href: "/dashboard/tools/qr", icon: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2zM6.5 6.5h1M16.5 6.5h1M6.5 16.5h1" },
   { label: "Payments", icon: "M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 10h18M7 15h3", roles: ["owner", "manager"] },
-  { label: "Jobs", icon: "M14.7 6.3a4 4 0 0 0-5.4 5.2l-5.8 5.8a1.8 1.8 0 0 0 2.6 2.6l5.8-5.8a4 4 0 0 0 5.2-5.4l-2.5 2.5-2.4-.4-.4-2.4z" },
-  { label: "Dispatch", icon: "M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 1 1 13 0c0 5.4-6.5 11-6.5 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z", roles: ["owner", "manager", "office"] },
-  { label: "Van inventory", icon: "M2.5 7a1 1 0 0 1 1-1h10v10.5h-11zM13.5 9.5h4l3 3.5v3.5h-7zM7 19.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM17 19.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" },
-  { label: "Time tracking", icon: "M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 9v4l2.5 1.5M10 2.5h4M18.5 6.2l1.5-1.5" },
   { label: "Reports", icon: "M4 4v16h16M8.5 16v-4M12.5 16V8M16.5 16v-6", roles: ["owner", "manager"] },
   { label: "Team", icon: "M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6", roles: ["owner", "manager"] },
-  { label: "Settings", href: "/dashboard/settings", icon: "M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1M15 5v4M9 10v4M17 15v4", roles: ["owner", "manager"] },
+  SETTINGS,
 ];
+
+const QR_NAV: NavItem[] = [
+  { label: "Create QR code", href: "/dashboard/tools/qr", icon: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2zM6.5 6.5h1M16.5 6.5h1M6.5 16.5h1" },
+  { label: "My QR codes", icon: "M4 5h16v14H4zM4 9h16M8 13h3M8 16h6" },
+  { label: "Scan stats", icon: "M4 20V10M10 20V4M16 20v-7M22 20H2" },
+  SETTINGS,
+];
+const NAV_BY_APP: Record<AppId, NavItem[]> = { finance: FINANCE_NAV, qr: QR_NAV };
+const APP_TITLE: Record<AppId, { label: string; icon: string; color: string }> = {
+  finance: { label: "Finances", icon: "M12 2.5v19M16.6 6.6c-.6-1.6-2.4-2.6-4.6-2.6-2.6 0-4.6 1.3-4.6 3.4 0 4.8 9.4 2.5 9.4 7.4 0 2.1-2.1 3.5-4.8 3.5-2.4 0-4.4-1.1-5-2.9", color: "#0f766e" },
+  qr: { label: "QR Studio", icon: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM14 18h2v2h-2zM18 14h2v2h-2z", color: "#4f46e5" },
+};
 
 function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => void }) {
   const pathname = usePathname();
+  const app = appOf(pathname);
+  const NAV = NAV_BY_APP[app];
   const items = NAV.filter((i) => !i.roles || (role && i.roles.includes(role)));
   const isActive = (href?: string) => Boolean(href && (href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href)));
   const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -129,6 +147,16 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
       onMouseEnter={() => clearTimeout(leaveTimer.current)}
       // Si abriste un grupo y sacas el mouse del menú sin elegir nada, se vuelve a cerrar
       onMouseLeave={() => { leaveTimer.current = setTimeout(() => setOpen(insideGroups()), 700); }}>
+      {/* App actual (cambia con el menú de apps) */}
+      <div className="mb-2 flex items-center gap-2 px-2.5 pb-2 pt-0.5">
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg text-white" style={{ background: APP_TITLE[app].color }}>
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={APP_TITLE[app].icon} /></svg>
+        </span>
+        <span className="flex-1 text-[12px] font-semibold uppercase tracking-wide text-slate-500">{APP_TITLE[app].label}</span>
+        {app !== "finance" && (
+          <Link prefetch={false} href="/dashboard" onClick={onNavigate} className="rounded-md px-2 py-1 text-[11px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4]">Finances →</Link>
+        )}
+      </div>
       <ul className="space-y-0.5">
         {items.map((item) => {
           if (!item.children) return entry(item);

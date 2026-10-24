@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
+import ColorPicker from "@/components/ui/ColorPicker";
 import { BODY, EYE_FRAME, EYE_INNER, FRAMES, QrOptions, bodyPreviewPath, buildQrSvg } from "@/lib/qr-design";
 
 type Kind = "url" | "phone" | "sms" | "whatsapp" | "review" | "email" | "vcard" | "wifi" | "text";
@@ -61,16 +62,9 @@ function ShapeGrid({ value, opts, kind, onPick }: { value: string; opts: Record<
     </div>
   );
 }
+// Selector de color propio (el mismo en celular y computadora; se abre hacia abajo)
 function ColorField({ label, value, on }: { label: string; value: string; on: (v: string) => void }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="w-28 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</span>
-      <label className="relative h-9 w-9 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-slate-200 shadow-inner" style={{ background: value }}>
-        <input type="color" value={value} onChange={(e) => on(e.target.value)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
-      </label>
-      <input value={value} onChange={(e) => on(e.target.value)} className={`${field} !w-28 !py-1.5 font-mono text-[13px]`} />
-    </div>
-  );
+  return <ColorPicker label={label} value={value} onChange={on} />;
 }
 function Slider({ label, value, min, max, step, fmt, on }: { label: string; value: number; min: number; max: number; step: number; fmt: (v: number) => string; on: (v: number) => void }) {
   return (
@@ -100,6 +94,23 @@ export default function QrStudio({ company, logoUrl, phone, website }: { company
   const [size, setSize] = useState(2000);
   const [sec, setSec] = useState<Sec>("content");
   const [open, setOpen] = useState<Sec | null>("content");
+  // Celular: al abrir una sección, se acomoda justo debajo de la vista del código
+  // (siempre se despliega hacia abajo y nunca queda escondida detrás de la vista previa)
+  const stickyRef = useRef<HTMLDivElement>(null);
+  const secRefs = useRef<Partial<Record<Sec, HTMLDivElement | null>>>({});
+  const firstOpen = useRef(true);
+  useEffect(() => {
+    if (firstOpen.current) { firstOpen.current = false; return; }
+    if (!open) return;
+    const id = requestAnimationFrame(() => {
+      const el = secRefs.current[open];
+      if (!el) return;
+      const offset = 64 + (stickyRef.current?.offsetHeight ?? 0) + 10;
+      const y = el.getBoundingClientRect().top + window.scrollY - offset;
+      if (Math.abs(window.scrollY - y) > 4) window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [open]);
   const file = useRef<HTMLInputElement>(null);
   useEffect(() => { if (logoUrl) toDataUrl(logoUrl).then(setLogoData); }, [logoUrl]);
   const logo = logoMode === "company" ? logoData : logoMode === "upload" ? upload : null;
@@ -345,33 +356,33 @@ export default function QrStudio({ company, logoUrl, phone, website }: { company
 
       {/* ---------- Celular: el código arriba (fijo) y las secciones abajo, una abierta a la vez ---------- */}
       <div className="lg:hidden">
-        <div className="sticky top-16 z-20 border-b border-slate-200 bg-white px-4 pb-3 pt-2.5 shadow-[0_6px_16px_rgba(15,40,60,0.06)]">
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-[17px] font-semibold text-[#0b1f3a]">QR Code Studio</p>
-            <Menu>
-              <MenuButton aria-label="Download" className="flex h-10 items-center gap-1.5 rounded-xl bg-[#0f766e] px-3 text-sm font-semibold text-white active:scale-95">
-                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 3v10m0 0-3.5-3.5M10 13l3.5-3.5M4 16h12" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><circle cx="4.5" cy="10" r="1.5" /><circle cx="10" cy="10" r="1.5" /><circle cx="15.5" cy="10" r="1.5" /></svg>
-              </MenuButton>
-              <MenuItems anchor="bottom end" transition className="z-[90] mt-1 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_16px_44px_rgba(15,40,60,0.18)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
-                <div className="px-2 pb-2 pt-1">
-                  <div className="flex items-center justify-between"><span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Quality</span><span className="text-[12px] font-semibold text-[#0f766e]">{sizeLabel}</span></div>
-                  <div className="mt-1 grid grid-cols-4 gap-1">{[1000, 2000, 3000, 4000].map((v) => <button key={v} type="button" onClick={(e) => { e.preventDefault(); setSize(v); }} className={`rounded-md py-1 text-[12px] ${size === v ? "bg-[#0f766e] font-semibold text-white" : "bg-slate-100 text-slate-600"}`}>{v === 4000 ? "4K" : `${v / 1000}K`}</button>)}</div>
-                </div>
-                {([["PNG", "Best for web & phone", dl.png], ["JPG", "Smaller file, white background", dl.jpg], ["SVG", "Vector for vans & big signs", dl.svg], ["PDF", "Ready to print", dl.pdf]] as const).map(([l, sub, fn]) => (
-                  <MenuItem key={l}><button type="button" onClick={fn} className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left data-[focus]:bg-[#e9f7f4]">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#eef8f5] text-[12px] font-bold text-[#0f766e]">{l}</span>
-                    <span><span className="block text-[14px] font-medium text-[#0b1f3a]">Download {l}</span><span className="text-[12px] text-slate-500">{sub}</span></span>
-                  </button></MenuItem>
-                ))}
-              </MenuItems>
-            </Menu>
+        {/* Sin título: solo la vista del código (más grande) y el botón redondo de descarga */}
+        <div ref={stickyRef} className="sticky top-16 z-30 border-b border-slate-200 bg-white px-4 pb-3 pt-3 shadow-[0_6px_16px_rgba(15,40,60,0.06)]">
+          <div className="absolute right-3 top-3 z-10">
+              <Menu>
+                <MenuButton aria-label="Download" title="Download"
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-[#0f766e] text-white shadow-[0_6px_16px_rgba(15,118,110,0.35)] transition-transform active:scale-90">
+                  <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.1"><path d="M10 3v10m0 0-3.5-3.5M10 13l3.5-3.5M4 16h12" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </MenuButton>
+                <MenuItems anchor="bottom end" transition className="z-[90] mt-1 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_16px_44px_rgba(15,40,60,0.18)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
+                  <div className="px-2 pb-2 pt-1">
+                    <div className="flex items-center justify-between"><span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Quality</span><span className="text-[12px] font-semibold text-[#0f766e]">{sizeLabel}</span></div>
+                    <div className="mt-1 grid grid-cols-4 gap-1">{[1000, 2000, 3000, 4000].map((v) => <button key={v} type="button" onClick={(e) => { e.preventDefault(); setSize(v); }} className={`rounded-md py-1 text-[12px] ${size === v ? "bg-[#0f766e] font-semibold text-white" : "bg-slate-100 text-slate-600"}`}>{v === 4000 ? "4K" : `${v / 1000}K`}</button>)}</div>
+                  </div>
+                  {([["PNG", "Best for web & phone", dl.png], ["JPG", "Smaller file, white background", dl.jpg], ["SVG", "Vector for vans & big signs", dl.svg], ["PDF", "Ready to print", dl.pdf]] as const).map(([l, sub, fn]) => (
+                    <MenuItem key={l}><button type="button" onClick={fn} className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left data-[focus]:bg-[#e9f7f4]">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#eef8f5] text-[12px] font-bold text-[#0f766e]">{l}</span>
+                      <span><span className="block text-[14px] font-medium text-[#0b1f3a]">Download {l}</span><span className="text-[12px] text-slate-500">{sub}</span></span>
+                    </button></MenuItem>
+                  ))}
+                </MenuItems>
+              </Menu>
           </div>
-          <div className="mx-auto w-[min(40vw,165px)]">{preview}</div>
+          <div className="mx-auto w-[min(58vw,240px)]">{preview}</div>
         </div>
         <div className="relative z-0 space-y-2.5 px-3 pb-10 pt-6">
           {SECTIONS.map((s) => (
-            <div key={s.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <div key={s.id} ref={(el) => { secRefs.current[s.id] = el; }} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
               <button type="button" onClick={() => setOpen(open === s.id ? null : s.id)} className="flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-slate-50">
                 <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${open === s.id ? "bg-[#e3f4ef] text-[#0f766e]" : "bg-slate-100 text-slate-500"}`}><SecIcon d={s.icon} /></span>
                 <span className="flex-1 text-[15px] font-semibold text-[#0b1f3a]">{s.label}</span>
