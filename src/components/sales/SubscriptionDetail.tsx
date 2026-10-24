@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmDelete } from "@/lib/confirm";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -49,10 +50,10 @@ export default function SubscriptionDetail({ data, prefs, actor }: {
     router.push(`/dashboard/invoices/${id}`); router.refresh();
   }
   async function remove() {
-    if (!window.confirm(`Delete subscription ${sub.number}? Invoices already created stay in Invoices.`)) return;
+    if (!(await confirmDelete({ title: `Delete subscription ${sub.number}?`, message: "Invoices already created stay in Invoices. The subscription itself can't be recovered.", download: { filename: sub.number, data: sub } }))) return;
     const { error } = await db().from("subscriptions").delete().eq("id", sub.id);
     if (error) return flash("It couldn't be deleted.");
-    router.push(base); router.refresh();
+    router.replace(base); router.refresh();
   }
   const cancel = () => window.confirm(`Cancel ${sub.number}? No more invoices will be created.`) && update({ status: "cancelled", cancelled_at: new Date().toISOString() }, "Subscription cancelled");
 

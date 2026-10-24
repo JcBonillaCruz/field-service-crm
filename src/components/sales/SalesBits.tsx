@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
@@ -131,8 +132,9 @@ export function Modal({ open, onClose, title, children, footer, width = "max-w-l
   open: boolean; onClose: () => void; title: string; children: React.ReactNode; footer?: React.ReactNode; width?: string;
 }) {
   const shown = useEsc(open, onClose);
-  if (!open) return null;
-  return (
+  if (!open || typeof document === "undefined") return null;
+  // Portal: siempre por encima de todo (barras fijas, vista del QR, paneles)
+  return createPortal(
     <div className={`fixed inset-0 z-[90] overflow-y-auto bg-slate-900/40 transition-opacity duration-200 ${shown ? "opacity-100" : "opacity-0"}`}>
       {/* Siempre centrado en la pantalla; si es muy alto, se desliza */}
       <div className="flex min-h-full items-center justify-center p-4 sm:p-8" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -145,7 +147,8 @@ export function Modal({ open, onClose, title, children, footer, width = "max-w-l
           {footer && <div className="flex flex-wrap items-center gap-3 border-t border-slate-200 px-6 py-4">{footer}</div>}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

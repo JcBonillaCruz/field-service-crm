@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { FinanceArt, QrArt } from "@/components/AppIcons";
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { Role } from "@/lib/types";
 
@@ -17,26 +18,24 @@ export const APPS: App[] = [
     tone: ["#eef2ff", "#dfe4ff", "#4f46e5"], hint: "Branded QR codes for vans, flyers and reviews", parts: ["Website", "Reviews", "WhatsApp", "Wi-Fi"] },
 ];
 
-export function AppsGrid({ onPick, layout = "grid" }: { role?: Role | null; onPick?: () => void; layout?: "grid" | "wide" }) {
+export function AppsGrid({ onPick, layout = "grid" }: { role?: Role | null; onPick?: () => void; layout?: "grid" | "wide" | "stack" }) {
+  const stack = layout === "stack";
   const path = usePathname() || "";
   const current = path.startsWith("/dashboard/tools/qr") ? "qr" : "finance";
   return (
-    <div className={`grid gap-3 ${layout === "wide" ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2"}`}>
+    <div className={`grid ${stack ? "gap-2" : "gap-3"} ${layout === "wide" ? "grid-cols-2" : stack ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"}`}>
       {APPS.map((a, i) => {
-        const [bg, bg2, fg] = a.tone;
         const on = current === a.id;
         return (
           <Link prefetch={false} key={a.id} href={a.href} onClick={() => onPick?.()} style={{ animationDelay: `${i * 40}ms` }}
-            className={`group/app flex items-start gap-3.5 rounded-2xl border p-4 text-left transition-all duration-200 animate-[bp-fade_0.35s_ease-out_both] hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(15,40,60,0.10)] active:scale-[0.98] ${on ? "border-[#0f766e] bg-[#f3fbf8]" : "border-slate-200 bg-white hover:border-[#14a39a]"}`}>
-            <span className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl transition-transform duration-300 group-hover/app:rotate-[-5deg] group-hover/app:scale-105"
-              style={{ background: `linear-gradient(140deg, ${bg} 0%, ${bg2} 100%)`, color: fg }}>
-              <span className="pointer-events-none absolute -left-8 top-0 h-full w-6 -skew-x-12 bg-white/70 opacity-0 transition-all duration-700 group-hover/app:left-16 group-hover/app:opacity-100" />
-              <svg viewBox="0 0 24 24" className="relative h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d={a.icon} /></svg>
+            className={`group/app flex items-start ${stack ? "gap-2.5 p-2.5" : "gap-3.5 p-4"} rounded-2xl border text-left transition-all duration-200 animate-[bp-fade_0.35s_ease-out_both] hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(15,40,60,0.10)] active:scale-[0.98] ${on ? "border-[#0f766e] bg-[#f3fbf8]" : "border-slate-200 bg-white hover:border-[#14a39a]"}`}>
+            <span className="flex shrink-0 items-center justify-center transition-transform duration-300 group-hover/app:-rotate-3 group-hover/app:scale-105">
+              {a.id === "finance" ? <FinanceArt size={stack ? 40 : 56} /> : <QrArt size={stack ? 40 : 56} />}
             </span>
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-2 text-[15px] font-semibold text-[#0b1f3a]">{a.label}{on && <span className="rounded-full bg-[#0f766e] px-2 py-0.5 text-[10px] font-semibold text-white">Open</span>}</span>
               <span className="mt-0.5 block text-[12.5px] leading-snug text-slate-500">{a.hint}</span>
-              <span className="mt-2 flex flex-wrap gap-1">
+              <span className={`mt-2 flex-wrap gap-1 ${stack ? "hidden" : "flex"}`}>
                 {a.parts.map((p) => <span key={p} className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10.5px] font-medium text-slate-500">{p}</span>)}
               </span>
             </span>

@@ -128,6 +128,20 @@ export function softColor(seed: string | number) {
   return SOFT_PALETTE[i % SOFT_PALETTE.length];
 }
 
+export const SOLID_COLORS = SOLID_PALETTE;
+// Colores para una lista: nunca dos iguales seguidos
+// (verde azulado y verde cuentan como "parecidos", igual azul y celeste)
+const FAMILY = ["g", "b", "v", "p", "o", "y", "g", "b", "r", "s"];
+export function listColors(seeds: string[]) {
+  const out: number[] = [];
+  seeds.forEach((sd, i) => {
+    let k = hash(sd) % SOLID_PALETTE.length;
+    for (let t = 0; i > 0 && t < SOLID_PALETTE.length && FAMILY[k] === FAMILY[out[i - 1]]; t++) k = (k + 1) % SOLID_PALETTE.length;
+    out.push(k);
+  });
+  return out.map((k) => SOLID_PALETTE[k]);
+}
+
 export function solidColor(seed: string) {
   return SOLID_PALETTE[hash(seed) % SOLID_PALETTE.length];
 }

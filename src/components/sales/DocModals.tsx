@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmDelete } from "@/lib/confirm";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import UploadChoices from "@/components/ui/UploadChoices";
@@ -436,7 +437,7 @@ export function AttachmentsButton({ entity, entityId, companyId, files }: { enti
     if (data?.signedUrl) window.open(data.signedUrl, "_blank");
   }
   async function remove(f: SalesFile) {
-    if (!window.confirm(`Remove "${f.name}"?`)) return;
+    if (!(await confirmDelete({ title: `Remove "${f.name}"?`, message: "The attached file will be deleted and can't be recovered.", confirmLabel: "Remove" }))) return;
     const supabase = db();
     await supabase.storage.from("sales-attachments").remove([f.path]);
     await supabase.from("sales_files").delete().eq("id", f.id);

@@ -11,7 +11,7 @@ import { hideSplash, splashPending } from "@/lib/splash";
 // sesión ya iniciada, mientras se cargan los datos del panel. Nunca en la pantalla de login
 // ni en las páginas públicas que ven tus clientes, ni al moverte entre pantallas.
 // =====================================================================
-const MIN_MS = 700;
+const MIN_MS = 1100; // siempre se alcanza a ver la animación (también al abrir la app instalada)
 const MAX_MS = 12000;
 const FADE_MS = 450;
 
@@ -21,6 +21,8 @@ export default function SplashScreen() {
   // Se dibuja desde el primer instante (antes de que lleguen los datos), así nunca se ve la pantalla en blanco.
   const [phase, setPhase] = useState<"on" | "out" | "off">(() => (path.startsWith("/dashboard") ? "on" : "off"));
   const shownAt = useRef(0);
+  // Al abrir la app, el tiempo mínimo cuenta desde que la animación aparece en pantalla
+  useEffect(() => { if (phase === "on") shownAt.current = performance.now(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Encender: al enviar el login (evento) o si la página se recargó a mitad del ingreso
   useEffect(() => {

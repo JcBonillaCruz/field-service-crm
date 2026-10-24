@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmDelete } from "@/lib/confirm";
 import { bustCache } from "@/lib/cache-client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -62,10 +63,10 @@ export default function CouponForm({ companyId, products: initialProducts, coupo
   }
 
   async function remove() {
-    if (!coupon || !window.confirm(`Delete the coupon "${coupon.code}"?`)) return;
+    if (!coupon || !(await confirmDelete({ title: `Delete the coupon "${coupon.code}"?`, download: { filename: coupon.code, data: coupon } }))) return;
     const { error: dbErr } = await createClient().from("coupons").delete().eq("id", coupon.id);
     if (dbErr) return setError("The coupon couldn't be deleted.");
-    await bustCache("catalog"); router.push("/dashboard/coupons");
+    await bustCache("catalog"); router.replace("/dashboard/coupons");
     router.refresh();
   }
 

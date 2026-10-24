@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmDelete } from "@/lib/confirm";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -63,7 +64,7 @@ export default function AddressManager({
   }
 
   async function remove(id: string) {
-    if (!window.confirm("Delete this address?")) return;
+    if (!(await confirmDelete({ title: "Delete this address?" }))) return;
     await createClient().from("customer_addresses").delete().eq("id", id);
     router.refresh();
   }

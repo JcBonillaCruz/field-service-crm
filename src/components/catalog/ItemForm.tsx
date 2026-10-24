@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmDelete } from "@/lib/confirm";
 import { bustCache } from "@/lib/cache-client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -82,10 +83,10 @@ export default function ItemForm({ companyId, item, clone }: { companyId: string
   }
 
   async function remove() {
-    if (!item || !window.confirm(`Delete "${item.name}"?`)) return;
+    if (!item || !(await confirmDelete({ title: `Delete "${item.name}"?`, download: { filename: item.name, data: item } }))) return;
     const { error: dbErr } = await createClient().from("items").delete().eq("id", item.id);
     if (dbErr) return setError("The item couldn't be deleted.");
-    await bustCache("catalog"); router.push("/dashboard/items");
+    await bustCache("catalog"); router.replace("/dashboard/items");
     router.refresh();
   }
 

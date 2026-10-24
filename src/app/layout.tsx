@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import SplashScreen from "@/components/SplashScreen";
+import ConfirmHost from "@/components/ConfirmHost";
+import InstallPrompt from "@/components/InstallPrompt";
 
 const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -29,6 +31,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body className={`${jakarta.className} bg-white text-slate-900 antialiased`}>
         <SplashScreen />
+        <ConfirmHost />
+        <InstallPrompt />
         {children}
       </body>
     </html>

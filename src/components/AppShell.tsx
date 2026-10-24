@@ -8,6 +8,8 @@ import AppHeader from "@/components/AppHeader";
 import ProfilePanel from "@/components/ProfilePanel";
 import Avatar from "@/components/Avatar";
 import NotificationsProvider from "@/components/NotificationsProvider";
+import { AppsGrid } from "@/components/AppsMenu";
+import { FinanceArt, QrArt } from "@/components/AppIcons";
 import { canManageSales } from "@/lib/sales";
 import { CompanySummary, CurrentUser, Role } from "@/lib/types";
 
@@ -45,7 +47,7 @@ const FINANCE_NAV: NavItem[] = [
       { label: "Subscriptions", href: "/dashboard/subscriptions", addHref: "/dashboard/subscriptions/new", icon: "" },
     ] },
   // Finanzas: el grupo lleva el ícono ($); Money In y Expenses van sin ícono, igual que Sales y Product Catalog
-  { label: "Finances", icon: "M12 2.5v19M16.6 6.6c-.6-1.6-2.4-2.6-4.6-2.6-2.6 0-4.6 1.3-4.6 3.4 0 4.8 9.4 2.5 9.4 7.4 0 2.1-2.1 3.5-4.8 3.5-2.4 0-4.4-1.1-5-2.9", roles: ["owner", "manager", "office"],
+  { label: "Finances", icon: "M4 19.5h16M6.5 15.5l4-4.2 3 2.7 5-6M15 8h4v4", roles: ["owner", "manager", "office"],
     children: [
       { label: "Money In", href: "/dashboard/income", icon: "" },
       { label: "Expenses", href: "/dashboard/expenses", icon: "" },
@@ -75,6 +77,8 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
   const items = NAV.filter((i) => !i.roles || (role && i.roles.includes(role)));
   const isActive = (href?: string) => Boolean(href && (href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href)));
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [appsOpen, setAppsOpen] = useState(false);
+  useEffect(() => setAppsOpen(false), [app]);
   const leaveTimer = useRef<ReturnType<typeof setTimeout>>();
   // Solo queda abierto el grupo donde estás. Al ir a Home, Customers, etc. se vuelve a cerrar.
   const insideGroups = () => Object.fromEntries(NAV.filter((g) => g.children?.some((c) => isActive(c.href))).map((g) => [g.label, true]));
@@ -147,14 +151,21 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
       onMouseEnter={() => clearTimeout(leaveTimer.current)}
       // Si abriste un grupo y sacas el mouse del menú sin elegir nada, se vuelve a cerrar
       onMouseLeave={() => { leaveTimer.current = setTimeout(() => setOpen(insideGroups()), 700); }}>
-      {/* App actual (cambia con el menú de apps) */}
-      <div className="mb-2 flex items-center gap-2 px-2.5 pb-2 pt-0.5">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg text-white" style={{ background: APP_TITLE[app].color }}>
-          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={APP_TITLE[app].icon} /></svg>
-        </span>
-        <span className="flex-1 text-[12px] font-semibold uppercase tracking-wide text-slate-500">{APP_TITLE[app].label}</span>
-        {app !== "finance" && (
-          <Link prefetch={false} href="/dashboard" onClick={onNavigate} className="rounded-md px-2 py-1 text-[11px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4]">Finances →</Link>
+      {/* App actual: al tocarla se abre el menú de apps (aquí mismo, optimizado para celular) */}
+      <div className="mb-2 px-1">
+        <button type="button" onClick={() => setAppsOpen((v) => !v)} aria-expanded={appsOpen}
+          className={`group flex w-full items-center gap-2.5 rounded-xl px-1.5 py-1.5 text-left transition-colors hover:bg-[#e3f5f0] ${appsOpen ? "bg-[#e3f5f0]" : ""}`}>
+          {app === "finance" ? <FinanceArt size={32} /> : <QrArt size={32} />}
+          <span className="min-w-0 flex-1">
+            <span className="block text-[12px] font-semibold uppercase tracking-wide text-slate-600">{APP_TITLE[app].label}</span>
+            <span className="block text-[11px] text-slate-400">Switch app</span>
+          </span>
+          <svg viewBox="0 0 20 20" className={`h-4 w-4 text-slate-400 transition-transform duration-200 ${appsOpen ? "rotate-180 text-[#0f766e]" : ""}`} fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
+        </button>
+        {appsOpen && (
+          <div className="mt-2 animate-[bp-fade_0.2s_ease-out]">
+            <AppsGrid layout="stack" onPick={() => { setAppsOpen(false); onNavigate?.(); }} />
+          </div>
         )}
       </div>
       <ul className="space-y-0.5">

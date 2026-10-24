@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmDelete } from "@/lib/confirm";
 import { bustCache } from "@/lib/cache-client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -129,7 +130,8 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
   async function bulk(action: "active" | "inactive" | "delete") {
     const ids = Array.from(checked);
     if (!ids.length) return;
-    if (action === "delete" && !window.confirm(`Delete ${ids.length} ${ids.length === 1 ? info.singular.toLowerCase() : info.plural.toLowerCase()}? This can't be undone.`)) return;
+    if (action === "delete" && !(await confirmDelete({ title: `Delete ${ids.length} ${ids.length === 1 ? info.singular.toLowerCase() : info.plural.toLowerCase()}?`,
+      download: { filename: table, data: async () => (await createClient().from(table).select("*").in("id", ids)).data } }))) return;
     setBusy(action);
     const db = createClient().from(table);
     const { error } = action === "delete" ? await db.delete().in("id", ids) : await db.update({ is_active: action === "active" }).in("id", ids);
@@ -137,7 +139,7 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
     if (error) return flash(action === "delete" ? "Some records couldn't be deleted." : "The status couldn't be changed.");
     setChecked(new Set());
     await bustCache("catalog");
-    if (action === "delete" && selectedId && ids.includes(selectedId)) router.push(base);
+    if (action === "delete" && selectedId && ids.includes(selectedId)) router.replace(base);
     router.refresh();
     flash(action === "delete" ? "Deleted." : `Marked as ${action}.`);
   }

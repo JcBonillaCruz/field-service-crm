@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmDelete } from "@/lib/confirm";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -73,7 +74,7 @@ export default function ViewForm({ module, companyId, view, from }: { module: Ca
     router.refresh();
   }
   async function remove() {
-    if (!view || !window.confirm(`Delete the view "${view.name}"?`)) return;
+    if (!view || !(await confirmDelete({ title: `Delete the view "${view.name}"?`, message: "Only this saved list view is removed. Your records stay as they are." }))) return;
     await createClient().from("list_views").delete().eq("id", view.id);
     try { localStorage.removeItem(`bp-view-last:${module}:${companyId}`); } catch { /* */ }
     router.push(base);

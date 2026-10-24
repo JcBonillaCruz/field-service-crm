@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmDelete } from "@/lib/confirm";
 import { bustCache } from "@/lib/cache-client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -27,10 +28,10 @@ export default function ItemDetailView({ item, history, companyId }: { item: Ite
     await bustCache("catalog"); router.refresh();
   }
   async function remove() {
-    if (!window.confirm(`Delete "${item.name}"? This can't be undone.`)) return;
+    if (!(await confirmDelete({ title: `Delete "${item.name}"?`, download: { filename: item.name, data: item } }))) return;
     const { error } = await createClient().from("items").delete().eq("id", item.id);
     if (error) return setMsg("The item couldn't be deleted. It may be used in a quote or invoice.");
-    await bustCache("catalog"); router.push("/dashboard/items");
+    await bustCache("catalog"); router.replace("/dashboard/items");
     router.refresh();
   }
 

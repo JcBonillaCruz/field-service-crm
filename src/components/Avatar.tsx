@@ -6,11 +6,13 @@ export default function Avatar({
   url,
   seed,
   size = 36,
+  color,
 }: {
   name: string;
   url: string | null;
   seed?: string;
   size?: number;
+  color?: string;
 }) {
   if (url) {
     return (
@@ -21,7 +23,7 @@ export default function Avatar({
   return (
     <span
       className="flex items-center justify-center rounded-full font-semibold text-white ring-2 ring-white"
-      style={{ width: size, height: size, fontSize: size * 0.38, backgroundColor: solidColor(seed || name) }}
+      style={{ width: size, height: size, fontSize: size * 0.38, backgroundColor: color ?? solidColor(seed || name) }}
       aria-label={name}
     >
       {initials(name)}

@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmDelete } from "@/lib/confirm";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -126,7 +127,7 @@ export default function SalesWorkspace({ module, rows, customViews, companyId, p
     const ids = Array.from(checked);
     if (!ids.length) return;
     const noun = ids.length === 1 ? info.singular.toLowerCase() : info.plural.toLowerCase();
-    if (action === "delete" && !window.confirm(`Delete ${ids.length} ${noun}? This can't be undone.`)) return;
+    if (action === "delete" && !(await confirmDelete({ title: `Delete ${ids.length} ${noun}?`, download: { filename: table, data: async () => (await createClient().from(table).select("*").in("id", ids)).data } }))) return;
     if (action === "cancel" && !window.confirm(`Cancel ${ids.length} ${noun}?`)) return;
     setBusy(action);
     const supabase = createClient();
@@ -137,7 +138,7 @@ export default function SalesWorkspace({ module, rows, customViews, companyId, p
     setBusy("");
     if (error) return flash(action === "delete" ? "Some records couldn't be deleted." : "The status couldn't be changed.");
     setChecked(new Set());
-    if (action === "delete" && selectedId && ids.includes(selectedId)) router.push(base);
+    if (action === "delete" && selectedId && ids.includes(selectedId)) router.replace(base);
     router.refresh();
     flash(action === "delete" ? "Deleted." : action === "cancel" ? "Cancelled." : "Marked as sent.");
   }

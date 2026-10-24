@@ -26,6 +26,11 @@ const ic = {
 };
 
 const SECTIONS: Section[] = [
+  { title: "My Account", cards: [
+    { title: "Personal", icon: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20.5a7.5 7.5 0 0 1 15 0", tone: "bg-[#fff4ec] text-[#e8713a]", items: [
+      { label: "Profile & photo", href: "/dashboard/account" }, { label: "Email & password", href: "/dashboard/account#security" }, { label: "My organizations", href: "/dashboard/account" }, { label: "Delete account", href: "/dashboard/account#delete" },
+    ] },
+  ] },
   { title: "Organization Settings", cards: [
     { title: "Organization", icon: ic.org, tone: "bg-[#e9f7f4] text-[#0f766e]", items: [{ label: "Profile" }, { label: "Branding", href: "/dashboard/settings/branding" }, { label: "Custom Domain" }, { label: "Locations" }, { label: "Manage Subscription" }] },
     { title: "Users & Roles", icon: ic.users, tone: "bg-[#fff0f0] text-[#e11d48]", items: [{ label: "Users" }, { label: "Roles" }, { label: "User Preferences" }] },

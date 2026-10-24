@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmDelete } from "@/lib/confirm";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -88,11 +89,12 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
     router.refresh();
   }
   async function remove() {
-    if (!window.confirm(`Delete ${noun.toLowerCase()} ${doc.number}? This can't be undone.`)) return;
+    if (!(await confirmDelete({ title: `Delete ${noun.toLowerCase()} ${doc.number}?`,
+      download: { filename: doc.number, data: async () => ({ ...doc, lines: (await db().from("sales_lines").select("*").eq("doc_id", doc.id)).data, payments: (await db().from("sales_payments").select("*").eq("invoice_id", doc.id)).data }) } }))) return;
     const { error } = await db().from("sales_docs").delete().eq("id", doc.id);
     if (error) return flash(`The ${noun.toLowerCase()} couldn't be deleted.`);
     await db().from("sales_activity").delete().eq("entity_id", doc.id);
-    router.push(base); router.refresh();
+    router.replace(base); router.refresh();
   }
   async function voidInvoice() {
     if (!window.confirm(`Void ${doc.number}? A void invoice stays in your records but can't be paid.`)) return;
@@ -104,7 +106,7 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
     router.refresh();
   }
   async function deletePayment(p: Payment) {
-    if (!window.confirm(`Delete this ${p.kind === "payment" ? "payment" : "write-off"} of ${money(p.amount)}?`)) return;
+    if (!(await confirmDelete({ title: `Delete this ${p.kind === "payment" ? "payment" : "write-off"} of ${money(p.amount)}?`, download: { filename: `${doc.number}-${p.kind}`, data: p } }))) return;
     await db().from("sales_payments").delete().eq("id", p.id);
     await refreshInvoicePaid(doc);
     await logActivity(doc.company_id, "invoice", doc.id, `${p.kind === "payment" ? "Payment" : "Write-off"} of ${money(p.amount)} deleted`, actor);

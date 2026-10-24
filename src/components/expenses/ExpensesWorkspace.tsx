@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmDelete } from "@/lib/confirm";
 import { useMemo, useRef, useState, useTransition } from "react";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions, Menu, MenuButton, MenuItem, MenuItems, Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { parseCsv } from "@/lib/csv";
@@ -381,7 +382,7 @@ function ExpenseModal({ cfg, open, expense, onClose, companyId, actor, onSaved }
     onSaved(expense ? "Saved." : `${cfg.one[0].toUpperCase()}${cfg.one.slice(1)} added.`);
   }
   async function remove() {
-    if (!expense || !window.confirm(`Delete this ${cfg.one}?`)) return;
+    if (!expense || !(await confirmDelete({ title: `Delete this ${cfg.one}?`, download: { filename: `${cfg.folder}-${expense.date}`, data: expense } }))) return;
     const s = createClient();
     if (expense.receipt_path) await s.storage.from("sales-attachments").remove([expense.receipt_path]);
     await s.from(cfg.table).delete().eq("id", expense.id);

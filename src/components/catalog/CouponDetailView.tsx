@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmDelete } from "@/lib/confirm";
 import { bustCache } from "@/lib/cache-client";
 import { useSwipe } from "@/components/ui/useSwipe";
 import { useState } from "react";
@@ -39,10 +40,10 @@ export default function CouponDetailView({ coupon, history }: { coupon: CouponRo
     await bustCache("catalog"); router.refresh();
   }
   async function remove() {
-    if (!window.confirm(`Delete the coupon "${coupon.code}"? This can't be undone.`)) return;
+    if (!(await confirmDelete({ title: `Delete the coupon "${coupon.code}"?`, download: { filename: coupon.code, data: coupon } }))) return;
     const { error } = await createClient().from("coupons").delete().eq("id", coupon.id);
     if (error) return setMsg("The coupon couldn't be deleted.");
-    await bustCache("catalog"); router.push("/dashboard/coupons");
+    await bustCache("catalog"); router.replace("/dashboard/coupons");
     router.refresh();
   }
   async function copy() {
