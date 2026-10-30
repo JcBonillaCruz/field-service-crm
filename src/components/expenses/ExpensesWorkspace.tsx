@@ -499,7 +499,7 @@ function ExpenseModal({ cfg, open, expense, onClose, companyId, actor, onSaved, 
               className={`${inputClass} mt-2 animate-[bp-fade_0.2s_ease-out]`} />
           )}
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 [&>*]:min-w-0">
           <label className="block"><span className="mb-1.5 block text-sm font-medium text-red-600">Amount*</span>
             <div className="flex"><span className="flex items-center rounded-l-lg border border-r-0 border-slate-200 bg-slate-100 px-3 text-sm text-slate-600">USD</span>
               <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="0.00" className={`${inputClass} rounded-l-none`} /></div></label>

@@ -14,6 +14,17 @@ import type { PayerOption } from "@/components/expenses/ExpensesWorkspace";
 const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 const NEW = "__new__";
 
+// Sube el buscador al tope del formulario SOLO en vertical (nunca de lado: así la pantalla no se corre)
+function liftUp(el: HTMLElement) {
+  const box = el.closest("[data-payer]") as HTMLElement | null;
+  let sc: HTMLElement | null = box?.parentElement ?? null;
+  while (sc && !(sc.scrollHeight > sc.clientHeight && /(auto|scroll)/.test(getComputedStyle(sc).overflowY))) sc = sc.parentElement;
+  if (!box || !sc) return;
+  const top = sc.scrollTop + box.getBoundingClientRect().top - sc.getBoundingClientRect().top - 12;
+  sc.scrollTo({ top, left: 0, behavior: "smooth" });
+  sc.scrollLeft = 0;
+}
+
 function Dot({ name, seed, size = 30 }: { name: string; seed: string; size?: number }) {
   const c = softColor(seed);
   return <span className="flex shrink-0 items-center justify-center rounded-full font-semibold" style={{ width: size, height: size, background: c.bg, color: c.text, fontSize: size * 0.38 }}>{initials(name)}</span>;
@@ -58,13 +69,10 @@ export default function PayerPicker({ companyId, people, customerId, name, onPic
   }
 
   // Al tocar el buscador (y salir el teclado), el campo sube al TOPE del formulario para que la lista se vea completa debajo
-  const lift = (el: HTMLElement) => {
-    const box = el.closest("[data-payer]");
-    [80, 380].forEach((ms) => setTimeout(() => box?.scrollIntoView({ block: "start", inline: "nearest", behavior: "smooth" }), ms));
-  };
+  const lift = (el: HTMLElement) => [80, 380].forEach((ms) => setTimeout(() => liftUp(el), ms));
   const typed = query.trim();
   return (
-    <div data-payer className="scroll-mt-3">
+    <div data-payer className="min-w-0 scroll-mt-3">
       <Combobox value={null as string | null} immediate
         onChange={(v: string | null) => {
           if (!v) return;
@@ -93,7 +101,7 @@ export default function PayerPicker({ companyId, people, customerId, name, onPic
             {/* La lista abre HACIA ABAJO, dentro del formulario (no flota encima ni se va arriba) */}
             {open && (
               <ComboboxOptions static
-                className="mt-1.5 max-h-[min(18rem,45vh)] overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_12px_32px_rgba(15,40,60,0.12)] animate-[bp-fade_0.18s_ease-out]">
+                className="mt-1.5 w-full max-h-[min(18rem,45vh)] overflow-y-auto overflow-x-hidden overscroll-contain rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_12px_32px_rgba(15,40,60,0.12)] animate-[bp-fade_0.18s_ease-out]">
                 {typed && !exact && (
                   <ComboboxOption value={NEW} className="mb-1 flex cursor-pointer items-center gap-2.5 rounded-lg bg-[#f3fbf8] px-2.5 py-2.5 text-[14px] font-semibold text-[#0f766e] data-[focus]:bg-[#e3f4ef]">
                     <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#0f766e] text-white"><svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M10 5v10M5 10h10" /></svg></span>
@@ -168,7 +176,7 @@ function QuickCustomer({ companyId, initial, onCancel, onSaved }: { companyId: s
         </div>
       </div>
       <div className="grid gap-2.5 sm:grid-cols-2">
-        <input autoFocus onFocus={(e) => { const b = e.currentTarget.closest("[data-payer]"); setTimeout(() => b?.scrollIntoView({ block: "start", inline: "nearest", behavior: "smooth" }), 350); }} value={first} onChange={(e) => setFirst(e.target.value)} placeholder="First name" className={inputClass} />
+        <input autoFocus onFocus={(e) => { const el = e.currentTarget; setTimeout(() => liftUp(el), 350); }} value={first} onChange={(e) => setFirst(e.target.value)} placeholder="First name" className={inputClass} />
         <input value={last} onChange={(e) => setLast(e.target.value)} placeholder="Last name" className={inputClass} />
         {type === "commercial" && <input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Company name" className={`${inputClass} sm:col-span-2`} />}
         <input inputMode="tel" value={phone} onChange={(e) => setPhone(formatPhone(e.target.value))} placeholder="Phone (optional)" className={inputClass} />

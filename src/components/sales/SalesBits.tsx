@@ -135,10 +135,10 @@ export function Modal({ open, onClose, title, children, footer, width = "max-w-l
   if (!open || typeof document === "undefined") return null;
   // Portal: siempre por encima de todo (barras fijas, vista del QR, paneles)
   return createPortal(
-    <div className={`fixed inset-0 z-[90] overflow-y-auto bg-slate-900/40 transition-opacity duration-200 ${shown ? "opacity-100" : "opacity-0"}`}>
+    <div className={`fixed inset-0 z-[90] overflow-y-auto overflow-x-hidden overscroll-contain bg-slate-900/40 transition-opacity duration-200 ${shown ? "opacity-100" : "opacity-0"}`}>
       {/* Siempre centrado en la pantalla; si es muy alto, se desliza */}
       <div className="flex min-h-full items-center justify-center p-4 sm:p-8" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-        <div className={`w-full ${width} rounded-2xl bg-white shadow-2xl transition-transform duration-200 ${shown ? "translate-y-0 scale-100" : "translate-y-2 scale-[0.98]"}`}>
+        <div className={`w-full min-w-0 ${width} rounded-2xl bg-white shadow-2xl transition-transform duration-200 ${shown ? "translate-y-0 scale-100" : "translate-y-2 scale-[0.98]"}`}>
           <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
             <h2 className="text-lg font-semibold text-[#0b1f3a]">{title}</h2>
             <XButton onClick={onClose} />
