@@ -12,6 +12,9 @@ import { inputClass } from "@/components/customers/ui";
 import DatePicker from "@/components/ui/DatePicker";
 import SelectMenu from "@/components/ui/SelectMenu";
 import { Modal, Toast, btnGhost, btnPrimary } from "@/components/sales/SalesBits";
+import { useCountUp } from "@/components/dashboard/MobileWidgets";
+import { LedgerTracker, LedgerGlance } from "@/components/expenses/LedgerCharts";
+import PayerPicker from "@/components/expenses/PayerPicker";
 
 // =====================================================================
 // Libro de Finanzas: el mismo diseño sirve para Gastos (rojo) y Entradas de dinero (verde).
@@ -19,7 +22,14 @@ import { Modal, Toast, btnGhost, btnPrimary } from "@/components/sales/SalesBits
 export type Entry = {
   id: string; company_id: string; date: string; category: string; party: string | null; amount: number; payment_mode: string | null;
   reference: string | null; notes: string | null; receipt_path: string | null; receipt_name: string | null; created_by_name: string | null; created_at: string;
+  customer_id?: string | null; // Money In: cliente ligado (de la tabla customers)
 };
+export type PayerOption = { id: string; display_name: string; company_name: string | null; email: string | null; phone: string | null };
+// Barras de categorías: colores MUY distintos entre sí (por puesto, no por categoría), con degradado
+export const BAR_COLORS: [string, string][] = [
+  ["#0d9488", "#2dd4bf"], ["#f97316", "#fdba74"], ["#7c3aed", "#c4b5fd"], ["#2563eb", "#93c5fd"],
+  ["#db2777", "#f9a8d4"], ["#ca8a04", "#fde047"], ["#0891b2", "#67e8f9"], ["#65a30d", "#bef264"],
+];
 export type Expense = Entry; // compatibilidad
 export type LedgerKind = "expense" | "income";
 type Cat = { name: string; icon: string; color: string };
@@ -150,8 +160,9 @@ function PeriodPicker({ range, onPick }: { range: { key: RangeKey; from: string;
   );
 }
 
-export default function ExpensesWorkspace({ kind = "expense", companyId, actor, rows, needsSql, range }: {
+export default function ExpensesWorkspace({ kind = "expense", companyId, actor, rows, needsSql, range, customers = [], linkReady = false }: {
   kind?: LedgerKind; companyId: string; actor: string; rows: Entry[]; needsSql: boolean; range: { key: RangeKey; from: string; to: string; label: string };
+  customers?: PayerOption[]; linkReady?: boolean;
 }) {
   const cfg = LEDGER[kind];
   const cats = cfg.cats;
@@ -191,6 +202,8 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
     router.refresh(); flash("Deleted.");
   }
   const amt = (v: number) => `${cfg.sign}${money(v)}`;
+  const shownTotal = useCountUp(total, 1000); // el número grande sube hasta el total
+  const [people, setPeople] = useState<PayerOption[]>(customers);
 
   function go(key: RangeKey, from?: string, to?: string) {
     const sp = new URLSearchParams({ range: key });
@@ -276,13 +289,19 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
         )}
 
         <div className={`transition-opacity duration-200 ${pending ? "opacity-50" : "opacity-100"}`}>
-          {/* Tarjeta blanca (igual que el Home): rojo para gastos, verde para entradas */}
-          <div className="mt-4 rounded-3xl border border-slate-200 bg-white px-5 py-5 shadow-[0_6px_20px_rgba(15,40,60,0.05)]">
+          {/* Celular: tarjeta blanca de siempre (rojo gastos / verde entradas) con el número que sube */}
+          <div className="mt-4 rounded-3xl border border-slate-200 bg-white px-5 py-5 shadow-[0_6px_20px_rgba(15,40,60,0.05)] animate-[bp-pop-in_0.45s_cubic-bezier(.2,.8,.2,1)_both] lg:hidden">
             <p className="flex items-center gap-2 text-[14px] font-medium text-slate-500">
-              <span className="inline-flex h-2 w-2 rounded-full" style={{ background: cfg.dot }} />{cfg.verb} · {range.label}
+              <span className="relative inline-flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" style={{ background: cfg.dot }} /><span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: cfg.dot }} /></span>{cfg.verb} · {range.label}
             </p>
-            <p className="mt-1 text-[40px] font-bold leading-none tracking-tight tabular-nums sm:text-[44px]" style={{ color: cfg.color }}>{amt(total)}</p>
+            <p className="mt-1 text-[40px] font-bold leading-none tracking-tight tabular-nums sm:text-[44px]" style={{ color: cfg.color }}>{amt(shownTotal)}</p>
             <p className="mt-2 text-[13px] text-slate-500">{list.length} {list.length === 1 ? cfg.one : cfg.many} · {short(range.from)} – {short(range.to)}</p>
+          </div>
+
+          {/* Escritorio: tracker con barritas + resumen rápido */}
+          <div className="mt-4 hidden gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_340px]">
+            <LedgerTracker kind={kind} rows={list} range={range} total={shownTotal} realTotal={total} color={cfg.color} sign={cfg.sign} verb={cfg.verb} title={kind === "income" ? "Money In tracker" : "Spending tracker"} />
+            <LedgerGlance kind={kind} rows={list} />
           </div>
 
           <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -295,12 +314,12 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
                 </div>
               ) : (
                 <div>
-                  {byDay.map(([day, items]) => (
-                    <section key={day}>
+                  {byDay.map(([day, items], di) => (
+                    <section key={day} className="animate-[bp-fade_0.4s_ease-out_both]" style={{ animationDelay: `${Math.min(di, 8) * 60}ms` }}>
                       {/* Encabezado de fecha (normal, no pegajoso: así nunca tapa los montos) */}
                       <div className="flex items-center justify-between border-y border-slate-100 bg-slate-50 px-4 py-2 text-[12px] font-semibold uppercase tracking-wide text-slate-500 first:border-t-0">
                         <span>{fmtD(day)}</span>
-                        <span className="tabular-nums" style={{ color: cfg.color }}>{amt(items.reduce((a, r) => a + Number(r.amount), 0))}</span>
+                        <span className="tabular-nums text-[#0b1f3a]">{amt(items.reduce((a, r) => a + Number(r.amount), 0))}</span>
                       </div>
                       <ul className="divide-y divide-slate-100">
                         {items.map((r) => (
@@ -311,7 +330,7 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
                                 <span className="block truncate text-[15px] font-medium text-[#0b1f3a]">{r.category}</span>
                                 <span className="block truncate text-[13px] text-slate-500">{[r.party, r.payment_mode, r.notes].filter(Boolean).join(" · ") || "—"}</span>
                               </span>
-                              <span className="shrink-0 pl-2 font-semibold tabular-nums" style={{ color: cfg.color }}>{amt(r.amount)}</span>
+                              <span className="shrink-0 pl-2 font-semibold tabular-nums text-[#0b1f3a]">{amt(r.amount)}</span>
                             </button>
                             {/* Borrar directo (papelera roja con la tapa que se levanta) */}
                             <button type="button" onClick={() => removeEntry(r)} aria-label={`Delete this ${cfg.one}`} title="Delete"
@@ -330,15 +349,32 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
               )}
             </div>
             {byCat.length > 0 && (
-              <div className="h-fit rounded-2xl border border-slate-200 bg-white p-4">
-                <p className="mb-3 text-[13px] font-semibold uppercase tracking-wide text-slate-500">By category</p>
-                <ul className="space-y-3">
-                  {byCat.slice(0, 8).map(([name, v]) => (
-                    <li key={name}>
-                      <div className="flex items-center gap-2.5 text-[14px]"><CatIcon cats={cats} name={name} size={28} /><span className="flex-1 truncate text-slate-700">{name}</span><span className="font-semibold tabular-nums" style={{ color: cfg.color }}>{amt(v)}</span></div>
-                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full transition-all duration-700" style={{ width: `${(v / (byCat[0][1] || 1)) * 100}%`, background: catOf(cats, name).color }} /></div>
-                    </li>
-                  ))}
+              <div className="h-fit rounded-2xl border border-slate-200 bg-white p-4 lg:p-5">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-500">By category</p>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">{byCat.length}</span>
+                </div>
+                <ul className="space-y-3.5">
+                  {byCat.slice(0, 8).map(([name, v], k) => {
+                    const [c1, c2] = BAR_COLORS[k % BAR_COLORS.length];
+                    const share = total > 0 ? v / total : 0;
+                    return (
+                      <li key={name} className="group animate-[bp-fade_0.4s_ease-out_both]" style={{ animationDelay: `${120 + k * 70}ms` }}>
+                        <div className="flex items-center gap-2.5 text-[14px]">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-110 group-hover:-rotate-6" style={{ background: `${c1}18`, color: c1 }}>
+                            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d={catOf(cats, name).icon} /></svg>
+                          </span>
+                          <span className="flex-1 truncate text-slate-700">{name}</span>
+                          <span className="text-[11.5px] font-semibold tabular-nums" style={{ color: c1 }}>{Math.round(share * 100)}%</span>
+                          <span className="font-semibold tabular-nums text-[#0b1f3a]">{amt(v)}</span>
+                        </div>
+                        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100">
+                          <div className="bp-shimmer h-full origin-left rounded-full animate-[bp-bar-in_0.9s_cubic-bezier(.2,.8,.2,1)_both] transition-[width] duration-700"
+                            style={{ width: `${Math.max(4, (v / (byCat[0][1] || 1)) * 100)}%`, background: `linear-gradient(90deg, ${c1}, ${c2})`, boxShadow: `0 0 10px ${c1}55`, animationDelay: `${150 + k * 90}ms`, ["--bp-delay" as string]: `${1 + k * 0.35}s` }} />
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}
@@ -347,15 +383,19 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
       </div>
 
       <ExpenseModal cfg={cfg} open={edit !== null} expense={edit === "new" ? null : edit} onClose={() => setEdit(null)} companyId={companyId} actor={actor}
+        people={people} onPersonCreated={(c) => setPeople((p) => [...p, c].sort((a, b) => a.display_name.localeCompare(b.display_name)))} linkReady={linkReady}
         onSaved={(m) => { setEdit(null); router.refresh(); flash(m); }} />
       <Toast text={toast} />
     </div>
   );
 }
 
-function ExpenseModal({ cfg, open, expense, onClose, companyId, actor, onSaved }: {
+function ExpenseModal({ cfg, open, expense, onClose, companyId, actor, onSaved, people, onPersonCreated, linkReady }: {
   cfg: Cfg; open: boolean; expense: Entry | null; onClose: () => void; companyId: string; actor: string; onSaved: (msg: string) => void;
+  people: PayerOption[]; onPersonCreated: (c: PayerOption) => void; linkReady: boolean;
 }) {
+  const isIncome = cfg.table === "other_income";
+  const [customerId, setCustomerId] = useState<string | null>(null);
   const [date, setDate] = useState(today());
   const cats = cfg.cats;
   const [cat, setCat] = useState<string>(cats[0].name);
@@ -377,7 +417,7 @@ function ExpenseModal({ cfg, open, expense, onClose, companyId, actor, onSaved }
     setDate(expense?.date ?? today()); setCat(expense?.category ?? cats[0].name);
     setCustom(expense && !cats.some((c) => c.name === expense.category) ? expense.category : ""); setVendor(expense?.party ?? "");
     setAmount(expense ? String(expense.amount) : ""); setMode(expense?.payment_mode ?? (cfg.table === "expenses" ? "Credit Card" : "Cash")); setRef(expense?.reference ?? "");
-    setNotes(expense?.notes ?? ""); setFile(null); setError("");
+    setNotes(expense?.notes ?? ""); setFile(null); setError(""); setCustomerId(expense?.customer_id ?? null);
   }
   if (!open && loaded) setLoaded("");
 
@@ -394,10 +434,13 @@ function ExpenseModal({ cfg, open, expense, onClose, companyId, actor, onSaved }
       if (!up.error) receipt = { receipt_path: path, receipt_name: file.name };
     }
     const category = (isCustom || cat === "Other") ? (custom.trim() || "Other") : cat;
-    const row = { [cfg.dateCol]: date, category, [cfg.partyCol]: vendor.trim() || null, amount: a, payment_mode: mode, reference: ref.trim() || null, notes: notes.trim() || null, ...receipt, updated_at: new Date().toISOString() };
-    const { error: e } = expense
-      ? await s.from(cfg.table).update(row).eq("id", expense.id)
-      : await s.from(cfg.table).insert({ ...row, company_id: companyId, created_by_name: actor });
+    const row: Record<string, unknown> = { [cfg.dateCol]: date, category, [cfg.partyCol]: vendor.trim() || null, amount: a, payment_mode: mode, reference: ref.trim() || null, notes: notes.trim() || null, ...receipt, updated_at: new Date().toISOString() };
+    const write = (r: Record<string, unknown>) => expense
+      ? s.from(cfg.table).update(r).eq("id", expense.id)
+      : s.from(cfg.table).insert({ ...r, company_id: companyId, created_by_name: actor });
+    // Money In: se guarda el cliente ligado (si ya se corrió el SQL); si no, solo el nombre
+    let { error: e } = await write(isIncome && linkReady ? { ...row, customer_id: customerId } : row);
+    if (e && isIncome && linkReady && /customer_id/i.test(e.message)) ({ error: e } = await write(row));
     setBusy(false);
     if (e) return setError(`It couldn't be saved. ${cfg.sql}`);
     onSaved(expense ? "Saved." : `${cfg.one[0].toUpperCase()}${cfg.one.slice(1)} added.`);
@@ -449,8 +492,16 @@ function ExpenseModal({ cfg, open, expense, onClose, companyId, actor, onSaved }
             <div className="flex"><span className="flex items-center rounded-l-lg border border-r-0 border-slate-200 bg-slate-100 px-3 text-sm text-slate-600">USD</span>
               <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="0.00" className={`${inputClass} rounded-l-none`} /></div></label>
           <div><span className="mb-1.5 block text-sm font-medium text-slate-700">Date</span><DatePicker value={date} onChange={setDate} /></div>
-          <label className="block"><span className="mb-1.5 block text-sm font-medium text-slate-700">{cfg.partyLabel}</span>
-            <input value={vendor} onChange={(e) => setVendor(e.target.value)} placeholder={cfg.partyPh} className={inputClass} /></label>
+          {isIncome ? (
+            <div className="sm:col-span-2"><span className="mb-1.5 block text-sm font-medium text-slate-700">{cfg.partyLabel}</span>
+              <PayerPicker companyId={companyId} people={people} customerId={customerId} name={vendor}
+                onPick={(c) => { setCustomerId(c?.id ?? null); setVendor(c?.display_name ?? ""); }}
+                onType={(t) => { setVendor(t); setCustomerId(null); }}
+                onCreated={(c) => { onPersonCreated(c); setCustomerId(c.id); setVendor(c.display_name); }} /></div>
+          ) : (
+            <label className="block"><span className="mb-1.5 block text-sm font-medium text-slate-700">{cfg.partyLabel}</span>
+              <input value={vendor} onChange={(e) => setVendor(e.target.value)} placeholder={cfg.partyPh} className={inputClass} /></label>
+          )}
           <div><span className="mb-1.5 block text-sm font-medium text-slate-700">{cfg.modeLabel}</span>
             <SelectMenu value={mode} options={PAYMENT_MODES.map((m) => ({ value: m, label: m }))} onChange={setMode} ariaLabel="Payment mode" /></div>
           <label className="block"><span className="mb-1.5 block text-sm font-medium text-slate-700">Reference#</span>

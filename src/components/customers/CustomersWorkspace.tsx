@@ -45,6 +45,9 @@ export default function CustomersWorkspace({
 
   const params = readListParams(Object.fromEntries(sp.entries()));
   const list = useMemo(() => filterSortCustomers(customers, params), [customers, params]);
+  // Un color distinto por cliente (el mismo en celular y escritorio, aunque filtres o busques)
+  const colorOf = useMemo(() => { const ids = [...customers].sort((a, b) => (a.display_name || "").localeCompare(b.display_name || "") || a.id.localeCompare(b.id)).map((c) => c.id); const cs = listColors(ids); return new Map(ids.map((id, i) => [id, cs[i]])); }, [customers]);
+  const colors = list.map((c) => colorOf.get(c.id));
 
   // Las pantallas de formulario ocupan todo (no llevan lista al lado)
   const isForm = pathname.endsWith("/new") || pathname.endsWith("/import") || pathname.endsWith("/edit");
@@ -164,20 +167,20 @@ export default function CustomersWorkspace({
             <EmptyState filtered={filtered} />
           ) : selectedId ? (
             <ul className="divide-y divide-slate-100">
-              {list.map((c) => <CompactRow key={c.id} c={c} active={c.id === selectedId} />)}
+              {list.map((c, i) => <CompactRow key={c.id} c={c} active={c.id === selectedId} color={colors[i]} />)}
             </ul>
           ) : (
             <div className="px-5 pb-10 sm:px-8">
               {/* Celular: filas compactas (avatar + nombre principal + correo), caben más clientes por pantalla */}
               <ul className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white md:hidden">
-                {(() => { const colors = listColors(list.map((c) => c.id)); return list.map((c, i) => <MobileRow key={c.id} c={c} m={money[c.id]} color={colors[i]} />); })()}
+                {list.map((c, i) => <MobileRow key={c.id} c={c} m={money[c.id]} color={colors[i]} />)}
               </ul>
               <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white md:block">
                 <div className={`hidden gap-4 border-b border-slate-100 bg-slate-50/70 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500 md:grid ${COLS}`}>
                   <span>Name</span><span>Company name</span><span>Email</span><span>Phone</span><span>Location</span>
                 </div>
                 <ul className="divide-y divide-slate-100">
-                  {list.map((c) => <WideRow key={c.id} c={c} />)}
+                  {list.map((c, i) => <WideRow key={c.id} c={c} color={colors[i]} />)}
                 </ul>
               </div>
             </div>
@@ -287,12 +290,12 @@ function MobileRow({ c, m, color }: { c: ListRow; m?: { receivable: number; cred
   );
 }
 
-function CompactRow({ c, active }: { c: ListRow; active: boolean }) {
+function CompactRow({ c, active, color }: { c: ListRow; active: boolean; color?: string }) {
   return (
     <li className="group relative">
       <Link prefetch={false} href={`/dashboard/customers/${c.id}`}
         className={`relative flex items-center gap-3 px-4 py-3 transition-colors ${active ? "bg-[#d7f1eb] before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-[#0f766e]" : "hover:bg-[#f0faf7]"}`}>
-        <Avatar name={c.display_name} url={null} seed={c.id} size={38} />
+        <Avatar name={c.display_name} url={null} seed={c.id} size={38} color={color} />
         <span className="min-w-0 flex-1 pr-8">
           <span className={`block truncate font-medium ${active ? "text-[#0f766e]" : "text-[#0b1f3a]"}`}>{c.display_name}</span>
           <span className="block truncate text-xs text-slate-500">{subtitle(c)}</span>
@@ -303,7 +306,7 @@ function CompactRow({ c, active }: { c: ListRow; active: boolean }) {
   );
 }
 
-function WideRow({ c }: { c: ListRow }) {
+function WideRow({ c, color }: { c: ListRow; color?: string }) {
   const primary = c.customer_addresses.find((a) => a.is_primary) ?? c.customer_addresses[0];
   const more = c.customer_addresses.length - 1;
   const person = [c.first_name, c.last_name].filter(Boolean).join(" ");
@@ -312,7 +315,7 @@ function WideRow({ c }: { c: ListRow }) {
       <Link prefetch={false} href={`/dashboard/customers/${c.id}`}
         className={`grid gap-1 px-5 py-4 transition-colors hover:bg-[#f0faf7] md:items-center md:gap-4 ${COLS}`}>
         <span className="flex min-w-0 items-center gap-3">
-          <Avatar name={c.display_name} url={null} seed={c.id} size={36} />
+          <Avatar name={c.display_name} url={null} seed={c.id} size={36} color={color} />
           <span className="min-w-0">
             <span className="block truncate font-medium text-[#0f766e]">{c.customer_type === "commercial" && person ? person : c.display_name}</span>
             <span className="block text-xs text-slate-500">{c.customer_type === "commercial" ? "Commercial" : "Residential"}</span>

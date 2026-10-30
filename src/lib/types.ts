@@ -129,17 +129,34 @@ export function softColor(seed: string | number) {
 }
 
 export const SOLID_COLORS = SOLID_PALETTE;
-// Colores para una lista: nunca dos iguales seguidos
-// (verde azulado y verde cuentan como "parecidos", igual azul y celeste)
-const FAMILY = ["g", "b", "v", "p", "o", "y", "g", "b", "r", "s"];
+// Colores para una LISTA (celular y escritorio): cada cliente con un color distinto.
+// No se repite ningún color hasta usar los 14, y nunca quedan dos parecidos juntos.
+const LIST_PALETTE: [string, string][] = [
+  ["#0f766e", "teal"], ["#2563eb", "blue"], ["#db2777", "pink"], ["#ea580c", "orange"],
+  ["#7c3aed", "violet"], ["#16a34a", "green"], ["#dc2626", "red"], ["#ca8a04", "yellow"],
+  ["#0891b2", "cyan"], ["#475569", "slate"], ["#c026d3", "fuchsia"], ["#65a30d", "lime"],
+  ["#92400e", "brown"], ["#1e3a8a", "navy"],
+];
+const NEAR: Record<string, string[]> = {
+  teal: ["green", "cyan"], green: ["teal", "lime"], lime: ["green", "yellow"], cyan: ["teal", "blue"],
+  blue: ["navy", "cyan", "violet"], navy: ["blue", "slate"], violet: ["fuchsia", "blue"], fuchsia: ["violet", "pink"],
+  pink: ["fuchsia", "red"], red: ["pink", "orange"], orange: ["red", "brown", "yellow"], brown: ["orange", "yellow"],
+  yellow: ["brown", "lime", "orange"], slate: ["navy"],
+};
 export function listColors(seeds: string[]) {
-  const out: number[] = [];
-  seeds.forEach((sd, i) => {
-    let k = hash(sd) % SOLID_PALETTE.length;
-    for (let t = 0; i > 0 && t < SOLID_PALETTE.length && FAMILY[k] === FAMILY[out[i - 1]]; t++) k = (k + 1) % SOLID_PALETTE.length;
-    out.push(k);
+  const N = LIST_PALETTE.length;
+  const used = new Array(N).fill(0);
+  let prev = -1;
+  return seeds.map((sd) => {
+    const start = hash(sd) % N;
+    const low = Math.min(...used);
+    const like = (k: number) => prev >= 0 && (k === prev || NEAR[LIST_PALETTE[prev][1]].includes(LIST_PALETTE[k][1]));
+    let pick = -1;
+    for (let t = 0; t < N && pick < 0; t++) { const k = (start + t) % N; if (used[k] === low && !like(k)) pick = k; }
+    for (let t = 0; t < N && pick < 0; t++) { const k = (start + t) % N; if (used[k] === low) pick = k; }
+    used[pick]++; prev = pick;
+    return LIST_PALETTE[pick][0];
   });
-  return out.map((k) => SOLID_PALETTE[k]);
 }
 
 export function solidColor(seed: string) {

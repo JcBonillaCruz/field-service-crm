@@ -49,3 +49,13 @@
 @keyframes bp-lid { 0%, 70%, 100% { transform: rotate(0); } 80% { transform: rotate(-14deg) translateY(-1px); } 90% { transform: rotate(6deg); } }
 @keyframes bp-sheet-up { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes bp-wiggle { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-12deg); } 60% { transform: rotate(8deg); } }
+
+/* Paso Finanzas+ : barritas que avanzan, brillo que recorre las barras, números que laten */
+@keyframes bp-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes bp-bar-in { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes bp-shimmer { 0% { transform: translateX(-120%); } 55%, 100% { transform: translateX(260%); } }
+@keyframes bp-pop-in { 0% { opacity: 0; transform: translateY(8px) scale(.96); } 100% { opacity: 1; transform: none; } }
+@keyframes bp-stick { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.bp-shimmer { position: relative; overflow: hidden; }
+.bp-shimmer::after { content: ""; position: absolute; inset: 0; width: 45%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.65), transparent); animation: bp-shimmer 2.8s ease-in-out infinite; animation-delay: var(--bp-delay, 0s); }
+@media (prefers-reduced-motion: reduce) { .bp-shimmer::after { animation: none; } }

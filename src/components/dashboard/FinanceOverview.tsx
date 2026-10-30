@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { MobileStats } from "@/lib/dashboard-server";
-import { InsightsCard, useCountUp } from "@/components/dashboard/MobileWidgets";
+import Link from "next/link";
+import { useCountUp } from "@/components/dashboard/MobileWidgets";
+import DesktopInsights from "@/components/dashboard/DesktopInsights";
 
 const $ = (v: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(v || 0);
 const short = (v: number) => (Math.abs(v) >= 1000 ? `$${(v / 1000).toFixed(Math.abs(v) >= 10000 ? 0 : 1)}K` : `$${Math.round(v)}`);
@@ -25,32 +27,65 @@ function Spark({ values, color }: { values: number[]; color: string }) {
   return <svg viewBox="0 0 100 30" className="h-8 w-full" preserveAspectRatio="none"><path d={smooth(pts)} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke" /></svg>;
 }
 
-function Kpi({ label, value, sub, color, tone, series }: { label: string; value: number; sub: string; color: string; tone: string; series: number[] }) {
-  const v = useCountUp(value);
+// Tarjetas de arriba (estilo "Your store at a glance"): fondo pastel suavecito, ícono en cuadrito blanco,
+// formas decorativas que se mueven, número que sube y un mensajito al pasar el mouse.
+type KpiTheme = { bg: string; blob: string; icon: string; iconColor: string };
+const KPI_THEME: Record<"in" | "out" | "profit" | "owe", KpiTheme> = {
+  in: { bg: "linear-gradient(135deg,#e6f6f2 0%,#f3fbf9 100%)", blob: "#c9ece3", icon: "M12 19V5M5 12l7-7 7 7", iconColor: "#0f766e" },
+  out: { bg: "linear-gradient(135deg,#fdecee 0%,#fff6f6 100%)", blob: "#f8d3d8", icon: "M12 5v14M5 12l7 7 7-7", iconColor: "#e11d48" },
+  profit: { bg: "linear-gradient(135deg,#e8edfb 0%,#f5f7fe 100%)", blob: "#d3dcf6", icon: "M3 17l6-6 4 4 8-8M15 7h6v6", iconColor: "#3b5bdb" },
+  owe: { bg: "linear-gradient(135deg,#fdf1e2 0%,#fff9f1 100%)", blob: "#f7dfbf", icon: "M4 6h16v12H4zM4 10h16M8 15h3", iconColor: "#c2410c" },
+};
+function Kpi({ label, value, sub, color, tone, series, theme, tip, delay = 0 }: { label: string; value: number; sub: string; color: string; tone: string; series: number[]; theme: KpiTheme; tip: string; delay?: number }) {
+  const v = useCountUp(value, 1200);
   return (
-    <div className="group rounded-2xl border border-slate-200 bg-white p-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_10px_28px_rgba(15,40,60,0.08)]">
-      <p className={`text-[12px] font-semibold uppercase tracking-wide ${tone}`}>{label}</p>
-      <p className="mt-1 text-[24px] font-bold tabular-nums text-[#0b1f3a]">{value < 0 ? "-" : ""}{$(Math.abs(v))}</p>
-      <p className="text-[12px] text-slate-500">{sub}</p>
-      <div className="mt-2 opacity-80 transition-opacity group-hover:opacity-100"><Spark values={series} color={color} /></div>
+    <div className="group relative animate-[bp-pop-in_0.5s_cubic-bezier(.2,.8,.2,1)_both]" style={{ animationDelay: `${delay}ms` }}>
+      {/* Mensajito al pasar el mouse */}
+      <div className="pointer-events-none absolute -top-2 left-1/2 z-20 w-[min(17rem,92%)] -translate-x-1/2 -translate-y-full rounded-xl bg-[#0b1f3a] px-3.5 py-2.5 text-[12.5px] leading-snug text-white opacity-0 shadow-[0_12px_30px_rgba(11,31,58,0.28)] transition-all duration-200 group-hover:-translate-y-[calc(100%+4px)] group-hover:opacity-100">
+        {tip}
+        <span className="absolute -bottom-1.5 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 bg-[#0b1f3a]" />
+      </div>
+      <div className="relative overflow-hidden rounded-2xl border border-white p-5 shadow-[0_1px_2px_rgba(15,40,60,0.04)] ring-1 ring-slate-200/70 transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-[0_18px_36px_rgba(15,40,60,0.10)]" style={{ background: theme.bg }}>
+        <span className="pointer-events-none absolute -bottom-10 -right-6 h-32 w-32 rounded-full opacity-70 transition-transform duration-700 group-hover:-translate-x-4 group-hover:-translate-y-3 group-hover:scale-125" style={{ background: theme.blob }} />
+        <span className="pointer-events-none absolute -bottom-14 right-20 h-24 w-24 rounded-full opacity-40 transition-transform duration-700 group-hover:translate-x-3 group-hover:scale-110" style={{ background: theme.blob }} />
+        <div className="relative flex items-start justify-between gap-3">
+          <p className={`pt-1 text-[12px] font-semibold uppercase tracking-wide ${tone}`}>{label}</p>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white shadow-[0_4px_12px_rgba(15,40,60,0.08)] transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110" style={{ color: theme.iconColor }}>
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={theme.icon} /></svg>
+          </span>
+        </div>
+        <p className="relative mt-3 text-[30px] font-bold leading-none tracking-tight tabular-nums text-[#0b1f3a]">{value < 0 ? "-" : ""}{$(Math.abs(v))}</p>
+        <p className="relative mt-1.5 text-[12.5px] font-medium text-slate-500">{sub}</p>
+        <div className="relative mt-2 opacity-80 transition-opacity group-hover:opacity-100"><Spark values={series} color={color} /></div>
+      </div>
     </div>
   );
 }
 
-// Anillo animado (margen, cobranza, cierre de cotizaciones)
-function Ring({ pct, label, sub, color }: { pct: number; label: string; sub: string; color: string }) {
+// Anillo animado (margen, cobranza, cierre de cotizaciones): se puede hacer clic y te lleva a esa información
+function Ring({ pct, label, sub, color, href, cta }: { pct: number; label: string; sub: string; color: string; href: string; cta: string }) {
   const [p, setP] = useState(0);
   useEffect(() => { const t = setTimeout(() => setP(Math.max(0, Math.min(1, pct))), 150); return () => clearTimeout(t); }, [pct]);
   const r = 34, c = 2 * Math.PI * r;
   return (
-    <div className="flex items-center gap-4">
-      <svg viewBox="0 0 84 84" className="h-[84px] w-[84px] -rotate-90">
-        <circle cx="42" cy="42" r={r} fill="none" stroke="#eef2f6" strokeWidth="9" />
-        <circle cx="42" cy="42" r={r} fill="none" stroke={color} strokeWidth="9" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - p)} style={{ transition: "stroke-dashoffset 1.1s cubic-bezier(.2,.8,.2,1)" }} />
-        <text x="42" y="47" textAnchor="middle" fontSize="16" fontWeight="700" fill="#0b1f3a" transform="rotate(90 42 42)">{Math.round(pct * 100)}%</text>
-      </svg>
-      <div><p className="text-[14px] font-semibold text-[#0b1f3a]">{label}</p><p className="text-[12px] text-slate-500">{sub}</p></div>
-    </div>
+    <Link prefetch={false} href={href} className="group -mx-2 flex items-center gap-4 rounded-2xl px-2 py-1.5 transition-all duration-200 hover:bg-slate-50 hover:shadow-[inset_0_0_0_1px_rgba(15,40,60,0.06)] active:scale-[0.99]">
+      <span className="relative shrink-0">
+        <span className="absolute inset-[10px] rounded-full opacity-0 transition-all duration-300 group-hover:inset-[6px] group-hover:opacity-100" style={{ background: `${color}1f` }} />
+        <svg viewBox="0 0 84 84" className="relative h-[84px] w-[84px] -rotate-90 transition-transform duration-300 group-hover:scale-105">
+          <circle cx="42" cy="42" r={r} fill="none" stroke="#eef2f6" strokeWidth="9" className="transition-[stroke] duration-300" />
+          <circle cx="42" cy="42" r={r} fill="none" stroke={color} strokeWidth="9" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - p)}
+            className="transition-[stroke-width] duration-300 group-hover:[stroke-width:11]" style={{ transition: "stroke-dashoffset 1.1s cubic-bezier(.2,.8,.2,1), stroke-width .3s" }} />
+          <text x="42" y="47" textAnchor="middle" fontSize="16" fontWeight="700" fill="#0b1f3a" transform="rotate(90 42 42)">{Math.round(pct * 100)}%</text>
+        </svg>
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[14px] font-semibold text-[#0b1f3a] transition-colors group-hover:text-[color:var(--ring)]" style={{ ["--ring" as string]: color }}>{label}</span>
+        <span className="block text-[12px] text-slate-500">{sub}</span>
+        <span className="mt-1 inline-flex max-h-0 items-center gap-1 overflow-hidden text-[12px] font-semibold opacity-0 transition-all duration-200 group-hover:max-h-5 group-hover:opacity-100" style={{ color }}>
+          {cta}<svg viewBox="0 0 20 20" className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" fill="currentColor"><path d="M7.3 5.3a1 1 0 0 1 1.4 0l4 4a1 1 0 0 1 0 1.4l-4 4a1 1 0 0 1-1.4-1.4L10.6 10 7.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
+        </span>
+      </span>
+    </Link>
   );
 }
 
@@ -85,10 +120,14 @@ export default function FinanceOverview({ st }: { st: MobileStats }) {
   return (
     <section className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Kpi label="Received this year" value={st.ytdReceived} sub={`${$(st.receipts12)} in the last 12 months`} color="#14b8a6" tone="text-[#0f766e]" series={st.receipts} />
-        <Kpi label="Spent this year" value={st.ytdExpenses} sub="Supplies, payroll, fuel…" color="#f97316" tone="text-[#e11d48]" series={st.expenses} />
-        <Kpi label="Net profit" value={profitYtd} sub={st.ytdReceived ? `${Math.round(margin * 100)}% margin` : "Add payments and expenses"} color="#0b1f3a" tone={profitYtd >= 0 ? "text-[#047857]" : "text-[#e11d48]"} series={profitM} />
-        <Kpi label="Customers owe you" value={st.total} sub={`${$(st.overdue)} overdue`} color="#f59e0b" tone="text-[#b45309]" series={st.income} />
+        <Kpi delay={0} theme={KPI_THEME.in} label="Received this year" value={st.ytdReceived} sub={`${$(st.receipts12)} in the last 12 months`} color="#14b8a6" tone="text-[#0f766e]" series={st.receipts}
+          tip={st.ytdReceived > 0 ? `This is all the money that came in this year (${$(st.ytdReceived)}): paid invoices plus Money In.` : "Record payments or Money In and your income shows up here."} />
+        <Kpi delay={80} theme={KPI_THEME.out} label="Spent this year" value={st.ytdExpenses} sub="Supplies, payroll, fuel…" color="#f97316" tone="text-[#e11d48]" series={st.expenses}
+          tip={st.ytdExpenses > 0 ? `Everything you spent this year (${$(st.ytdExpenses)}). Every dollar you save here goes straight to your profit.` : "Add your expenses to see what you really keep."} />
+        <Kpi delay={160} theme={KPI_THEME.profit} label="Net profit" value={profitYtd} sub={st.ytdReceived ? `${Math.round(margin * 100)}% margin` : "Add payments and expenses"} color="#0b1f3a" tone={profitYtd >= 0 ? "text-[#047857]" : "text-[#e11d48]"} series={profitM}
+          tip={profitYtd >= 0 ? `Nice work! This is what you really kept this year: ${$(profitYtd)} after expenses.` : `You're losing ${$(Math.abs(profitYtd))} this year: you spent more than you collected.`} />
+        <Kpi delay={240} theme={KPI_THEME.owe} label="Customers owe you" value={st.total} sub={`${$(st.overdue)} overdue`} color="#f59e0b" tone="text-[#b45309]" series={st.income}
+          tip={st.total > 0 ? `${$(st.total)} in unpaid invoices${st.overdue > 0 ? `, ${$(st.overdue)} already overdue. A friendly reminder usually gets you paid this week.` : ". Nothing is overdue yet."}` : "All caught up: no customer owes you money right now."} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -143,10 +182,10 @@ export default function FinanceOverview({ st }: { st: MobileStats }) {
         </div>
 
         <div className="space-y-4">
-          <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
-            <Ring pct={margin} label="Profit margin" sub={st.ytdReceived ? "Of what you collected this year, you kept this much" : "Shows once you record payments"} color={margin >= 0.3 ? "#10b981" : margin >= 0.15 ? "#f59e0b" : "#ef4444"} />
-            <Ring pct={collect} label="Collection rate" sub="Paid vs invoiced, last 12 months" color="#14b8a6" />
-            <Ring pct={win} label="Quote win rate" sub={decided ? `${st.quoteStats.accepted} won · ${st.quoteStats.declined} lost` : "Shows after customers answer quotes"} color="#6366f1" />
+          <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5">
+            <Ring href="/dashboard/expenses" cta="See where your money goes" pct={margin} label="Profit margin" sub={st.ytdReceived ? "Of what you collected this year, you kept this much" : "Shows once you record payments"} color={margin >= 0.3 ? "#10b981" : margin >= 0.15 ? "#f59e0b" : "#ef4444"} />
+            <Ring href="/dashboard/invoices" cta="Open invoices" pct={collect} label="Collection rate" sub="Paid vs invoiced, last 12 months" color="#14b8a6" />
+            <Ring href="/dashboard/quotes" cta="Open quotes" pct={win} label="Quote win rate" sub={decided ? `${st.quoteStats.accepted} won · ${st.quoteStats.declined} lost` : "Shows after customers answer quotes"} color="#6366f1" />
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <p className="text-[15px] font-semibold text-[#0b1f3a]">Where your money goes</p>
@@ -169,7 +208,7 @@ export default function FinanceOverview({ st }: { st: MobileStats }) {
         </div>
       </div>
 
-      <InsightsCard st={st} />
+      <DesktopInsights st={st} />
     </section>
   );
 }

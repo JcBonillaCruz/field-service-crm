@@ -125,6 +125,12 @@ export default function NotificationsProvider({ companyId, userId, enabled, chil
   }, []);
 
   const visible = useMemo(() => items.filter((n) => !localRead.includes(n.key)), [items, localRead]);
+  // Numerito sobre el ícono de la app instalada (iPhone 16.4+ y Android): igual a los avisos sin leer
+  useEffect(() => {
+    const nav = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+    if (!enabled || !nav.setAppBadge) return;
+    (visible.length ? nav.setAppBadge(visible.length) : nav.clearAppBadge?.())?.catch(() => undefined);
+  }, [visible.length, enabled]);
   const value = useMemo<Ctx>(() => ({ items: visible, unread: visible.length, markRead, push, pushMsg, enablePush, disablePush }),
     [visible, markRead, push, pushMsg, enablePush, disablePush]);
   return <NotificationsCtx.Provider value={value}>{children}</NotificationsCtx.Provider>;

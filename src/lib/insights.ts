@@ -1,6 +1,7 @@
 import type { MobileStats } from "@/lib/dashboard-server";
 
-export type Insight = { tone: "good" | "warn" | "bad" | "info"; title: string; body: string; href?: string; cta?: string };
+// stat/statLabel/more: extras que solo usa la vista de escritorio (panel grande al pasar el mouse)
+export type Insight = { tone: "good" | "warn" | "bad" | "info"; title: string; body: string; href?: string; cta?: string; stat?: number; statKind?: "money" | "pct"; statLabel?: string; more?: string };
 
 const $ = (v: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(v || 0);
 const pct = (v: number) => `${Math.round(v * 100)}%`;
@@ -14,28 +15,28 @@ export function buildInsights(st: MobileStats): Insight[] {
   const profitYtd = st.ytdReceived - st.ytdExpenses;
   const margin = st.ytdReceived > 0 ? profitYtd / st.ytdReceived : 0;
 
-  if (st.ytdReceived > 0 && profitYtd < 0) out.push({ tone: "bad", title: "You're spending more than you collect", body: `This year you've spent ${$(st.ytdExpenses)} but collected ${$(st.ytdReceived)}. Review your biggest expense categories and collect overdue invoices first.`, href: "/dashboard/expenses", cta: "Review expenses" });
-  else if (st.ytdReceived > 0 && margin < 0.2) out.push({ tone: "warn", title: `Profit margin is ${pct(margin)}`, body: "Service businesses usually aim for 20–40%. Consider raising prices on your most requested services or cutting one recurring cost.", href: "/dashboard/items", cta: "Check prices" });
-  else if (st.ytdReceived > 0 && margin >= 0.4) out.push({ tone: "good", title: `Healthy profit margin: ${pct(margin)}`, body: `You kept ${$(profitYtd)} of every dollar collected this year. Set aside part of it for taxes and slow months.` });
+  if (st.ytdReceived > 0 && profitYtd < 0) out.push({ tone: "bad", title: "You're spending more than you collect", stat: profitYtd, statKind: "money", statLabel: "Net this year", more: "Start with the category that eats the most money and look for one cost you can pause this month.", body: `This year you've spent ${$(st.ytdExpenses)} but collected ${$(st.ytdReceived)}. Review your biggest expense categories and collect overdue invoices first.`, href: "/dashboard/expenses", cta: "Review expenses" });
+  else if (st.ytdReceived > 0 && margin < 0.2) out.push({ tone: "warn", title: `Profit margin is ${pct(margin)}`, stat: margin, statKind: "pct", statLabel: "Profit margin", more: "A small 5–10% price increase on your top services often lifts profit more than finding new customers.", body: "Service businesses usually aim for 20–40%. Consider raising prices on your most requested services or cutting one recurring cost.", href: "/dashboard/items", cta: "Check prices" });
+  else if (st.ytdReceived > 0 && margin >= 0.4) out.push({ tone: "good", title: `Healthy profit margin: ${pct(margin)}`, stat: profitYtd, statKind: "money", statLabel: "You kept this year", more: "You're doing great. Move 25–30% of every payment to a separate account for taxes, and keep a cushion for slow months.", body: `You kept ${$(profitYtd)} of every dollar collected this year. Set aside part of it for taxes and slow months.` });
 
   if (st.overdue > 0) {
     const late = st.agingCount.slice(1).reduce((a, b) => a + b, 0);
-    out.push({ tone: "warn", title: `${$(st.overdue)} is overdue`, body: `${late} ${late === 1 ? "invoice is" : "invoices are"} past due. A friendly reminder today usually gets paid within the week.`, href: "/dashboard/invoices?view=overdue", cta: "Send reminders" });
+    out.push({ tone: "warn", title: `${$(st.overdue)} is overdue`, stat: st.overdue, statKind: "money", statLabel: "Waiting to be collected", more: "Send the reminder by text or WhatsApp too: customers answer messages faster than emails.", body: `${late} ${late === 1 ? "invoice is" : "invoices are"} past due. A friendly reminder today usually gets paid within the week.`, href: "/dashboard/invoices?view=overdue", cta: "Send reminders" });
   }
   if (lastM > 0) {
     const ch = (thisM - lastM) / lastM;
     out.push(ch >= 0
-      ? { tone: "good", title: `Collections up ${pct(ch)} vs last month`, body: `You've received ${$(thisM)} this month vs ${$(lastM)} last month. Keep the momentum: follow up on open quotes.` }
-      : { tone: "info", title: `Collections down ${pct(-ch)} vs last month`, body: `${$(thisM)} so far this month vs ${$(lastM)} last month. The month isn't over: check unpaid invoices and quotes waiting for approval.` });
+      ? { tone: "good", title: `Collections up ${pct(ch)} vs last month`, stat: thisM, statKind: "money", statLabel: "Received this month", more: "Good momentum. Ask today's happy customers for a Google review while the job is fresh.", body: `You've received ${$(thisM)} this month vs ${$(lastM)} last month. Keep the momentum: follow up on open quotes.` }
+      : { tone: "info", title: `Collections down ${pct(-ch)} vs last month`, stat: thisM, statKind: "money", statLabel: "Received this month", more: "Slow weeks are normal. Call past customers for maintenance work: it's the easiest job to win.", body: `${$(thisM)} so far this month vs ${$(lastM)} last month. The month isn't over: check unpaid invoices and quotes waiting for approval.` });
   }
-  if (spentLast > 0 && spentM > spentLast * 1.25) out.push({ tone: "warn", title: `Spending is up ${pct((spentM - spentLast) / spentLast)} this month`, body: `${$(spentM)} spent vs ${$(spentLast)} last month. Make sure each purchase is tied to a job you're billing for.`, href: "/dashboard/expenses", cta: "See expenses" });
+  if (spentLast > 0 && spentM > spentLast * 1.25) out.push({ tone: "warn", title: `Spending is up ${pct((spentM - spentLast) / spentLast)} this month`, stat: spentM, statKind: "money", statLabel: "Spent this month", more: "Check if any of these purchases can be billed to a customer as materials.", body: `${$(spentM)} spent vs ${$(spentLast)} last month. Make sure each purchase is tied to a job you're billing for.`, href: "/dashboard/expenses", cta: "See expenses" });
   const totalCat = st.expenseByCat.reduce((a, [, v]) => a + v, 0);
-  if (st.expenseByCat[0] && totalCat > 0 && st.expenseByCat[0][1] / totalCat > 0.4) out.push({ tone: "info", title: `${st.expenseByCat[0][0]} is ${pct(st.expenseByCat[0][1] / totalCat)} of your spending`, body: "Your biggest cost category. Compare suppliers or buy in bulk for the jobs you do most." });
-  if (st.quoteStats.open > 0) out.push({ tone: "info", title: `${$(st.quoteStats.openValue)} waiting in open quotes`, body: `${st.quoteStats.open} ${st.quoteStats.open === 1 ? "quote is" : "quotes are"} sent and not answered yet. A quick call or text can close them.`, href: "/dashboard/quotes?view=sent", cta: "Follow up" });
+  if (st.expenseByCat[0] && totalCat > 0 && st.expenseByCat[0][1] / totalCat > 0.4) out.push({ tone: "info", title: `${st.expenseByCat[0][0]} is ${pct(st.expenseByCat[0][1] / totalCat)} of your spending`, stat: st.expenseByCat[0][1], statKind: "money", statLabel: "Your biggest expense", more: "This is where you can save the most. Cancel what you don't use, switch to a yearly plan, or compare 2–3 providers.", body: "Your biggest cost category. Compare suppliers or buy in bulk for the jobs you do most.", href: "/dashboard/expenses", cta: "See expenses" });
+  if (st.quoteStats.open > 0) out.push({ tone: "info", title: `${$(st.quoteStats.openValue)} waiting in open quotes`, stat: st.quoteStats.openValue, statKind: "money", statLabel: "In open quotes", more: "Quotes answered in the first 48 hours close much more often. A short follow-up text is enough.", body: `${st.quoteStats.open} ${st.quoteStats.open === 1 ? "quote is" : "quotes are"} sent and not answered yet. A quick call or text can close them.`, href: "/dashboard/quotes?view=sent", cta: "Follow up" });
   const decided = st.quoteStats.accepted + st.quoteStats.declined;
   if (decided >= 3) {
     const win = st.quoteStats.accepted / decided;
-    out.push({ tone: win >= 0.5 ? "good" : "warn", title: `You win ${pct(win)} of your quotes`, body: win >= 0.5 ? "Great close rate. You may have room to raise prices a little." : "Try sending quotes the same day, adding photos, and offering good/better/best options." });
+    out.push({ tone: win >= 0.5 ? "good" : "warn", title: `You win ${pct(win)} of your quotes`, stat: win, statKind: "pct", statLabel: `${st.quoteStats.accepted} won · ${st.quoteStats.declined} lost`, href: "/dashboard/quotes", cta: "See quotes", more: win >= 0.5 ? "Customers trust you. Try a premium option on your next quote." : "Write down why quotes are lost (price, timing or trust) and fix the most common one.", body: win >= 0.5 ? "Great close rate. You may have room to raise prices a little." : "Try sending quotes the same day, adding photos, and offering good/better/best options." });
   }
   if (st.ytdExpenses === 0) out.push({ tone: "info", title: "Add your expenses to see real profit", body: "Right now BrightPro only knows what comes in. Add supplies, payroll and fuel to see what you actually keep.", href: "/dashboard/expenses", cta: "Add an expense" });
   return out;
