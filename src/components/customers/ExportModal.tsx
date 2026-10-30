@@ -10,14 +10,15 @@ const MODULE_GROUPS: { group: string; items: string[] }[] = [
   { group: "Sales", items: ["Quotes", "Invoices", "Invoice payments", "Subscriptions", "Credit notes", "Credit notes applied to invoices", "Refunds"] },
   { group: "Purchases", items: ["Expenses", "Recurring expenses"] },
   { group: "Projects", items: ["Projects", "Tasks", "Timesheets"] },
-  { group: "Items & other", items: ["Items", "Coupons", "Price lists", "Exchange rates", "Taxes", "Users", "Documents"] },
+  { group: "Items & other", items: ["Items", "Coupons", "Inventory", "Price lists", "Exchange rates", "Taxes", "Users", "Documents"] },
 ];
 const ENDPOINTS: Record<string, string> = {
   Customers: "/dashboard/customers/export", Items: "/dashboard/items/export", Coupons: "/dashboard/coupons/export",
   Quotes: "/dashboard/quotes/export", Invoices: "/dashboard/invoices/export", Subscriptions: "/dashboard/subscriptions/export",
+  Inventory: "/dashboard/inventory/export",
 };
 const ENABLED = new Set(Object.keys(ENDPOINTS));
-export type ExportModule = "Customers" | "Items" | "Coupons" | "Quotes" | "Invoices" | "Subscriptions";
+export type ExportModule = "Customers" | "Items" | "Coupons" | "Quotes" | "Invoices" | "Subscriptions" | "Inventory";
 export type ExportView = { module: ExportModule; label: string; ids: string[]; columns: string[] };
 
 const DECIMALS = ["1,234,567.89", "1234567.89", "1.234.567,89", "1,23,456.78"];

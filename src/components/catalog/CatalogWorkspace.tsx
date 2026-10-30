@@ -52,10 +52,14 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
   const [exportOpen, setExportOpen] = useState(false);
   const [exportScope, setExportScope] = useState<"all" | "view">("all");
   const onScan = useCallback((code: string) => {
-    setScanOpen(false); setMSearch(true);
+    setScanOpen(false);
+    // Código que no existe en el catálogo → crear el item con ese código como SKU
+    const known = (rows as Item[]).some((r) => (r.sku ?? "").trim().toLowerCase() === code.trim().toLowerCase());
+    if (module === "items" && !known) { router.push(`/dashboard/items/new?sku=${encodeURIComponent(code)}`); return; }
+    setMSearch(true);
     const p = new URLSearchParams(window.location.search); p.set("q", code);
     router.replace(`${window.location.pathname}?${p.toString()}`, { scroll: false });
-  }, [router]);
+  }, [router, rows, module]);
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {

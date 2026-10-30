@@ -14,14 +14,17 @@ import { readItemPrefs } from "@/lib/item-prefs";
 
 const ACCOUNT_OPTIONS = ACCOUNTS.map((a) => ({ value: a, label: a }));
 
-export default function ItemForm({ companyId, item, clone }: { companyId: string; item?: Item; clone?: Item }) {
+export default function ItemForm({ companyId, item, clone, scannedSku }: { companyId: string; item?: Item; clone?: Item; scannedSku?: string }) {
   const router = useRouter();
   const src = item ?? clone;
   const fileRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(src?.name ?? "");
   const [type, setType] = useState<ItemType>(src?.item_type ?? "goods");
   const [unit, setUnit] = useState(src?.unit ?? "");
-  const [sku, setSku] = useState(item?.sku ?? "");
+  const [sku, setSku] = useState(item?.sku ?? scannedSku ?? "");
+  // Inventario (Paso 4.1): el mismo item puede llevar stock en la app Inventory
+  const [track, setTrack] = useState(Boolean(src?.track_inventory));
+  const [cost, setCost] = useState(src?.cost_price ? String(src.cost_price) : "");
   const [image, setImage] = useState(src?.image_url ?? "");
   const [price, setPrice] = useState(src ? String(src.selling_price) : "");
   const [account, setAccount] = useState(src?.account ?? "Sales");
@@ -64,6 +67,9 @@ export default function ItemForm({ companyId, item, clone }: { companyId: string
     if (!name.trim()) return setError("Enter the item name.");
     if (!price.trim() || Number.isNaN(amount)) return setError("Enter the selling price.");
     if (requireSku && !sku.trim()) return setError("Enter the SKU (your Preferences require it).");
+    const tracking = track && type === "goods";
+    if (tracking && !sku.trim()) return setError("Items that track inventory need a SKU / barcode.");
+    const costNum = Number(cost.replace(/[^0-9.]/g, "") || 0);
     setSaving(true); setError("");
     const supabase = createClient();
     if (!item && warnDup) {
@@ -73,11 +79,19 @@ export default function ItemForm({ companyId, item, clone }: { companyId: string
     const row = {
       name: name.trim(), item_type: type, unit: unit.trim() || null, sku: sku.trim() || null, image_url: image || null,
       selling_price: Math.round(amount * 100) / 100, account, description: description.trim() || null, updated_at: new Date().toISOString(),
+      // Solo se mandan si se usan (así el formulario sigue funcionando aunque falte el SQL del Paso 4.1)
+      ...(tracking || src?.track_inventory || costNum ? { track_inventory: tracking, cost_price: Math.round(costNum * 100) / 100 } : {}),
     };
     const { data: saved, error: dbErr } = item
       ? await supabase.from("items").update(row).eq("id", item.id).select("id").single()
       : await supabase.from("items").insert({ ...row, company_id: companyId }).select("id").single();
-    if (dbErr || !saved) { setSaving(false); return setError("The item couldn't be saved. Did you run the SQL for Paso 3.24?"); }
+    if (dbErr || !saved) {
+      setSaving(false);
+      if (dbErr?.code === "23505") return setError("Another inventory item already uses this SKU / barcode.");
+      if (dbErr?.message?.includes("SKU_REQUIRED")) return setError("Items that track inventory need a SKU / barcode.");
+      if (dbErr?.message?.includes("track_inventory") || dbErr?.message?.includes("cost_price")) return setError("Run the SQL for Paso 4.1 (Inventory) first.");
+      return setError("The item couldn't be saved. Try again.");
+    }
     await bustCache("catalog"); router.push(`/dashboard/items/${saved.id}`);
     router.refresh();
   }
@@ -124,8 +138,9 @@ export default function ItemForm({ companyId, item, clone }: { companyId: string
                   </ComboboxOptions>
                 </Combobox>
               </FormRow>
-              <FormRow label="SKU" htmlFor="it-sku" hint="The Stock Keeping Unit of the item: your own product or part code.">
+              <FormRow label="SKU" htmlFor="it-sku" required={track && type === "goods"} hint="The Stock Keeping Unit of the item. For parts, use the barcode that comes on the box. Optional for services.">
                 <input id="it-sku" value={sku} onChange={(e) => setSku(e.target.value)} className={inputClass} />
+                {scannedSku && !item && <p className="mt-1.5 text-[13px] text-[#0f766e]">Scanned code — it isn&apos;t in your catalog yet.</p>}
               </FormRow>
             </div>
 
@@ -174,6 +189,31 @@ export default function ItemForm({ companyId, item, clone }: { companyId: string
             </FormRow>
           </div>
         </div>
+
+        {/* Inventario: solo para productos físicos (Goods). Los servicios no llevan stock ni SKU obligatorio. */}
+        {type === "goods" && (
+          <div className="border-t border-slate-100 px-5 py-7 sm:px-8">
+            <SectionTitle>Inventory</SectionTitle>
+            <div className="grid max-w-[1100px] gap-5 xl:grid-cols-2 xl:gap-x-10">
+              <FormRow label="Track Inventory" hint="Turn this on for parts and products you keep in stock. They appear in the Inventory app, where you add stock and your team scans them.">
+                <button type="button" role="switch" aria-checked={track} onClick={() => setTrack((t) => !t)}
+                  className="group flex items-center gap-3 py-1.5 text-left">
+                  <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${track ? "bg-[#0f766e]" : "bg-slate-300"}`}>
+                    <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all duration-200 group-active:scale-90 ${track ? "left-[22px]" : "left-0.5"}`} />
+                  </span>
+                  <span className="text-[15px] text-slate-700">{track ? "Tracked in Inventory" : "Not tracked"}</span>
+                </button>
+              </FormRow>
+              <FormRow label="Cost Price" htmlFor="it-cost" width="max-w-[340px]" hint="What you pay for one unit. Used for the inventory value and job costing.">
+                <div className="flex">
+                  <span className="flex items-center rounded-l-lg border border-r-0 border-slate-200 bg-slate-100 px-3 text-sm text-slate-600">USD</span>
+                  <input id="it-cost" inputMode="decimal" value={cost} placeholder="0.00" onChange={(e) => setCost(e.target.value.replace(/[^0-9.]/g, ""))} className={`${inputClass} rounded-l-none`} />
+                </div>
+              </FormRow>
+            </div>
+            {track && <p className="mt-4 max-w-[640px] text-[13.5px] text-slate-500">Add stock, set low stock alerts and photos from the <a href="/dashboard/inventory" className="font-medium text-[#0f766e] hover:underline">Inventory app</a>.</p>}
+          </div>
+        )}
       </div>
 
       <SaveBar saving={saving} cancelHref={back} error={error} onDelete={item ? remove : undefined} deleteLabel="Delete item" />

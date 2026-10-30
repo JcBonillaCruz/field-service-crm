@@ -53,3 +53,28 @@ export function QrArt({ size = 48, className = "" }: { size?: number; className?
     </svg>
   );
 }
+
+export function InventoryArt({ size = 48, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg viewBox="0 0 48 48" width={size} height={size} className={className} aria-hidden="true">
+      <circle cx="24" cy="25" r="20" fill="#fff3dc" />
+      {/* estante */}
+      <rect x="6" y="38" width="36" height="2.4" rx="1.2" fill="#c9a26a" />
+      {/* caja de atrás */}
+      <path d="M24 14l10 4.5v10L24 33l-10-4.5v-10z" fill="#e8b36a" />
+      <path d="M24 14l10 4.5-10 4.5-10-4.5z" fill="#f4cc8c" />
+      <path d="M24 23v10l10-4.5v-10z" fill="#d4964a" />
+      {/* caja de enfrente */}
+      <path d="M15 24l9 4v9l-9 4-9-4v-9z" fill="#f2a43a" />
+      <path d="M15 24l9 4-9 4-9-4z" fill="#ffc876" />
+      <path d="M15 32v9l9-4v-9z" fill="#d9822b" />
+      <path d="M10.5 26l9 4" stroke="#fff3dc" strokeWidth="1.2" />
+      {/* etiqueta con código de barras */}
+      <g className="origin-[35px_33px] transition-transform duration-300 group-hover/app:-rotate-6 group-hover/app:scale-110 group-hover:-rotate-6 group-hover:scale-110">
+        <rect x="28" y="28" width="15" height="10" rx="2" fill="#fff" stroke="#0f766e" strokeWidth="1.2" />
+        <path d="M30.5 30.5v5M32.3 30.5v5M33.6 30.5v5M35.6 30.5v5M37.2 30.5v5M38.4 30.5v5M40.4 30.5v5" stroke="#0b1f3a" strokeWidth=".9" />
+        <path d="M29.6 33h12.2" stroke="#e8713a" strokeWidth=".9" />
+      </g>
+    </svg>
+  );
+}

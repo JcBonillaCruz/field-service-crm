@@ -4,13 +4,34 @@ import { useEffect, useRef, useState } from "react";
 
 type Detector = { detect: (src: HTMLVideoElement) => Promise<{ rawValue: string }[]> };
 
-// Escáner de código de barras con la cámara del celular.
-// Si el navegador puede leer códigos (Android/Chrome), busca el item por SKU al detectarlo.
-export default function BarcodeScanner({ open, onClose, onCode }: { open: boolean; onClose: () => void; onCode: (code: string) => void }) {
+type DetectorCtor = new (o?: object) => Detector;
+const FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "code_93", "itf", "codabar", "qr_code", "data_matrix"];
+
+// Lector: el del navegador si existe y lee códigos de barras (Android/Chrome);
+// si no (iPhone, Safari, Firefox, Chrome en Windows), el lector compatible "barcode-detector" (se descarga solo la primera vez).
+async function getDetector(): Promise<Detector> {
+  const Native = (window as unknown as { BarcodeDetector?: DetectorCtor & { getSupportedFormats?: () => Promise<string[]> } }).BarcodeDetector;
+  if (Native) {
+    try {
+      const ok = (await Native.getSupportedFormats?.()) ?? [];
+      const formats = FORMATS.filter((f) => ok.includes(f));
+      if (formats.includes("ean_13") || formats.includes("upc_a") || formats.includes("code_128")) return new Native({ formats });
+    } catch { /* usa el compatible */ }
+  }
+  const mod = await import("barcode-detector/ponyfill");
+  return new (mod.BarcodeDetector as unknown as DetectorCtor)({ formats: FORMATS });
+}
+
+// Escáner de código de barras con la cámara (celular; con "everywhere" también en computadora con cámara).
+// Lee UNA vez por apertura y entrega el código (el que lo usa decide si busca, crea o descuenta).
+export default function BarcodeScanner({ open, onClose, onCode, everywhere = false }: { open: boolean; onClose: () => void; onCode: (code: string) => void; everywhere?: boolean }) {
   const video = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState("");
   const [canRead, setCanRead] = useState(true);
   const [manual, setManual] = useState("");
+  // El aviso del código se guarda en una referencia: así la cámara no se reinicia cada vez que la pantalla se redibuja
+  const codeRef = useRef(onCode);
+  codeRef.current = onCode;
 
   useEffect(() => {
     if (!open) return;
@@ -23,26 +44,31 @@ export default function BarcodeScanner({ open, onClose, onCode }: { open: boolea
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
         if (stopped) return stream.getTracks().forEach((t) => t.stop());
         if (video.current) { video.current.srcObject = stream; await video.current.play().catch(() => {}); }
-        const BD = (window as unknown as { BarcodeDetector?: new (o?: object) => Detector }).BarcodeDetector;
-        if (!BD) { setCanRead(false); return; }
-        const detector = new BD({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "qr_code"] });
+        let detector: Detector;
+        try { detector = await getDetector(); } catch { if (!stopped) setCanRead(false); return; }
+        if (stopped) return;
+        setCanRead(true);
+        let reading = false, done = false;
         timer = setInterval(async () => {
-          if (!video.current || video.current.readyState < 2) return;
+          if (done || reading || !video.current || video.current.readyState < 2) return;
+          reading = true;
           try {
             const found = await detector.detect(video.current);
-            if (found[0]?.rawValue) { if (navigator.vibrate) navigator.vibrate(80); onCode(found[0].rawValue); }
+            const code = found[0]?.rawValue?.trim();
+            if (code && !done && !stopped) { done = true; clearInterval(timer); if (navigator.vibrate) navigator.vibrate(80); codeRef.current(code); }
           } catch { /* sigue intentando */ }
-        }, 350);
+          reading = false;
+        }, 300);
       } catch {
         setError("We couldn't open the camera. Allow camera access for this site in your browser settings.");
       }
     })();
     return () => { stopped = true; clearInterval(timer); stream?.getTracks().forEach((t) => t.stop()); };
-  }, [open, onCode]);
+  }, [open]);
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[95] flex flex-col bg-black lg:hidden">
+    <div className={`fixed inset-0 z-[95] flex flex-col bg-black ${everywhere ? "" : "lg:hidden"}`}>
       <div className="flex items-center justify-between px-4 py-4 text-white">
         <p className="text-lg font-semibold">Scan barcode</p>
         <button type="button" onClick={onClose} aria-label="Close" className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 active:bg-white/25">
@@ -63,10 +89,11 @@ export default function BarcodeScanner({ open, onClose, onCode }: { open: boolea
       </div>
       <div className="space-y-3 bg-black px-4 pb-8 pt-4 text-center text-sm text-white/80">
         {error ? <p className="text-red-300">{error}</p>
-          : canRead ? <p>Point the camera at the barcode. The item is found by its SKU.</p>
-            : <p>Automatic reading isn&apos;t available on this browser yet. Type the code below.</p>}
+          : canRead ? <p>Point the camera at the barcode on the box. Hold steady for a second.</p>
+            : <p>The camera reader couldn&apos;t start on this browser. Type the code below.</p>}
         <div className="flex gap-2">
           <input value={manual} onChange={(e) => setManual(e.target.value)} placeholder="Or type the SKU / code" inputMode="text"
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); if (manual.trim()) onCode(manual.trim()); } }}
             className="min-w-0 flex-1 rounded-lg border border-white/20 bg-white/10 px-3 py-2.5 text-[15px] text-white placeholder:text-white/50 focus:border-[#2dd4bf] focus:outline-none" />
           <button type="button" disabled={!manual.trim()} onClick={() => onCode(manual.trim())} className="rounded-lg bg-[#0f9f6e] px-4 font-semibold text-white disabled:opacity-50">Search</button>
         </div>

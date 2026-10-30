@@ -11,7 +11,7 @@ import Avatar from "@/components/Avatar";
 import NotificationsProvider from "@/components/NotificationsProvider";
 import { AppsGrid } from "@/components/AppsMenu";
 import { useInstallApp } from "@/components/InstallPrompt";
-import { FinanceArt, QrArt } from "@/components/AppIcons";
+import { FinanceArt, InventoryArt, QrArt } from "@/components/AppIcons";
 import { canManageSales } from "@/lib/sales";
 import { CompanySummary, CurrentUser, Role } from "@/lib/types";
 
@@ -21,6 +21,7 @@ type NavItem = {
   addHref?: string; // botón "+" para crear directo desde el menú
   icon: string;
   roles?: Role[];
+  exact?: boolean; // activo solo en esa ruta exacta (no en sus subpáginas)
   children?: NavItem[]; // grupo plegable (ej. Product Catalog → Items, Coupons)
 };
 
@@ -29,8 +30,9 @@ type NavItem = {
 //   · Finances: clientes, ventas, catálogo y dinero (todo lo que hay hoy)
 //   · QR Studio: su propio menú
 // Cuando hagamos Trabajos/Seguimiento o Inventario, cada uno será otra app con su menú.
-export type AppId = "finance" | "qr";
-export const appOf = (path: string): AppId => (path.startsWith("/dashboard/tools/qr") ? "qr" : "finance");
+export type AppId = "finance" | "qr" | "inventory";
+export const appOf = (path: string): AppId =>
+  path.startsWith("/dashboard/tools/qr") ? "qr" : path.startsWith("/dashboard/inventory") ? "inventory" : "finance";
 
 const SETTINGS: NavItem = { label: "Settings", href: "/dashboard/settings", icon: "M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1M15 5v4M9 10v4M17 15v4", roles: ["owner", "manager"] };
 
@@ -66,10 +68,26 @@ const QR_NAV: NavItem[] = [
   { label: "Scan stats", icon: "M4 20V10M10 20V4M16 20v-7M22 20H2" },
   SETTINGS,
 ];
-const NAV_BY_APP: Record<AppId, NavItem[]> = { finance: FINANCE_NAV, qr: QR_NAV };
+// Inventory: su propio menú. El técnico ve solo lo suyo (su van, escanear, su consumo).
+const MANAGE: Role[] = ["owner", "manager", "office"];
+const INVENTORY_NAV: NavItem[] = [
+  { label: "Items", href: "/dashboard/inventory", exact: true, addHref: "/dashboard/inventory?new=1", roles: MANAGE, icon: "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9" },
+  { label: "My Van", roles: ["technician"], icon: "M3 7h11v9H3zM14 10h4l3 3v3h-7zM7 19a1.8 1.8 0 1 0 0-3.6A1.8 1.8 0 0 0 7 19zM17 19a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6z" },
+  { label: "Scan", href: "/dashboard/inventory/scan", roles: MANAGE, icon: "M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 8v8M10 8v8M13 8v8M16.5 8v8" },
+  { label: "Scan", roles: ["technician"], icon: "M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 8v8M10 8v8M13 8v8M16.5 8v8" },
+  { label: "Locations & Vans", roles: MANAGE, icon: "M3 10.5 12 4l9 6.5V20H3zM8 20v-6h8v6M8 17h8" },
+  { label: "Transfers", roles: MANAGE, icon: "M4 8h13l-3-3M20 16H7l3 3" },
+  { label: "Movements", roles: MANAGE, icon: "M12 8v4l2.5 2.5M3.5 12a8.5 8.5 0 1 0 2.5-6M3 4v4h4" },
+  { label: "Counts", roles: MANAGE, icon: "M9 5h6M9 3h6v4H9zM6 5H5v16h14V5h-1M9 13l2 2 4-4" },
+  { label: "Reports", roles: MANAGE, icon: "M4 4v16h16M8.5 16v-4M12.5 16V8M16.5 16v-6" },
+  { label: "My Usage", roles: ["technician"], icon: "M4 4v16h16M8.5 16v-4M12.5 16V8M16.5 16v-6" },
+  { label: "Settings", href: "/dashboard/inventory/settings", roles: MANAGE, icon: "M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1M15 5v4M9 10v4M17 15v4" },
+];
+const NAV_BY_APP: Record<AppId, NavItem[]> = { finance: FINANCE_NAV, qr: QR_NAV, inventory: INVENTORY_NAV };
 const APP_TITLE: Record<AppId, { label: string; icon: string; color: string }> = {
   finance: { label: "Finances", icon: "M12 2.5v19M16.6 6.6c-.6-1.6-2.4-2.6-4.6-2.6-2.6 0-4.6 1.3-4.6 3.4 0 4.8 9.4 2.5 9.4 7.4 0 2.1-2.1 3.5-4.8 3.5-2.4 0-4.4-1.1-5-2.9", color: "#0f766e" },
   qr: { label: "QR Studio", icon: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM14 18h2v2h-2zM18 14h2v2h-2z", color: "#4f46e5" },
+  inventory: { label: "Inventory", icon: "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9", color: "#d97706" },
 };
 
 function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => void }) {
@@ -77,7 +95,8 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
   const app = appOf(pathname);
   const NAV = NAV_BY_APP[app];
   const items = NAV.filter((i) => !i.roles || (role && i.roles.includes(role)));
-  const isActive = (href?: string) => Boolean(href && (href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href)));
+  const exactHrefs = new Set(["/dashboard", ...NAV.filter((n) => n.exact && n.href).map((n) => n.href as string)]);
+  const isActive = (href?: string) => Boolean(href && (exactHrefs.has(href) ? pathname === href : pathname.startsWith(href)));
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [appsOpen, setAppsOpen] = useState(false);
   const installApp = useInstallApp();
@@ -126,7 +145,7 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
     const base = `flex items-center gap-2.5 rounded-lg transition-all duration-150 ${size} ${child ? (mobile ? "pl-[3.6rem] pr-2.5" : "pl-[3.35rem] pr-2.5") : "px-2.5"} ${showAdd ? "pr-10" : ""}`;
     const singular = item.label.replace(/s$/, "");
     return (
-      <li key={item.label} className="group relative">
+      <li key={`${item.label}-${item.href ?? item.roles?.join("")}`} className="group relative">
         {item.href ? (
           <Link prefetch={false} href={item.href} onClick={onNavigate}
             className={`${base} ${active ? activeCls : "text-slate-700 hover:bg-[#d7f1eb] hover:text-[#0b1f3a] active:bg-[#c3eadf]"}`}>
@@ -159,7 +178,7 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
           Computadora: solo el ícono (allá se cambia con los 9 puntos de arriba). */}
       <div className="mb-2 flex items-center gap-2 px-2">
         <span title={APP_TITLE[app].label} aria-label={APP_TITLE[app].label} className="flex">
-          {app === "finance" ? <FinanceArt size={mobile ? 40 : 34} /> : <QrArt size={mobile ? 40 : 34} />}
+          {app === "finance" ? <FinanceArt size={mobile ? 40 : 34} /> : app === "inventory" ? <InventoryArt size={mobile ? 40 : 34} /> : <QrArt size={mobile ? 40 : 34} />}
         </span>
         {mobile && (
           <button type="button" onClick={() => setAppsOpen(true)}

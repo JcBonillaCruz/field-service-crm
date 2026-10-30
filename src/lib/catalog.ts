@@ -6,6 +6,7 @@ export type Item = {
   id: string; name: string; item_type: ItemType; unit: string | null; sku: string | null; image_url: string | null;
   selling_price: number; account: string; description: string | null; is_active: boolean; created_at: string;
   updated_at?: string | null; source?: string | null;
+  track_inventory?: boolean; cost_price?: number | null; category_id?: string | null; // Paso 4.1 (Inventory)
 };
 export type CatalogProduct = {
   id: string; name: string; description: string | null; notify_emails: string | null; redirect_url: string | null; auto_numbers: boolean;
@@ -25,7 +26,7 @@ export type HistoryRow = { id: string; action: string; actor_name: string | null
 export const FIELD_LABELS: Record<string, string> = {
   name: "Name", item_type: "Type", unit: "Unit", sku: "SKU", image_url: "Image", selling_price: "Selling Price", account: "Account",
   description: "Description", is_active: "Status", product_id: "Product", code: "Coupon Code", discount_type: "Discount By",
-  discount_value: "Discount", redemption_type: "Redemption Type", cycles: "Cycles", expires_on: "Expiration Date", max_redemptions: "Maximum Redemptions",
+  discount_value: "Discount", track_inventory: "Track Inventory", cost_price: "Cost Price", category_id: "Category", redemption_type: "Redemption Type", cycles: "Cycles", expires_on: "Expiration Date", max_redemptions: "Maximum Redemptions",
 };
 
 export const fmtDate = (v: string | null | undefined) =>

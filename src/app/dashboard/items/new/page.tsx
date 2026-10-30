@@ -4,7 +4,7 @@ import { Item, canManageCatalog } from "@/lib/catalog";
 import NoAccess from "@/components/customers/NoAccess";
 import ItemForm from "@/components/catalog/ItemForm";
 
-export default async function NewItemPage({ searchParams }: { searchParams: { clone?: string } }) {
+export default async function NewItemPage({ searchParams }: { searchParams: { clone?: string; sku?: string } }) {
   const { supabase, current } = await getSession();
   if (!current) redirect("/dashboard");
   if (!canManageCatalog(current.role)) return <NoAccess />;
@@ -13,5 +13,5 @@ export default async function NewItemPage({ searchParams }: { searchParams: { cl
     const { data } = await supabase.from("items").select("*").eq("id", searchParams.clone).eq("company_id", current.id).maybeSingle();
     clone = (data as Item) ?? undefined;
   }
-  return <ItemForm companyId={current.id} clone={clone} />;
+  return <ItemForm companyId={current.id} clone={clone} scannedSku={searchParams.sku?.slice(0, 120)} />;
 }
