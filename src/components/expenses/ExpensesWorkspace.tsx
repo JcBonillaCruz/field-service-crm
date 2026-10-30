@@ -13,7 +13,7 @@ import DatePicker from "@/components/ui/DatePicker";
 import SelectMenu from "@/components/ui/SelectMenu";
 import { Modal, Toast, btnGhost, btnPrimary } from "@/components/sales/SalesBits";
 import { useCountUp } from "@/components/dashboard/MobileWidgets";
-import { LedgerTracker, LedgerGlance } from "@/components/expenses/LedgerCharts";
+import { LedgerTracker, LedgerGlance, LedgerMobileHero } from "@/components/expenses/LedgerCharts";
 import PayerPicker from "@/components/expenses/PayerPicker";
 
 // =====================================================================
@@ -255,9 +255,7 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
             <h1 className="text-2xl font-semibold tracking-tight text-[#0b1f3a]">{cfg.title}</h1>
             <p className="text-[14px] text-slate-500">{cfg.subtitle}</p>
           </div>
-          <button type="button" onClick={() => setEdit("new")} className="group flex h-10 items-center gap-1.5 rounded-lg bg-[#0f766e] px-4 text-[15px] font-semibold text-white shadow-sm transition-transform hover:bg-[#0c5f59] active:scale-95">
-            <svg viewBox="0 0 20 20" className="h-5 w-5 transition-transform group-hover:rotate-90" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>{cfg.newLabel}
-          </button>
+          <NewButton label={cfg.newLabel} kind={kind} onClick={() => setEdit("new")} />
         </div>
         {needsSql && <p className="mt-4 rounded-xl bg-[#fff7ef] px-4 py-3 text-sm text-[#9a3412]">{cfg.sql}</p>}
 
@@ -289,13 +287,9 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
         )}
 
         <div className={`transition-opacity duration-200 ${pending ? "opacity-50" : "opacity-100"}`}>
-          {/* Celular: tarjeta blanca de siempre (rojo gastos / verde entradas) con el número que sube */}
-          <div className="mt-4 rounded-3xl border border-slate-200 bg-white px-5 py-5 shadow-[0_6px_20px_rgba(15,40,60,0.05)] animate-[bp-pop-in_0.45s_cubic-bezier(.2,.8,.2,1)_both] lg:hidden">
-            <p className="flex items-center gap-2 text-[14px] font-medium text-slate-500">
-              <span className="relative inline-flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" style={{ background: cfg.dot }} /><span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: cfg.dot }} /></span>{cfg.verb} · {range.label}
-            </p>
-            <p className="mt-1 text-[40px] font-bold leading-none tracking-tight tabular-nums sm:text-[44px]" style={{ color: cfg.color }}>{amt(shownTotal)}</p>
-            <p className="mt-2 text-[13px] text-slate-500">{list.length} {list.length === 1 ? cfg.one : cfg.many} · {short(range.from)} – {short(range.to)}</p>
+          {/* Celular: tarjeta interactiva (número que sube + paletas que se tocan + resumen) */}
+          <div className="lg:hidden">
+            <LedgerMobileHero kind={kind} rows={list} range={range} total={shownTotal} realTotal={total} color={cfg.color} sign={cfg.sign} verb={cfg.verb} />
           </div>
 
           {/* Escritorio: tracker con barritas + resumen rápido */}
@@ -387,6 +381,24 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
         onSaved={(m) => { setEdit(null); router.refresh(); flash(m); }} />
       <Toast text={toast} />
     </div>
+  );
+}
+
+// Botón "New Money In / New Expense": degradado, brillo que lo recorre, el "+" gira y late
+function NewButton({ label, kind, onClick }: { label: string; kind: LedgerKind; onClick: () => void }) {
+  const grad = kind === "income" ? "from-[#14a39a] via-[#0f8f84] to-[#0f766e]" : "from-[#0f8f84] via-[#0f766e] to-[#0b5f59]";
+  return (
+    <button type="button" onClick={onClick}
+      className={`group relative isolate flex h-11 items-center gap-2.5 overflow-hidden rounded-full bg-gradient-to-r ${grad} py-1.5 pl-1.5 pr-5 text-[15px] font-semibold text-white shadow-[0_8px_20px_rgba(15,118,110,0.32)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(15,118,110,0.42)] active:translate-y-0 active:scale-95`}>
+      {/* brillo que pasa solito cada pocos segundos */}
+      <span className="pointer-events-none absolute inset-y-0 -left-16 w-12 -skew-x-12 bg-white/30 blur-[2px] animate-[bp-shine_3.6s_ease-in-out_infinite]" />
+      <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#0f766e] shadow-sm">
+        <span className="absolute inset-0 rounded-full ring-2 ring-white/70 animate-[bp-share-ring_2s_ease-out_infinite]" />
+        <svg viewBox="0 0 20 20" className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90 group-active:rotate-180" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>
+      </span>
+      <span className="relative">{label}</span>
+      <svg viewBox="0 0 20 20" className="relative -ml-1 h-4 w-4 -translate-x-1 opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100" fill="currentColor"><path d="M7.3 5.3a1 1 0 0 1 1.4 0l4 4a1 1 0 0 1 0 1.4l-4 4a1 1 0 0 1-1.4-1.4L10.6 10 7.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
+    </button>
   );
 }
 

@@ -175,3 +175,84 @@ export function LedgerGlance({ kind, rows }: { kind: LedgerKind; rows: Entry[] }
     </div>
   );
 }
+
+// =====================================================================
+// CELULAR: tarjeta del total, parecida al tracker de escritorio pero hecha para el dedo.
+// Toca una paleta y arriba te dice cuánto fue ese día / semana / mes.
+// =====================================================================
+export function LedgerMobileHero({ kind, rows, range, total, realTotal, color, sign, verb }: {
+  kind: LedgerKind; rows: Entry[]; range: { from: string; to: string; label: string }; total: number; realTotal: number; color: string; sign: string; verb: string;
+}) {
+  const th = THEME[kind];
+  const { unit, buckets } = useMemo(() => buildBuckets(rows, range.from, range.to), [rows, range.from, range.to]);
+  const max = Math.max(1, ...buckets.map((b) => b.value));
+  const peak = buckets.reduce((p, b, i) => (b.value > buckets[p].value ? i : p), 0);
+  const [sel, setSel] = useState<number | null>(null);
+  const [grown, setGrown] = useState(false);
+  useEffect(() => { setGrown(false); setSel(null); const t = setTimeout(() => setGrown(true), 120); return () => clearTimeout(t); }, [range.from, range.to, rows.length]);
+  const hi = sel ?? peak;
+  const amounts = rows.map((r) => Number(r.amount) || 0);
+  const largest = amounts.length ? Math.max(...amounts) : 0;
+  const avg = amounts.length ? realTotal / amounts.length : 0;
+  const per = unit === "day" ? "day" : unit;
+  const tight = buckets.length > 8;
+  const b = buckets[hi];
+
+  return (
+    <div className="relative mt-4 overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,40,60,0.07)] animate-[bp-pop-in_0.45s_cubic-bezier(.2,.8,.2,1)_both]">
+      <span className="pointer-events-none absolute -right-14 -top-16 h-48 w-48 rounded-full opacity-80 blur-2xl animate-[bp-float_10s_ease-in-out_infinite]" style={{ background: th.soft }} />
+      <span className="pointer-events-none absolute -left-10 bottom-10 h-28 w-28 rounded-full opacity-50 blur-2xl" style={{ background: th.soft }} />
+      <div className="relative px-5 pt-5">
+        <div className="flex items-center justify-between">
+          <p className="flex items-center gap-2 text-[13.5px] font-medium text-slate-500">
+            <span className="relative inline-flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" style={{ background: th.dot }} /><span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: th.dot }} /></span>
+            {verb} · {range.label}
+          </p>
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white shadow-[0_4px_12px_rgba(15,40,60,0.08)]" style={{ color }}>
+            <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d={th.icon} /></svg>
+          </span>
+        </div>
+        <p className="mt-1 text-[40px] font-bold leading-none tracking-tight tabular-nums" style={{ color }}>{sign}{money(total)}</p>
+
+        {/* Lo que tocaste (o la mejor semana) */}
+        <div key={hi} className="mt-3 inline-flex max-w-full items-center gap-2 rounded-full bg-[#0b1f3a] py-1 pl-1 pr-3 text-[12.5px] text-white shadow-md animate-[bp-pop-in_0.25s_ease-out]">
+          <span className="rounded-full bg-white/15 px-2 py-0.5 font-semibold">{sel === null ? `Best ${per}` : b?.long}</span>
+          <span className="truncate font-semibold tabular-nums">{money(b?.value ?? 0)}</span>
+          {sel === null && b?.value ? <span className="truncate text-white/60">{b.long}</span> : <span className="shrink-0 text-white/60">{b?.count ?? 0} {(b?.count ?? 0) === 1 ? "entry" : "entries"}</span>}
+        </div>
+
+        {/* Paletas que se tocan */}
+        <div className="relative mt-3 h-[132px]">
+          <div className="absolute inset-x-0 bottom-[34px] top-0 flex items-end justify-between gap-1">
+            {buckets.map((x, i) => {
+              const on = i === hi;
+              const h = x.value > 0 ? Math.max(12, (x.value / max) * 100) : 5;
+              return (
+                <button key={x.from} type="button" onClick={() => setSel(sel === i ? null : i)} aria-label={`${x.long}: ${money(x.value)}`}
+                  className="relative flex h-full min-w-0 flex-1 flex-col items-center justify-end active:scale-95">
+                  <span className={`absolute -bottom-[34px] top-0 w-full max-w-[40px] rounded-full transition-all duration-200 ${on ? "bg-gradient-to-b from-transparent to-slate-100 opacity-100" : "opacity-0"}`} />
+                  <span className="relative flex w-full flex-col items-center transition-[height] duration-700 ease-[cubic-bezier(.2,.8,.2,1)]" style={{ height: `${grown ? h : 0}%`, transitionDelay: `${i * 40}ms` }}>
+                    <span className={`h-3 w-3 shrink-0 rounded-full transition-transform duration-200 ${on ? "scale-125" : ""}`}
+                      style={{ background: x.value > 0 ? (on ? color : th.dot) : "#cbd5e1", boxShadow: on ? `0 0 0 4px ${th.soft}, 0 4px 12px ${color}55` : undefined }} />
+                    <span className="mt-1 w-[2px] flex-1 rounded-full" style={{ background: on ? color : x.value > 0 ? th.stick : "#e2e8f0" }} />
+                  </span>
+                  <span className={`absolute -bottom-[32px] flex items-center justify-center rounded-full font-semibold transition-all duration-200 ${tight ? "h-6 w-6 text-[9.5px]" : "h-7 w-7 text-[11px]"} ${on ? "bg-[#0b1f3a] text-white shadow-md" : "bg-slate-100 text-slate-500"}`}>{x.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Resumen rápido */}
+      <div className="relative mt-4 grid grid-cols-3 divide-x divide-slate-100 border-t border-slate-100 bg-slate-50/60">
+        {([["Entries", String(rows.length)], ["Average", whole(avg)], ["Largest", whole(largest)]] as const).map(([l, v], i) => (
+          <div key={l} className="px-3 py-3 text-center animate-[bp-fade_0.4s_ease-out_both]" style={{ animationDelay: `${200 + i * 80}ms` }}>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{l}</p>
+            <p className="mt-0.5 truncate text-[15px] font-bold tabular-nums text-[#0b1f3a]">{v}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

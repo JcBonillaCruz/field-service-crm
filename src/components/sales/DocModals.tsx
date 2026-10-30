@@ -47,6 +47,43 @@ function Chips({ value, onChange, placeholder }: { value: string[]; onChange: (v
   );
 }
 
+// ---------- Correos / teléfonos guardados del cliente (para elegir a dónde mandarlo) ----------
+export type Contact = { value: string; label: string | null; is_primary: boolean };
+// Etiquetas que dicen "este correo es para…": se eligen solas al enviar
+const WANTS: Record<"quote" | "invoice", RegExp> = { quote: /quote|estimate|cotiz|presupuesto/i, invoice: /invoice|billing|bill|factura|pago|payment|account/i };
+export function pickFor(kind: "quote" | "invoice", list: Contact[]) {
+  const hit = list.filter((c) => c.label && WANTS[kind].test(c.label));
+  return hit.length ? hit.map((c) => c.value) : null;
+}
+function ContactPills({ title, list, selected, onToggle, kind, multi = true }: { title: string; list: Contact[]; selected: string[]; onToggle: (v: string) => void; kind?: "quote" | "invoice"; multi?: boolean }) {
+  if (list.length < 1) return null;
+  return (
+    <div className="mt-2 animate-[bp-fade_0.25s_ease-out]">
+      <p className="mb-1.5 text-[11.5px] font-semibold uppercase tracking-wide text-slate-400">{title}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {list.map((c) => {
+          const on = selected.includes(c.value);
+          const rec = kind && c.label && WANTS[kind].test(c.label);
+          return (
+            <button key={c.value} type="button" onClick={() => onToggle(c.value)} aria-pressed={on}
+              className={`group flex max-w-full items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-left text-[13px] transition-all duration-150 active:scale-95 ${on ? "border-[#0f766e] bg-[#e9f7f4] text-[#0b1f3a] shadow-[0_2px_8px_rgba(15,118,110,0.15)]" : "border-slate-200 bg-white text-slate-600 hover:-translate-y-0.5 hover:border-[#14a39a] hover:shadow-sm"}`}>
+              <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors ${on ? "bg-[#0f766e] text-white" : "bg-slate-100 text-slate-400 group-hover:bg-[#e9f7f4] group-hover:text-[#0f766e]"}`}>
+                {on
+                  ? <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="currentColor"><path d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0z" /></svg>
+                  : (multi
+                    ? <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M10 5v10M5 10h10" /></svg>
+                    : <span className="h-2.5 w-2.5 rounded-full border-2 border-current" />)}
+              </span>
+              <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide ${rec ? "bg-[#fff3e8] text-[#c2410c]" : "bg-slate-100 text-slate-500"}`}>{c.label || (c.is_primary ? "Main" : "Other")}</span>
+              <span className="min-w-0 truncate">{c.value}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function SendEmailModal({ open, onClose, doc, companyName, actor, reminder = false, files = [], whiteLabel = false }: {
   open: boolean; onClose: () => void; doc: SalesDoc; companyName: string; actor: string; reminder?: boolean; files?: SalesFile[]; whiteLabel?: boolean;
 }) {
@@ -64,6 +101,21 @@ export function SendEmailModal({ open, onClose, doc, companyName, actor, reminde
   const [error, setError] = useState("");
   const [fallback, setFallback] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
+  const [book, setBook] = useState<Contact[]>([]);
+  // Todos los correos guardados del cliente; si uno dice "Invoices"/"Billing" o "Quotes", se elige solo
+  useEffect(() => {
+    if (!open || !doc.customer_id) { setBook([]); return; }
+    let alive = true;
+    db().from("customer_emails").select("email, label, is_primary").eq("customer_id", doc.customer_id).order("position").then(({ data }) => {
+      if (!alive) return;
+      const list: Contact[] = Array.from(new Map(((data ?? []) as { email: string; label: string | null; is_primary: boolean }[])
+        .filter((x) => x.email).map((x) => [x.email.toLowerCase(), { value: x.email.toLowerCase(), label: x.label, is_primary: x.is_primary }])).values());
+      setBook(list);
+      const auto = pickFor(doc.kind, list);
+      if (auto) setTo(auto);
+    });
+    return () => { alive = false; };
+  }, [open, doc.customer_id, doc.kind]);
   useEffect(() => {
     if (!open) return;
     setTo(doc.emails); setCc([]); setBcc([]); setShowCc(false); setError(""); setFallback(false); setAttachPdf(true); setFileIds([]);
@@ -121,6 +173,8 @@ export function SendEmailModal({ open, onClose, doc, companyName, actor, reminde
           <span className="text-[13px] font-medium text-slate-500 sm:pt-3 sm:text-[15px] sm:font-normal">Send To</span>
           <div className="min-w-0">
             <Chips value={to} onChange={setTo} placeholder="name@example.com" />
+            <ContactPills title={`${doc.customer_name}'s emails · tap to add or remove`} list={book} selected={to} kind={doc.kind}
+              onToggle={(v) => setTo((t) => (t.includes(v) ? t.filter((x) => x !== v) : [...t, v]))} />
             {!showCc && <button type="button" onClick={() => setShowCc(true)} className="mt-1.5 text-[13px] font-medium text-[#0f766e] hover:underline">+ Add Cc / Bcc</button>}
           </div>
         </div>
@@ -165,10 +219,16 @@ export function ShareModal({ open, onClose, doc, actor, companyName = "" }: { op
   const router = useRouter();
   const [token, setToken] = useState(doc.share_token);
   const [phone, setPhone] = useState("");
-  // Teléfono del cliente para mandarlo por mensaje o WhatsApp (gente que no usa correo)
+  const [phones, setPhones] = useState<Contact[]>([]);
+  // Teléfonos del cliente para mandarlo por mensaje o WhatsApp (se elige el principal; puedes cambiarlo con un toque)
   useEffect(() => {
-    if (!open || !doc.customer_id) return;
-    db().from("customer_phones").select("number").eq("customer_id", doc.customer_id).limit(1).then(({ data }) => { if (data?.[0]?.number) setPhone(data[0].number); });
+    if (!open || !doc.customer_id) { setPhones([]); return; }
+    db().from("customer_phones").select("number, label, is_primary").eq("customer_id", doc.customer_id).order("position").then(({ data }) => {
+      const list = ((data ?? []) as { number: string; label: string | null; is_primary: boolean }[]).filter((x) => x.number).map((x) => ({ value: x.number, label: x.label, is_primary: x.is_primary }));
+      setPhones(list);
+      const main = list.find((x) => x.is_primary) ?? list[0];
+      if (main) setPhone(main.value);
+    });
   }, [open, doc.customer_id]);
   async function sendBy(channel: "sms" | "whatsapp" | "native") {
     let t = token;
@@ -215,6 +275,7 @@ export function ShareModal({ open, onClose, doc, actor, companyName = "" }: { op
         <div className="rounded-xl border border-slate-200 p-4">
           <p className="mb-2 text-sm font-semibold text-[#0b1f3a]">Send by text or WhatsApp</p>
           <input type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Customer phone, e.g. (214) 555-0123" className={inputClass} />
+          {phones.length > 1 && <ContactPills title={`${doc.customer_name}'s phones · tap one`} list={phones} selected={[phone]} multi={false} onToggle={setPhone} />}
           {/* Solo íconos (profesionales, con animación al pasar el mouse) */}
           <div className="mt-4 flex items-center justify-center gap-5">
             <button type="button" onClick={() => sendBy("sms")} aria-label="Send by text message" title="Text message"
