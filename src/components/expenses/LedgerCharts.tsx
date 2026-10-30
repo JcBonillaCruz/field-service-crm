@@ -21,7 +21,14 @@ type Bucket = { from: string; to: string; label: string; long: string; value: nu
 type Unit = "day" | "week" | "month" | "year";
 
 function buildBuckets(rows: Entry[], from: string, to: string): { unit: Unit; buckets: Bucket[] } {
-  const a = toD(from), b = toD(to);
+  let a = toD(from), b = toD(to);
+  // "All time": la gráfica empieza en el mes del primer registro y termina en el último (no desde el año 2000)
+  if (b.getTime() - a.getTime() > 400 * 86400000 && rows.length) {
+    const ds = rows.map((r) => r.date).sort();
+    const f = toD(ds[0]), l = toD(ds[ds.length - 1]);
+    a = new Date(Math.max(a.getTime(), new Date(f.getFullYear(), f.getMonth(), 1).getTime()));
+    b = new Date(Math.min(b.getTime(), new Date(l.getFullYear(), l.getMonth() + 1, 0).getTime()));
+  }
   const days = Math.round((b.getTime() - a.getTime()) / 86400000) + 1;
   const months = (b.getFullYear() - a.getFullYear()) * 12 + b.getMonth() - a.getMonth() + 1;
   const out: Bucket[] = [];

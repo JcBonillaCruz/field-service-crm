@@ -1,7 +1,8 @@
 "use client";
 
 import { confirmDelete } from "@/lib/confirm";
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions, Menu, MenuButton, MenuItem, MenuItems, Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { parseCsv } from "@/lib/csv";
 import { usePathname, useRouter } from "next/navigation";
@@ -15,6 +16,9 @@ import { Modal, Toast, btnGhost, btnPrimary } from "@/components/sales/SalesBits
 import { useCountUp } from "@/components/dashboard/MobileWidgets";
 import { LedgerTracker, LedgerGlance, LedgerMobileHero } from "@/components/expenses/LedgerCharts";
 import PayerPicker from "@/components/expenses/PayerPicker";
+import { ProfitSummary } from "@/components/expenses/ProfitPanels";
+import CustomerFilter from "@/components/expenses/CustomerFilter";
+import { COST_TYPES, CostType, Profit, costTypeOf } from "@/lib/job-costing";
 
 // =====================================================================
 // Libro de Finanzas: el mismo diseño sirve para Gastos (rojo) y Entradas de dinero (verde).
@@ -22,7 +26,9 @@ import PayerPicker from "@/components/expenses/PayerPicker";
 export type Entry = {
   id: string; company_id: string; date: string; category: string; party: string | null; amount: number; payment_mode: string | null;
   reference: string | null; notes: string | null; receipt_path: string | null; receipt_name: string | null; created_by_name: string | null; created_at: string;
-  customer_id?: string | null; // Money In: cliente ligado (de la tabla customers)
+  customer_id?: string | null; // cliente ligado (de la tabla customers)
+  doc_id?: string | null;      // Gastos: invoice / trabajo ligado
+  cost_type?: string | null;   // Gastos: material | labor | other
 };
 export type PayerOption = { id: string; display_name: string; company_name: string | null; email: string | null; phone: string | null };
 // Barras de categorías: colores MUY distintos entre sí (por puesto, no por categoría), con degradado
@@ -160,9 +166,9 @@ function PeriodPicker({ range, onPick }: { range: { key: RangeKey; from: string;
   );
 }
 
-export default function ExpensesWorkspace({ kind = "expense", companyId, actor, rows, needsSql, range, customers = [], linkReady = false }: {
+export default function ExpensesWorkspace({ kind = "expense", companyId, actor, rows, needsSql, range, customers = [], linkReady = false, filterCustomer = null, profit = null }: {
   kind?: LedgerKind; companyId: string; actor: string; rows: Entry[]; needsSql: boolean; range: { key: RangeKey; from: string; to: string; label: string };
-  customers?: PayerOption[]; linkReady?: boolean;
+  customers?: PayerOption[]; linkReady?: boolean; filterCustomer?: PayerOption | null; profit?: Profit | null;
 }) {
   const cfg = LEDGER[kind];
   const cats = cfg.cats;
@@ -205,16 +211,23 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
   const shownTotal = useCountUp(total, 1000); // el número grande sube hasta el total
   const [people, setPeople] = useState<PayerOption[]>(customers);
 
-  function go(key: RangeKey, from?: string, to?: string) {
+  // El periodo y el cliente viven en la dirección (así se pueden compartir y el servidor filtra)
+  function nav(key: RangeKey, from?: string, to?: string, customer?: string | null) {
     const sp = new URLSearchParams({ range: key });
     if (key === "custom" && from && to) { sp.set("from", from); sp.set("to", to); }
+    if (customer) sp.set("customer", customer);
     startTransition(() => router.replace(`${pathname}?${sp.toString()}`, { scroll: false }));
   }
+  const go = (key: RangeKey, from?: string, to?: string) => nav(key, from, to, filterCustomer?.id);
+  const pickCustomer = (id: string | null) => nav(range.key, range.from, range.to, id);
+  const nameOf = useMemo(() => new Map(people.map((p) => [p.id, p.display_name])), [people]);
 
   function exportCsv() {
     const esc = (v: string | number | null) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const csv = [["Date", "Category", cfg.partyCsv, "Amount", "Payment Mode", "Reference", "Notes"].join(","),
-      ...list.map((r) => [r.date, r.category, r.party, Number(r.amount).toFixed(2), r.payment_mode, r.reference, r.notes].map(esc).join(","))].join("\n");
+    const job = kind === "expense" && linkReady;
+    const csv = [["Date", "Category", cfg.partyCsv, "Amount", "Payment Mode", "Reference", "Notes", ...(linkReady ? ["Customer"] : []), ...(job ? ["Cost Type"] : [])].join(","),
+      ...list.map((r) => [r.date, r.category, r.party, Number(r.amount).toFixed(2), r.payment_mode, r.reference, r.notes,
+        ...(linkReady ? [r.customer_id ? nameOf.get(r.customer_id) ?? "" : ""] : []), ...(job ? [costTypeOf(r.cost_type).short] : [])].map(esc).join(","))].join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
     a.download = `${cfg.folder}-${range.from}-to-${range.to}.csv`; a.click();
@@ -262,6 +275,7 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
         {/* Barra: periodo ▾ · buscar · ⋯ */}
         <div className="mt-5 flex items-center gap-2">
           <PeriodPicker key={`${range.key}-${range.from}-${range.to}`} range={range} onPick={go} />
+          {linkReady && <CustomerFilter people={people} value={filterCustomer?.id ?? null} onChange={pickCustomer} />}
           <button type="button" aria-label="Search" onClick={() => setSearchOpen((v) => !v)}
             className={`ml-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border bg-white ${searchOpen || q ? "border-[#0f766e] text-[#0f766e]" : "border-slate-200 text-slate-500"}`}>
             <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
@@ -287,6 +301,25 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
         )}
 
         <div className={`transition-opacity duration-200 ${pending ? "opacity-50" : "opacity-100"}`}>
+          {/* Filtrado por un cliente: resumen de rentabilidad arriba */}
+          {filterCustomer && (
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_6px_20px_rgba(15,40,60,0.04)] animate-[bp-pop-in_0.35s_ease-out] sm:p-5">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-500">Profitability</p>
+                <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full bg-[#e9f7f4] py-1 pl-3 pr-1 text-[13.5px] font-semibold text-[#0b1f3a]">
+                  <span className="truncate">{filterCustomer.display_name}</span>
+                  <button type="button" onClick={() => pickCustomer(null)} aria-label="Show all customers" title="Show all customers"
+                    className="group flex h-6 w-6 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-white hover:text-[#e11d48]">
+                    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M5 5l10 10M15 5 5 15" /></svg>
+                  </button>
+                </span>
+                <span className="text-[12.5px] text-slate-400">{range.label}</span>
+                <Link prefetch={false} href={`/dashboard/customers/${filterCustomer.id}`} className="ml-auto text-[13px] font-semibold text-[#0f766e] hover:underline">Customer profile →</Link>
+              </div>
+              {profit && <ProfitSummary p={profit} period={range.label.toLowerCase()} />}
+            </div>
+          )}
+
           {/* Celular: tarjeta interactiva (número que sube + paletas que se tocan + resumen) */}
           <div className="lg:hidden">
             <LedgerMobileHero kind={kind} rows={list} range={range} total={shownTotal} realTotal={total} color={cfg.color} sign={cfg.sign} verb={cfg.verb} />
@@ -322,7 +355,15 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
                               <CatIcon cats={cats} name={r.category} />
                               <span className="min-w-0 flex-1">
                                 <span className="block truncate text-[15px] font-medium text-[#0b1f3a]">{r.category}</span>
-                                <span className="block truncate text-[13px] text-slate-500">{[r.party, r.payment_mode, r.notes].filter(Boolean).join(" · ") || "—"}</span>
+                                <span className="flex min-w-0 items-center gap-1.5 text-[13px] text-slate-500">
+                                  {kind === "expense" && r.cost_type && r.cost_type !== "other" && (
+                                    <span className="shrink-0 rounded-md px-1.5 py-px text-[10.5px] font-bold uppercase tracking-wide" style={{ background: costTypeOf(r.cost_type).soft, color: costTypeOf(r.cost_type).color }}>{costTypeOf(r.cost_type).short}</span>
+                                  )}
+                                  {kind === "expense" && r.customer_id && nameOf.get(r.customer_id) && !filterCustomer && (
+                                    <span className="max-w-[45%] shrink-0 truncate rounded-md bg-[#e9f7f4] px-1.5 py-px text-[11.5px] font-semibold text-[#0f766e]">{nameOf.get(r.customer_id)}</span>
+                                  )}
+                                  <span className="truncate">{[r.party, r.payment_mode, r.notes].filter(Boolean).join(" · ") || "—"}</span>
+                                </span>
                               </span>
                               <span className="shrink-0 pl-2 font-semibold tabular-nums text-[#0b1f3a]">{amt(r.amount)}</span>
                             </button>
@@ -378,6 +419,7 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
 
       <ExpenseModal cfg={cfg} open={edit !== null} expense={edit === "new" ? null : edit} onClose={() => setEdit(null)} companyId={companyId} actor={actor}
         people={people} onPersonCreated={(c) => setPeople((p) => [...p, c].sort((a, b) => a.display_name.localeCompare(b.display_name)))} linkReady={linkReady}
+        defaultCustomer={filterCustomer?.id ?? null}
         onSaved={(m) => { setEdit(null); router.refresh(); flash(m); }} />
       <Toast text={toast} />
     </div>
@@ -402,12 +444,21 @@ function NewButton({ label, kind, onClick }: { label: string; kind: LedgerKind; 
   );
 }
 
-function ExpenseModal({ cfg, open, expense, onClose, companyId, actor, onSaved, people, onPersonCreated, linkReady }: {
+// Tipo de costo sugerido por la categoría (se puede cambiar con un toque)
+const guessType = (cat: string): CostType => (/material|supplies|equipment|tools/i.test(cat) ? "material" : /payroll|labor|subcontract/i.test(cat) ? "labor" : "other");
+
+function ExpenseModal({ cfg, open, expense, onClose, companyId, actor, onSaved, people, onPersonCreated, linkReady, defaultCustomer }: {
   cfg: Cfg; open: boolean; expense: Entry | null; onClose: () => void; companyId: string; actor: string; onSaved: (msg: string) => void;
-  people: PayerOption[]; onPersonCreated: (c: PayerOption) => void; linkReady: boolean;
+  people: PayerOption[]; onPersonCreated: (c: PayerOption) => void; linkReady: boolean; defaultCustomer: string | null;
 }) {
   const isIncome = cfg.table === "other_income";
+  const jobCosting = !isIncome && linkReady; // gastos ligados a cliente / trabajo (SQL paso-job-costing)
   const [customerId, setCustomerId] = useState<string | null>(null);
+  const [custName, setCustName] = useState("");
+  const [docId, setDocId] = useState<string | null>(null);
+  const [costType, setCostType] = useState<CostType>("other");
+  const [typeTouched, setTypeTouched] = useState(false);
+  const [jobs, setJobs] = useState<{ id: string; number: string; doc_date: string; total: number; status: string }[]>([]);
   const [date, setDate] = useState(today());
   const cats = cfg.cats;
   const [cat, setCat] = useState<string>(cats[0].name);
@@ -429,9 +480,29 @@ function ExpenseModal({ cfg, open, expense, onClose, companyId, actor, onSaved, 
     setDate(expense?.date ?? today()); setCat(expense?.category ?? cats[0].name);
     setCustom(expense && !cats.some((c) => c.name === expense.category) ? expense.category : ""); setVendor(expense?.party ?? "");
     setAmount(expense ? String(expense.amount) : ""); setMode(expense?.payment_mode ?? (cfg.table === "expenses" ? "Credit Card" : "Cash")); setRef(expense?.reference ?? "");
-    setNotes(expense?.notes ?? ""); setFile(null); setError(""); setCustomerId(expense?.customer_id ?? null);
+    setNotes(expense?.notes ?? ""); setFile(null); setError("");
+    const cid = expense ? expense.customer_id ?? null : (jobCosting ? defaultCustomer : null);
+    setCustomerId(cid); setCustName(cid ? people.find((p) => p.id === cid)?.display_name ?? "" : "");
+    setDocId(expense?.doc_id ?? null);
+    setCostType((expense ? (["material", "labor"].includes(expense.cost_type ?? "") ? expense.cost_type : "other") : guessType(cats[0].name)) as CostType);
+    setTypeTouched(Boolean(expense));
   }
   if (!open && loaded) setLoaded("");
+
+  // Invoices (trabajos) del cliente elegido, para ligar el gasto a uno
+  useEffect(() => {
+    if (!open || !jobCosting || !customerId) { setJobs([]); return; }
+    let alive = true;
+    createClient().from("sales_docs").select("id, number, doc_date, total, status").eq("company_id", companyId).eq("customer_id", customerId)
+      .eq("kind", "invoice").neq("status", "void").order("doc_date", { ascending: false }).limit(100)
+      .then(({ data }) => { if (alive) setJobs((data ?? []) as typeof jobs); });
+    return () => { alive = false; };
+  }, [open, jobCosting, customerId, companyId]);
+  // El tipo se sugiere solo según la categoría (mientras no lo cambies tú)
+  function onCategory(v: string) {
+    setCat(v); if (v !== "Other") setCustom("");
+    if (!typeTouched && jobCosting) setCostType(guessType(v));
+  }
 
   async function save() {
     const a = round2(Number(amount.replace(/[^0-9.]/g, "")));
@@ -451,8 +522,10 @@ function ExpenseModal({ cfg, open, expense, onClose, companyId, actor, onSaved, 
       ? s.from(cfg.table).update(r).eq("id", expense.id)
       : s.from(cfg.table).insert({ ...r, company_id: companyId, created_by_name: actor });
     // Money In: se guarda el cliente ligado (si ya se corrió el SQL); si no, solo el nombre
-    let { error: e } = await write(isIncome && linkReady ? { ...row, customer_id: customerId } : row);
-    if (e && isIncome && linkReady && /customer_id/i.test(e.message)) ({ error: e } = await write(row));
+    const link = isIncome && linkReady ? { customer_id: customerId }
+      : jobCosting ? { customer_id: customerId, doc_id: customerId ? docId : null, cost_type: costType } : null;
+    let { error: e } = await write(link ? { ...row, ...link } : row);
+    if (e && link && /customer_id|doc_id|cost_type/i.test(e.message)) ({ error: e } = await write(row));
     setBusy(false);
     if (e) return setError(`It couldn't be saved. ${cfg.sql}`);
     onSaved(expense ? "Saved." : `${cfg.one[0].toUpperCase()}${cfg.one.slice(1)} added.`);
@@ -481,7 +554,7 @@ function ExpenseModal({ cfg, open, expense, onClose, companyId, actor, onSaved, 
       <div className="space-y-4">
         <div>
           <p className="mb-1.5 text-sm font-medium text-slate-700">Category</p>
-          <Listbox value={isCustom ? "Other" : cat} onChange={(v: string) => { setCat(v); if (v !== "Other") setCustom(""); }}>
+          <Listbox value={isCustom ? "Other" : cat} onChange={onCategory}>
             <ListboxButton className="group flex w-full items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left text-[15px] hover:border-[#14a39a] focus:outline-none data-[open]:border-[#0f766e] data-[open]:bg-white">
               <CatIcon cats={cats} name={isCustom ? "Other" : cat} size={30} /><span className="flex-1 text-[#0b1f3a]">{isCustom ? "Other" : cat}</span>
               <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-400 transition-transform group-data-[open]:rotate-180" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
@@ -499,6 +572,42 @@ function ExpenseModal({ cfg, open, expense, onClose, companyId, actor, onSaved, 
               className={`${inputClass} mt-2 animate-[bp-fade_0.2s_ease-out]`} />
           )}
         </div>
+        {jobCosting && (
+          <div className="space-y-3 rounded-2xl border border-slate-200 bg-[#fbfcfd] p-3.5">
+            <div>
+              <p className="mb-1.5 text-sm font-medium text-slate-700">Type of cost</p>
+              <div className="grid grid-cols-3 gap-1.5 rounded-xl bg-slate-100 p-1">
+                {COST_TYPES.map((t) => {
+                  const on = costType === t.value;
+                  return (
+                    <button key={t.value} type="button" onClick={() => { setCostType(t.value); setTypeTouched(true); }} aria-pressed={on}
+                      className={`flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1.5 py-1.5 text-[12.5px] font-semibold transition-all duration-150 active:scale-95 sm:flex-row sm:gap-1.5 sm:px-2 sm:py-2 sm:text-[13.5px] ${on ? "bg-white shadow-[0_2px_8px_rgba(15,40,60,0.10)]" : "text-slate-500 hover:text-slate-700"}`}
+                      style={on ? { color: t.color } : undefined}>
+                      <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={t.icon} /></svg>
+                      <span className="truncate">{t.value === "labor" ? <><span className="sm:hidden">Labor</span><span className="hidden sm:inline">{t.label}</span></> : t.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="min-w-0">
+              <p className="mb-1.5 text-sm font-medium text-slate-700">Customer / job <span className="font-normal text-slate-400">(optional)</span></p>
+              <PayerPicker companyId={companyId} people={people} customerId={customerId} name={custName}
+                hint="Assign it to a customer to see how much each customer really leaves you."
+                onPick={(c) => { setCustomerId(c?.id ?? null); setCustName(c?.display_name ?? ""); setDocId(null); }}
+                onType={(t) => { setCustName(t); setCustomerId(null); setDocId(null); }}
+                onCreated={(c) => { onPersonCreated(c); setCustomerId(c.id); setCustName(c.display_name); setDocId(null); }} />
+            </div>
+            {customerId && (
+              <div className="animate-[bp-fade_0.2s_ease-out]">
+                <p className="mb-1.5 text-sm font-medium text-slate-700">Invoice / job <span className="font-normal text-slate-400">(optional)</span></p>
+                <SelectMenu value={docId ?? ""} ariaLabel="Invoice or job" onChange={(v) => setDocId(v || null)}
+                  options={[{ value: "", label: jobs.length ? "Not tied to an invoice" : "This customer has no invoices yet" },
+                    ...jobs.map((j) => ({ value: j.id, label: `${j.number} · ${fmtD(j.doc_date)} · ${money(j.total)}` }))]} />
+              </div>
+            )}
+          </div>
+        )}
         <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 [&>*]:min-w-0">
           <label className="block"><span className="mb-1.5 block text-sm font-medium text-red-600">Amount*</span>
             <div className="flex"><span className="flex items-center rounded-l-lg border border-r-0 border-slate-200 bg-slate-100 px-3 text-sm text-slate-600">USD</span>

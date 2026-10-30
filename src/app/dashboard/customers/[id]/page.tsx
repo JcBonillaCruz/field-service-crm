@@ -9,6 +9,8 @@ import NoAccess from "@/components/customers/NoAccess";
 import CustomerDetailActions from "@/components/customers/CustomerDetailActions";
 import Accordion, { PencilLink } from "@/components/customers/Accordion";
 import RecentLogger from "@/components/RecentLogger";
+import { loadProfit } from "@/lib/job-costing";
+import { CustomerProfitPanel } from "@/components/expenses/ProfitPanels";
 
 const TABS = ["Overview", "Comments", "Transactions", "Mails", "Statement"];
 const MOBILE_TABS = ["Details", "Transactions", "Comments"];
@@ -32,11 +34,13 @@ export default async function CustomerPage({
   const c = customer as Customer;
   const editHref = `/dashboard/customers/${c.id}/edit`;
 
-  const [{ data: addrRows }, { data: phoneRows }, { data: emailRows }] = await Promise.all([
+  const [{ data: addrRows }, { data: phoneRows }, { data: emailRows }, profit] = await Promise.all([
     supabase.from("customer_addresses").select("id, label, street, unit, city, state, zip, country, is_primary")
       .eq("customer_id", c.id).order("is_primary", { ascending: false }).order("created_at"),
     supabase.from("customer_phones").select("id, label, country, dial_code, number, is_primary").eq("customer_id", c.id).order("position"),
     supabase.from("customer_emails").select("id, label, email, is_primary").eq("customer_id", c.id).order("position"),
+    // Rentabilidad de este cliente (todo el tiempo): cobrado vs. gastos, y por trabajo
+    loadProfit(supabase, current.id, c.id).catch(() => null),
   ]);
   const phones = phoneRows ?? [];
   const emails = emailRows ?? [];
@@ -203,6 +207,7 @@ export default async function CustomerPage({
 
           {/* DERECHA: historial de actividad */}
           <div className="min-w-0 space-y-6">
+          {profit && <CustomerProfitPanel p={profit} customerId={c.id} currency={c.currency || "USD"} />}
           <div className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
             <p className="text-sm text-slate-500">Payment due period</p>
             <p className="mt-0.5 text-[15px] text-[#0b1f3a]">{c.payment_terms || "Due on Receipt"}</p>
@@ -214,7 +219,7 @@ export default async function CustomerPage({
                 </tr></thead>
                 <tbody><tr className="border-b border-slate-100">
                   <td className="px-4 py-3 text-slate-800">{CURRENCIES.find((x) => x.value === (c.currency || "USD"))?.label ?? c.currency}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-slate-800">{money(0)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-slate-800">{money(profit?.outstanding ?? 0)}</td>
                   <td className="px-4 py-3 text-right tabular-nums text-slate-800">{money(0)}</td>
                 </tr></tbody>
               </table>

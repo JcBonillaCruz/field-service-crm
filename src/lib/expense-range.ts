@@ -1,12 +1,13 @@
 // Rangos de fechas de Expenses. Se usan igual en el servidor (para filtrar en Supabase con gte/lte)
 // y en el navegador (para armar el enlace con la fecha local de quien usa la app).
-export type RangeKey = "month" | "last" | "3m" | "6m" | "year" | "custom";
+export type RangeKey = "month" | "last" | "3m" | "6m" | "year" | "all" | "custom";
 export const RANGES: { key: RangeKey; label: string }[] = [
   { key: "month", label: "This month" },
   { key: "last", label: "Last month" },
   { key: "3m", label: "Last 3 months" },
   { key: "6m", label: "Last 6 months" },
   { key: "year", label: "This year" },
+  { key: "all", label: "All time" },
   { key: "custom", label: "Custom" },
 ];
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -31,6 +32,7 @@ export function resolveRange(key: string | undefined, today: string, from?: stri
   if (k === "3m") return { key: k, from: iso(y, mi - 2, 1), to: endOfMonth, label: "Last 3 months" };
   if (k === "6m") return { key: k, from: iso(y, mi - 5, 1), to: endOfMonth, label: "Last 6 months" };
   if (k === "year") return { key: k, from: `${y}-01-01`, to: `${y}-12-31`, label: "This year" };
+  if (k === "all") return { key: k, from: "2000-01-01", to: `${y + 1}-12-31`, label: "All time" };
   return { key: "month", from: iso(y, mi, 1), to: endOfMonth, label: "This month" };
 }
 

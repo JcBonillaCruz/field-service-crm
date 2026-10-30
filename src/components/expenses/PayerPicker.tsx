@@ -30,8 +30,8 @@ function Dot({ name, seed, size = 30 }: { name: string; seed: string; size?: num
   return <span className="flex shrink-0 items-center justify-center rounded-full font-semibold" style={{ width: size, height: size, background: c.bg, color: c.text, fontSize: size * 0.38 }}>{initials(name)}</span>;
 }
 
-export default function PayerPicker({ companyId, people, customerId, name, onPick, onType, onCreated }: {
-  companyId: string; people: PayerOption[]; customerId: string | null; name: string;
+export default function PayerPicker({ companyId, people, customerId, name, onPick, onType, onCreated, hint }: {
+  companyId: string; people: PayerOption[]; customerId: string | null; name: string; hint?: string;
   onPick: (c: PayerOption | null) => void; onType: (text: string) => void; onCreated: (c: PayerOption) => void;
 }) {
   const [query, setQuery] = useState("");
@@ -125,7 +125,7 @@ export default function PayerPicker({ companyId, people, customerId, name, onPic
           </>
         )}
       </Combobox>
-      <p className="mt-1 text-[12px] text-slate-400">Search your customers. Not there? Tap <b className="font-semibold text-[#0f766e]">New</b> to add it.</p>
+      <p className="mt-1 text-[12px] text-slate-400">{hint ?? <>Search your customers. Not there? Tap <b className="font-semibold text-[#0f766e]">New</b> to add it.</>}</p>
     </div>
   );
 }
