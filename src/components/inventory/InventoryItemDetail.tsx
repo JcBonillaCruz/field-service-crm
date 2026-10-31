@@ -11,7 +11,7 @@ import { Toast } from "@/components/sales/SalesBits";
 import QuickAdjust from "@/components/inventory/QuickAdjust";
 import {
   InvCategory, InvItem, InvLocation, InvMovement, InvPhoto, InvStock, MOVE_LABEL, STATUS_META,
-  invError, qtyFmt, statusOf, usd,
+  invError, pingAlerts, qtyFmt, statusOf, usd,
 } from "@/lib/inventory";
 
 const TABS = ["Overview", "History"];
@@ -61,7 +61,7 @@ export default function InventoryItemDetail({ companyId, item, stock, locations,
     if (Number.isNaN(v) || v < 0) return setMsg("Enter a positive number.");
     const { error } = await createClient().rpc("inv_set_min", { p_company: companyId, p_item: item.id, p_location: loc, p_min: v });
     if (error) return setMsg(invError(error));
-    setEditMin(null); setMsg("");
+    setEditMin(null); setMsg(""); pingAlerts();
     onChanged("Low stock alert updated", true);
   }
 

@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { bustCache } from "@/lib/cache-client";
 import BarcodeScanner from "@/components/catalog/BarcodeScanner";
 import SelectMenu from "@/components/ui/SelectMenu";
-import { InvLocation, invError, qtyFmt, usd } from "@/lib/inventory";
+import { InvLocation, invError, pingAlerts, qtyFmt, usd } from "@/lib/inventory";
 
 type Found = {
   found: true;
@@ -148,6 +148,7 @@ function FoundCard({ companyId, data, locations, onChanged }: { companyId: strin
     setBusy(false);
     if (error) return setMsg({ ok: false, text: invError(error) });
     if (navigator.vibrate) navigator.vibrate(40);
+    pingAlerts();
     setMsg({ ok: true, text: `${mode === "add" ? "Added" : "Removed"} ${qtyFmt(n)} ${it.unit ?? ""}` });
     setQty("1");
     onChanged();

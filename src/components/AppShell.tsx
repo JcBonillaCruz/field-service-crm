@@ -19,6 +19,7 @@ type NavItem = {
   label: string;
   href?: string;
   addHref?: string; // botón "+" para crear directo desde el menú
+  addLabel?: string; // texto del "+" (por defecto: el nombre en singular)
   icon: string;
   roles?: Role[];
   exclude?: string[]; // rutas hijas que NO marcan este enlace como activo
@@ -71,16 +72,16 @@ const QR_NAV: NavItem[] = [
 // Inventory: su propio menú. El técnico ve solo lo suyo (su van, escanear, su consumo).
 const MANAGE: Role[] = ["owner", "manager", "office"];
 const INVENTORY_NAV: NavItem[] = [
-  { label: "Items", href: "/dashboard/inventory", exclude: ["/dashboard/inventory/scan", "/dashboard/inventory/settings"], addHref: "/dashboard/inventory/new", roles: MANAGE, icon: "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9" },
-  { label: "My Van", roles: ["technician"], icon: "M3 7h11v9H3zM14 10h4l3 3v3h-7zM7 19a1.8 1.8 0 1 0 0-3.6A1.8 1.8 0 0 0 7 19zM17 19a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6z" },
+  { label: "Items", href: "/dashboard/inventory", exclude: ["/dashboard/inventory/scan", "/dashboard/inventory/settings", "/dashboard/inventory/locations", "/dashboard/inventory/transfers", "/dashboard/inventory/movements", "/dashboard/inventory/counts", "/dashboard/inventory/reports"], addHref: "/dashboard/inventory/new", roles: MANAGE, icon: "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9" },
+  { label: "My Van", href: "/dashboard/inventory/van", roles: ["technician"], icon: "M3 7h11v9H3zM14 10h4l3 3v3h-7zM7 19a1.8 1.8 0 1 0 0-3.6A1.8 1.8 0 0 0 7 19zM17 19a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6z" },
   { label: "Scan", href: "/dashboard/inventory/scan", roles: MANAGE, icon: "M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 8v8M10 8v8M13 8v8M16.5 8v8" },
-  { label: "Scan", roles: ["technician"], icon: "M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 8v8M10 8v8M13 8v8M16.5 8v8" },
-  { label: "Locations & Vans", roles: MANAGE, icon: "M3 10.5 12 4l9 6.5V20H3zM8 20v-6h8v6M8 17h8" },
-  { label: "Transfers", roles: MANAGE, icon: "M4 8h13l-3-3M20 16H7l3 3" },
-  { label: "Movements", roles: MANAGE, icon: "M12 8v4l2.5 2.5M3.5 12a8.5 8.5 0 1 0 2.5-6M3 4v4h4" },
-  { label: "Counts", roles: MANAGE, icon: "M9 5h6M9 3h6v4H9zM6 5H5v16h14V5h-1M9 13l2 2 4-4" },
-  { label: "Reports", roles: MANAGE, icon: "M4 4v16h16M8.5 16v-4M12.5 16V8M16.5 16v-6" },
-  { label: "My Usage", roles: ["technician"], icon: "M4 4v16h16M8.5 16v-4M12.5 16V8M16.5 16v-6" },
+  { label: "Scan", href: "/dashboard/inventory/scan", roles: ["technician"], icon: "M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 8v8M10 8v8M13 8v8M16.5 8v8" },
+  { label: "Locations & Vans", href: "/dashboard/inventory/locations", addHref: "/dashboard/inventory/locations/new", addLabel: "Location", roles: MANAGE, icon: "M3 10.5 12 4l9 6.5V20H3zM8 20v-6h8v6M8 17h8" },
+  { label: "Transfers", href: "/dashboard/inventory/transfers", addHref: "/dashboard/inventory/transfers/new", roles: MANAGE, icon: "M4 8h13l-3-3M20 16H7l3 3" },
+  { label: "Movements", href: "/dashboard/inventory/movements", roles: MANAGE, icon: "M12 8v4l2.5 2.5M3.5 12a8.5 8.5 0 1 0 2.5-6M3 4v4h4" },
+  { label: "Counts", href: "/dashboard/inventory/counts", addHref: "/dashboard/inventory/counts/new", roles: MANAGE, icon: "M9 5h6M9 3h6v4H9zM6 5H5v16h14V5h-1M9 13l2 2 4-4" },
+  { label: "Reports", href: "/dashboard/inventory/reports", roles: MANAGE, icon: "M4 4v16h16M8.5 16v-4M12.5 16V8M16.5 16v-6" },
+  { label: "My Usage", href: "/dashboard/inventory/usage", roles: ["technician"], icon: "M4 4v16h16M8.5 16v-4M12.5 16V8M16.5 16v-6" },
   { label: "Settings", href: "/dashboard/inventory/settings", roles: MANAGE, icon: "M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1M15 5v4M9 10v4M17 15v4" },
 ];
 const NAV_BY_APP: Record<AppId, NavItem[]> = { finance: FINANCE_NAV, qr: QR_NAV, inventory: INVENTORY_NAV };
@@ -144,7 +145,7 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
       </>
     );
     const base = `flex items-center gap-2.5 rounded-lg transition-all duration-150 ${size} ${child ? (mobile ? "pl-[3.6rem] pr-2.5" : "pl-[3.35rem] pr-2.5") : "px-2.5"} ${showAdd ? "pr-10" : ""}`;
-    const singular = item.label.replace(/s$/, "");
+    const singular = item.addLabel ?? item.label.replace(/s$/, "");
     return (
       <li key={`${item.label}-${item.href ?? item.roles?.join("")}`} className="group relative">
         {item.href ? (

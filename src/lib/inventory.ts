@@ -17,7 +17,11 @@ export type InvPhoto = { id: string; item_id: string; url: string; path: string;
 export type InvMovement = {
   id: string; item_id: string; kind: MoveKind; qty: number; from_location: string | null; to_location: string | null;
   reason: string | null; note: string | null; actor_name: string | null; created_at: string;
+  unit_cost?: number | null; expected_qty?: number | null; counted_qty?: number | null; responsible_name?: string | null; actor_id?: string | null; responsible_id?: string | null;
 };
+export type InvMember = { user_id: string; full_name: string; role: string };
+export type TechStock = { item_id: string; name: string; sku: string | null; unit: string | null; image_url: string | null; location_id: string; qty: number; min_qty: number };
+export type AlertFrequency = "once" | "daily" | "weekly";
 export type MoveKind = "receive" | "transfer" | "use" | "return" | "adjust" | "count";
 export type StockStatus = "in" | "low" | "out";
 
@@ -59,6 +63,10 @@ export function invError(e: { message?: string; code?: string; hint?: string } |
   if (m.includes("PHOTO_LIMIT")) return `Up to ${MAX_PHOTOS} photos per product.`;
   if (m.includes("NO_ACCESS")) return e.hint || "You don't have permission to do this.";
   if (m.includes("NAME_REQUIRED")) return "Enter the product name.";
+  if (m.includes("LOCATION_NOT_EMPTY")) return "This location still has stock. Transfer it or count it to zero first.";
+  if (m.includes("DEFAULT_LOCATION")) return "The main warehouse can't be deleted.";
+  if (m.includes("one_van_per_tech")) return "That technician already has a van. Each technician can have one active van.";
+  if (m.includes("BAD_LOCATION")) return "Choose two different locations.";
   if (m.includes("does not exist") || m.includes("Could not find the function")) return "Run the SQL for Paso 4.1 in Supabase first.";
   return "Something went wrong. Try again.";
 }
@@ -84,3 +92,13 @@ export async function compressImage(file: File, max = 1280, quality = 0.8): Prom
     URL.revokeObjectURL(url);
   }
 }
+
+// Después de mover stock: revisa alertas de stock bajo y avisa al celular del dueño (no bloquea la pantalla)
+export function pingAlerts() {
+  try { fetch("/api/inventory/alerts", { method: "POST", keepalive: true }).catch(() => {}); } catch { /* sin conexión */ }
+}
+
+export const LOCATION_ICON = {
+  warehouse: "M3 10.5 12 4l9 6.5V20H3zM8 20v-6h8v6M8 17h8",
+  van: "M3 7h11v9H3zM14 10h4l3 3v3h-7zM7 19a1.8 1.8 0 1 0 0-3.6A1.8 1.8 0 0 0 7 19zM17 19a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6z",
+};

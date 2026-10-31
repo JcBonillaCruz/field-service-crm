@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { admin, pushToCompany } from "@/lib/push";
 import { SalesDoc, balanceOf, daysBetween, money, today } from "@/lib/sales";
+import { processInventoryAlerts } from "@/lib/inventory-alerts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +28,8 @@ export async function GET(request: NextRequest) {
       body: `${d.customer_name} · ${money(balanceOf(d))} due`, url: `/dashboard/invoices/${d.id}`, tag: `due-${d.id}`,
     });
   }
+  // Inventario: repite los avisos de stock bajo (diario / semanal) según los ajustes de cada compañía
+  sent += await processInventoryAlerts(db).catch(() => 0);
   await db.from("push_log").delete().lt("created_at", new Date(Date.now() - 30 * 86400000).toISOString());
   return NextResponse.json({ ok: true, sent });
 }

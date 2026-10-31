@@ -6,12 +6,27 @@ import { createClient } from "@/lib/supabase/client";
 import { confirmDelete } from "@/lib/confirm";
 import { inputClass } from "@/components/customers/ui";
 import { Toast } from "@/components/sales/SalesBits";
-import { InvCategory } from "@/lib/inventory";
+import { AlertFrequency, InvCategory } from "@/lib/inventory";
+import { sheetItem } from "@/components/ui/sheet";
 
-// Ajustes del inventario: categorías (las alertas y frecuencia llegan en el Paso 4.2)
-export default function InventorySettings({ companyId, categories, counts, needsSql }: {
-  companyId: string; categories: InvCategory[]; counts: Record<string, number>; needsSql: boolean;
+const FREQ: { value: AlertFrequency; label: string; text: string }[] = [
+  { value: "once", label: "Once", text: "One alert when an item reaches its minimum." },
+  { value: "daily", label: "Every day", text: "Repeat every day while it stays low." },
+  { value: "weekly", label: "Every week", text: "Repeat once a week while it stays low." },
+];
+
+// Ajustes del inventario: categorías y avisos de stock bajo
+export default function InventorySettings({ companyId, categories, counts, needsSql, frequency, canEditAlerts }: {
+  companyId: string; categories: InvCategory[]; counts: Record<string, number>; needsSql: boolean; frequency: AlertFrequency; canEditAlerts: boolean;
 }) {
+  const [freq, setFreq] = useState<AlertFrequency>(frequency);
+  async function saveFreq(v: AlertFrequency) {
+    if (!canEditAlerts) return setError("Only the owner or a manager can change alerts.");
+    const prev = freq; setFreq(v); setError("");
+    const { error: err } = await createClient().from("inventory_settings").upsert({ company_id: companyId, alert_frequency: v, updated_at: new Date().toISOString() });
+    if (err) { setFreq(prev); return setError("It couldn't be saved. Did you run the SQL for Paso 4.2?"); }
+    say("Alert frequency saved");
+  }
   const router = useRouter();
   const [name, setName] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
@@ -94,9 +109,20 @@ export default function InventorySettings({ companyId, categories, counts, needs
         )}
       </section>
 
-      <section className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-4">
-        <h2 className="text-[15px] font-semibold text-[#0b1f3a]">Low stock alerts to your phone <span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">Next update</span></h2>
-        <p className="mt-1 text-[13.5px] text-slate-500">Choose how often you get reminded (once, daily or weekly) when a van or the warehouse runs low.</p>
+      <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <div className="border-b border-slate-100 px-5 py-4">
+          <h2 className="text-[16px] font-semibold text-[#0b1f3a]">Low stock alerts</h2>
+          <p className="text-[13px] text-slate-500">When the warehouse or a van reaches the minimum you set on an item, you get a notification on your phone and in the bell.</p>
+        </div>
+        <div className="space-y-1.5 px-4 py-4">
+          {FREQ.map((f) => (
+            <button key={f.value} type="button" onClick={() => saveFreq(f.value)} className={sheetItem(freq === f.value)}>
+              <span><span className="block font-medium">{f.label}</span><span className="block text-[13px] text-slate-500">{f.text}</span></span>
+              {freq === f.value && <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-[#0f766e]" fill="currentColor"><path d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0z" /></svg>}
+            </button>
+          ))}
+        </div>
+        <p className="border-t border-slate-100 px-5 py-3 text-[12.5px] text-slate-500">Phone alerts need notifications turned on in the app (bell → enable alerts on this device).</p>
       </section>
       <Toast text={toast} />
     </div>

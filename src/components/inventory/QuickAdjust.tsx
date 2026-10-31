@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { createClient } from "@/lib/supabase/client";
 import SelectMenu from "@/components/ui/SelectMenu";
-import { ADD_REASONS, InvItem, InvLocation, InvStock, REMOVE_REASONS, invError, qtyFmt } from "@/lib/inventory";
+import { ADD_REASONS, InvItem, InvLocation, InvStock, REMOVE_REASONS, invError, pingAlerts, qtyFmt } from "@/lib/inventory";
 
 type Props = {
   companyId: string; item: InvItem; locations: InvLocation[]; rows: InvStock[];
@@ -28,6 +28,7 @@ export default function QuickAdjust({ companyId, item, locations, rows, onDone, 
     });
     setBusy(false);
     if (error) { onDone(invError(error), false); return false; }
+    pingAlerts();
     onDone(`${item.name}: ${kind === "receive" || to ? "+" : "−"}${qtyFmt(qty)}`, true);
     return true;
   }

@@ -23,6 +23,8 @@ type StatusFilter = "all" | StockStatus;
 type Row = InvItem & { rows: InvStock[]; total: number; status: StockStatus; value: number; retail: number; thumb: string | null; places: InvLocation[] };
 
 const BASE = "/dashboard/inventory";
+// Pantallas propias (solo menú + esa pantalla): no son productos
+const RESERVED = new Set(["new", "scan", "settings", "locations", "transfers", "movements", "counts", "reports", "van", "usage"]);
 const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "All" }, { value: "in", label: "In Stock" }, { value: "low", label: "Low Stock" }, { value: "out", label: "Out of Stock" },
 ];
@@ -59,7 +61,7 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
 
   const seg = pathname.slice(BASE.length).split("/").filter(Boolean);
-  const isForm = ["new", "scan", "settings"].includes(seg[0] ?? "") || seg[1] === "edit";
+  const isForm = RESERVED.has(seg[0] ?? "") || seg.length > 1;
   const selectedId = seg.length === 1 && !isForm ? seg[0] : null;
 
   const say = useCallback((text: string) => {
