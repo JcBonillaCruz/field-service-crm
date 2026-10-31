@@ -30,3 +30,25 @@ export async function loadInventory(supabase: SupabaseClient, companyId: string)
     photos: (photos.data ?? []) as InvPhoto[],
   };
 }
+
+// Un solo producto (ficha y edición)
+export async function loadInventoryItem(supabase: SupabaseClient, companyId: string, id: string) {
+  const [item, stock, locs, cats, photos] = await Promise.all([
+    supabase.from("items").select("id, name, sku, unit, image_url, selling_price, cost_price, category_id, description, is_active, created_at")
+      .eq("company_id", companyId).eq("id", id).eq("track_inventory", true).maybeSingle(),
+    supabase.from("inventory_stock").select("item_id, location_id, qty, min_qty").eq("item_id", id),
+    supabase.from("inventory_locations").select("id, name, kind, is_default, assigned_user_id").eq("company_id", companyId).eq("is_active", true)
+      .order("is_default", { ascending: false }).order("name"),
+    supabase.from("item_categories").select("id, name").eq("company_id", companyId).order("name"),
+    supabase.from("item_photos").select("id, item_id, url, path, position").eq("item_id", id).order("position"),
+  ]);
+  if (!item.data) return null;
+  const it = item.data as InvItem;
+  return {
+    item: { ...it, selling_price: Number(it.selling_price), cost_price: Number(it.cost_price) },
+    stock: ((stock.data ?? []) as InvStock[]).map((s) => ({ ...s, qty: Number(s.qty), min_qty: Number(s.min_qty) })),
+    locations: (locs.data ?? []) as InvLocation[],
+    categories: (cats.data ?? []) as InvCategory[],
+    photos: (photos.data ?? []) as InvPhoto[],
+  };
+}

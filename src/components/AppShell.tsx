@@ -21,7 +21,7 @@ type NavItem = {
   addHref?: string; // botón "+" para crear directo desde el menú
   icon: string;
   roles?: Role[];
-  exact?: boolean; // activo solo en esa ruta exacta (no en sus subpáginas)
+  exclude?: string[]; // rutas hijas que NO marcan este enlace como activo
   children?: NavItem[]; // grupo plegable (ej. Product Catalog → Items, Coupons)
 };
 
@@ -71,7 +71,7 @@ const QR_NAV: NavItem[] = [
 // Inventory: su propio menú. El técnico ve solo lo suyo (su van, escanear, su consumo).
 const MANAGE: Role[] = ["owner", "manager", "office"];
 const INVENTORY_NAV: NavItem[] = [
-  { label: "Items", href: "/dashboard/inventory", exact: true, addHref: "/dashboard/inventory?new=1", roles: MANAGE, icon: "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9" },
+  { label: "Items", href: "/dashboard/inventory", exclude: ["/dashboard/inventory/scan", "/dashboard/inventory/settings"], addHref: "/dashboard/inventory/new", roles: MANAGE, icon: "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9" },
   { label: "My Van", roles: ["technician"], icon: "M3 7h11v9H3zM14 10h4l3 3v3h-7zM7 19a1.8 1.8 0 1 0 0-3.6A1.8 1.8 0 0 0 7 19zM17 19a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6z" },
   { label: "Scan", href: "/dashboard/inventory/scan", roles: MANAGE, icon: "M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 8v8M10 8v8M13 8v8M16.5 8v8" },
   { label: "Scan", roles: ["technician"], icon: "M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 8v8M10 8v8M13 8v8M16.5 8v8" },
@@ -95,8 +95,9 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
   const app = appOf(pathname);
   const NAV = NAV_BY_APP[app];
   const items = NAV.filter((i) => !i.roles || (role && i.roles.includes(role)));
-  const exactHrefs = new Set(["/dashboard", ...NAV.filter((n) => n.exact && n.href).map((n) => n.href as string)]);
-  const isActive = (href?: string) => Boolean(href && (exactHrefs.has(href) ? pathname === href : pathname.startsWith(href)));
+  const excludes = new Map(NAV.filter((n) => n.exclude && n.href).map((n) => [n.href as string, n.exclude as string[]]));
+  const isActive = (href?: string) => Boolean(href && (href === "/dashboard" ? pathname === "/dashboard"
+    : pathname.startsWith(href) && !(excludes.get(href) ?? []).some((x) => pathname.startsWith(x))));
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [appsOpen, setAppsOpen] = useState(false);
   const installApp = useInstallApp();

@@ -42,7 +42,7 @@ export default function ScanFlow({ companyId, locations, needsSql }: { companyId
     setBusy(false);
     if (upErr) return setError(invError(upErr));
     await bustCache("catalog");
-    router.push(`/dashboard/inventory?item=${id}&edit=1`);
+    router.push(`/dashboard/inventory/${id}/edit`); router.refresh();
   }
 
   return (
@@ -62,11 +62,11 @@ export default function ScanFlow({ companyId, locations, needsSql }: { companyId
 
       {/* Botón grande para escanear */}
       <button type="button" onClick={() => { setError(""); setOpen(true); }} disabled={busy}
-        className="group relative mt-6 flex w-full flex-col items-center overflow-hidden rounded-3xl bg-[radial-gradient(120%_140%_at_50%_120%,#2bb3a4_0%,#1a8f84_45%,#0f766e_100%)] px-6 py-10 text-white shadow-[0_18px_40px_rgba(15,118,110,0.28)] transition-all hover:-translate-y-0.5 hover:shadow-[0_22px_48px_rgba(15,118,110,0.34)] active:scale-[0.99] disabled:opacity-70">
-        <span className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10 animate-[bp-float_7s_ease-in-out_infinite]" />
+        className="group relative mt-6 flex w-full flex-col items-center overflow-hidden rounded-3xl bg-[radial-gradient(120%_140%_at_50%_120%,#2bb3a4_0%,#1a8f84_45%,#0f766e_100%)] px-6 py-10 text-white shadow-[0_18px_40px_rgba(15,118,110,0.28)] transition-all hover:shadow-[0_22px_48px_rgba(15,118,110,0.34)] active:scale-[0.99] disabled:opacity-70">
+        <span className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
         <span className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/30 transition-transform duration-300 group-hover:scale-105">
           <svg viewBox="0 0 24 24" className="h-11 w-11" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 8v8M10 8v8M13 8v8M16.5 8v8" /></svg>
-          <span className="absolute inset-x-2 top-1/2 h-0.5 bg-[#ffd8c2] shadow-[0_0_10px_#ffd8c2] animate-pulse" />
+          <span className="absolute inset-x-2 top-1/2 h-0.5 bg-[#ffd8c2] shadow-[0_0_10px_#ffd8c2]" />
         </span>
         <span className="relative mt-4 text-lg font-semibold">{busy ? "Looking up..." : result ? "Scan another" : "Scan a barcode"}</span>
         <span className="relative mt-1 text-[13.5px] text-white/80">Works on iPhone and Android</span>
@@ -77,7 +77,7 @@ export default function ScanFlow({ companyId, locations, needsSql }: { companyId
       {result && (result.data.found
         ? <FoundCard key={result.code} companyId={companyId} data={result.data} locations={locations} onChanged={() => lookup(result.code)} />
         : (
-          <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 text-center animate-[bp-pop-in_0.3s_ease-out]">
+          <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 text-center">
             <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#fff4ec] text-[#e8713a]">
               <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 20 7.5v9L12 21l-8-4.5v-9zM12 8v5M12 16h.01" /></svg>
             </span>
@@ -92,7 +92,7 @@ export default function ScanFlow({ companyId, locations, needsSql }: { companyId
             ) : (
               <>
                 <p className="mt-2 text-[14.5px] text-slate-500">This code isn&apos;t in your inventory yet. Create the product and this code becomes its SKU.</p>
-                <Link prefetch={false} href={`/dashboard/inventory?new=1&sku=${encodeURIComponent(result.code)}`}
+                <Link prefetch={false} href={`/dashboard/inventory/new?sku=${encodeURIComponent(result.code)}`}
                   className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#0f766e] py-3 text-[15px] font-semibold text-white transition-colors hover:bg-[#0c5f59]">
                   <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>
                   Create product
@@ -154,7 +154,7 @@ function FoundCard({ companyId, data, locations, onChanged }: { companyId: strin
   }
 
   return (
-    <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white animate-[bp-pop-in_0.3s_ease-out]">
+    <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
       <div className="flex items-center gap-4 p-4">
         <span className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-gradient-to-br from-[#f4f7fa] to-[#e9f7f4]">
           {it.image_url ? (
@@ -199,7 +199,7 @@ function FoundCard({ companyId, data, locations, onChanged }: { companyId: strin
             className={`flex-1 rounded-xl py-3 text-[15px] font-semibold text-white transition-colors disabled:opacity-60 ${mode === "add" ? "bg-[#0f766e] hover:bg-[#0c5f59]" : "bg-[#be123c] hover:bg-[#9f1239]"}`}>
             {busy ? "Saving..." : mode === "add" ? "Add to stock" : "Remove from stock"}
           </button>
-          <Link prefetch={false} href={`/dashboard/inventory?item=${it.id}`} className="flex items-center rounded-xl border border-slate-200 px-4 text-[15px] font-medium text-slate-700 hover:bg-slate-50">Details</Link>
+          <Link prefetch={false} href={`/dashboard/inventory/${it.id}`} className="flex items-center rounded-xl border border-slate-200 px-4 text-[15px] font-medium text-slate-700 hover:bg-slate-50">Details</Link>
         </div>
       </div>
     </div>
