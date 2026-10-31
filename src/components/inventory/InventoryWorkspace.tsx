@@ -10,6 +10,7 @@ import ExportModal from "@/components/customers/ExportModal";
 import { sheetItem } from "@/components/ui/sheet";
 import { Toast } from "@/components/sales/SalesBits";
 import QuickAdjust from "@/components/inventory/QuickAdjust";
+import { ItemsArt, LowArt, OutArt, ValueArt } from "@/components/inventory/KpiArt";
 import {
   InvCategory, InvItem, InvLocation, InvPhoto, InvStock, STATUS_META, StockStatus, qtyFmt, statusOf, usd,
 } from "@/lib/inventory";
@@ -172,15 +173,15 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
               </div>
             )}
 
-            {/* KPIs: cada una con su color; al pasar el mouse muestran un dato extra y filtran al hacer clic */}
+            {/* KPIs: tarjetas blancas; al pasar el mouse se elevan, el ícono se anima y (si aplica) filtran al hacer clic */}
             <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
-              <Kpi tone="teal" label="Total Items" value={kpi.total.toLocaleString("en-US")} icon={ICON.box}
+              <Kpi label="Total Items" value={kpi.total.toLocaleString("en-US")} Art={ItemsArt}
                 hint={`${qtyFmt(kpi.units)} units on hand`} action="Show all" active={status === "all" && !filtersOn} onClick={clearFilters} />
-              <Kpi tone="blue" label="Inventory Value" value={usd(kpi.value)} icon={ICON.value}
+              <Kpi label="Inventory Value" value={usd(kpi.value)} Art={ValueArt}
                 hint={`At cost · ${usd(kpi.retail)} at selling price`} />
-              <Kpi tone="amber" label="Low Stock" value={String(kpi.low)} icon={ICON.low} hint={kpi.low ? "Need restocking soon" : "Nothing running low"}
+              <Kpi label="Low Stock" value={String(kpi.low)} Art={LowArt} warn={kpi.low > 0 ? "amber" : undefined} hint={kpi.low ? "Need restocking soon" : "Nothing running low"}
                 action={kpi.low ? "Show them" : undefined} active={status === "low"} onClick={kpi.low ? () => setStatus(status === "low" ? "all" : "low") : undefined} />
-              <Kpi tone="rose" label="Out of Stock" value={String(kpi.out)} icon={ICON.out} hint={kpi.out ? "None left in any location" : "Everything in stock"}
+              <Kpi label="Out of Stock" value={String(kpi.out)} Art={OutArt} warn={kpi.out > 0 ? "red" : undefined} hint={kpi.out ? "None left in any location" : "Everything in stock"}
                 action={kpi.out ? "Show them" : undefined} active={status === "out"} onClick={kpi.out ? () => setStatus(status === "out" ? "all" : "out") : undefined} />
             </div>
 
@@ -343,29 +344,23 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
   );
 }
 
-// Tarjeta de resumen: cada una con su propio color. Sin animaciones; al pasar el mouse se llena de su color,
-// muestra un dato extra y (si se puede) un "Show them" que filtra la lista.
-const TONES = {
-  teal: { card: "border-[#cdeee6] bg-[#f3fbf8] hover:border-[#0f766e] hover:bg-[#e3f6f0]", icon: "bg-[#0f766e] text-white", value: "text-[#0b3d38]", hint: "text-[#0f766e]", on: "border-[#0f766e] bg-[#e3f6f0]" },
-  blue: { card: "border-[#d6e6fb] bg-[#f4f8fe] hover:border-[#2563eb] hover:bg-[#e8f0fd]", icon: "bg-[#2563eb] text-white", value: "text-[#13306b]", hint: "text-[#2563eb]", on: "border-[#2563eb] bg-[#e8f0fd]" },
-  amber: { card: "border-[#f8e2b8] bg-[#fffaf0] hover:border-[#d97706] hover:bg-[#fff1d6]", icon: "bg-[#d97706] text-white", value: "text-[#7a3d06]", hint: "text-[#b45309]", on: "border-[#d97706] bg-[#fff1d6]" },
-  rose: { card: "border-[#fbd5dc] bg-[#fff6f7] hover:border-[#e11d48] hover:bg-[#ffe7eb]", icon: "bg-[#e11d48] text-white", value: "text-[#7f1230]", hint: "text-[#be123c]", on: "border-[#e11d48] bg-[#ffe7eb]" },
-};
-function Kpi({ tone, label, value, icon, hint, action, active, onClick }: {
-  tone: keyof typeof TONES; label: string; value: string; icon: string; hint: string; action?: string; active?: boolean; onClick?: () => void;
+// Tarjeta de resumen: blanca y limpia. Al pasar el mouse sube un poquito y su ícono ilustrado se anima.
+function Kpi({ label, value, Art, hint, action, active, onClick, warn }: {
+  label: string; value: string; Art: (p: { size?: number }) => JSX.Element; hint: string; action?: string; active?: boolean; onClick?: () => void; warn?: "amber" | "red";
 }) {
-  const t = TONES[tone];
-  const cls = `group relative block w-full rounded-2xl border p-3.5 text-left transition-colors duration-150 lg:p-4 ${active ? t.on : t.card} ${onClick ? "cursor-pointer" : "cursor-default"}`;
+  const cls = `group relative block w-full rounded-2xl border bg-white p-3.5 text-left transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(15,40,60,0.09)] lg:p-4 ${active && onClick ? "border-[#0f766e]" : "border-slate-200 hover:border-slate-300"} ${onClick ? "cursor-pointer" : "cursor-default"}`;
   const body = (
     <>
-      <div className="flex items-center justify-between gap-2">
-        <p className="truncate text-[12.5px] font-semibold uppercase tracking-wide text-slate-500 lg:text-[12px]">{label}</p>
-        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${t.icon}`}><Svg d={icon} className="h-[18px] w-[18px]" /></span>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-[12.5px] font-medium text-slate-500 lg:text-[13px]">{label}</p>
+          <p className={`mt-1 truncate text-[22px] font-semibold tabular-nums tracking-tight lg:text-[26px] ${warn === "amber" ? "text-[#b45309]" : warn === "red" ? "text-[#be123c]" : "text-[#0b1f3a]"}`}>{value}</p>
+        </div>
+        <span className="shrink-0"><Art size={44} /></span>
       </div>
-      <p className={`mt-1 truncate text-[22px] font-semibold tabular-nums tracking-tight lg:text-[26px] ${t.value}`}>{value}</p>
-      <p className={`mt-0.5 flex items-center justify-between gap-2 text-[12.5px] ${t.hint}`}>
+      <p className="mt-0.5 flex items-center justify-between gap-2 text-[12.5px] text-slate-500">
         <span className="truncate">{hint}</span>
-        {action && onClick && <span className="hidden shrink-0 font-semibold underline-offset-2 group-hover:inline group-hover:underline">{action} →</span>}
+        {action && onClick && <span className="hidden shrink-0 font-semibold text-[#0f766e] group-hover:inline">{action} →</span>}
       </p>
     </>
   );
