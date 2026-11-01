@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -15,6 +15,13 @@ const inputClass =
 export default function SignInPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
+  // Invitaciones: /?next=/join/… → después de entrar, regresa a la invitación
+  const [qs, setQs] = useState("");
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    setQs(window.location.search);
+    if (p.get("email")) setEmail(p.get("email") as string);
+  }, []);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
@@ -39,7 +46,8 @@ export default function SignInPage() {
       }
       return setError("That email and password don't match. Try again.");
     }
-    router.push("/dashboard");
+    const next = new URLSearchParams(window.location.search).get("next");
+    router.push(next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard");
     router.refresh();
   }
 
@@ -83,7 +91,7 @@ export default function SignInPage() {
 
       <p className="mt-8 text-sm text-slate-600">
         Don&apos;t have a BrightPro account?{" "}
-        <Link prefetch={false} href="/signup" className="font-semibold text-[#0f766e] hover:underline">Sign up now</Link>
+        <Link prefetch={false} href={`/signup${qs}`} className="font-semibold text-[#0f766e] hover:underline">Sign up now</Link>
       </p>
     </AuthShell>
   );

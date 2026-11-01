@@ -46,7 +46,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/", request.url));
   }
   if (user && (path === "/" || path === "/signup")) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    // Si viene de una invitación (?next=/join/…), lo manda de vuelta ahí
+    const next = request.nextUrl.searchParams.get("next");
+    return NextResponse.redirect(new URL(next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard", request.url));
   }
 
   if (user && INTERNAL) {

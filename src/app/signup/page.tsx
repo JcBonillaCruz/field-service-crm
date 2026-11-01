@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import AuthShell from "@/components/AuthShell";
@@ -12,6 +12,14 @@ const inputClass =
 export default function SignUpPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  // Invitaciones: llega con ?next=/join/…&email=…&name=… → se llenan solos y al confirmar regresa a la invitación
+  const [qs, setQs] = useState("");
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    setQs(window.location.search);
+    if (p.get("email")) setEmail(p.get("email") as string);
+    if (p.get("name")) setFullName(p.get("name") as string);
+  }, []);
   const [password, setPassword] = useState("");
   const [agree, setAgree] = useState(false);
   const [error, setError] = useState("");
@@ -33,7 +41,10 @@ export default function SignUpPage() {
       password,
       options: {
         data: { full_name: fullName.trim() },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: (() => {
+          const next = new URLSearchParams(window.location.search).get("next");
+          return `${window.location.origin}/auth/callback${next && next.startsWith("/") && !next.startsWith("//") ? `?next=${encodeURIComponent(next)}` : ""}`;
+        })(),
       },
     });
     setLoading(false);
@@ -104,7 +115,7 @@ export default function SignUpPage() {
 
           <p className="mt-8 text-sm text-slate-600">
             Already have an account?{" "}
-            <Link prefetch={false} href="/" className="font-semibold text-[#0f766e] hover:underline">Sign in</Link>
+            <Link prefetch={false} href={`/${qs}`} className="font-semibold text-[#0f766e] hover:underline">Sign in</Link>
           </p>
         </>
       )}

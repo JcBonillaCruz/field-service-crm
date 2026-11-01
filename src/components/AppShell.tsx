@@ -59,7 +59,7 @@ const FINANCE_NAV: NavItem[] = [
     ] },
   { label: "Payments", icon: "M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 10h18M7 15h3", roles: ["owner", "manager"] },
   { label: "Reports", icon: "M4 4v16h16M8.5 16v-4M12.5 16V8M16.5 16v-6", roles: ["owner", "manager"] },
-  { label: "Team", icon: "M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6", roles: ["owner", "manager"] },
+  { label: "Team", href: "/dashboard/team", addHref: "/dashboard/team/invite", addLabel: "Member", icon: "M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6", roles: ["owner", "manager"] },
   SETTINGS,
 ];
 
@@ -82,6 +82,7 @@ const INVENTORY_NAV: NavItem[] = [
   { label: "Counts", href: "/dashboard/inventory/counts", addHref: "/dashboard/inventory/counts/new", roles: MANAGE, icon: "M9 5h6M9 3h6v4H9zM6 5H5v16h14V5h-1M9 13l2 2 4-4" },
   { label: "Reports", href: "/dashboard/inventory/reports", roles: MANAGE, icon: "M4 4v16h16M8.5 16v-4M12.5 16V8M16.5 16v-6" },
   { label: "My Usage", href: "/dashboard/inventory/usage", roles: ["technician"], icon: "M4 4v16h16M8.5 16v-4M12.5 16V8M16.5 16v-6" },
+  { label: "Team", href: "/dashboard/team", roles: ["owner", "manager"], icon: "M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6" },
   { label: "Settings", href: "/dashboard/inventory/settings", roles: MANAGE, icon: "M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1M15 5v4M9 10v4M17 15v4" },
 ];
 const NAV_BY_APP: Record<AppId, NavItem[]> = { finance: FINANCE_NAV, qr: QR_NAV, inventory: INVENTORY_NAV };
