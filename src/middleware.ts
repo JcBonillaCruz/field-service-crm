@@ -45,6 +45,11 @@ export async function middleware(request: NextRequest) {
   if (!user && (path.startsWith("/dashboard") || path.startsWith("/print"))) {
     return NextResponse.redirect(new URL("/", request.url));
   }
+  // Cuenta creada por el dueño con contraseña temporal: la primera vez debe crear su propia contraseña
+  if (user && user.user_metadata?.must_change_password && path.startsWith("/dashboard")) {
+    return NextResponse.redirect(new URL("/set-password", request.url));
+  }
+  if (!user && path === "/set-password") return NextResponse.redirect(new URL("/", request.url));
   if (user && (path === "/" || path === "/signup")) {
     // Si viene de una invitación (?next=/join/…), lo manda de vuelta ahí
     const next = request.nextUrl.searchParams.get("next");
@@ -64,5 +69,5 @@ export async function middleware(request: NextRequest) {
 // Solo donde hace falta: login, panel, impresión y /api (este último solo para limpiar encabezados).
 // Antes corría en TODAS las rutas (incluidas las públicas) y llamaba a Supabase cada vez.
 export const config = {
-  matcher: ["/", "/signup", "/dashboard/:path*", "/print/:path*", "/api/:path*"],
+  matcher: ["/", "/signup", "/set-password", "/dashboard/:path*", "/print/:path*", "/api/:path*"],
 };

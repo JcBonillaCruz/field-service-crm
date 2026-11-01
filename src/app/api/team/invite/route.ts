@@ -5,7 +5,7 @@ import { canManageTeam, inviteLink, teamError, ROLE_INFO } from "@/lib/team";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type Body = { email?: string; full_name?: string; role?: string; job_title?: string; phone?: string; send?: boolean; resend?: string };
+type Body = { email?: string; full_name?: string; role?: string; job_title?: string; phone?: string; send?: boolean; resend?: string; note?: string };
 const okEmail = (e: string) => /^\S+@\S+\.\S+$/.test(e);
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
 
@@ -52,15 +52,25 @@ export async function POST(request: NextRequest) {
     else {
       const company = esc(current.name), who = esc(user.fullName || "Your team"), first = esc((invite.full_name ?? "").split(" ")[0] || "there");
       const role = ROLE_INFO[invite.role as keyof typeof ROLE_INFO]?.label ?? invite.role;
-      const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#0b1f3a">
-        ${current.logoUrl ? `<img src="${esc(current.logoUrl)}" alt="" style="max-height:56px;margin-bottom:16px">` : ""}
-        <h2 style="margin:0 0 12px">Hi ${first}, you're invited to join ${company}</h2>
-        <p style="font-size:15px;line-height:1.6;color:#334155">${who} invited you to ${company} on BrightPro as <b>${esc(role)}</b>.</p>
-        <p style="margin:28px 0"><a href="${link}" style="background:#0f766e;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold;display:inline-block">Accept invitation</a></p>
-        <p style="font-size:13px;color:#64748b">This link works for 14 days. If the button doesn't work, copy this link:<br><a href="${link}" style="color:#0f766e">${link}</a></p></div>`;
+      // Correo personal y sencillo (como si lo escribiera el dueño): ayuda a que Gmail lo ponga en "Principal" y no en "Promociones".
+      // Sin imágenes ni diseño de anuncio, con versión de solo texto y "Responder" va directo al dueño.
+      const note = (b.note ?? "").trim().slice(0, 600);
+      const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1f2937;max-width:560px">
+        <p>Hi ${first},</p>
+        ${note ? `<p>${esc(note).replace(/\n/g, "<br>")}</p>` : `<p>I added you to ${company} on BrightPro as ${esc(role)}. This is where we'll handle our work${invite.role === "technician" ? ", jobs and the parts in your van" : ""}.</p>`}
+        <p>To get started, open this link and create your password:<br><a href="${link}">${link}</a></p>
+        <p>The link works for 14 days. If you have any question, just reply to this email.</p>
+        <p>Thanks,<br>${who}<br>${company}</p></div>`;
+      const text = `Hi ${(invite.full_name ?? "").split(" ")[0] || "there"},\n\n${note || `I added you to ${current.name} on BrightPro as ${role}.`}\n\nTo get started, open this link and create your password:\n${link}\n\nThe link works for 14 days. If you have any question, just reply to this email.\n\nThanks,\n${user.fullName || ""}\n${current.name}`;
+      const sender = (process.env.TEAM_FROM_EMAIL || from);
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ from: `${current.name} <${from}>`, to: [invite.email], subject: `You're invited to join ${current.name} on BrightPro`, html }),
+        body: JSON.stringify({
+          from: `${(user.fullName || current.name).replace(/[<>"]/g, "")} via BrightPro <${sender}>`, to: [invite.email],
+          reply_to: user.email ? [user.email] : undefined,
+          subject: `${user.fullName ? user.fullName.split(" ")[0] : current.name} added you to ${current.name}`,
+          html, text, headers: { "X-Entity-Ref-ID": invite.id },
+        }),
       }).catch(() => null);
       emailed = Boolean(res?.ok);
       if (!emailed) emailNote = "The email couldn't be sent. Share the link instead.";

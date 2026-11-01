@@ -22,7 +22,17 @@ export const ROLE_INFO: Record<Role, { label: string; text: string; can: string[
   technician: { label: "Technician", text: "Works in the field.", can: ["Only their own van and its parts", "Scan the parts they use on a job", "Only the jobs assigned to them (Jobs app)"], tone: "bg-[#fff4ec] text-[#c2410c]" },
 };
 
-export const inviteLink = (origin: string, token: string) => `${origin}/join/${token}`;
+// Dirección pública de la app (ej. https://app.brightproapp.com). Se pone en Vercel como NEXT_PUBLIC_APP_URL;
+// si no existe, se usa la dirección desde donde se abrió la app.
+export const appOrigin = (fallback: string) => (process.env.NEXT_PUBLIC_APP_URL || fallback).replace(/\/+$/, "");
+export const inviteLink = (origin: string, token: string) => `${appOrigin(origin)}/join/${token}`;
+
+// Contraseña temporal fácil de dictar por teléfono (ej. Bright-4821-kp)
+export function tempPassword() {
+  const n = Math.floor(1000 + Math.random() * 9000);
+  const a = "abcdefghjkmnpqrstuvwxyz";
+  return `Bright-${n}-${a[Math.floor(Math.random() * a.length)]}${a[Math.floor(Math.random() * a.length)]}`;
+}
 
 export function teamError(e: { message?: string; code?: string; hint?: string } | null | undefined): string {
   if (!e) return "";

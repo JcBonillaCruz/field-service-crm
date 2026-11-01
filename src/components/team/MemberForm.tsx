@@ -33,9 +33,10 @@ export default function MemberForm({ companyId, member, myRole, isMe }: { compan
   }
 
   async function remove() {
-    if (!(await confirmDelete({ title: `Remove ${member.full_name}?`, message: "They lose access to this company right away. Their history (invoices, scans, movements) stays. If they have a van, it becomes unassigned." }))) return;
-    const { error: err } = await createClient().rpc("team_remove_member", { p_company: companyId, p_user: member.user_id });
-    if (err) return setError(teamError(err));
+    if (!(await confirmDelete({ title: `Remove ${member.full_name}?`, message: "They lose access to this company right away. Their history stays. If they have a van, it becomes unassigned. If they don't belong to any other company, their login is deleted too." }))) return;
+    const res = await fetch("/api/team/remove", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user_id: member.user_id }) }).catch(() => null);
+    const data = res ? await res.json().catch(() => ({})) : {};
+    if (!res?.ok) return setError(data.error || "It couldn't be removed.");
     router.replace("/dashboard/team"); router.refresh();
   }
 

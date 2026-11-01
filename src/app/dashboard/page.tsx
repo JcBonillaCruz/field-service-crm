@@ -1,4 +1,4 @@
-import CreateCompanyForm from "@/components/CreateCompanyForm";
+import NoCompanyWelcome from "@/components/NoCompanyWelcome";
 import { getSession } from "@/lib/session";
 import Dashboard from "@/components/dashboard/Dashboard"; // celular (sin cambios)
 import DesktopDashboard from "@/components/dashboard/DesktopDashboard"; // computadora
@@ -10,17 +10,9 @@ export default async function DashboardPage({ searchParams }: { searchParams?: {
   const { supabase, current, firstName, companies } = await getSession();
 
   if (!current) {
-    return (
-      <section className="mx-auto max-w-lg px-5 py-12 sm:py-16">
-        <h1 className="text-3xl font-semibold tracking-tight text-[#0b1f3a]">Welcome, {firstName}</h1>
-        <p className="mt-2 text-slate-500">Let&apos;s set up your first company.</p>
-        <div className="mt-8 rounded-2xl bg-white p-6 shadow-[0_12px_40px_rgba(15,40,60,0.06)] sm:p-8">
-          <h2 className="text-lg font-semibold text-[#0b1f3a]">Create your first company</h2>
-          <p className="mb-6 mt-1 text-sm text-slate-500">Each company keeps its own customers, invoices and inventory. You can add more later.</p>
-          <CreateCompanyForm />
-        </div>
-      </section>
-    );
+    // ¿Lo invitaron a alguna compañía? (técnicos, oficina…) → se une en vez de crear una
+    const { data: invites } = await supabase.rpc("my_pending_invites");
+    return <NoCompanyWelcome firstName={firstName} invites={(invites ?? []) as { token: string; company_name: string; role: string; invited_by_name: string | null }[]} />;
   }
 
   // Clientes y Ventas en paralelo (antes uno esperaba al otro)
