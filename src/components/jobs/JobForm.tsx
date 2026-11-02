@@ -221,7 +221,7 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
   const closeHref = "/dashboard/jobs/schedule";
 
   return (
-    <form onSubmit={submit} noValidate autoComplete="off" className="flex min-h-[calc(100vh-4rem)] flex-col bg-white">
+    <form onSubmit={submit} noValidate autoComplete="off" className="flex min-h-[calc(100vh-4rem)] min-w-0 flex-col overflow-x-hidden bg-white">
       <FormHeader title={editing ? `Edit Job ${initial!.number}` : "New Job"} closeHref={closeHref} />
 
       {initial?.cancelled_at && (
@@ -232,7 +232,7 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
       )}
 
       <div className="space-y-6 border-b border-slate-200 px-5 py-7 sm:px-8">
-        <div className="grid max-w-[1000px] gap-6">
+        <div className="grid max-w-[1000px] grid-cols-[minmax(0,1fr)] gap-6">
           <FormRow label="Customer" hint="Search your customers or add a new one here. It's saved in Customers too." alignTop width="max-w-[560px]">
             <PayerPicker companyId={companyId} people={customers} customerId={customerId} name={typed}
               onPick={(c) => setCustomerId(c?.id ?? null)} onType={setTyped}
@@ -388,7 +388,7 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
 
       {/* Checklist y notas */}
       <div className="px-5 py-7 sm:px-8">
-        <div className="grid max-w-[1000px] gap-6">
+        <div className="grid max-w-[1000px] grid-cols-[minmax(0,1fr)] gap-6">
           <SectionTitle>Checklist</SectionTitle>
           <div className="-mt-3 max-w-[640px] space-y-2">
             {checklist.length === 0 && <p className="text-[13.5px] text-slate-500">Required tasks the technician must check off before finishing the job.</p>}

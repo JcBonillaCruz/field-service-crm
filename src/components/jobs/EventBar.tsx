@@ -1,6 +1,6 @@
 "use client";
 
-import { CalVisit, TechChip, barColor, fmtTime } from "@/lib/jobs";
+import { CalVisit, TechChip, barColor, fmtTime, tint } from "@/lib/jobs";
 
 // Circulito con las iniciales del técnico en su color (con foto si tiene)
 export function TechDot({ t, size = 22, ring = true }: { t: TechChip | { initials: string; color: string; avatar_url?: string | null; name?: string }; size?: number; ring?: boolean }) {
@@ -49,30 +49,30 @@ export function EventBar({ v, start, end, compact, dragging, onDown, onResizeDow
     <div role="button" tabIndex={0} aria-label={`${v.customer_name}, ${fmtTime(start)}`}
       onPointerDown={onDown}
       onMouseEnter={(e) => onHover(e.currentTarget)} onMouseLeave={() => onHover(null)}
-      className={`group/bar absolute inset-0 flex cursor-grab select-none flex-col overflow-hidden rounded-md px-1.5 text-left text-white shadow-[0_1px_2px_rgba(15,40,60,0.18)] transition-[box-shadow,opacity,filter] duration-100 [touch-action:none] hover:z-10 hover:shadow-[0_8px_20px_rgba(15,40,60,0.25)] hover:brightness-105 active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0b1f3a] ${dragging ? "opacity-40" : ""} ${done ? "opacity-60" : ""}`}
-      style={{ background: color }}>
+      className={`group/bar absolute inset-0 flex cursor-grab select-none flex-col overflow-hidden rounded-lg border-l-[3px] pl-1.5 pr-1 text-left text-[#0b1f3a] transition-[box-shadow,opacity] duration-100 [touch-action:none] hover:z-10 hover:shadow-[0_6px_18px_rgba(15,40,60,0.14)] active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] ${dragging ? "opacity-40" : ""} ${done ? "opacity-60" : ""}`}
+      style={{ background: tint(color, 0.13), borderLeftColor: color }}>
       <div className={`flex min-w-0 items-start gap-1 ${compact ? "pt-0.5" : "pt-1"}`}>
         <div className="min-w-0 flex-1">
           <p className={`truncate font-semibold leading-tight ${compact ? "text-[11.5px]" : "text-[12.5px]"} ${v.visit_status === "cancelled" ? "line-through" : ""}`}>
             {v.customer_name || v.title || v.number}
           </p>
           {!compact && (
-            <p className="truncate text-[11px] leading-tight text-white/85">
+            <p className="truncate text-[11px] leading-tight text-slate-600">
               {fmtTime(start)} – {fmtTime(end)}{v.visit_count > 1 ? ` · Visit ${v.visit_no}` : ""}
             </p>
           )}
         </div>
-        <span className="flex shrink-0 items-center gap-1 rounded-full bg-white/90 p-0.5">
+        <span className="flex shrink-0 items-center gap-1">
           <StatusGlyph s={v.visit_status} className="h-3 w-3" />
           <TechDots techs={v.techs} size={compact ? 15 : 18} max={1} />
         </span>
       </div>
-      {!compact && v.type_name && <p className="mt-0.5 truncate text-[10.5px] text-white/80">{v.type_name}</p>}
+      {!compact && v.type_name && <p className="mt-0.5 truncate text-[10.5px] text-slate-500">{v.type_name}</p>}
       {/* Borde de abajo: estirar para cambiar la duración */}
       {!done && (
         <span onPointerDown={(e) => { e.stopPropagation(); onResizeDown(e); }} aria-hidden="true"
           className="absolute inset-x-0 bottom-0 flex h-2.5 cursor-ns-resize items-end justify-center [touch-action:none]">
-          <span className="mb-0.5 h-1 w-6 rounded-full bg-white/0 transition-colors group-hover/bar:bg-white/60" />
+          <span className="mb-0.5 h-1 w-6 rounded-full bg-slate-500/0 transition-colors group-hover/bar:bg-slate-500/40" />
         </span>
       )}
     </div>
@@ -84,9 +84,10 @@ export function EventChip({ v, dragging, onDown, onHover }: { v: CalVisit; dragg
   const color = barColor(v);
   return (
     <div role="button" tabIndex={0} onPointerDown={onDown} onMouseEnter={(e) => onHover(e.currentTarget)} onMouseLeave={() => onHover(null)}
-      className={`flex w-full cursor-grab select-none items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-[11.5px] leading-snug text-white transition-shadow [touch-action:none] hover:shadow-[0_3px_10px_rgba(15,40,60,0.22)] ${dragging ? "opacity-40" : ""} ${v.visit_status === "completed" ? "opacity-60" : ""}`}
-      style={{ background: color }}>
-      <span className="shrink-0 text-white/80">{fmtTime(new Date(v.starts_at)).replace(":00", "").replace(" ", "").toLowerCase()}</span>
+      className={`flex w-full cursor-grab select-none items-center gap-1 truncate rounded-md px-1.5 py-0.5 text-left text-[11.5px] leading-snug text-[#0b1f3a] transition-shadow [touch-action:none] hover:shadow-[0_3px_10px_rgba(15,40,60,0.12)] ${dragging ? "opacity-40" : ""} ${v.visit_status === "completed" ? "opacity-60" : ""}`}
+      style={{ background: tint(color, 0.13) }}>
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: color }} />
+      <span className="shrink-0 text-slate-500">{fmtTime(new Date(v.starts_at)).replace(":00", "").replace(" ", "").toLowerCase()}</span>
       <span className="min-w-0 truncate font-medium">{v.customer_name || v.number}</span>
     </div>
   );

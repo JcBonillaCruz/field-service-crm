@@ -133,16 +133,16 @@ export default function DispatchGrid({ days, rows, visits, dStart, dEnd, preview
                     <div key={`${p.v.visit_id}-${p.dayIdx}`} role="button" tabIndex={0}
                       onPointerDown={(e) => handlers.onVisitDown(e, p.v, col, "move")}
                       onMouseEnter={(e) => handlers.onVisitHover(p.v, e.currentTarget)} onMouseLeave={() => handlers.onVisitHover(null, null)}
-                      className={`group/bar absolute flex cursor-grab select-none items-center gap-1.5 overflow-hidden rounded-md px-2 text-left text-white shadow-sm transition-[box-shadow,opacity] duration-100 [touch-action:none] hover:z-10 hover:shadow-[0_6px_16px_rgba(15,40,60,0.22)] active:cursor-grabbing ${handlers.draggingId === p.v.visit_id ? "opacity-40" : ""} ${done ? "opacity-60" : ""}`}
-                      style={{ left: left + 1, width, top: p.lane * LANE_H + 7, height: LANE_H - 6, background: color }}>
+                      className={`group/bar absolute flex cursor-grab select-none items-center gap-1.5 overflow-hidden rounded-md border-l-[3px] px-2 text-left text-[#0b1f3a] transition-[box-shadow,opacity] duration-100 [touch-action:none] hover:z-10 hover:shadow-[0_6px_16px_rgba(15,40,60,0.14)] active:cursor-grabbing ${handlers.draggingId === p.v.visit_id ? "opacity-40" : ""} ${done ? "opacity-60" : ""}`}
+                      style={{ left: left + 1, width, top: p.lane * LANE_H + 7, height: LANE_H - 6, background: tint(color, 0.13), borderLeftColor: color }}>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[12px] font-semibold leading-tight">{p.v.customer_name || p.v.number}</span>
-                        {width > 90 && <span className="block truncate text-[10.5px] leading-tight text-white/85">{fmtTime(new Date(p.v.starts_at))} · {p.v.type_name ?? "Job"}</span>}
+                        {width > 90 && <span className="block truncate text-[10.5px] leading-tight text-slate-500">{fmtTime(new Date(p.v.starts_at))} · {p.v.type_name ?? "Job"}</span>}
                       </span>
-                      {width > 70 && <span className="flex shrink-0 items-center gap-1 rounded-full bg-white/90 px-0.5 py-0.5"><StatusGlyph s={p.v.visit_status} className="h-3 w-3" /><TechDots techs={p.v.techs} size={16} max={1} /></span>}
+                      {width > 70 && <span className="flex shrink-0 items-center gap-1"><StatusGlyph s={p.v.visit_status} className="h-3 w-3" /><TechDots techs={p.v.techs} size={16} max={1} /></span>}
                       {!done && (
                         <span onPointerDown={(e) => { e.stopPropagation(); handlers.onVisitDown(e, p.v, col, "resize"); }} aria-hidden="true"
-                          className="absolute inset-y-0 right-0 w-2 cursor-ew-resize [touch-action:none] hover:bg-white/30" />
+                          className="absolute inset-y-0 right-0 w-2 cursor-ew-resize [touch-action:none] hover:bg-slate-500/15" />
                       )}
                     </div>
                   );

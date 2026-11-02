@@ -274,7 +274,7 @@ export default function AppShell({
   const role = companies.find((c) => c.id === currentId)?.role ?? null;
   // Logo → inicio de la app donde estás (Finances, Inventory o QR Studio). El técnico va a su van.
   const appNow = appOf(pathname || "");
-  const homeHref = role === "technician" ? "/dashboard/inventory/van"
+  const homeHref = role === "technician" ? (appNow === "inventory" ? "/dashboard/inventory/van" : "/dashboard/jobs/mine")
     : appNow === "inventory" ? "/dashboard/inventory" : appNow === "jobs" ? "/dashboard/jobs" : appNow === "qr" ? "/dashboard/tools/qr" : "/dashboard";
 
   // Presencia: cada minuto avisa que la app está abierta y si la persona la está usando (para Team: verde / naranja / rojo)

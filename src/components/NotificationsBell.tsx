@@ -14,7 +14,7 @@ const TONE: Record<NoticeKind, string> = {
 export default function NotificationsBell() {
   const ctx = useNotifications();
   if (!ctx) return null;
-  const { items: visible, unread, markRead, push, pushMsg, enablePush, disablePush } = ctx;
+  const { items: visible, unread, markRead, push, pushMsg, enablePush, disablePush, testPush } = ctx;
   const markAll = () => markRead(visible.map((n) => n.key));
   return (
     <Popover className="relative">
@@ -39,7 +39,7 @@ export default function NotificationsBell() {
                   {pushMsg && <span className="block text-red-600">{pushMsg}</span>}
                 </p>
                 {push === "off" && <button type="button" onClick={enablePush} className="shrink-0 rounded-lg bg-[#0f766e] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#0c5f59]">Turn on</button>}
-                {push === "on" && <button type="button" onClick={disablePush} className="shrink-0 text-[12px] text-slate-500 hover:underline">Turn off</button>}
+                {push === "on" && <span className="flex shrink-0 items-center gap-2"><button type="button" onClick={testPush} className="text-[12px] font-semibold text-[#0f766e] hover:underline">Send test</button><button type="button" onClick={disablePush} className="text-[12px] text-slate-500 hover:underline">Turn off</button></span>}
               </div>
             )}
             {visible.length === 0 ? (

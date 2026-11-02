@@ -20,7 +20,7 @@ const VAPID = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
 type Push = "unsupported" | "off" | "on" | "blocked";
 type Ctx = {
   items: Notice[]; unread: number; markRead: (keys: string[]) => void;
-  push: Push; pushMsg: string; enablePush: () => void; disablePush: () => void;
+  push: Push; pushMsg: string; enablePush: () => void; disablePush: () => void; testPush: () => void;
 };
 const NotificationsCtx = createContext<Ctx | null>(null);
 export const useNotifications = () => useContext(NotificationsCtx);
@@ -145,6 +145,22 @@ export default function NotificationsProvider({ companyId, userId, enabled, tech
       setPush("on"); chime();
     } catch { setPushMsg("This device can't receive alerts. On iPhone, add BrightPro to your Home Screen first."); }
   }, []);
+  // El teléfono queda ligado a la cuenta que lo está usando AHORA (si en el mismo teléfono entras con otra cuenta,
+  // las alertas pasan a esa cuenta). Antes se quedaban con la cuenta anterior y por eso dejaban de llegar.
+  useEffect(() => {
+    if (!enabled || !companyId || !("serviceWorker" in navigator) || !VAPID || Notification.permission !== "granted") return;
+    navigator.serviceWorker.getRegistration("/sw.js").then(async (reg) => {
+      const sub = await reg?.pushManager.getSubscription();
+      if (!sub) return;
+      await fetch("/api/push/subscribe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sub.toJSON()) }).catch(() => undefined);
+    }).catch(() => undefined);
+  }, [enabled, companyId, userId]);
+  const testPush = useCallback(async () => {
+    setPushMsg("");
+    const r = await fetch("/api/push/test", { method: "POST" }).catch(() => null);
+    const j = r ? await r.json().catch(() => ({})) : {};
+    setPushMsg(r?.ok && j.sent > 0 ? "Test sent. It should ring in a few seconds." : (j.error || "No alert reached this device. Turn alerts off and on again."));
+  }, []);
   const disablePush = useCallback(async () => {
     const reg = await navigator.serviceWorker.getRegistration("/sw.js");
     const sub = await reg?.pushManager.getSubscription();
@@ -159,7 +175,7 @@ export default function NotificationsProvider({ companyId, userId, enabled, tech
     if (!enabled || !nav.setAppBadge) return;
     (visible.length ? nav.setAppBadge(visible.length) : nav.clearAppBadge?.())?.catch(() => undefined);
   }, [visible.length, enabled]);
-  const value = useMemo<Ctx>(() => ({ items: visible, unread: visible.length, markRead, push, pushMsg, enablePush, disablePush }),
-    [visible, markRead, push, pushMsg, enablePush, disablePush]);
+  const value = useMemo<Ctx>(() => ({ items: visible, unread: visible.length, markRead, push, pushMsg, enablePush, disablePush, testPush }),
+    [visible, markRead, push, pushMsg, enablePush, disablePush, testPush]);
   return <NotificationsCtx.Provider value={value}>{children}</NotificationsCtx.Provider>;
 }

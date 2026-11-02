@@ -455,46 +455,37 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
 
   return (
     <div className="flex h-[calc(100dvh-4rem)] flex-col bg-white">
-      {/* Barra de herramientas */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-2.5 lg:px-5">
-        <div className="flex items-center gap-1.5">
+      {/* Barra de herramientas: fecha a la izquierda; Vista, Filtros, bandeja y Nuevo a la derecha */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-2 lg:px-5 lg:py-2.5">
+        <div className="flex min-w-0 flex-1 items-center gap-1">
           <button type="button" onClick={() => setAnchor(dayStart(new Date()))}
-            className="h-9 rounded-lg border border-slate-200 px-3 text-[13.5px] font-semibold text-slate-700 transition-colors hover:border-[#14a39a] hover:bg-[#f3fbf8]">Today</button>
+            className="h-9 shrink-0 rounded-lg border border-slate-200 px-3 text-[13.5px] font-semibold text-slate-700 transition-colors hover:border-[#14a39a] hover:bg-[#f3fbf8]">Today</button>
           {([-1, 1] as const).map((d) => (
             <button key={d} type="button" aria-label={d < 0 ? "Previous" : "Next"} onClick={() => setAnchor((a) => shiftAnchor(view, a, d))}
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800">
+              className="flex h-9 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800">
               <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d < 0 ? "m12 5-5 5 5 5" : "m8 5 5 5-5 5"} /></svg>
             </button>
           ))}
           <DateJump label={rangeLabel(view, anchor, settings.week_starts_on)} anchor={anchor} days={days} weekStartsOn={settings.week_starts_on}
             onPick={(d) => setAnchor(d)} />
-          {loading && <span className="ml-1 h-4 w-4 animate-spin rounded-full border-2 border-[#14a39a] border-t-transparent" aria-label="Loading" />}
+          {loading && <span className="ml-1 h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-[#14a39a] border-t-transparent" aria-label="Loading" />}
         </div>
 
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <StatusFilter value={statusF} onChange={setStatusF} counts={counts} />
-          <TechFilter team={techs} value={techF} onChange={setTechF} />
-          {types.length > 0 && (
-            <SimpleSelect value={typeF} onChange={setTypeF} options={[{ value: "", label: "All job types" }, ...types.filter((t) => t.is_active).map((t) => ({ value: t.id, label: t.name, color: t.color }))]} />
-          )}
-          <SimpleSelect value={colorBy} onChange={(v) => { setColorBy(v as ColorBy); try { localStorage.setItem(COLOR_KEY, v); } catch { /* */ } }}
-            options={[{ value: "tech", label: "Color by: Technician" }, { value: "type", label: "Color by: Job type" }, { value: "priority", label: "Color by: Priority" }]} />
-          <div className="flex overflow-x-auto rounded-lg bg-slate-100 p-0.5" role="tablist" aria-label="Calendar view">
-            {VIEWS.map((v) => (
-              <button key={v.id} type="button" role="tab" aria-selected={view === v.id} onClick={() => setView(v.id)}
-                className={`whitespace-nowrap rounded-md px-2.5 py-1.5 text-[12.5px] font-semibold transition-all duration-150 ${view === v.id ? "bg-white text-[#0f766e] shadow-sm" : "text-slate-500 hover:text-[#0b1f3a]"}`}>{v.label}</button>
-            ))}
-          </div>
-          <button type="button" onClick={toggleTray} aria-pressed={trayOpen}
-            className={`relative flex h-9 items-center gap-1.5 rounded-lg border px-3 text-[13px] font-semibold transition-colors ${trayOpen ? "border-[#0f766e] bg-[#e9f7f4] text-[#0f766e]" : "border-slate-200 text-slate-700 hover:border-[#14a39a]"}`}>
+        <div className="flex items-center gap-1.5">
+          <ViewMenu value={view} onChange={setView} />
+          <FiltersMenu statusF={statusF} setStatusF={setStatusF} counts={counts} team={techs} techF={techF} setTechF={setTechF}
+            types={types.filter((t) => t.is_active)} typeF={typeF} setTypeF={setTypeF}
+            colorBy={colorBy} setColorBy={(v) => { setColorBy(v); try { localStorage.setItem(COLOR_KEY, v); } catch { /* */ } }} />
+          <button type="button" onClick={toggleTray} aria-pressed={trayOpen} aria-label="To schedule" title="To schedule"
+            className={`relative flex h-9 items-center gap-1.5 rounded-lg border px-2.5 text-[13px] font-semibold transition-colors ${trayOpen ? "border-[#0f766e] bg-[#e9f7f4] text-[#0f766e]" : "border-slate-200 text-slate-700 hover:border-[#14a39a]"}`}>
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5h16v14H4zM15 5v14" /></svg>
-            <span className="hidden sm:inline">To schedule</span>
+            <span className="hidden xl:inline">To schedule</span>
             {trayCount > 0 && <span className={`rounded-full px-1.5 text-[11px] text-white ${holdCount ? "bg-[#e11d48]" : "bg-[#0f766e]"}`}>{trayCount}</span>}
           </button>
-          <Link prefetch={false} href="/dashboard/jobs/new"
-            className="group/n inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#0f766e] px-3.5 text-[14px] font-semibold text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59]">
+          <Link prefetch={false} href="/dashboard/jobs/new" aria-label="New job"
+            className="group/n inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#0f766e] px-2.5 text-[14px] font-semibold text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59] sm:px-3.5">
             <svg viewBox="0 0 20 20" className="h-4 w-4 transition-transform duration-200 group-hover/n:rotate-90" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>
-            New job
+            <span className="hidden sm:inline">New job</span>
           </Link>
         </div>
       </div>
@@ -565,27 +556,29 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
   );
 }
 
-// ---------- Filtros (Headless UI) ----------
-const btn = "flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white pl-3 pr-2 text-[13px] font-medium text-slate-700 transition-colors hover:border-[#14a39a] focus:outline-none data-[open]:border-[#0f766e] data-[open]:ring-4 data-[open]:ring-[#14a39a]/15";
-
-function StatusFilter({ value, onChange, counts }: { value: "all" | JobStatus; onChange: (v: "all" | JobStatus) => void; counts: Map<string, number> }) {
-  const opts: ("all" | JobStatus)[] = ["all", ...STATUS_ORDER.filter((s) => s !== "unscheduled")];
+// ---------- Vista y Filtros (Headless UI) ----------
+const btn = "flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-semibold text-slate-700 transition-colors hover:border-[#14a39a] focus:outline-none data-[open]:border-[#0f766e] data-[open]:ring-4 data-[open]:ring-[#14a39a]/15";
+const VIEW_ICON: Record<CalView, string> = {
+  day: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 15h6", week: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 10v10M14 10v10",
+  workweek: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M10 10v10M15 10v10", month: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M4 15h16M9 10v10M14 10v10",
+  dispatch: "M4 6h16M4 12h16M4 18h16M8 4v4M13 10v4M10 16v4",
+};
+function ViewMenu({ value, onChange }: { value: CalView; onChange: (v: CalView) => void }) {
   return (
     <Listbox value={value} onChange={onChange}>
-      <ListboxButton className={btn} aria-label="Filter by status">
-        {value !== "all" && <span className={`h-2 w-2 rounded-full ${STATUS_META[value].dot}`} />}
-        <span className="whitespace-nowrap">{value === "all" ? "All statuses" : STATUS_META[value].label}</span>
-        <span className="rounded-full bg-slate-100 px-1.5 text-[11px] text-slate-500">{counts.get(value) ?? 0}</span>
+      <ListboxButton className={btn} aria-label="Calendar view">
+        <svg viewBox="0 0 24 24" className="h-4 w-4 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={VIEW_ICON[value]} /></svg>
+        <span>{VIEWS.find((v) => v.id === value)?.label}</span>
         <span className="text-slate-400"><Chevron /></span>
       </ListboxButton>
-      <ListboxOptions anchor="bottom end" transition className={`${panelClass} w-56`}>
-        {opts.map((o) => (
-          <ListboxOption key={o} value={o} className={optionClass}>
-            <span className="flex items-center gap-2">
-              {o === "all" ? <span className="h-2 w-2 rounded-full bg-slate-300" /> : <span className={`h-2 w-2 rounded-full ${STATUS_META[o].dot}`} />}
-              {o === "all" ? "All statuses" : STATUS_META[o].label}
+      <ListboxOptions anchor="bottom end" transition className={`${panelClass} w-48`}>
+        {VIEWS.map((v) => (
+          <ListboxOption key={v.id} value={v.id} className={optionClass}>
+            <span className="flex items-center gap-2.5">
+              <svg viewBox="0 0 24 24" className="h-4 w-4 text-slate-400 group-data-[selected]:text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={VIEW_ICON[v.id]} /></svg>
+              {v.label}
             </span>
-            <span className="flex items-center gap-2"><span className="text-[12px] text-slate-400">{counts.get(o) ?? 0}</span><Check /></span>
+            <Check />
           </ListboxOption>
         ))}
       </ListboxOptions>
@@ -593,52 +586,78 @@ function StatusFilter({ value, onChange, counts }: { value: "all" | JobStatus; o
   );
 }
 
-function TechFilter({ team, value, onChange }: { team: TeamMember[]; value: string[]; onChange: (v: string[]) => void }) {
-  const label = !value.length ? "All technicians" : value.length === 1 ? (value[0] === UNASSIGNED ? "Unassigned" : team.find((m) => m.user_id === value[0])?.full_name ?? "1 technician") : `${value.length} technicians`;
+function FiltersMenu({ statusF, setStatusF, counts, team, techF, setTechF, types, typeF, setTypeF, colorBy, setColorBy }: {
+  statusF: "all" | JobStatus; setStatusF: (v: "all" | JobStatus) => void; counts: Map<string, number>;
+  team: TeamMember[]; techF: string[]; setTechF: (v: string[]) => void; types: JobType[]; typeF: string; setTypeF: (v: string) => void;
+  colorBy: ColorBy; setColorBy: (v: ColorBy) => void;
+}) {
+  const active = (statusF !== "all" ? 1 : 0) + (techF.length ? 1 : 0) + (typeF ? 1 : 0);
+  const chip = (on: boolean) => `rounded-full border px-2.5 py-1 text-[12.5px] font-semibold transition-colors ${on ? "border-[#0f766e] bg-[#e9f7f4] text-[#0f766e]" : "border-slate-200 text-slate-600 hover:border-slate-300"}`;
+  const statuses: ("all" | JobStatus)[] = ["all", ...STATUS_ORDER.filter((x) => x !== "unscheduled")];
+  const toggleTech = (id: string) => setTechF(techF.includes(id) ? techF.filter((t) => t !== id) : [...techF, id]);
   return (
-    <Listbox value={value} onChange={onChange} multiple>
-      <ListboxButton className={btn} aria-label="Filter by technician">
-        {value.length === 1 && value[0] !== UNASSIGNED && team.find((m) => m.user_id === value[0]) && <TechDot t={team.find((m) => m.user_id === value[0])!} size={18} ring={false} />}
-        <span className="max-w-[9rem] truncate whitespace-nowrap">{label}</span>
-        <span className="text-slate-400"><Chevron /></span>
-      </ListboxButton>
-      <ListboxOptions anchor="bottom end" transition className={`${panelClass} w-64`}>
-        {team.map((m) => (
-          <ListboxOption key={m.user_id} value={m.user_id} className={optionClass}>
-            <span className="flex min-w-0 items-center gap-2"><TechDot t={m} size={22} ring={false} /><span className="truncate">{m.full_name}</span></span>
-            <Check />
-          </ListboxOption>
-        ))}
-        <ListboxOption value={UNASSIGNED} className={`${optionClass} border-t border-slate-100`}>
-          <span className="flex items-center gap-2 text-slate-500"><span className="h-[22px] w-[22px] rounded-full border border-dashed border-slate-300" />Unassigned</span>
-          <Check />
-        </ListboxOption>
-        {value.length > 0 && (
-          <button type="button" onClick={() => onChange([])} className="w-full border-t border-slate-100 px-4 py-2 text-left text-[13px] font-semibold text-[#0f766e] hover:bg-[#f3fbf8]">Show everyone</button>
+    <Popover className="relative">
+      <PopoverButton className={btn} aria-label="Filters">
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+        <span className="hidden sm:inline">Filters</span>
+        {active > 0 && <span className="rounded-full bg-[#0f766e] px-1.5 text-[11px] text-white">{active}</span>}
+      </PopoverButton>
+      <PopoverPanel anchor="bottom end" transition
+        className="z-[100] mt-2 max-h-[min(34rem,calc(100dvh-7rem))] w-[min(22rem,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_18px_48px_rgba(15,40,60,0.2)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0">
+        <div className="flex items-center justify-between">
+          <p className="text-[15px] font-semibold text-[#0b1f3a]">Filters</p>
+          {active > 0 && <button type="button" onClick={() => { setStatusF("all"); setTechF([]); setTypeF(""); }} className="text-[13px] font-semibold text-[#0f766e] hover:underline">Clear all</button>}
+        </div>
+
+        <p className="mb-2 mt-4 text-[12.5px] font-semibold text-slate-500">Status</p>
+        <div className="flex flex-wrap gap-1.5">
+          {statuses.map((x) => (
+            <button key={x} type="button" onClick={() => setStatusF(x)} className={chip(statusF === x)}>
+              {x === "all" ? "All" : STATUS_META[x].label} <span className="font-normal text-slate-400">{counts.get(x) ?? 0}</span>
+            </button>
+          ))}
+        </div>
+
+        <p className="mb-2 mt-4 text-[12.5px] font-semibold text-slate-500">Technicians</p>
+        <div className="space-y-0.5">
+          {team.length === 0 && <p className="text-[13px] text-slate-400">No technicians yet.</p>}
+          {[...team.map((m) => ({ id: m.user_id, m })), { id: UNASSIGNED, m: null }].map(({ id, m }) => {
+            const on = techF.includes(id);
+            return (
+              <button key={id} type="button" onClick={() => toggleTech(id)} className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-[14px] text-slate-700 hover:bg-slate-50">
+                <span className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded border ${on ? "border-[#0f766e] bg-[#0f766e] text-white" : "border-slate-300"}`}>
+                  {on && <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3"><path d="m5 10.5 3 3 7-7" /></svg>}
+                </span>
+                {m ? <TechDot t={m} size={22} ring={false} /> : <span className="h-[22px] w-[22px] rounded-full border border-dashed border-slate-300" />}
+                <span className="truncate">{m ? m.full_name : "Unassigned"}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {types.length > 0 && (
+          <>
+            <p className="mb-2 mt-4 text-[12.5px] font-semibold text-slate-500">Job type</p>
+            <div className="flex flex-wrap gap-1.5">
+              <button type="button" onClick={() => setTypeF("")} className={chip(!typeF)}>All</button>
+              {types.map((t) => (
+                <button key={t.id} type="button" onClick={() => setTypeF(typeF === t.id ? "" : t.id)} className={`${chip(typeF === t.id)} flex items-center gap-1.5`}>
+                  <span className="h-2 w-2 rounded-full" style={{ background: t.color }} />{t.name}
+                </button>
+              ))}
+            </div>
+          </>
         )}
-      </ListboxOptions>
-    </Listbox>
-  );
-}
 
-function SimpleSelect({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: { value: string; label: string; color?: string }[] }) {
-  const cur = options.find((o) => o.value === value);
-  return (
-    <Listbox value={value} onChange={onChange}>
-      <ListboxButton className={btn}>
-        {cur?.color && <span className="h-2 w-2 rounded-full" style={{ background: cur.color }} />}
-        <span className="max-w-[9rem] truncate whitespace-nowrap">{cur?.label}</span>
-        <span className="text-slate-400"><Chevron /></span>
-      </ListboxButton>
-      <ListboxOptions anchor="bottom end" transition className={`${panelClass} w-56`}>
-        {options.map((o) => (
-          <ListboxOption key={o.value} value={o.value} className={optionClass}>
-            <span className="flex items-center gap-2">{o.color ? <span className="h-2 w-2 rounded-full" style={{ background: o.color }} /> : <span className="h-2 w-2" />}{o.label}</span>
-            <Check />
-          </ListboxOption>
-        ))}
-      </ListboxOptions>
-    </Listbox>
+        <p className="mb-2 mt-4 text-[12.5px] font-semibold text-slate-500">Color bars by</p>
+        <div className="flex rounded-lg bg-slate-100 p-0.5">
+          {([["tech", "Technician"], ["type", "Job type"], ["priority", "Priority"]] as const).map(([v, l]) => (
+            <button key={v} type="button" onClick={() => setColorBy(v)}
+              className={`flex-1 rounded-md px-2 py-1.5 text-[12.5px] font-semibold transition-all ${colorBy === v ? "bg-white text-[#0f766e] shadow-sm" : "text-slate-500 hover:text-[#0b1f3a]"}`}>{l}</button>
+          ))}
+        </div>
+      </PopoverPanel>
+    </Popover>
   );
 }
 
@@ -681,9 +700,9 @@ function DateJump({ label, anchor, days, weekStartsOn, onPick }: { label: string
   const inRange = (d: Date) => days.length < 42 && d >= days[0] && d <= days[days.length - 1];
   const today = new Date();
   return (
-    <Popover className="relative">
-      <PopoverButton className="group ml-1 flex items-center gap-1.5 rounded-lg px-2 py-1 text-left transition-colors hover:bg-slate-100 focus:outline-none data-[open]:bg-[#e9f7f4]">
-        <span className="whitespace-nowrap text-[17px] font-semibold tracking-tight text-[#0b1f3a] lg:text-[19px]">{label}</span>
+    <Popover className="relative min-w-0">
+      <PopoverButton className="group ml-0.5 flex min-w-0 items-center gap-1 rounded-lg px-1.5 py-1 text-left transition-colors hover:bg-slate-100 focus:outline-none data-[open]:bg-[#e9f7f4]">
+        <span className="truncate whitespace-nowrap text-[15.5px] font-semibold tracking-tight text-[#0b1f3a] sm:text-[17px] lg:text-[19px]">{label}</span>
         <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-500 transition-transform duration-200 group-data-[open]:rotate-180" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
       </PopoverButton>
       <PopoverPanel anchor="bottom start" transition className="z-[100] mt-2 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-[0_16px_44px_rgba(15,40,60,0.2)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0">

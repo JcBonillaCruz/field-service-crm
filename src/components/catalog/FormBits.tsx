@@ -30,7 +30,7 @@ export function FormRow({ label, htmlFor, required, hint, alignTop, children, wi
 }) {
   const text = <>{label}{required && "*"}</>;
   return (
-    <div className={`grid gap-1.5 lg:grid-cols-[10.5rem_minmax(0,1fr)] lg:gap-6 ${alignTop ? "lg:items-start" : "lg:items-center"}`}>
+    <div className={`grid grid-cols-[minmax(0,1fr)] gap-1.5 lg:grid-cols-[10.5rem_minmax(0,1fr)] lg:gap-6 ${alignTop ? "lg:items-start" : "lg:items-center"}`}>
       <div className={`flex items-center text-[15px] ${alignTop ? "lg:pt-2.5" : ""} ${required ? "text-red-600" : "text-slate-700"}`}>
         {hint ? (
           <Tip text={hint}>
@@ -44,7 +44,7 @@ export function FormRow({ label, htmlFor, required, hint, alignTop, children, wi
           <label htmlFor={htmlFor}>{text}</label>
         )}
       </div>
-      <div className={width}>{children}</div>
+      <div className={`min-w-0 ${width}`}>{children}</div>
     </div>
   );
 }
