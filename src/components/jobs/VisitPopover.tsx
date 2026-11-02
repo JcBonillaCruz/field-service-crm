@@ -1,7 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
+import { createClient } from "@/lib/supabase/client";
+import { StatusArt } from "@/components/jobs/EventBar";
 import { CalVisit, PRIORITIES, STATUS_META, addMinutes, fmtDayShort, fmtRange, fmtTime, usd } from "@/lib/jobs";
 
 const W = 300;
@@ -14,6 +17,12 @@ export default function VisitPopover({ v, rect, pinned, onClose, onEnter, onLeav
   v: CalVisit; rect: DOMRect; pinned: boolean; onClose: () => void; onEnter: () => void; onLeave: () => void;
   onUnschedule: (v: CalVisit) => void; canSeeMoney: boolean;
 }) {
+  // Terminado: cuándo empezó y cuándo terminó de verdad
+  const [times, setTimes] = useState<{ started_at: string | null; finished_at: string | null } | null>(null);
+  useEffect(() => {
+    if (v.visit_status !== "completed") return;
+    createClient().from("job_visits").select("started_at, finished_at").eq("id", v.visit_id).maybeSingle().then(({ data }) => setTimes(data ?? null));
+  }, [v.visit_id, v.visit_status]);
   if (typeof document === "undefined") return null;
   const vw = window.innerWidth, vh = window.innerHeight;
   const mobile = vw < 640;
@@ -22,6 +31,37 @@ export default function VisitPopover({ v, rect, pinned, onClose, onEnter, onLeav
   const start = new Date(v.starts_at), end = new Date(v.ends_at);
   const pr = PRIORITIES.find((p) => p.value === v.priority) ?? PRIORITIES[1];
   const st = STATUS_META[v.job_status];
+
+  const fmtAt = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "—");
+  const completedCard = (
+    <div role="dialog" aria-label={`Job ${v.number} completed`} onMouseEnter={onEnter} onMouseLeave={onLeave} onPointerDown={(e) => e.stopPropagation()}
+      className={`fixed z-[90] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_18px_48px_rgba(15,40,60,0.2)] animate-[bp-pop-in_0.14s_ease-out] ${mobile ? "inset-x-3 bottom-3" : ""}`}
+      style={mobile ? undefined : { left, top, width: W }}>
+      <div className="flex items-center gap-3 bg-[#f0fdf4] px-4 py-3.5">
+        <StatusArt s="completed" size={40} />
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px] font-semibold text-[#15803d]">Completed successfully</p>
+          <p className="text-[12.5px] text-slate-500">Job #{v.number}</p>
+        </div>
+        {(pinned || mobile) && (
+          <button type="button" onClick={onClose} aria-label="Close" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
+          </button>
+        )}
+      </div>
+      <div className="space-y-2 px-4 py-3 text-[13.5px] text-slate-700">
+        <div className="flex justify-between gap-3"><span className="text-slate-500">Customer</span><span className="truncate font-semibold text-[#0b1f3a]">{v.customer_name || "—"}</span></div>
+        <div className="flex justify-between gap-3"><span className="text-slate-500">Started</span><span>{times ? fmtAt(times.started_at) : "…"}</span></div>
+        <div className="flex justify-between gap-3"><span className="text-slate-500">Finished</span><span className="font-semibold text-[#15803d]">{times ? fmtAt(times.finished_at) : "…"}</span></div>
+        {times?.started_at && times.finished_at && (
+          <div className="flex justify-between gap-3"><span className="text-slate-500">Time on site</span>
+            <span>{(() => { const m = Math.round((new Date(times.finished_at).getTime() - new Date(times.started_at).getTime()) / 60000); return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m} min`; })()}</span></div>
+        )}
+        {v.techs.length > 0 && <div className="flex justify-between gap-3"><span className="text-slate-500">Technician</span><span className="truncate">{v.techs.map((t) => t.name).join(", ")}</span></div>}
+        {canSeeMoney && <div className="flex justify-between gap-3"><span className="text-slate-500">Amount</span><span className="font-semibold text-[#0b1f3a]">{usd(v.estimated_total)}</span></div>}
+      </div>
+    </div>
+  );
 
   const card = (
     <div role="dialog" aria-label={`Job ${v.number}`} onMouseEnter={onEnter} onMouseLeave={onLeave} onPointerDown={(e) => e.stopPropagation()}
@@ -66,5 +106,5 @@ export default function VisitPopover({ v, rect, pinned, onClose, onEnter, onLeav
       )}
     </div>
   );
-  return createPortal(card, document.body);
+  return createPortal(v.visit_status === "completed" ? completedCard : card, document.body);
 }

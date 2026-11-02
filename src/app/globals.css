@@ -70,3 +70,4 @@ html, body { overflow-x: clip; } /* clip (no hidden): no rompe los encabezados p
 @keyframes bp-burst { 0% { opacity: 1; transform: translate(0, 0) scale(.5); } 100% { opacity: 0; transform: translate(var(--bx), var(--by)) scale(1); } }
 
 @keyframes bp-drive { 0%, 100% { transform: translateX(-1.5px); } 50% { transform: translateX(1.5px) translateY(-0.5px); } }
+@keyframes bp-wrench { 0%, 100% { transform: rotate(-14deg); } 50% { transform: rotate(14deg); } }

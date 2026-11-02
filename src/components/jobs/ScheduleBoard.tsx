@@ -460,10 +460,10 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
       <div className="flex items-center gap-1.5 border-b border-slate-200 px-2.5 py-2 sm:gap-2 sm:px-3 lg:px-5 lg:py-2.5">
         <div className="flex min-w-0 flex-1 items-center gap-1">
           <button type="button" onClick={() => setAnchor(dayStart(new Date()))}
-            className="h-9 shrink-0 rounded-lg border border-slate-200 px-2.5 text-[13.5px] font-semibold text-slate-700 transition-colors hover:border-[#14a39a] hover:bg-[#f3fbf8]">Today</button>
+            className="h-11 shrink-0 rounded-xl border border-slate-200 px-3.5 text-[15px] sm:h-9 sm:rounded-lg sm:px-2.5 sm:text-[13.5px] font-semibold text-slate-700 transition-colors hover:border-[#14a39a] hover:bg-[#f3fbf8]">Today</button>
           {([-1, 1] as const).map((d) => (
             <button key={d} type="button" aria-label={d < 0 ? "Previous" : "Next"} onClick={() => setAnchor((a) => shiftAnchor(view, a, d))}
-              className="flex h-9 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800">
+              className="hidden h-9 w-8 shrink-0 sm:flex items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800">
               <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d < 0 ? "m12 5-5 5 5 5" : "m8 5 5 5-5 5"} /></svg>
             </button>
           ))}
@@ -478,14 +478,14 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
             types={types.filter((t) => t.is_active)} typeF={typeF} setTypeF={setTypeF}
             colorBy={colorBy} setColorBy={(v) => { setColorBy(v); try { localStorage.setItem(COLOR_KEY, v); } catch { /* */ } }} />
           <button type="button" onClick={toggleTray} aria-pressed={trayOpen} aria-label="To schedule" title="To schedule"
-            className={`relative flex h-9 items-center gap-1.5 rounded-lg border px-2.5 text-[13px] font-semibold transition-colors ${trayOpen ? "border-[#0f766e] bg-[#e9f7f4] text-[#0f766e]" : "border-slate-200 text-slate-700 hover:border-[#14a39a]"}`}>
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5h16v14H4zM15 5v14" /></svg>
+            className={`relative flex h-11 min-w-[2.75rem] items-center justify-center gap-1.5 rounded-xl border px-2.5 text-[13px] font-semibold transition-colors sm:h-9 sm:min-w-0 sm:rounded-lg ${trayOpen ? "border-[#0f766e] bg-[#e9f7f4] text-[#0f766e]" : "border-slate-200 text-slate-700 hover:border-[#14a39a]"}`}>
+            <svg viewBox="0 0 24 24" className="h-6 w-6 sm:h-4 sm:w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5h16v14H4zM15 5v14" /></svg>
             <span className="hidden xl:inline">To schedule</span>
             {trayCount > 0 && <span className={`rounded-full px-1.5 text-[11px] text-white ${holdCount ? "bg-[#e11d48]" : "bg-[#0f766e]"}`}>{trayCount}</span>}
           </button>
           <Link prefetch={false} href="/dashboard/jobs/new" aria-label="New job"
-            className="group/n inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#0f766e] px-2.5 text-[14px] font-semibold text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59] sm:px-3.5">
-            <svg viewBox="0 0 20 20" className="h-4 w-4 transition-transform duration-200 group-hover/n:rotate-90" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>
+            className="group/n inline-flex h-11 min-w-[2.75rem] items-center justify-center gap-1.5 rounded-xl bg-[#0f766e] px-2.5 text-[14px] sm:h-9 sm:min-w-0 sm:rounded-lg font-semibold text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59] sm:px-3.5">
+            <svg viewBox="0 0 20 20" className="h-6 w-6 transition-transform duration-200 group-hover/n:rotate-90 sm:h-4 sm:w-4" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>
             <span className="hidden sm:inline">New job</span>
           </Link>
         </div>
@@ -558,7 +558,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
 }
 
 // ---------- Vista y Filtros (Headless UI) ----------
-const btn = "flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-semibold text-slate-700 transition-colors hover:border-[#14a39a] focus:outline-none data-[open]:border-[#0f766e] data-[open]:ring-4 data-[open]:ring-[#14a39a]/15";
+const btn = "flex h-11 min-w-[2.75rem] items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 sm:h-9 sm:min-w-0 sm:rounded-lg text-[13px] font-semibold text-slate-700 transition-colors hover:border-[#14a39a] focus:outline-none data-[open]:border-[#0f766e] data-[open]:ring-4 data-[open]:ring-[#14a39a]/15";
 const VIEW_ICON: Record<CalView, string> = {
   day: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 15h6", week: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 10v10M14 10v10",
   workweek: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M10 10v10M15 10v10", month: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M4 15h16M9 10v10M14 10v10",
@@ -568,7 +568,7 @@ function ViewMenu({ value, onChange }: { value: CalView; onChange: (v: CalView) 
   return (
     <Listbox value={value} onChange={onChange}>
       <ListboxButton className={btn} aria-label="Calendar view">
-        <svg viewBox="0 0 24 24" className="h-4 w-4 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={VIEW_ICON[value]} /></svg>
+        <svg viewBox="0 0 24 24" className="h-6 w-6 text-[#0f766e] sm:h-4 sm:w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={VIEW_ICON[value]} /></svg>
         <span className="hidden sm:inline">{VIEWS.find((v) => v.id === value)?.label}</span>
         <span className="hidden text-slate-400 sm:inline"><Chevron /></span>
       </ListboxButton>
@@ -599,7 +599,7 @@ function FiltersMenu({ statusF, setStatusF, counts, team, techF, setTechF, types
   return (
     <Popover className="relative">
       <PopoverButton className={btn} aria-label="Filters">
-        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+        <svg viewBox="0 0 24 24" className="h-6 w-6 sm:h-4 sm:w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
         <span className="hidden sm:inline">Filters</span>
         {active > 0 && <span className="rounded-full bg-[#0f766e] px-1.5 text-[11px] text-white">{active}</span>}
       </PopoverButton>
@@ -702,8 +702,8 @@ function DateJump({ label, anchor, days, weekStartsOn, onPick }: { label: string
   const today = new Date();
   return (
     <Popover className="relative min-w-0">
-      <PopoverButton aria-label={label} title={label} className="group ml-0.5 flex h-9 min-w-0 items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 sm:border-transparent text-left transition-colors hover:bg-slate-100 focus:outline-none data-[open]:bg-[#e9f7f4]">
-        <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-[#0f766e] sm:hidden" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4" /></svg>
+      <PopoverButton aria-label={label} title={label} className="group ml-0.5 flex h-11 w-11 min-w-0 items-center justify-center gap-1 rounded-xl border border-slate-200 px-2 py-1 sm:h-9 sm:w-auto sm:justify-start sm:rounded-lg sm:border-transparent text-left transition-colors hover:bg-slate-100 focus:outline-none data-[open]:bg-[#e9f7f4]">
+        <svg viewBox="0 0 24 24" className="h-6 w-6 shrink-0 text-[#0f766e] sm:hidden" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4" /></svg>
         <span className="hidden truncate whitespace-nowrap text-[17px] font-semibold tracking-tight text-[#0b1f3a] sm:inline lg:text-[19px]">{label}</span>
         <svg viewBox="0 0 20 20" className="hidden h-4 w-4 text-slate-500 transition-transform duration-200 group-data-[open]:rotate-180 sm:block" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
       </PopoverButton>
