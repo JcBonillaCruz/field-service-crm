@@ -3,15 +3,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "@headlessui/react";
+import { Listbox, ListboxButton, ListboxOption, ListboxOptions, Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { createClient } from "@/lib/supabase/client";
 import {
-  CalView, CalVisit, JobRow, JobSettings, JobStatus, JobType, STATUS_META, STATUS_ORDER, TeamMember, TechChip,
+  CalView, CalVisit, ColorBy, JobRow, JobSettings, JobStatus, JobType, PRIORITIES, STATUS_META, STATUS_ORDER, TeamMember, TechChip, UNASSIGNED_COLOR, leadOf, startOfMonth, startOfWeek,
   addDays, addMinutes, atMinute, barColor, dayStart, fmtDayShort, fmtTime, fromIsoDay, isoDay, jobError, minutesOf,
   rangeLabel, sameDay, shiftAnchor, timeToMin, viewDays,
 } from "@/lib/jobs";
 import { Col, GridApi, Handlers, Hit, Preview } from "@/components/jobs/cal-shared";
 import TimeGrid from "@/components/jobs/TimeGrid";
+import DispatchGrid from "@/components/jobs/DispatchGrid";
 import MonthGrid from "@/components/jobs/MonthGrid";
 import VisitPopover from "@/components/jobs/VisitPopover";
 import JobTray from "@/components/jobs/JobTray";
@@ -21,7 +22,7 @@ import { Check, Chevron, optionClass, panelClass } from "@/components/ui/SearchS
 const VIEWS: { id: CalView; label: string }[] = [
   { id: "day", label: "Day" }, { id: "week", label: "Week" }, { id: "workweek", label: "Mon–Fri" }, { id: "month", label: "Month" }, { id: "dispatch", label: "Dispatch" },
 ];
-const VIEW_KEY = "bp-schedule-view";
+const COLOR_KEY = "bp-schedule-color";
 const TRAY_KEY = "bp-schedule-tray";
 const UNASSIGNED = "__none__";
 
@@ -41,7 +42,11 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
 }) {
   const router = useRouter();
   const sp = useSearchParams();
+  // Siempre abre en Semana (a menos que el enlace diga otra vista)
   const [view, setView] = useState<CalView>(() => (VIEWS.some((v) => v.id === sp.get("view")) ? (sp.get("view") as CalView) : "week"));
+  const [colorBy, setColorBy] = useState<ColorBy>("tech");
+  const [draft, setDraft] = useState<{ day: Date; startMin: number; endMin: number; techId: string | null; x: number; y: number } | null>(null);
+  const [ask, setAsk] = useState<{ v: CalVisit; start: Date } | null>(null);
   const [anchor, setAnchor] = useState<Date>(() => (sp.get("date") ? fromIsoDay(sp.get("date") as string) : dayStart(new Date())));
   const [visits, setVisits] = useState<CalVisit[]>([]);
   const [tray, setTray] = useState<JobRow[]>([]);
@@ -75,17 +80,14 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
   // Vista guardada y bandeja (celular: Día y bandeja cerrada)
   useEffect(() => {
     const small = window.innerWidth < 1024;
-    if (!sp.get("view")) {
-      const saved = localStorage.getItem(VIEW_KEY) as CalView | null;
-      setView(small ? "day" : saved && VIEWS.some((v) => v.id === saved) ? saved : "week");
-    }
+    const c = localStorage.getItem(COLOR_KEY) as ColorBy | null;
+    if (c === "tech" || c === "type" || c === "priority") setColorBy(c);
     setTrayOpen(!small && localStorage.getItem(TRAY_KEY) !== "0");
     const t = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
-    try { localStorage.setItem(VIEW_KEY, view); } catch { /* */ }
     window.history.replaceState(null, "", `?view=${view}&date=${isoDay(anchor)}`);
   }, [view, anchor]);
 
@@ -135,10 +137,15 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
     visits.forEach((v) => { const s = asJobStatus(v); c.set(s, (c.get(s) ?? 0) + 1); });
     return c;
   }, [visits]);
-  const shown = useMemo(() => visits.filter((v) =>
+  const colored = useMemo(() => visits.map((v) => ({
+    ...v, color: colorBy === "type" ? v.type_color ?? UNASSIGNED_COLOR
+      : colorBy === "priority" ? PRIORITIES.find((p) => p.value === v.priority)?.color ?? UNASSIGNED_COLOR
+      : leadOf(v.techs)?.color ?? UNASSIGNED_COLOR,
+  })), [visits, colorBy]);
+  const shown = useMemo(() => colored.filter((v) =>
     (statusF === "all" || asJobStatus(v) === statusF)
     && (!typeF || v.job_type_id === typeF)
-    && (!techF.length || view === "dispatch" || techF.some((t) => (t === UNASSIGNED ? v.tech_ids.length === 0 : v.tech_ids.includes(t))))), [visits, statusF, typeF, techF, view]);
+    && (!techF.length || view === "dispatch" || techF.some((t) => (t === UNASSIGNED ? v.tech_ids.length === 0 : v.tech_ids.includes(t))))), [colored, statusF, typeF, techF, view]);
 
   // Horas visibles: el horario de trabajo, más lo necesario si hay trabajos antes o después
   const [visStart, visEnd] = useMemo(() => {
@@ -154,6 +161,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
   }, [shown, workStart, workEnd, rangeKey]);
 
   // ---------- Columnas ----------
+  // Solo técnicos (oficina y dueño aparecen únicamente si tienen un trabajo asignado en estas fechas)
   const techs = useMemo(() => team.filter((m) => m.role === "technician" || visits.some((v) => v.tech_ids.includes(m.user_id))), [team, visits]);
   const cols: Col[] = useMemo(() => {
     if (view === "dispatch") {
@@ -170,6 +178,21 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
     return { user_id: id, name: m?.full_name ?? "Technician", initials: m?.initials ?? "T", color: m?.color ?? "#94a3b8", avatar_url: m?.avatar_url ?? null, is_lead: id === (lead ?? ids[0]) };
   }), [team]);
 
+  // ---------- Avisos (técnicos por push/correo y cliente por correo) ----------
+  async function notify(body: Record<string, unknown>) {
+    try {
+      const r = await fetch("/api/jobs/notify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      return (await r.json().catch(() => null)) as { customer?: { ok: boolean; reason: string | null } | null } | null;
+    } catch { return null; }
+  }
+  async function notifyCustomerNow(v: CalVisit) {
+    const r = await notify({ visitId: v.visit_id, notifyCustomer: true });
+    const c = r?.customer;
+    if (c?.ok) flash(`${v.customer_name} was notified by email`);
+    else if (c?.reason === "no_email") flash(`${v.customer_name} has no email on file, so they weren't notified.`, "error");
+    else flash("The email couldn't be sent. Check that email sending is set up (Resend).", "error");
+  }
+
   // ---------- Acciones en la base de datos ----------
   async function saveVisit(v: CalVisit, start: Date, end: Date, techIds: string[] | null, lead: string | null, msg: string) {
     const before = visits;
@@ -183,6 +206,14 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
     if (error) { setVisits(before); flash(jobError(error), "error"); return; }
     flash(msg);
     load();
+    const after = techIds ?? v.tech_ids;
+    const moved = start.getTime() !== new Date(v.starts_at).getTime() || end.getTime() !== new Date(v.ends_at).getTime();
+    notify({ visitId: v.visit_id, assigned: after.filter((t) => !v.tech_ids.includes(t)), unassigned: v.tech_ids.filter((t) => !after.includes(t)), moved });
+    // ¿Avisar al cliente del cambio de hora?
+    if (moved && v.customer_id) {
+      if (settings.notify_customer === "always") notifyCustomerNow(v);
+      else if (settings.notify_customer !== "never") setAsk({ v, start });
+    }
   }
   async function unschedule(v: CalVisit) {
     setPop(null);
@@ -193,11 +224,14 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
   }
   async function scheduleFromTray(j: JobRow, start: Date, end: Date, techIds: string[] | null) {
     setTray((t) => t.filter((x) => x.id !== j.id));
-    const { error } = await createClient().rpc("job_schedule", {
+    const { data: visitId, error } = await createClient().rpc("job_schedule", {
       p_job: j.id, p_starts: start.toISOString(), p_ends: end.toISOString(), p_window: null, p_techs: techIds, p_lead: techIds?.[0] ?? null,
     });
     if (error) flash(jobError(error), "error");
-    else flash(`${j.customer_name || j.number} scheduled for ${fmtDayShort(start)} at ${fmtTime(start)}`);
+    else {
+      flash(`${j.customer_name || j.number} scheduled for ${fmtDayShort(start)} at ${fmtTime(start)}`);
+      if (visitId) notify({ visitId, assignAll: true });
+    }
     load();
   }
   function newJobAt(day: Date, startMin: number, endMin: number, techId: string | null) {
@@ -295,9 +329,8 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
       if ((s.kind === "move" || s.kind === "resize") && s.visit && s.el) { clearTimeout(hoverT.current); setPop({ v: s.visit, rect: s.el.getBoundingClientRect(), pinned: true }); return; }
       if (s.kind === "tray" && s.job) { router.push(`/dashboard/jobs/${s.job.id}/edit`); return; }
       if (s.kind === "create" && s.col) {
-        if (view === "month") { newJobAt(s.col.day, workStart, workStart + settings.default_duration_min, null); return; }
-        const a = Math.floor(s.startMin / slot) * slot;
-        newJobAt(s.col.day, a, a + settings.default_duration_min, s.col.techId);
+        const a = view === "month" ? workStart : Math.floor(s.startMin / slot) * slot;
+        openDraft(s.col, a, a + settings.default_duration_min, ev.clientX, ev.clientY);
       }
       return;
     }
@@ -305,7 +338,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
     if (s.overTray && s.visit) { unschedule(s.visit); return; }
     const p = s.preview, hit = s.hit;
     if (!p) return;
-    if (s.kind === "create") { newJobAt(p.day, p.startMin, p.endMin, s.col?.techId ?? null); return; }
+    if (s.kind === "create" && s.col) { openDraft({ ...s.col, day: p.day }, p.startMin, p.endMin, ev.clientX, ev.clientY); return; }
 
     if (s.kind === "tray" && s.job) {
       const start = view === "month" ? atMinute(p.day, workStart) : atMinute(p.day, p.startMin);
@@ -346,8 +379,20 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
     touch: (e: TouchEvent) => { if (drag.current?.active) e.preventDefault(); },
   });
 
+  // Clic o arrastre en un espacio vacío: primero una tarjetita para confirmar (nunca abre el formulario solo)
+  function openDraft(col: Col, startMin: number, endMin: number, x: number, y: number) {
+    setDraft({ day: col.day, startMin, endMin, techId: col.techId, x, y });
+    setPreview({ colKey: col.key, day: col.day, startMin, endMin, color: "#0f766e", label: "New job" });
+  }
+  function closeDraft() { setDraft(null); setPreview(null); }
+
   function begin(e: React.PointerEvent, s: Omit<DragState, "pointerId" | "touch" | "x0" | "y0" | "lastX" | "lastY" | "active" | "scrolled">) {
     if (e.pointerType === "mouse" && e.button !== 0) return;
+    // Un solo arrastre por toque: si una barra ya lo tomó, el fondo no crea otro
+    const nat = e.nativeEvent as PointerEvent & { __bp?: boolean };
+    if (nat.__bp) return;
+    nat.__bp = true;
+    if (draft) closeDraft();
     if (e.pointerType === "mouse") e.preventDefault();
     const touch = e.pointerType !== "mouse";
     drag.current = { ...s, pointerId: e.pointerId, touch, x0: e.clientX, y0: e.clientY, lastX: e.clientX, lastY: e.clientY, active: false, scrolled: false };
@@ -421,7 +466,8 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
               <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d < 0 ? "m12 5-5 5 5 5" : "m8 5 5 5-5 5"} /></svg>
             </button>
           ))}
-          <h1 className="ml-1 whitespace-nowrap text-[17px] font-semibold tracking-tight text-[#0b1f3a] lg:text-[19px]">{rangeLabel(view, anchor, settings.week_starts_on)}</h1>
+          <DateJump label={rangeLabel(view, anchor, settings.week_starts_on)} anchor={anchor} days={days} weekStartsOn={settings.week_starts_on}
+            onPick={(d) => setAnchor(d)} />
           {loading && <span className="ml-1 h-4 w-4 animate-spin rounded-full border-2 border-[#14a39a] border-t-transparent" aria-label="Loading" />}
         </div>
 
@@ -431,6 +477,8 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
           {types.length > 0 && (
             <SimpleSelect value={typeF} onChange={setTypeF} options={[{ value: "", label: "All job types" }, ...types.filter((t) => t.is_active).map((t) => ({ value: t.id, label: t.name, color: t.color }))]} />
           )}
+          <SimpleSelect value={colorBy} onChange={(v) => { setColorBy(v as ColorBy); try { localStorage.setItem(COLOR_KEY, v); } catch { /* */ } }}
+            options={[{ value: "tech", label: "Color by: Technician" }, { value: "type", label: "Color by: Job type" }, { value: "priority", label: "Color by: Priority" }]} />
           <div className="flex overflow-x-auto rounded-lg bg-slate-100 p-0.5" role="tablist" aria-label="Calendar view">
             {VIEWS.map((v) => (
               <button key={v.id} type="button" role="tab" aria-selected={view === v.id} onClick={() => setView(v.id)}
@@ -453,12 +501,14 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
 
       <div className="relative flex min-h-0 flex-1">
         <div className="min-w-0 flex-1">
-          {view === "month" ? (
+          {view === "dispatch" ? (
+            <DispatchGrid days={days} rows={cols} visits={shown} dStart={visStart} dEnd={visEnd} preview={preview} handlers={handlers} apiRef={apiRef} now={now} />
+          ) : view === "month" ? (
             <MonthGrid days={days} month={anchor.getMonth()} visits={shown} preview={preview} handlers={handlers} apiRef={apiRef} now={now}
               onOpenDay={(d) => { setAnchor(d); setView("day"); }} />
           ) : (
             <TimeGrid cols={cols} visits={shown} visStart={visStart} visEnd={visEnd} workStart={workStart} workEnd={workEnd} slot={slot}
-              preview={preview} handlers={handlers} apiRef={apiRef} now={now} dispatch={view === "dispatch"} scrollTo={scrollTo} />
+              preview={preview} handlers={handlers} apiRef={apiRef} now={now} dispatch={false} scrollTo={scrollTo} />
           )}
           {!loading && visits.length === 0 && view !== "month" && (
             <div className="pointer-events-none absolute left-1/2 top-24 -translate-x-1/2 rounded-full bg-white/90 px-4 py-2 text-[13px] text-slate-500 shadow-sm ring-1 ring-slate-200">
@@ -483,6 +533,27 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
           onClose={() => setPop(null)} onUnschedule={unschedule}
           onEnter={() => { clearTimeout(hideT.current); }}
           onLeave={() => { if (!pop.pinned) hideT.current = setTimeout(() => setPop((p) => (p?.pinned ? p : null)), 200); }} />
+      )}
+
+      {draft && (
+        <DraftCard draft={draft} techName={draft.techId ? team.find((m) => m.user_id === draft.techId)?.full_name ?? null : null}
+          onCreate={() => { newJobAt(draft.day, draft.startMin, draft.endMin, draft.techId); }} onClose={closeDraft} />
+      )}
+
+      {ask && (
+        <div className="fixed inset-0 z-[96] flex items-center justify-center bg-slate-900/30 p-4 animate-[bp-fade_0.15s_ease-out]" onPointerDown={(e) => e.stopPropagation()}>
+          <div role="alertdialog" aria-labelledby="notify-title" className="w-full max-w-md rounded-2xl bg-white p-5 shadow-[0_24px_60px_rgba(15,40,60,0.3)] animate-[bp-pop-in_0.18s_ease-out]">
+            <h2 id="notify-title" className="text-[18px] font-semibold text-[#0b1f3a]">Notify customer of schedule change?</h2>
+            <p className="mt-3 rounded-xl bg-[#f3fbf8] px-4 py-3 text-[13.5px] text-slate-700">
+              <b className="font-semibold text-[#0b1f3a]">{ask.v.customer_name}</b> will get an email with the new time: {fmtDayShort(ask.start)} at {fmtTime(ask.start)}.
+            </p>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={() => setAsk(null)} className="rounded-lg px-4 py-2 text-[14px] font-semibold text-slate-600 hover:bg-slate-100">Don&apos;t notify</button>
+              <button type="button" autoFocus onClick={() => { const v = ask.v; setAsk(null); notifyCustomerNow(v); }}
+                className="rounded-lg bg-[#0f766e] px-4 py-2 text-[14px] font-semibold text-white hover:bg-[#0c5f59]">Notify customer</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {toast && (
@@ -568,5 +639,81 @@ function SimpleSelect({ value, onChange, options }: { value: string; onChange: (
         ))}
       </ListboxOptions>
     </Listbox>
+  );
+}
+
+// ---------- Tarjetita "New job" al dar clic o arrastrar en un espacio vacío ----------
+function DraftCard({ draft, techName, onCreate, onClose }: {
+  draft: { day: Date; startMin: number; endMin: number; x: number; y: number }; techName: string | null; onCreate: () => void; onClose: () => void;
+}) {
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); if (e.key === "Enter") onCreate(); };
+    const out = () => onClose();
+    window.addEventListener("keydown", esc);
+    const t = setTimeout(() => window.addEventListener("pointerdown", out), 0);
+    return () => { window.removeEventListener("keydown", esc); window.removeEventListener("pointerdown", out); clearTimeout(t); };
+  }, [onClose, onCreate]);
+  const W = 260;
+  const vw = typeof window !== "undefined" ? window.innerWidth : 1200, vh = typeof window !== "undefined" ? window.innerHeight : 800;
+  const left = Math.min(Math.max(12, draft.x + 14), vw - W - 12), top = Math.min(Math.max(12, draft.y - 20), vh - 170);
+  const s = atMinute(draft.day, draft.startMin), e = atMinute(draft.day, draft.endMin);
+  return (
+    <div role="dialog" aria-label="New job" onPointerDown={(ev) => ev.stopPropagation()}
+      className="fixed z-[92] rounded-xl border border-slate-200 bg-white p-3.5 shadow-[0_18px_48px_rgba(15,40,60,0.22)] animate-[bp-pop-in_0.14s_ease-out]" style={{ left, top, width: W }}>
+      <p className="text-[15px] font-semibold text-[#0b1f3a]">New job</p>
+      <p className="mt-0.5 text-[13px] text-slate-600">{fmtDayShort(s)} · {fmtTime(s)} – {fmtTime(e)}</p>
+      {techName && <p className="text-[12.5px] text-slate-500">For {techName}</p>}
+      <div className="mt-3 flex gap-2">
+        <button type="button" autoFocus onClick={onCreate} className="flex-1 rounded-lg bg-[#0f766e] px-3 py-2 text-[13.5px] font-semibold text-white hover:bg-[#0c5f59]">Create job</button>
+        <button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-[13.5px] font-medium text-slate-600 hover:bg-slate-100">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Clic en la fecha: calendario para saltar a cualquier día ----------
+function DateJump({ label, anchor, days, weekStartsOn, onPick }: { label: string; anchor: Date; days: Date[]; weekStartsOn: number; onPick: (d: Date) => void }) {
+  const [cursor, setCursor] = useState(() => startOfMonth(anchor));
+  useEffect(() => setCursor(startOfMonth(anchor)), [anchor]);
+  const first = startOfWeek(cursor, weekStartsOn);
+  const cells = Array.from({ length: 42 }, (_, i) => addDays(first, i));
+  const dow = Array.from({ length: 7 }, (_, i) => addDays(first, i).toLocaleDateString("en-US", { weekday: "short" }).slice(0, 2));
+  const inRange = (d: Date) => days.length < 42 && d >= days[0] && d <= days[days.length - 1];
+  const today = new Date();
+  return (
+    <Popover className="relative">
+      <PopoverButton className="group ml-1 flex items-center gap-1.5 rounded-lg px-2 py-1 text-left transition-colors hover:bg-slate-100 focus:outline-none data-[open]:bg-[#e9f7f4]">
+        <span className="whitespace-nowrap text-[17px] font-semibold tracking-tight text-[#0b1f3a] lg:text-[19px]">{label}</span>
+        <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-500 transition-transform duration-200 group-data-[open]:rotate-180" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
+      </PopoverButton>
+      <PopoverPanel anchor="bottom start" transition className="z-[100] mt-2 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-[0_16px_44px_rgba(15,40,60,0.2)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0">
+        {({ close }) => (
+          <>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-[14.5px] font-semibold text-[#0b1f3a]">{cursor.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</p>
+              <div className="flex">
+                {([-1, 1] as const).map((d) => (
+                  <button key={d} type="button" aria-label={d < 0 ? "Previous month" : "Next month"} onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() + d, 1))}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"><svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d={d < 0 ? "m12 5-5 5 5 5" : "m8 5 5 5-5 5"} /></svg></button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-7 text-center text-[11px] font-medium text-slate-400">{dow.map((d, i) => <span key={i} className="py-1">{d}</span>)}</div>
+            <div className="grid grid-cols-7 gap-y-0.5 text-center">
+              {cells.map((d) => {
+                const out = d.getMonth() !== cursor.getMonth(), on = inRange(d), t = sameDay(d, today), sel = sameDay(d, anchor);
+                return (
+                  <button key={isoDay(d)} type="button" onClick={() => { onPick(dayStart(d)); close(); }}
+                    className={`mx-auto flex h-8 w-8 items-center justify-center rounded-full text-[13px] transition-colors ${sel ? "bg-[#0f766e] font-semibold text-white" : on ? "bg-[#dff3ee] font-medium text-[#0f766e]" : t ? "font-semibold text-[#0f766e] ring-1 ring-[#0f766e]" : out ? "text-slate-300 hover:bg-slate-50" : "text-slate-700 hover:bg-slate-100"}`}>
+                    {d.getDate()}
+                  </button>
+                );
+              })}
+            </div>
+            <button type="button" onClick={() => { onPick(dayStart(new Date())); close(); }} className="mt-2 w-full rounded-lg py-1.5 text-[13px] font-semibold text-[#0f766e] hover:bg-[#f3fbf8]">Go to today</button>
+          </>
+        )}
+      </PopoverPanel>
+    </Popover>
   );
 }

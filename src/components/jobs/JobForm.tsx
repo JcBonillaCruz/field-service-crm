@@ -65,12 +65,16 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
   const [techIds, setTechIds] = useState<string[]>(visit?.tech_ids?.length ? [visit.lead_id ?? visit.tech_ids[0], ...visit.tech_ids.filter((t) => t !== (visit.lead_id ?? visit.tech_ids[0]))] : defaults?.tech ? [defaults.tech] : []);
 
   const [saving, setSaving] = useState(false);
+  // Avisos: técnicos (push + correo) y, si se pide, el cliente
+  const notify = (body: Record<string, unknown>) => fetch("/api/jobs/notify", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
   const [error, setError] = useState("");
   const [cancelAsk, setCancelAsk] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
 
   const customer = customers.find((c) => c.id === customerId) ?? null;
-  const techFirst = useMemo(() => [...team].sort((a, b) => Number(b.role === "technician") - Number(a.role === "technician")), [team]);
+  // Solo técnicos (si ya estaba asignado alguien de la oficina, también se muestra para poder quitarlo)
+  const techFirst = useMemo(() => team.filter((m) => m.role === "technician" || (visit?.tech_ids ?? []).includes(m.user_id)), [team, visit]);
+  const [notifyCust, setNotifyCust] = useState(settings.notify_customer === "always");
   const activeTypes = types.filter((t) => t.is_active || t.id === typeId);
 
   // Direcciones (Job Sites) del cliente elegido
@@ -135,6 +139,7 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
         },
       });
       if (err || !data) { setSaving(false); return setError(jobError(err)); }
+      if (techIds.length) await notify({ jobId: data, assignAll: true });
       router.push(scheduleNow ? `/dashboard/jobs/schedule?view=day&date=${date}` : "/dashboard/jobs/schedule");
       router.refresh();
       return;
@@ -182,6 +187,14 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
       }
     }
     if (schedErr) { setSaving(false); return setError(jobError(schedErr)); }
+    if (!visitLocked) {
+      const was = visit?.tech_ids ?? [];
+      const moved = scheduleNow && (!visit?.starts_at || new Date(visit.starts_at).getTime() !== starts.getTime() || new Date(visit.ends_at ?? 0).getTime() !== ends.getTime());
+      const assigned = techIds.filter((t) => !was.includes(t)), unassigned = was.filter((t) => !techIds.includes(t));
+      if (assigned.length || unassigned.length || moved) {
+        await notify({ ...(visit ? { visitId: visit.id } : { jobId: job.id }), assigned, unassigned, moved, notifyCustomer: Boolean(moved && visit?.starts_at && notifyCust && customerId) });
+      }
+    }
     router.push(scheduleNow ? `/dashboard/jobs/schedule?view=day&date=${date}` : "/dashboard/jobs/schedule");
     router.refresh();
   }
@@ -329,6 +342,14 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
               ) : (
                 <p className="-mt-2 text-[13.5px] text-slate-500">The job goes to the <b className="font-semibold text-[#0b1f3a]">To schedule</b> panel. Drag it onto the calendar when you have a date.</p>
               )}
+              {editing && visit?.starts_at && scheduleNow && customerId && settings.notify_customer !== "never" && (
+                <FormRow label="Customer" width="max-w-[560px]">
+                  <label className="flex cursor-pointer items-center gap-2.5 text-[14px] text-slate-700">
+                    <input type="checkbox" checked={notifyCust} onChange={(e) => setNotifyCust(e.target.checked)} className="h-4 w-4 accent-[#0f766e]" />
+                    Email the customer if the date or time changes
+                  </label>
+                </FormRow>
+              )}
               <FormRow label="Arrival window" hint="What the customer is told: the technician arrives between the start time and the end of this window." width="max-w-[560px]">
                 <div className="flex flex-wrap gap-2">
                   {ARRIVAL_WINDOWS.map((m) => (
@@ -339,7 +360,7 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
                 {scheduleNow && arrival > 0 && <p className="mt-1 text-[12px] text-slate-400">Customer sees: arriving between {timeLabel(startMin)} and {timeLabel(Math.min(24 * 60 - 15, startMin + arrival))}</p>}
               </FormRow>
               <FormRow label="Technicians" hint="The first one is the lead: their color paints the bar on the calendar." alignTop width="max-w-[640px]">
-                {team.length === 0 ? <p className="pt-2 text-[13.5px] text-slate-500">Invite your technicians in Team first.</p> : (
+                {techFirst.length === 0 ? <p className="pt-2 text-[13.5px] text-slate-500">No technicians yet. Invite them in Team with the Technician role.</p> : (
                   <div className="flex flex-wrap gap-2">
                     {techFirst.map((m) => {
                       const i = techIds.indexOf(m.user_id);

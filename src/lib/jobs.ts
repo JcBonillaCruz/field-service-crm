@@ -19,6 +19,7 @@ export type CalVisit = {
   customer_id: string | null; customer_name: string; customer_phone: string | null; address_id: string | null; site_address: SiteAddress;
   estimated_total: number; priority: Priority; job_type_id: string | null; type_name: string | null; type_color: string | null; form_kind: string | null;
   visit_count: number; hold_reason: string | null; techs: TechChip[]; tech_ids: string[]; tags: TagChip[];
+  color?: string; // color de la barra según "Color by" (técnico, tipo o prioridad)
 };
 
 // Fila de la bandeja "Unscheduled / On hold" (y de la lista de Jobs)
@@ -38,6 +39,7 @@ export type JobSettings = {
   company_id: string; job_prefix: string; job_next: number; tech_can_see_prices: boolean; default_duration_min: number;
   default_arrival_window_min: number; day_start: string; day_end: string; week_starts_on: number; slot_minutes: 15 | 30 | 60;
   auto_clock_in: boolean; require_gps_on_start: boolean;
+  timezone: string; notify_tech_assign: boolean; notify_tech_agenda: boolean; notify_customer: "ask" | "always" | "never";
 };
 export type JobType = { id: string; name: string; color: string; default_duration_min: number; form_kind: "work" | "tune_up"; position: number; is_active: boolean };
 export type JobTag = { id: string; name: string; color: string };
@@ -47,6 +49,7 @@ export type ChecklistTemplate = { id: string; name: string; job_type_id: string 
 export const DEFAULT_SETTINGS: Omit<JobSettings, "company_id"> = {
   job_prefix: "JOB-", job_next: 1, tech_can_see_prices: true, default_duration_min: 120, default_arrival_window_min: 60,
   day_start: "07:00", day_end: "19:00", week_starts_on: 0, slot_minutes: 30, auto_clock_in: true, require_gps_on_start: true,
+  timezone: "America/Chicago", notify_tech_assign: true, notify_tech_agenda: true, notify_customer: "ask",
 };
 
 export const canManageJobs = (role: Role | null | undefined) => role === "owner" || role === "manager" || role === "office";
@@ -87,7 +90,14 @@ export const PRIORITIES: { value: Priority; label: string; color: string }[] = [
 export const ARRIVAL_WINDOWS = [0, 30, 60, 120, 180, 240];
 export const arrivalLabel = (m: number) => (m === 0 ? "Exact time" : m < 60 ? `${m} min` : `${m / 60} hour${m === 60 ? "" : "s"}`);
 
-export const TECH_COLORS = ["#2563eb", "#e11d48", "#0f766e", "#7c3aed", "#f59e0b", "#0891b2", "#db2777", "#65a30d", "#ea580c", "#4f46e5", "#475569", "#92400e"];
+// 30 colores (como la paleta de Housecall Pro) + color propio en Settings
+export const TECH_COLORS = [
+  "#c2410c", "#ea580c", "#0f766e", "#0d9488", "#2563eb", "#1e3a8a",
+  "#44403c", "#b91c1c", "#ef4444", "#15803d", "#0284c7", "#9333ea",
+  "#78350f", "#9d174d", "#e11d48", "#4d7c0f", "#1d4ed8", "#6d28d9",
+  "#7c3aed", "#1f2937", "#f97316", "#065f46", "#0891b2", "#0369a1",
+  "#4338ca", "#6366f1", "#a16207", "#16a34a", "#db2777", "#475569",
+];
 export const UNASSIGNED_COLOR = "#94a3b8";
 
 // ---------- Fechas (hora local del navegador) ----------
@@ -114,7 +124,8 @@ export const durationLabel = (min: number) => { const h = Math.floor(min / 60), 
 
 // Días visibles de cada vista
 export function viewDays(view: CalView, anchor: Date, weekStartsOn: number): Date[] {
-  if (view === "day" || view === "dispatch") return [dayStart(anchor)];
+  if (view === "day") return [dayStart(anchor)];
+  if (view === "dispatch") { const s = startOfWeek(anchor, weekStartsOn); return [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(s, i)); }
   if (view === "workweek") { const mon = startOfWeek(anchor, 1); return [0, 1, 2, 3, 4].map((i) => addDays(mon, i)); }
   if (view === "week") { const s = startOfWeek(anchor, weekStartsOn); return [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(s, i)); }
   const first = startOfWeek(startOfMonth(anchor), weekStartsOn);
@@ -122,12 +133,12 @@ export function viewDays(view: CalView, anchor: Date, weekStartsOn: number): Dat
 }
 export function shiftAnchor(view: CalView, anchor: Date, dir: -1 | 1): Date {
   if (view === "month") return new Date(anchor.getFullYear(), anchor.getMonth() + dir, 1);
-  if (view === "week" || view === "workweek") return addDays(anchor, 7 * dir);
+  if (view === "week" || view === "workweek" || view === "dispatch") return addDays(anchor, 7 * dir);
   return addDays(anchor, dir);
 }
 export function rangeLabel(view: CalView, anchor: Date, weekStartsOn: number): string {
   if (view === "month") return anchor.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-  if (view === "day" || view === "dispatch") return anchor.toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric", year: "numeric" });
+  if (view === "day") return anchor.toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric", year: "numeric" });
   const days = viewDays(view, anchor, weekStartsOn);
   const a = days[0], b = days[days.length - 1];
   const sameMonth = a.getMonth() === b.getMonth();
@@ -144,7 +155,8 @@ export function tint(hex: string, alpha: number) {
   return `rgba(${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)}, ${alpha})`;
 }
 export const leadOf = (techs: TechChip[]) => techs.find((t) => t.is_lead) ?? techs[0] ?? null;
-export const barColor = (v: { techs: TechChip[] }) => leadOf(v.techs)?.color ?? UNASSIGNED_COLOR;
+export const barColor = (v: { techs: TechChip[]; color?: string }) => v.color ?? leadOf(v.techs)?.color ?? UNASSIGNED_COLOR;
+export type ColorBy = "tech" | "type" | "priority";
 
 // Mensajes claros para los errores de la base de datos
 export function jobError(e: { message?: string; code?: string; hint?: string } | null | undefined): string {

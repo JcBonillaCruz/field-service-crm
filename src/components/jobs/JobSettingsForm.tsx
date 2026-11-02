@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { createClient } from "@/lib/supabase/client";
 import { inputClass } from "@/components/customers/ui";
 import SelectMenu from "@/components/ui/SelectMenu";
+import ColorPicker from "@/components/ui/ColorPicker";
 import { confirmDelete } from "@/lib/confirm";
 import { TechDot } from "@/components/jobs/EventBar";
 import { ChecklistTemplate, JobSettings, JobTag, JobType, TECH_COLORS, TeamMember, arrivalLabel, ARRIVAL_WINDOWS, durationLabel, fmtHour, jobError } from "@/lib/jobs";
@@ -27,14 +28,26 @@ function Switch({ on, onChange, label, text }: { on: boolean; onChange: (v: bool
 }
 
 function Swatch({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  // El color propio se guarda cuando dejas de moverlo (no en cada movimiento)
+  const t = useRef<ReturnType<typeof setTimeout>>();
+  const [live, setLive] = useState(value);
+  useEffect(() => setLive(value), [value]);
+  const custom = (c: string) => { setLive(c); clearTimeout(t.current); t.current = setTimeout(() => onChange(c), 450); };
   return (
     <Popover className="relative">
-      <PopoverButton aria-label="Change color" className="h-7 w-7 rounded-full ring-2 ring-white transition-transform hover:scale-110 focus:outline-none" style={{ background: value, boxShadow: `0 0 0 1px ${value}55` }} />
-      <PopoverPanel anchor="bottom start" transition className="z-[100] mt-1 grid w-48 grid-cols-6 gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-[0_12px_40px_rgba(15,40,60,0.18)] transition data-[closed]:scale-95 data-[closed]:opacity-0">
-        {({ close }) => <>{TECH_COLORS.map((c) => (
-          <button key={c} type="button" onClick={() => { onChange(c); close(); }} aria-label={c}
-            className={`h-6 w-6 rounded-full transition-transform hover:scale-110 ${c === value ? "ring-2 ring-offset-2" : ""}`} style={{ background: c, ["--tw-ring-color" as string]: c }} />
-        ))}</>}
+      <PopoverButton aria-label="Change color" className="h-7 w-7 rounded-full ring-2 ring-white transition-transform hover:scale-110 focus:outline-none" style={{ background: live, boxShadow: `0 0 0 1px ${live}55` }} />
+      <PopoverPanel anchor="bottom start" transition className="z-[100] mt-1 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-[0_12px_40px_rgba(15,40,60,0.18)] transition data-[closed]:scale-95 data-[closed]:opacity-0">
+        {({ close }) => (
+          <>
+            <div className="grid grid-cols-6 gap-2.5">
+              {TECH_COLORS.map((c) => (
+                <button key={c} type="button" onClick={() => { onChange(c); close(); }} aria-label={c}
+                  className={`h-7 w-7 rounded-full transition-transform hover:scale-110 ${c.toLowerCase() === value.toLowerCase() ? "ring-2 ring-offset-2" : ""}`} style={{ background: c, ["--tw-ring-color" as string]: c }} />
+              ))}
+            </div>
+            <div className="mt-3 border-t border-slate-100 pt-3"><ColorPicker label="Custom color" value={live} onChange={custom} /></div>
+          </>
+        )}
       </PopoverPanel>
     </Popover>
   );
@@ -124,6 +137,28 @@ export default function JobSettingsForm({ companyId, settings, types: t0, tags: 
             text="Tapping On my way clocks the technician in for the day if they forgot." />
         </section>
 
+        <section className={`${card} px-5 pt-4`}>
+          <h2 className="text-[16px] font-semibold text-[#0b1f3a]">Notifications</h2>
+          <div className="divide-y divide-slate-100">
+            <Switch on={s.notify_tech_assign} onChange={(v) => patch({ notify_tech_assign: v })} label="Tell technicians about new jobs"
+              text="When a job is assigned or moved, the technician gets an alert on the phone, in the app and by email." />
+            <Switch on={s.notify_tech_agenda} onChange={(v) => patch({ notify_tech_agenda: v })} label="Send tomorrow's schedule every evening"
+              text="Around 6 PM each technician gets the list of tomorrow's jobs (app alert and email)." />
+            <div className="flex flex-wrap items-center justify-between gap-3 py-3">
+              <span><span className="block text-[15px] font-medium text-[#0b1f3a]">When a job's time changes</span><span className="block text-[13px] text-slate-500">Email the customer with the new date and arrival window.</span></span>
+              <div className="w-56"><SelectMenu value={s.notify_customer} ariaLabel="Customer notification"
+                options={[{ value: "ask", label: "Ask me every time" }, { value: "always", label: "Always notify" }, { value: "never", label: "Never notify" }]}
+                onChange={(v) => patch({ notify_customer: v as JobSettings["notify_customer"] })} /></div>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 py-3">
+              <span><span className="block text-[15px] font-medium text-[#0b1f3a]">Time zone</span><span className="block text-[13px] text-slate-500">Used for the times in emails and the evening schedule.</span></span>
+              <div className="w-56"><SelectMenu value={s.timezone} ariaLabel="Time zone"
+                options={[["America/Chicago", "Central (Dallas)"], ["America/New_York", "Eastern"], ["America/Denver", "Mountain"], ["America/Phoenix", "Arizona"], ["America/Los_Angeles", "Pacific"], ["America/Anchorage", "Alaska"], ["Pacific/Honolulu", "Hawaii"], ["America/Mexico_City", "Mexico City"], ["America/Puerto_Rico", "Puerto Rico"]].map(([value, label]) => ({ value, label }))}
+                onChange={(v) => patch({ timezone: v })} /></div>
+            </div>
+          </div>
+        </section>
+
         <section className={`${card} p-5`}>
           <h2 className="text-[16px] font-semibold text-[#0b1f3a]">Calendar</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -147,9 +182,10 @@ export default function JobSettingsForm({ companyId, settings, types: t0, tags: 
 
         <section className={`${card} p-5`}>
           <h2 className="text-[16px] font-semibold text-[#0b1f3a]">Technician colors</h2>
-          <p className="text-[13px] text-slate-500">Each job bar on the calendar uses the color of its lead technician.</p>
+          <p className="text-[13px] text-slate-500">With &quot;Color by: Technician&quot;, each job bar uses the color of its lead technician.</p>
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            {team.map((m) => (
+            {team.filter((m) => m.role === "technician").length === 0 && <p className="text-[13.5px] text-slate-500">No technicians yet. Invite them in Team with the Technician role.</p>}
+            {team.filter((m) => m.role === "technician").map((m) => (
               <div key={m.user_id} className="flex items-center gap-3 rounded-xl border border-slate-100 px-3 py-2">
                 <TechDot t={m} size={32} ring={false} />
                 <span className="min-w-0 flex-1"><span className="block truncate text-[14.5px] font-medium text-[#0b1f3a]">{m.full_name}</span><span className="text-[12px] capitalize text-slate-500">{m.role}</span></span>

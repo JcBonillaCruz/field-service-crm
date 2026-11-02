@@ -303,7 +303,7 @@ export default function AppShell({
   }, [menuOpen]);
 
   return (
-    <NotificationsProvider companyId={currentId} userId={user.id} enabled={Boolean(role && canManageSales(role))}>
+    <NotificationsProvider companyId={currentId} userId={user.id} enabled={Boolean(role)} tech={Boolean(role && !canManageSales(role))}>
     <div data-bp-ready className="min-h-screen bg-[#f4f6f8] lg:pl-64">
       {/* Menú fijo en computadora */}
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r border-[#dfe7ee] bg-[#f4f7fa] lg:flex">

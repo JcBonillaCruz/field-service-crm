@@ -62,3 +62,14 @@ export function jobNotices(rows: JobAlertRow[], reads: string[]): Notice[] {
     return n;
   }).filter((n) => !read.has(n.key));
 }
+
+// Avisos personales del técnico (tabla job_notices): trabajo asignado, cambio de hora, agenda de mañana
+export type JobNoticeRow = { id: string; job_id: string | null; kind: string; title: string; body: string | null; created_at: string };
+export function myJobNotices(rows: JobNoticeRow[], reads: string[]): Notice[] {
+  const read = new Set(reads);
+  return rows.map((r) => {
+    const id = `jn-${r.id}`;
+    const n: Notice = { id, key: id, kind: "job", title: r.title, body: r.body ?? "", href: "/dashboard/jobs/mine", when: r.created_at };
+    return n;
+  }).filter((n) => !read.has(n.key));
+}

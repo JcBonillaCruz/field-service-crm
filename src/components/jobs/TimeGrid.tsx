@@ -134,7 +134,10 @@ export default function TimeGrid({ cols, visits, visStart, visEnd, workStart, wo
                 }}>
                 {placed.map((p) => (
                   <div key={`${p.v.visit_id}-${c.key}`} className="absolute px-[2px]"
-                    style={{ top: (p.s - visStart) * PX + 1, height: Math.max(22, (p.e - p.s) * PX - 2), left: `${(p.lane / p.lanes) * 100}%`, width: `${100 / p.lanes}%` }}>
+                    style={{ top: (p.s - visStart) * PX + 1, height: Math.max(22, (p.e - p.s) * PX - 2),
+                      // En Día la barra no se estira por toda la pantalla (máx. 22rem por carril)
+                      left: cols.length === 1 ? `min(${(p.lane / p.lanes) * 100}%, ${p.lane * 22}rem)` : `${(p.lane / p.lanes) * 100}%`,
+                      width: cols.length === 1 ? `min(${100 / p.lanes}%, 22rem)` : `${100 / p.lanes}%` }}>
                     <EventBar v={p.v} start={p.start} end={p.end} compact={(p.e - p.s) * PX < 46} dragging={handlers.draggingId === p.v.visit_id}
                       onDown={(e) => handlers.onVisitDown(e, p.v, c, "move")}
                       onResizeDown={(e) => handlers.onVisitDown(e, p.v, c, "resize")}

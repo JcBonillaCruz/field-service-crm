@@ -23,7 +23,13 @@ export type PushPayload = { title: string; body: string; url: string; tag?: stri
 export async function pushToCompany(companyId: string, payload: PushPayload) {
   if (!setup()) return 0;
   const db = admin(); if (!db) return 0;
-  const { data } = await db.from("push_subscriptions").select("id, endpoint, p256dh, auth").eq("company_id", companyId);
+  const [{ data: subs }, { data: techs }] = await Promise.all([
+    db.from("push_subscriptions").select("id, endpoint, p256dh, auth, user_id").eq("company_id", companyId),
+    db.from("company_members").select("user_id").eq("company_id", companyId).eq("role", "technician"),
+  ]);
+  // Los técnicos no reciben avisos de facturas ni del inventario de la empresa (solo los de sus trabajos)
+  const skip = new Set((techs ?? []).map((t) => t.user_id as string));
+  const data = (subs ?? []).filter((s) => !skip.has(s.user_id as string));
   let sent = 0;
   await Promise.all((data ?? []).map(async (s) => {
     try {
