@@ -41,6 +41,10 @@ export default function LabelDesigner({ companyName, items, initial, stock, barc
   const pageW = paper.kind === "sheet" ? 8.5 : paper.w, pageH = paper.kind === "sheet" ? 11 : paper.h;
 
   const add = (it: InvItem | LabelItem) => setLines((l) => l.some((x) => x.item.id === it.id) ? l : [...l, { item: items.find((i) => i.id === it.id)!, qty: 1 }]);
+  // Llenar: la fila completa (3 en la hoja de 30) o la hoja entera con el mismo producto
+  const cols = paper.kind === "sheet" ? paper.cols ?? 1 : 1;
+  const fillRow = (id: string, q: number) => setQty(id, Math.max(cols, Math.ceil(Math.max(1, q) / cols) * cols));
+  const fillSheet = (id: string) => setQty(id, lines.length === 1 ? perPage(paper) - (Math.min(start, perPage(paper)) - 1) : perPage(paper));
   const setQty = (id: string, q: number) => setLines((l) => l.map((x) => (x.item.id === id ? { ...x, qty: Math.max(0, Math.min(500, q)) } : x)));
   const pickable = items.map((i) => ({ id: i.id, name: i.name, sku: i.sku, unit: i.unit, image_url: null, selling_price: i.price, cost_price: 0, category_id: null, description: null, is_active: true, created_at: "" })) as InvItem[];
 
@@ -71,7 +75,7 @@ export default function LabelDesigner({ companyName, items, initial, stock, barc
             {lines.length === 0 ? <p className="rounded-xl border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500">Add the products you want labels for.</p> : (
               <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
                 {lines.map((l) => (
-                  <li key={l.item.id} className="flex items-center gap-2 px-3 py-2.5">
+                  <li key={l.item.id} className="px-3 py-2.5"><div className="flex items-center gap-2">
                     <span className="min-w-0 flex-1"><span className="block truncate text-[14px] font-medium text-[#0b1f3a]">{l.item.name}</span>
                       <span className="block truncate font-mono text-[11.5px] text-slate-400">{l.item.sku}{stock[l.item.id] ? <span className="font-sans"> · {stock[l.item.id]} on hand</span> : null}</span></span>
                     <button type="button" onClick={() => setQty(l.item.id, l.qty - 1)} className="h-8 w-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">−</button>
@@ -81,6 +85,13 @@ export default function LabelDesigner({ companyName, items, initial, stock, barc
                     <button type="button" onClick={() => setLines((x) => x.filter((y) => y.item.id !== l.item.id))} aria-label="Remove" className="ml-1 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-600">
                       <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
                     </button>
+                  </div>
+                    {paper.kind === "sheet" && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        <button type="button" onClick={() => fillRow(l.item.id, l.qty)} className="rounded-md border border-slate-200 px-2 py-1 text-[12px] font-medium text-slate-600 hover:border-[#14a39a] hover:text-[#0f766e]">Fill row ({cols})</button>
+                        <button type="button" onClick={() => fillSheet(l.item.id)} className="rounded-md border border-slate-200 px-2 py-1 text-[12px] font-medium text-slate-600 hover:border-[#14a39a] hover:text-[#0f766e]">Fill the whole sheet ({lines.length === 1 ? perPage(paper) - (Math.min(start, perPage(paper)) - 1) : perPage(paper)})</button>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>

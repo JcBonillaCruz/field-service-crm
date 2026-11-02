@@ -74,9 +74,10 @@ const QR_NAV: NavItem[] = [
 // Inventory: su propio menú. El técnico ve solo lo suyo (su van, escanear, su consumo).
 const MANAGE: Role[] = ["owner", "manager", "office"];
 const INVENTORY_NAV: NavItem[] = [
-  { label: "Items", href: "/dashboard/inventory", exclude: ["/dashboard/inventory/scan", "/dashboard/inventory/settings", "/dashboard/inventory/locations", "/dashboard/inventory/transfers", "/dashboard/inventory/movements", "/dashboard/inventory/counts", "/dashboard/inventory/reports"], addHref: "/dashboard/inventory/new", roles: MANAGE, icon: "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9" },
+  { label: "Items", href: "/dashboard/inventory", exclude: ["/dashboard/inventory/scan", "/dashboard/inventory/labels", "/dashboard/inventory/settings", "/dashboard/inventory/locations", "/dashboard/inventory/transfers", "/dashboard/inventory/movements", "/dashboard/inventory/counts", "/dashboard/inventory/reports"], addHref: "/dashboard/inventory/new", roles: MANAGE, icon: "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9" },
   { label: "My Van", href: "/dashboard/inventory/van", roles: ["technician"], icon: "M3 7h11v9H3zM14 10h4l3 3v3h-7zM7 19a1.8 1.8 0 1 0 0-3.6A1.8 1.8 0 0 0 7 19zM17 19a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6z" },
   { label: "Scan", href: "/dashboard/inventory/scan", roles: MANAGE, icon: "M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 8v8M10 8v8M13 8v8M16.5 8v8" },
+  { label: "Labels", href: "/dashboard/inventory/labels", roles: MANAGE, icon: "M7 8V3h10v5M6 17H4V9h16v8h-2M7 14h10v7H7z" },
   { label: "Scan", href: "/dashboard/inventory/scan", roles: ["technician"], icon: "M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 8v8M10 8v8M13 8v8M16.5 8v8" },
   { label: "Locations & Vans", href: "/dashboard/inventory/locations", addHref: "/dashboard/inventory/locations/new", addLabel: "Location", roles: MANAGE, icon: "M3 10.5 12 4l9 6.5V20H3zM8 20v-6h8v6M8 17h8" },
   { label: "Transfers", href: "/dashboard/inventory/transfers", addHref: "/dashboard/inventory/transfers/new", roles: MANAGE, icon: "M4 8h13l-3-3M20 16H7l3 3" },
