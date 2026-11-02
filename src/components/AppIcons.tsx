@@ -78,3 +78,26 @@ export function InventoryArt({ size = 48, className = "" }: { size?: number; cla
     </svg>
   );
 }
+
+export function JobsArt({ size = 48, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg viewBox="0 0 48 48" width={size} height={size} className={className} aria-hidden="true">
+      <circle cx="24" cy="25" r="20" fill="#e6eeff" />
+      {/* calendario */}
+      <rect x="8" y="11" width="28" height="27" rx="3" fill="#fff" stroke="#3b6fd8" strokeWidth="1.4" />
+      <path d="M8 14a3 3 0 0 1 3-3h22a3 3 0 0 1 3 3v4H8z" fill="#3b6fd8" />
+      <rect x="13" y="8" width="2.6" height="6" rx="1.3" fill="#24305e" />
+      <rect x="28.4" y="8" width="2.6" height="6" rx="1.3" fill="#24305e" />
+      {/* barras de trabajos (colores de técnicos) */}
+      <rect x="11" y="21" width="12" height="3.4" rx="1.2" fill="#14a39a" />
+      <rect x="11" y="26.6" width="17" height="3.4" rx="1.2" fill="#e8713a" />
+      <rect x="11" y="32.2" width="9" height="3.4" rx="1.2" fill="#7c3aed" opacity=".85" />
+      <rect x="25" y="21" width="8" height="3.4" rx="1.2" fill="#c8d8f5" />
+      {/* reloj */}
+      <g className="origin-[36px_34px] transition-transform duration-300 group-hover/app:rotate-12 group-hover/app:scale-110 group-hover:rotate-12 group-hover:scale-110">
+        <circle cx="36" cy="34" r="7.5" fill="#fff" stroke="#0f766e" strokeWidth="2" />
+        <path d="M36 30.2V34l2.6 1.8" fill="none" stroke="#0b1f3a" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </g>
+    </svg>
+  );
+}

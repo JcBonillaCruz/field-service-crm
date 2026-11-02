@@ -1,0 +1,572 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "@headlessui/react";
+import { createClient } from "@/lib/supabase/client";
+import {
+  CalView, CalVisit, JobRow, JobSettings, JobStatus, JobType, STATUS_META, STATUS_ORDER, TeamMember, TechChip,
+  addDays, addMinutes, atMinute, barColor, dayStart, fmtDayShort, fmtTime, fromIsoDay, isoDay, jobError, minutesOf,
+  rangeLabel, sameDay, shiftAnchor, timeToMin, viewDays,
+} from "@/lib/jobs";
+import { Col, GridApi, Handlers, Hit, Preview } from "@/components/jobs/cal-shared";
+import TimeGrid from "@/components/jobs/TimeGrid";
+import MonthGrid from "@/components/jobs/MonthGrid";
+import VisitPopover from "@/components/jobs/VisitPopover";
+import JobTray from "@/components/jobs/JobTray";
+import { TechDot } from "@/components/jobs/EventBar";
+import { Check, Chevron, optionClass, panelClass } from "@/components/ui/SearchSelect";
+
+const VIEWS: { id: CalView; label: string }[] = [
+  { id: "day", label: "Day" }, { id: "week", label: "Week" }, { id: "workweek", label: "Mon–Fri" }, { id: "month", label: "Month" }, { id: "dispatch", label: "Dispatch" },
+];
+const VIEW_KEY = "bp-schedule-view";
+const TRAY_KEY = "bp-schedule-tray";
+const UNASSIGNED = "__none__";
+
+// Estado de la visita llevado a las pestañas del trabajo
+const asJobStatus = (v: CalVisit): JobStatus =>
+  v.job_status === "cancelled" ? "cancelled" : v.visit_status === "paused" ? "in_progress" : v.visit_status === "unscheduled" ? "unscheduled" : (v.visit_status as JobStatus);
+
+type DragState = {
+  kind: "move" | "resize" | "create" | "tray"; pointerId: number; touch: boolean;
+  x0: number; y0: number; lastX: number; lastY: number; active: boolean; scrolled: boolean; timer?: ReturnType<typeof setTimeout>;
+  el?: HTMLElement; visit?: CalVisit; job?: JobRow; col?: Col; offsetMin: number; durMin: number; startMin: number;
+  color: string; label: string; hit?: Hit | null; preview?: Preview; overTray?: boolean; locked?: boolean;
+};
+
+export default function ScheduleBoard({ companyId, settings, types, team, canSeeMoney }: {
+  companyId: string; settings: JobSettings; types: JobType[]; team: TeamMember[]; canSeeMoney: boolean;
+}) {
+  const router = useRouter();
+  const sp = useSearchParams();
+  const [view, setView] = useState<CalView>(() => (VIEWS.some((v) => v.id === sp.get("view")) ? (sp.get("view") as CalView) : "week"));
+  const [anchor, setAnchor] = useState<Date>(() => (sp.get("date") ? fromIsoDay(sp.get("date") as string) : dayStart(new Date())));
+  const [visits, setVisits] = useState<CalVisit[]>([]);
+  const [tray, setTray] = useState<JobRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [trayOpen, setTrayOpen] = useState(false);
+  const [statusF, setStatusF] = useState<"all" | JobStatus>("all");
+  const [techF, setTechF] = useState<string[]>([]);
+  const [typeF, setTypeF] = useState("");
+  const [now, setNow] = useState(() => new Date());
+  const [toast, setToast] = useState<{ msg: string; tone: "ok" | "error" } | null>(null);
+  const [preview, setPreview] = useState<Preview>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [trayDrop, setTrayDrop] = useState(false);
+  const [pop, setPop] = useState<{ v: CalVisit; rect: DOMRect; pinned: boolean } | null>(null);
+  const apiRef = useRef<GridApi | null>(null);
+  const trayRef = useRef<HTMLDivElement>(null);
+  const drag = useRef<DragState | null>(null);
+  const hoverT = useRef<ReturnType<typeof setTimeout>>();
+  const hideT = useRef<ReturnType<typeof setTimeout>>();
+  const reqId = useRef(0);
+  const pendingReload = useRef(false);
+
+  const slot = settings.slot_minutes || 30;
+  const workStart = timeToMin(settings.day_start);
+  const workEnd = Math.max(workStart + 60, timeToMin(settings.day_end));
+  const days = useMemo(() => viewDays(view, anchor, settings.week_starts_on), [view, anchor, settings.week_starts_on]);
+  const rangeStart = days[0], rangeEnd = addDays(days[days.length - 1], 1);
+  const rangeKey = `${isoDay(rangeStart)}_${isoDay(rangeEnd)}`;
+  const typeDur = useMemo(() => new Map(types.map((t) => [t.id, t.default_duration_min])), [types]);
+
+  // Vista guardada y bandeja (celular: Día y bandeja cerrada)
+  useEffect(() => {
+    const small = window.innerWidth < 1024;
+    if (!sp.get("view")) {
+      const saved = localStorage.getItem(VIEW_KEY) as CalView | null;
+      setView(small ? "day" : saved && VIEWS.some((v) => v.id === saved) ? saved : "week");
+    }
+    setTrayOpen(!small && localStorage.getItem(TRAY_KEY) !== "0");
+    const t = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    try { localStorage.setItem(VIEW_KEY, view); } catch { /* */ }
+    window.history.replaceState(null, "", `?view=${view}&date=${isoDay(anchor)}`);
+  }, [view, anchor]);
+
+  const flash = useCallback((msg: string, tone: "ok" | "error" = "ok") => {
+    setToast({ msg, tone });
+    setTimeout(() => setToast((t) => (t?.msg === msg ? null : t)), tone === "error" ? 6000 : 3000);
+  }, []);
+
+  const load = useCallback(async () => {
+    if (drag.current?.active) { pendingReload.current = true; return; }
+    const id = ++reqId.current;
+    const sb = createClient();
+    const [cal, tr] = await Promise.all([
+      sb.from("v_job_calendar").select("*").eq("company_id", companyId)
+        .lt("starts_at", rangeEnd.toISOString()).gt("ends_at", rangeStart.toISOString()).order("starts_at").limit(3000),
+      sb.from("v_jobs").select("id, company_id, number, customer_id, customer_name, customer_phone, address_id, site_address, job_type_id, title, description, priority, status, estimated_total, visit_count, hold_reason, hold_note, hold_at, needs_followup, created_at, type_name, type_color, techs, tech_ids, tags")
+        .eq("company_id", companyId).in("status", ["unscheduled", "on_hold"]).order("created_at", { ascending: false }).limit(300),
+    ]);
+    if (id !== reqId.current) return;
+    if (cal.error) flash(jobError(cal.error), "error");
+    else setVisits((cal.data ?? []).map((v) => ({ ...v, estimated_total: Number(v.estimated_total) })) as CalVisit[]);
+    if (!tr.error) setTray((tr.data ?? []) as unknown as JobRow[]);
+    setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId, rangeKey, flash]);
+
+  useEffect(() => { setLoading(true); load(); }, [load]);
+
+  // Tiempo real: si alguien mueve una barra o el técnico cambia el estado, se actualiza solo
+  useEffect(() => {
+    const sb = createClient();
+    let t: ReturnType<typeof setTimeout>;
+    const again = () => { clearTimeout(t); t = setTimeout(() => load(), 450); };
+    const ch = sb.channel(`schedule-${companyId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "job_visits", filter: `company_id=eq.${companyId}` }, again)
+      .on("postgres_changes", { event: "*", schema: "public", table: "jobs", filter: `company_id=eq.${companyId}` }, again)
+      .on("postgres_changes", { event: "*", schema: "public", table: "job_visit_techs", filter: `company_id=eq.${companyId}` }, again)
+      .subscribe();
+    const onShow = () => { if (document.visibilityState === "visible") again(); };
+    document.addEventListener("visibilitychange", onShow);
+    return () => { clearTimeout(t); sb.removeChannel(ch); document.removeEventListener("visibilitychange", onShow); };
+  }, [companyId, load]);
+
+  // ---------- Filtros ----------
+  const counts = useMemo(() => {
+    const c = new Map<string, number>([["all", visits.length]]);
+    visits.forEach((v) => { const s = asJobStatus(v); c.set(s, (c.get(s) ?? 0) + 1); });
+    return c;
+  }, [visits]);
+  const shown = useMemo(() => visits.filter((v) =>
+    (statusF === "all" || asJobStatus(v) === statusF)
+    && (!typeF || v.job_type_id === typeF)
+    && (!techF.length || view === "dispatch" || techF.some((t) => (t === UNASSIGNED ? v.tech_ids.length === 0 : v.tech_ids.includes(t))))), [visits, statusF, typeF, techF, view]);
+
+  // Horas visibles: el horario de trabajo, más lo necesario si hay trabajos antes o después
+  const [visStart, visEnd] = useMemo(() => {
+    let a = workStart, b = workEnd;
+    shown.forEach((v) => {
+      const s = new Date(v.starts_at), e = new Date(v.ends_at);
+      if (s >= rangeStart && s < rangeEnd) a = Math.min(a, Math.floor(minutesOf(s) / 60) * 60);
+      if (e > rangeStart && e <= rangeEnd && minutesOf(e) > 0) b = Math.max(b, Math.ceil(minutesOf(e) / 60) * 60);
+      if (e > rangeEnd || (sameDay(s, e) === false && e <= rangeEnd)) b = 24 * 60;
+    });
+    return [Math.max(0, a), Math.min(24 * 60, b)];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown, workStart, workEnd, rangeKey]);
+
+  // ---------- Columnas ----------
+  const techs = useMemo(() => team.filter((m) => m.role === "technician" || visits.some((v) => v.tech_ids.includes(m.user_id))), [team, visits]);
+  const cols: Col[] = useMemo(() => {
+    if (view === "dispatch") {
+      const list = techF.length ? techs.filter((m) => techF.includes(m.user_id)) : techs;
+      const out: Col[] = list.map((m) => ({ key: `t:${m.user_id}`, day: anchor, techId: m.user_id, label: m.full_name, color: m.color, initials: m.initials, avatar: m.avatar_url }));
+      if (!techF.length || techF.includes(UNASSIGNED)) out.push({ key: "t:none", day: anchor, techId: null, label: "Unassigned" });
+      return out;
+    }
+    return days.map((d) => ({ key: isoDay(d), day: d, techId: null, label: d.toLocaleDateString("en-US", { weekday: "short" }), sub: String(d.getDate()), today: sameDay(d, now) }));
+  }, [view, days, anchor, techs, techF, now]);
+
+  const chipsFor = useCallback((ids: string[], lead: string | null): TechChip[] => ids.map((id) => {
+    const m = team.find((x) => x.user_id === id);
+    return { user_id: id, name: m?.full_name ?? "Technician", initials: m?.initials ?? "T", color: m?.color ?? "#94a3b8", avatar_url: m?.avatar_url ?? null, is_lead: id === (lead ?? ids[0]) };
+  }), [team]);
+
+  // ---------- Acciones en la base de datos ----------
+  async function saveVisit(v: CalVisit, start: Date, end: Date, techIds: string[] | null, lead: string | null, msg: string) {
+    const before = visits;
+    setVisits((vs) => vs.map((x) => (x.visit_id === v.visit_id ? {
+      ...x, starts_at: start.toISOString(), ends_at: end.toISOString(),
+      ...(techIds ? { tech_ids: techIds, techs: chipsFor(techIds, lead) } : {}),
+    } : x)));
+    const { error } = await createClient().rpc("visit_schedule", {
+      p_visit: v.visit_id, p_starts: start.toISOString(), p_ends: end.toISOString(), p_window: null, p_techs: techIds, p_lead: lead,
+    });
+    if (error) { setVisits(before); flash(jobError(error), "error"); return; }
+    flash(msg);
+    load();
+  }
+  async function unschedule(v: CalVisit) {
+    setPop(null);
+    setVisits((vs) => vs.filter((x) => x.visit_id !== v.visit_id));
+    const { error } = await createClient().rpc("visit_unschedule", { p_visit: v.visit_id });
+    if (error) flash(jobError(error), "error"); else flash(`${v.customer_name || v.number} moved to Unscheduled`);
+    load();
+  }
+  async function scheduleFromTray(j: JobRow, start: Date, end: Date, techIds: string[] | null) {
+    setTray((t) => t.filter((x) => x.id !== j.id));
+    const { error } = await createClient().rpc("job_schedule", {
+      p_job: j.id, p_starts: start.toISOString(), p_ends: end.toISOString(), p_window: null, p_techs: techIds, p_lead: techIds?.[0] ?? null,
+    });
+    if (error) flash(jobError(error), "error");
+    else flash(`${j.customer_name || j.number} scheduled for ${fmtDayShort(start)} at ${fmtTime(start)}`);
+    load();
+  }
+  function newJobAt(day: Date, startMin: number, endMin: number, techId: string | null) {
+    const s = atMinute(day, startMin), e = atMinute(day, endMin);
+    const q = new URLSearchParams({ start: s.toISOString(), end: e.toISOString() });
+    if (techId) q.set("tech", techId);
+    router.push(`/dashboard/jobs/new?${q.toString()}`);
+  }
+
+  // ---------- Arrastrar y soltar (mouse y dedo) ----------
+  const snap = (m: number) => Math.round(m / slot) * slot;
+
+  function computePreview(s: DragState, hit: Hit | null): Preview {
+    if (!hit) return null;
+    if (hit.minute === null) {
+      if (s.kind === "move" || s.kind === "tray") return { colKey: hit.colKey, day: hit.day, startMin: 0, endMin: 0, color: s.color, label: s.label };
+      return null;
+    }
+    if (s.kind === "move" || s.kind === "tray") {
+      const start = Math.min(24 * 60 - s.durMin, Math.max(0, snap(hit.minute - s.offsetMin)));
+      return { colKey: hit.colKey, day: hit.day, startMin: start, endMin: start + s.durMin, color: s.color, label: s.label };
+    }
+    if (s.kind === "resize" && s.col) {
+      const end = Math.min(24 * 60, Math.max(s.startMin + slot, snap(hit.minute)));
+      return { colKey: s.col.key, day: s.col.day, startMin: s.startMin, endMin: end, color: s.color, label: s.label };
+    }
+    if (s.kind === "create" && s.col) {
+      const a = Math.floor(s.startMin / slot) * slot, b = snap(hit.minute);
+      return b > a ? { colKey: s.col.key, day: s.col.day, startMin: a, endMin: Math.max(a + slot, b), color: s.color, label: s.label }
+        : { colKey: s.col.key, day: s.col.day, startMin: b, endMin: a + slot, color: s.color, label: s.label };
+    }
+    return null;
+  }
+
+  function activate() {
+    const s = drag.current; if (!s || s.active || s.locked) return;
+    s.active = true;
+    setDraggingId(s.visit?.visit_id ?? s.job?.id ?? null);
+    setPop(null); clearTimeout(hoverT.current);
+    document.body.style.userSelect = "none";
+    if (s.touch) navigator.vibrate?.(12);
+    const hit = apiRef.current?.hit(s.lastX, s.lastY) ?? null;
+    s.hit = hit; s.preview = computePreview(s, hit); setPreview(s.preview);
+  }
+
+  function moveImpl(ev: PointerEvent) {
+    const s = drag.current; if (!s || ev.pointerId !== s.pointerId) return;
+    const dist = Math.hypot(ev.clientX - s.x0, ev.clientY - s.y0);
+    if (s.locked) { if (dist > 6) s.scrolled = true; return; } // terminada o cancelada: solo se abre, no se mueve
+    if (!s.active) {
+      if (!s.touch && dist > 4) activate();
+      else if (s.touch && dist > 8) {
+        clearTimeout(s.timer);
+        if (s.kind !== "create") {
+          // Antes de mantener presionado: el dedo desplaza la lista o el calendario (no arrastra)
+          const sc = s.kind === "tray" ? (trayRef.current?.querySelector("[data-tray-list]") as HTMLElement | null) : apiRef.current?.scroller();
+          if (sc) { sc.scrollTop -= ev.clientY - s.lastY; sc.scrollLeft -= ev.clientX - s.lastX; }
+        }
+        s.scrolled = true;
+      }
+      if (!s.active) { s.lastX = ev.clientX; s.lastY = ev.clientY; return; }
+    }
+    s.lastX = ev.clientX; s.lastY = ev.clientY;
+    const tr = trayRef.current?.getBoundingClientRect();
+    s.overTray = Boolean(tr && s.kind === "move" && s.visit?.visit_status === "scheduled" && ev.clientX >= tr.left && ev.clientX <= tr.right && ev.clientY >= tr.top && ev.clientY <= tr.bottom);
+    setTrayDrop(Boolean(s.overTray));
+    const hit = s.overTray ? null : apiRef.current?.hit(ev.clientX, ev.clientY) ?? null;
+    s.hit = hit; s.preview = computePreview(s, hit); setPreview(s.preview);
+    // Auto-desplazamiento cerca de los bordes
+    const sc = apiRef.current?.scroller();
+    if (sc && !s.overTray && view !== "month") {
+      const r = sc.getBoundingClientRect();
+      if (ev.clientY < r.top + 56) sc.scrollTop -= 14; else if (ev.clientY > r.bottom - 36) sc.scrollTop += 14;
+      if (ev.clientX > r.right - 30) sc.scrollLeft += 14; else if (ev.clientX < r.left + 70 && sc.scrollLeft > 0) sc.scrollLeft -= 14;
+    }
+  }
+
+  function finishImpl(ev: PointerEvent, cancelled: boolean) {
+    const s = drag.current; if (!s || ev.pointerId !== s.pointerId) return;
+    clearTimeout(s.timer);
+    drag.current = null;
+    const l = listeners.current;
+    window.removeEventListener("pointermove", l.move);
+    window.removeEventListener("pointerup", l.up);
+    window.removeEventListener("pointercancel", l.cancel);
+    window.removeEventListener("touchmove", l.touch);
+    document.body.style.userSelect = "";
+    setDraggingId(null); setPreview(null); setTrayDrop(false);
+    if (pendingReload.current) { pendingReload.current = false; setTimeout(() => load(), 50); }
+    if (cancelled) return;
+
+    if (!s.active) {
+      if (s.scrolled) return;
+      // Clic sin arrastrar
+      if ((s.kind === "move" || s.kind === "resize") && s.visit && s.el) { clearTimeout(hoverT.current); setPop({ v: s.visit, rect: s.el.getBoundingClientRect(), pinned: true }); return; }
+      if (s.kind === "tray" && s.job) { router.push(`/dashboard/jobs/${s.job.id}/edit`); return; }
+      if (s.kind === "create" && s.col) {
+        if (view === "month") { newJobAt(s.col.day, workStart, workStart + settings.default_duration_min, null); return; }
+        const a = Math.floor(s.startMin / slot) * slot;
+        newJobAt(s.col.day, a, a + settings.default_duration_min, s.col.techId);
+      }
+      return;
+    }
+
+    if (s.overTray && s.visit) { unschedule(s.visit); return; }
+    const p = s.preview, hit = s.hit;
+    if (!p) return;
+    if (s.kind === "create") { newJobAt(p.day, p.startMin, p.endMin, s.col?.techId ?? null); return; }
+
+    if (s.kind === "tray" && s.job) {
+      const start = view === "month" ? atMinute(p.day, workStart) : atMinute(p.day, p.startMin);
+      scheduleFromTray(s.job, start, addMinutes(start, s.durMin), view === "dispatch" && hit?.techId ? [hit.techId] : null);
+      return;
+    }
+    const v = s.visit; if (!v) return;
+    const oldStart = new Date(v.starts_at), oldEnd = new Date(v.ends_at);
+    const dur = Math.round((oldEnd.getTime() - oldStart.getTime()) / 60000);
+    let start: Date, end: Date;
+    if (s.kind === "resize") { start = oldStart; end = atMinute(p.day, p.endMin); }
+    else if (view === "month") { start = atMinute(p.day, minutesOf(oldStart)); end = addMinutes(start, dur); }
+    else { start = atMinute(p.day, p.startMin); end = addMinutes(start, dur); }
+
+    // Dispatch: soltar en el carril de otro técnico cambia el técnico
+    let techIds: string[] | null = null, lead: string | null = null, techMsg = "";
+    if (view === "dispatch" && s.kind === "move" && s.col && hit && hit.techId !== s.col.techId) {
+      const from = s.col.techId, to = hit.techId;
+      const set = v.tech_ids.filter((t) => t !== from);
+      if (to && !set.includes(to)) set.push(to);
+      techIds = set;
+      const curLead = v.techs.find((t) => t.is_lead)?.user_id ?? null;
+      lead = to && (!from || curLead === from) ? to : curLead && set.includes(curLead) ? curLead : set[0] ?? null;
+      techMsg = to ? ` · assigned to ${team.find((m) => m.user_id === to)?.full_name ?? "technician"}` : " · unassigned";
+    }
+    if (start.getTime() === oldStart.getTime() && end.getTime() === oldEnd.getTime() && !techIds) return;
+    const who = v.customer_name || v.number;
+    saveVisit(v, start, end, techIds, lead, s.kind === "resize" ? `${who}: now ${fmtTime(start)} – ${fmtTime(end)}` : `${who} moved to ${fmtDayShort(start)}, ${fmtTime(start)}${techMsg}`);
+  }
+
+  // Los escuchas de la ventana son fijos y siempre llaman a la versión más nueva (sin datos viejos)
+  const impl = useRef({ move: moveImpl, finish: finishImpl, activate });
+  impl.current = { move: moveImpl, finish: finishImpl, activate };
+  const listeners = useRef({
+    move: (e: PointerEvent) => impl.current.move(e),
+    up: (e: PointerEvent) => impl.current.finish(e, false),
+    cancel: (e: PointerEvent) => impl.current.finish(e, true),
+    touch: (e: TouchEvent) => { if (drag.current?.active) e.preventDefault(); },
+  });
+
+  function begin(e: React.PointerEvent, s: Omit<DragState, "pointerId" | "touch" | "x0" | "y0" | "lastX" | "lastY" | "active" | "scrolled">) {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (e.pointerType === "mouse") e.preventDefault();
+    const touch = e.pointerType !== "mouse";
+    drag.current = { ...s, pointerId: e.pointerId, touch, x0: e.clientX, y0: e.clientY, lastX: e.clientX, lastY: e.clientY, active: false, scrolled: false };
+    const l = listeners.current;
+    window.addEventListener("pointermove", l.move);
+    window.addEventListener("pointerup", l.up);
+    window.addEventListener("pointercancel", l.cancel);
+    if (touch) {
+      window.addEventListener("touchmove", l.touch, { passive: false });
+      // Con el dedo: mantener presionado un momento para agarrar la barra
+      if (s.kind !== "create" && !s.locked) drag.current.timer = setTimeout(() => impl.current.activate(), 280);
+    }
+  }
+
+  const handlers: Handlers = {
+    draggingId,
+    onVisitDown: (e, v, col, mode) => {
+      const vs = new Date(v.starts_at), ve = new Date(v.ends_at);
+      const startMin = sameDay(vs, col.day) ? minutesOf(vs) : 0;
+      const hit = apiRef.current?.hit(e.clientX, e.clientY);
+      begin(e, {
+        kind: mode, el: e.currentTarget as HTMLElement, visit: v, col, locked: v.visit_status === "completed" || v.visit_status === "cancelled",
+        offsetMin: hit?.minute != null ? hit.minute - startMin : 0, durMin: Math.max(slot, Math.round((ve.getTime() - vs.getTime()) / 60000)), startMin,
+        color: barColor(v), label: v.customer_name || v.number,
+      });
+    },
+    onEmptyDown: (e, col, minute) => {
+      begin(e, { kind: "create", col, offsetMin: 0, durMin: settings.default_duration_min, startMin: minute ?? workStart, color: "#0f766e", label: "New job" });
+    },
+    onVisitHover: (v, el) => {
+      if (drag.current?.active) return;
+      clearTimeout(hoverT.current); clearTimeout(hideT.current);
+      if (v && el) hoverT.current = setTimeout(() => setPop((p) => (p?.pinned ? p : { v, rect: el.getBoundingClientRect(), pinned: false })), 380);
+      else hideT.current = setTimeout(() => setPop((p) => (p?.pinned ? p : null)), 200);
+    },
+  };
+
+  function onTrayDown(e: React.PointerEvent, j: JobRow) {
+    begin(e, {
+      kind: "tray", job: j, offsetMin: 15, durMin: (j.job_type_id && typeDur.get(j.job_type_id)) || settings.default_duration_min, startMin: 0,
+      color: j.type_color ?? "#0f766e", label: j.customer_name || j.number,
+    });
+  }
+
+  // Cerrar la tarjeta fija al tocar afuera · Esc cancela
+  useEffect(() => {
+    if (!pop?.pinned) return;
+    const close = () => setPop(null);
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setPop(null); };
+    window.addEventListener("pointerdown", close);
+    window.addEventListener("keydown", esc);
+    window.addEventListener("resize", close);
+    return () => { window.removeEventListener("pointerdown", close); window.removeEventListener("keydown", esc); window.removeEventListener("resize", close); };
+  }, [pop?.pinned]);
+
+  const toggleTray = () => setTrayOpen((o) => { try { localStorage.setItem(TRAY_KEY, o ? "0" : "1"); } catch { /* */ } return !o; });
+  const trayCount = tray.length;
+  const holdCount = tray.filter((j) => j.status === "on_hold").length;
+  const scrollTo = days.some((d) => sameDay(d, now)) ? Math.max(visStart, minutesOf(now) - 90) : Math.max(visStart, workStart - 30);
+
+  return (
+    <div className="flex h-[calc(100dvh-4rem)] flex-col bg-white">
+      {/* Barra de herramientas */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-2.5 lg:px-5">
+        <div className="flex items-center gap-1.5">
+          <button type="button" onClick={() => setAnchor(dayStart(new Date()))}
+            className="h-9 rounded-lg border border-slate-200 px-3 text-[13.5px] font-semibold text-slate-700 transition-colors hover:border-[#14a39a] hover:bg-[#f3fbf8]">Today</button>
+          {([-1, 1] as const).map((d) => (
+            <button key={d} type="button" aria-label={d < 0 ? "Previous" : "Next"} onClick={() => setAnchor((a) => shiftAnchor(view, a, d))}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800">
+              <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d < 0 ? "m12 5-5 5 5 5" : "m8 5 5 5-5 5"} /></svg>
+            </button>
+          ))}
+          <h1 className="ml-1 whitespace-nowrap text-[17px] font-semibold tracking-tight text-[#0b1f3a] lg:text-[19px]">{rangeLabel(view, anchor, settings.week_starts_on)}</h1>
+          {loading && <span className="ml-1 h-4 w-4 animate-spin rounded-full border-2 border-[#14a39a] border-t-transparent" aria-label="Loading" />}
+        </div>
+
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <StatusFilter value={statusF} onChange={setStatusF} counts={counts} />
+          <TechFilter team={techs} value={techF} onChange={setTechF} />
+          {types.length > 0 && (
+            <SimpleSelect value={typeF} onChange={setTypeF} options={[{ value: "", label: "All job types" }, ...types.filter((t) => t.is_active).map((t) => ({ value: t.id, label: t.name, color: t.color }))]} />
+          )}
+          <div className="flex overflow-x-auto rounded-lg bg-slate-100 p-0.5" role="tablist" aria-label="Calendar view">
+            {VIEWS.map((v) => (
+              <button key={v.id} type="button" role="tab" aria-selected={view === v.id} onClick={() => setView(v.id)}
+                className={`whitespace-nowrap rounded-md px-2.5 py-1.5 text-[12.5px] font-semibold transition-all duration-150 ${view === v.id ? "bg-white text-[#0f766e] shadow-sm" : "text-slate-500 hover:text-[#0b1f3a]"}`}>{v.label}</button>
+            ))}
+          </div>
+          <button type="button" onClick={toggleTray} aria-pressed={trayOpen}
+            className={`relative flex h-9 items-center gap-1.5 rounded-lg border px-3 text-[13px] font-semibold transition-colors ${trayOpen ? "border-[#0f766e] bg-[#e9f7f4] text-[#0f766e]" : "border-slate-200 text-slate-700 hover:border-[#14a39a]"}`}>
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5h16v14H4zM15 5v14" /></svg>
+            <span className="hidden sm:inline">To schedule</span>
+            {trayCount > 0 && <span className={`rounded-full px-1.5 text-[11px] text-white ${holdCount ? "bg-[#e11d48]" : "bg-[#0f766e]"}`}>{trayCount}</span>}
+          </button>
+          <Link prefetch={false} href="/dashboard/jobs/new"
+            className="group/n inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#0f766e] px-3.5 text-[14px] font-semibold text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59]">
+            <svg viewBox="0 0 20 20" className="h-4 w-4 transition-transform duration-200 group-hover/n:rotate-90" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>
+            New job
+          </Link>
+        </div>
+      </div>
+
+      <div className="relative flex min-h-0 flex-1">
+        <div className="min-w-0 flex-1">
+          {view === "month" ? (
+            <MonthGrid days={days} month={anchor.getMonth()} visits={shown} preview={preview} handlers={handlers} apiRef={apiRef} now={now}
+              onOpenDay={(d) => { setAnchor(d); setView("day"); }} />
+          ) : (
+            <TimeGrid cols={cols} visits={shown} visStart={visStart} visEnd={visEnd} workStart={workStart} workEnd={workEnd} slot={slot}
+              preview={preview} handlers={handlers} apiRef={apiRef} now={now} dispatch={view === "dispatch"} scrollTo={scrollTo} />
+          )}
+          {!loading && visits.length === 0 && view !== "month" && (
+            <div className="pointer-events-none absolute left-1/2 top-24 -translate-x-1/2 rounded-full bg-white/90 px-4 py-2 text-[13px] text-slate-500 shadow-sm ring-1 ring-slate-200">
+              No jobs here yet. Click or drag on an empty time to create one.
+            </div>
+          )}
+        </div>
+
+        {/* Bandeja: panel a la derecha en computadora; pantalla encima en celular */}
+        {trayOpen && (
+          <>
+            <button type="button" aria-label="Close panel" onClick={toggleTray} className="fixed inset-0 z-30 bg-slate-900/25 lg:hidden" />
+            <aside className="fixed inset-y-0 right-0 z-40 w-[86%] max-w-[22rem] shadow-2xl animate-[bp-in-left_0.2s_ease-out] lg:static lg:z-auto lg:w-72 lg:max-w-none lg:border-l lg:border-slate-200 lg:shadow-none lg:animate-none">
+              <JobTray jobs={tray} trayRef={trayRef} draggingId={draggingId} dropActive={trayDrop} onDown={onTrayDown} onClose={toggleTray} />
+            </aside>
+          </>
+        )}
+      </div>
+
+      {pop && (
+        <VisitPopover v={pop.v} rect={pop.rect} pinned={pop.pinned} canSeeMoney={canSeeMoney}
+          onClose={() => setPop(null)} onUnschedule={unschedule}
+          onEnter={() => { clearTimeout(hideT.current); }}
+          onLeave={() => { if (!pop.pinned) hideT.current = setTimeout(() => setPop((p) => (p?.pinned ? p : null)), 200); }} />
+      )}
+
+      {toast && (
+        <div role="status" className={`fixed bottom-5 left-1/2 z-[95] max-w-[92vw] -translate-x-1/2 rounded-xl px-4 py-2.5 text-[13.5px] font-medium shadow-[0_14px_36px_rgba(15,40,60,0.25)] animate-[bp-pop-in_0.2s_ease-out] ${toast.tone === "error" ? "bg-[#be123c] text-white" : "bg-[#0b1f3a] text-white"}`}>
+          {toast.msg}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------- Filtros (Headless UI) ----------
+const btn = "flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white pl-3 pr-2 text-[13px] font-medium text-slate-700 transition-colors hover:border-[#14a39a] focus:outline-none data-[open]:border-[#0f766e] data-[open]:ring-4 data-[open]:ring-[#14a39a]/15";
+
+function StatusFilter({ value, onChange, counts }: { value: "all" | JobStatus; onChange: (v: "all" | JobStatus) => void; counts: Map<string, number> }) {
+  const opts: ("all" | JobStatus)[] = ["all", ...STATUS_ORDER.filter((s) => s !== "unscheduled")];
+  return (
+    <Listbox value={value} onChange={onChange}>
+      <ListboxButton className={btn} aria-label="Filter by status">
+        {value !== "all" && <span className={`h-2 w-2 rounded-full ${STATUS_META[value].dot}`} />}
+        <span className="whitespace-nowrap">{value === "all" ? "All statuses" : STATUS_META[value].label}</span>
+        <span className="rounded-full bg-slate-100 px-1.5 text-[11px] text-slate-500">{counts.get(value) ?? 0}</span>
+        <span className="text-slate-400"><Chevron /></span>
+      </ListboxButton>
+      <ListboxOptions anchor="bottom end" transition className={`${panelClass} w-56`}>
+        {opts.map((o) => (
+          <ListboxOption key={o} value={o} className={optionClass}>
+            <span className="flex items-center gap-2">
+              {o === "all" ? <span className="h-2 w-2 rounded-full bg-slate-300" /> : <span className={`h-2 w-2 rounded-full ${STATUS_META[o].dot}`} />}
+              {o === "all" ? "All statuses" : STATUS_META[o].label}
+            </span>
+            <span className="flex items-center gap-2"><span className="text-[12px] text-slate-400">{counts.get(o) ?? 0}</span><Check /></span>
+          </ListboxOption>
+        ))}
+      </ListboxOptions>
+    </Listbox>
+  );
+}
+
+function TechFilter({ team, value, onChange }: { team: TeamMember[]; value: string[]; onChange: (v: string[]) => void }) {
+  const label = !value.length ? "All technicians" : value.length === 1 ? (value[0] === UNASSIGNED ? "Unassigned" : team.find((m) => m.user_id === value[0])?.full_name ?? "1 technician") : `${value.length} technicians`;
+  return (
+    <Listbox value={value} onChange={onChange} multiple>
+      <ListboxButton className={btn} aria-label="Filter by technician">
+        {value.length === 1 && value[0] !== UNASSIGNED && team.find((m) => m.user_id === value[0]) && <TechDot t={team.find((m) => m.user_id === value[0])!} size={18} ring={false} />}
+        <span className="max-w-[9rem] truncate whitespace-nowrap">{label}</span>
+        <span className="text-slate-400"><Chevron /></span>
+      </ListboxButton>
+      <ListboxOptions anchor="bottom end" transition className={`${panelClass} w-64`}>
+        {team.map((m) => (
+          <ListboxOption key={m.user_id} value={m.user_id} className={optionClass}>
+            <span className="flex min-w-0 items-center gap-2"><TechDot t={m} size={22} ring={false} /><span className="truncate">{m.full_name}</span></span>
+            <Check />
+          </ListboxOption>
+        ))}
+        <ListboxOption value={UNASSIGNED} className={`${optionClass} border-t border-slate-100`}>
+          <span className="flex items-center gap-2 text-slate-500"><span className="h-[22px] w-[22px] rounded-full border border-dashed border-slate-300" />Unassigned</span>
+          <Check />
+        </ListboxOption>
+        {value.length > 0 && (
+          <button type="button" onClick={() => onChange([])} className="w-full border-t border-slate-100 px-4 py-2 text-left text-[13px] font-semibold text-[#0f766e] hover:bg-[#f3fbf8]">Show everyone</button>
+        )}
+      </ListboxOptions>
+    </Listbox>
+  );
+}
+
+function SimpleSelect({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: { value: string; label: string; color?: string }[] }) {
+  const cur = options.find((o) => o.value === value);
+  return (
+    <Listbox value={value} onChange={onChange}>
+      <ListboxButton className={btn}>
+        {cur?.color && <span className="h-2 w-2 rounded-full" style={{ background: cur.color }} />}
+        <span className="max-w-[9rem] truncate whitespace-nowrap">{cur?.label}</span>
+        <span className="text-slate-400"><Chevron /></span>
+      </ListboxButton>
+      <ListboxOptions anchor="bottom end" transition className={`${panelClass} w-56`}>
+        {options.map((o) => (
+          <ListboxOption key={o.value} value={o.value} className={optionClass}>
+            <span className="flex items-center gap-2">{o.color ? <span className="h-2 w-2 rounded-full" style={{ background: o.color }} /> : <span className="h-2 w-2" />}{o.label}</span>
+            <Check />
+          </ListboxOption>
+        ))}
+      </ListboxOptions>
+    </Listbox>
+  );
+}

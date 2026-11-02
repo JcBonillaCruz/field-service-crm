@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FinanceArt, InventoryArt, QrArt } from "@/components/AppIcons";
+import { FinanceArt, InventoryArt, JobsArt, QrArt } from "@/components/AppIcons";
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { Role } from "@/lib/types";
 
@@ -11,7 +11,7 @@ import { Role } from "@/lib/types";
 //   · QR Studio: códigos QR con tu marca
 //   · Inventory: productos por código de barras, bodega y vans
 // Cuando salga Jobs (trabajos/seguimiento), se agrega aquí como app nueva.
-type App = { id: "finance" | "qr" | "inventory"; label: string; href: string; icon: string; tone: [string, string, string]; hint: string; parts: string[] };
+type App = { id: "finance" | "qr" | "inventory" | "jobs"; label: string; href: string; icon: string; tone: [string, string, string]; hint: string; parts: string[] };
 export const APPS: App[] = [
   { id: "finance", label: "Finances", href: "/dashboard", icon: "M12 2.5v19M16.6 6.6c-.6-1.6-2.4-2.6-4.6-2.6-2.6 0-4.6 1.3-4.6 3.4 0 4.8 9.4 2.5 9.4 7.4 0 2.1-2.1 3.5-4.8 3.5-2.4 0-4.4-1.1-5-2.9",
     tone: ["#e6f6f2", "#c9ede3", "#0f766e"], hint: "Sales, customers and your money", parts: ["Customers", "Quotes", "Invoices", "Catalog", "Money In", "Expenses"] },
@@ -19,22 +19,24 @@ export const APPS: App[] = [
     tone: ["#eef2ff", "#dfe4ff", "#4f46e5"], hint: "Branded QR codes for vans, flyers and reviews", parts: ["Website", "Reviews", "WhatsApp", "Wi-Fi"] },
   { id: "inventory", label: "Inventory", href: "/dashboard/inventory", icon: "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9",
     tone: ["#fff7e6", "#fde7c2", "#d97706"], hint: "Parts by barcode, per warehouse and per van", parts: ["Items", "Scan", "Vans", "Alerts"] },
+  { id: "jobs", label: "Jobs", href: "/dashboard/jobs", icon: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4",
+    tone: ["#eef4ff", "#dbe7ff", "#2563eb"], hint: "Schedule, dispatch and your technicians in the field", parts: ["Schedule", "Dispatch", "Technicians", "Timesheets"] },
 ];
 
 export function AppsGrid({ role, onPick, layout = "grid" }: { role?: Role | null; onPick?: () => void; layout?: "grid" | "wide" | "stack" }) {
   const stack = layout === "stack";
   const path = usePathname() || "";
-  const current = path.startsWith("/dashboard/tools/qr") ? "qr" : path.startsWith("/dashboard/inventory") ? "inventory" : "finance";
+  const current = path.startsWith("/dashboard/tools/qr") ? "qr" : path.startsWith("/dashboard/inventory") ? "inventory" : path.startsWith("/dashboard/jobs") ? "jobs" : "finance";
   return (
     <div className={`grid ${stack ? "gap-2" : "gap-3"} ${layout === "wide" ? "grid-cols-2" : stack ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"}`}>
       {/* El técnico solo ve Inventory (y Jobs cuando salga): nada de finanzas ni QR */}
-      {APPS.filter((a) => role !== "technician" || a.id === "inventory").map((a, i) => {
+      {APPS.filter((a) => role !== "technician" || a.id === "inventory" || a.id === "jobs").map((a, i) => {
         const on = current === a.id;
         return (
           <Link prefetch={false} key={a.id} href={a.href} onClick={() => onPick?.()} style={{ animationDelay: `${i * 40}ms` }}
             className={`group/app flex items-start ${stack ? "gap-2.5 p-2.5" : "gap-3.5 p-4"} rounded-2xl border text-left transition-all duration-200 animate-[bp-fade_0.35s_ease-out_both] hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(15,40,60,0.10)] active:scale-[0.98] ${on ? "border-[#0f766e] bg-[#f3fbf8]" : "border-slate-200 bg-white hover:border-[#14a39a]"}`}>
             <span className="flex shrink-0 items-center justify-center transition-transform duration-300 group-hover/app:-rotate-3 group-hover/app:scale-105">
-              {a.id === "finance" ? <FinanceArt size={stack ? 40 : 56} /> : a.id === "inventory" ? <InventoryArt size={stack ? 40 : 56} /> : <QrArt size={stack ? 40 : 56} />}
+              {a.id === "finance" ? <FinanceArt size={stack ? 40 : 56} /> : a.id === "inventory" ? <InventoryArt size={stack ? 40 : 56} /> : a.id === "jobs" ? <JobsArt size={stack ? 40 : 56} /> : <QrArt size={stack ? 40 : 56} />}
             </span>
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-2 text-[15px] font-semibold text-[#0b1f3a]">{a.label}{on && <span className="rounded-full bg-[#0f766e] px-2 py-0.5 text-[10px] font-semibold text-white">Open</span>}</span>

@@ -13,7 +13,7 @@ import Avatar from "@/components/Avatar";
 import NotificationsProvider from "@/components/NotificationsProvider";
 import { AppsGrid } from "@/components/AppsMenu";
 import { useInstallApp } from "@/components/InstallPrompt";
-import { FinanceArt, InventoryArt, QrArt } from "@/components/AppIcons";
+import { FinanceArt, InventoryArt, JobsArt, QrArt } from "@/components/AppIcons";
 import { canManageSales } from "@/lib/sales";
 import { CompanySummary, CurrentUser, Role } from "@/lib/types";
 
@@ -33,9 +33,9 @@ type NavItem = {
 //   · Finances: clientes, ventas, catálogo y dinero (todo lo que hay hoy)
 //   · QR Studio: su propio menú
 // Cuando hagamos Trabajos/Seguimiento o Inventario, cada uno será otra app con su menú.
-export type AppId = "finance" | "qr" | "inventory";
+export type AppId = "finance" | "qr" | "inventory" | "jobs";
 export const appOf = (path: string): AppId =>
-  path.startsWith("/dashboard/tools/qr") ? "qr" : path.startsWith("/dashboard/inventory") ? "inventory" : "finance";
+  path.startsWith("/dashboard/tools/qr") ? "qr" : path.startsWith("/dashboard/inventory") ? "inventory" : path.startsWith("/dashboard/jobs") ? "jobs" : "finance";
 
 const SETTINGS: NavItem = { label: "Settings", href: "/dashboard/settings", icon: "M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1M15 5v4M9 10v4M17 15v4", roles: ["owner", "manager"] };
 
@@ -88,11 +88,20 @@ const INVENTORY_NAV: NavItem[] = [
   { label: "Team", href: "/dashboard/team", roles: ["owner", "manager"], icon: "M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6" },
   { label: "Settings", href: "/dashboard/inventory/settings", roles: MANAGE, icon: "M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1M15 5v4M9 10v4M17 15v4" },
 ];
-const NAV_BY_APP: Record<AppId, NavItem[]> = { finance: FINANCE_NAV, qr: QR_NAV, inventory: INVENTORY_NAV };
+// Jobs: calendario (Schedule) para la oficina; el técnico ve solo sus trabajos
+const JOBS_NAV: NavItem[] = [
+  { label: "Schedule", href: "/dashboard/jobs/schedule", addHref: "/dashboard/jobs/new", addLabel: "Job", roles: MANAGE, icon: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M8 14h3M13 14h3M8 17h3" },
+  { label: "Jobs", roles: MANAGE, icon: "M9 4h6v3H9zM7 5.5H5.5v15h13v-15H17M8.5 11h7M8.5 14.5h7M8.5 18h4" },
+  { label: "My Jobs", href: "/dashboard/jobs/mine", roles: ["technician"], icon: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M8 14h3M8 17h6" },
+  { label: "Team", href: "/dashboard/team", roles: ["owner", "manager"], icon: "M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6" },
+  { label: "Settings", href: "/dashboard/jobs/settings", roles: ["owner", "manager"], icon: "M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1M15 5v4M9 10v4M17 15v4" },
+];
+const NAV_BY_APP: Record<AppId, NavItem[]> = { finance: FINANCE_NAV, qr: QR_NAV, inventory: INVENTORY_NAV, jobs: JOBS_NAV };
 const APP_TITLE: Record<AppId, { label: string; icon: string; color: string }> = {
   finance: { label: "Finances", icon: "M12 2.5v19M16.6 6.6c-.6-1.6-2.4-2.6-4.6-2.6-2.6 0-4.6 1.3-4.6 3.4 0 4.8 9.4 2.5 9.4 7.4 0 2.1-2.1 3.5-4.8 3.5-2.4 0-4.4-1.1-5-2.9", color: "#0f766e" },
   qr: { label: "QR Studio", icon: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM14 18h2v2h-2zM18 14h2v2h-2z", color: "#4f46e5" },
   inventory: { label: "Inventory", icon: "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9", color: "#d97706" },
+  jobs: { label: "Jobs", icon: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4", color: "#2563eb" },
 };
 
 function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => void }) {
@@ -184,7 +193,7 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
           Computadora: solo el ícono (allá se cambia con los 9 puntos de arriba). */}
       <div className="mb-2 flex items-center gap-2 px-2">
         <span title={APP_TITLE[app].label} aria-label={APP_TITLE[app].label} className="flex">
-          {app === "finance" ? <FinanceArt size={mobile ? 40 : 34} /> : app === "inventory" ? <InventoryArt size={mobile ? 40 : 34} /> : <QrArt size={mobile ? 40 : 34} />}
+          {app === "finance" ? <FinanceArt size={mobile ? 40 : 34} /> : app === "inventory" ? <InventoryArt size={mobile ? 40 : 34} /> : app === "jobs" ? <JobsArt size={mobile ? 40 : 34} /> : <QrArt size={mobile ? 40 : 34} />}
         </span>
         {mobile && (
           <button type="button" onClick={() => setAppsOpen(true)}
@@ -266,7 +275,7 @@ export default function AppShell({
   // Logo → inicio de la app donde estás (Finances, Inventory o QR Studio). El técnico va a su van.
   const appNow = appOf(pathname || "");
   const homeHref = role === "technician" ? "/dashboard/inventory/van"
-    : appNow === "inventory" ? "/dashboard/inventory" : appNow === "qr" ? "/dashboard/tools/qr" : "/dashboard";
+    : appNow === "inventory" ? "/dashboard/inventory" : appNow === "jobs" ? "/dashboard/jobs" : appNow === "qr" ? "/dashboard/tools/qr" : "/dashboard";
 
   // Presencia: cada minuto avisa que la app está abierta y si la persona la está usando (para Team: verde / naranja / rojo)
   useEffect(() => {

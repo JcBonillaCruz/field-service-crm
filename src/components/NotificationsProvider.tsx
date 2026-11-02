@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Digest, Notice, StockAlertRow, buildNotices, stockNotices } from "@/lib/notifications";
+import { Digest, JobAlertRow, Notice, StockAlertRow, buildNotices, jobNotices, stockNotices } from "@/lib/notifications";
 
 // =====================================================================
 // UN solo vigilante de avisos para toda la app (antes había dos campanitas
@@ -59,16 +59,20 @@ export default function NotificationsProvider({ companyId, userId, enabled, chil
     busy.current = true;
     try {
       const sb = createClient();
-      const [{ data, error }, alerts] = await Promise.all([
+      const [{ data, error }, alerts, jobAlerts] = await Promise.all([
         sb.rpc("get_company_notifications_digest", { p_company_id: companyId }),
         // Inventario: stock bajo (si la tabla aún no existe, simplemente no trae nada)
         sb.from("inventory_alerts").select("id, qty, min_qty, created_at, item_id, items ( name ), inventory_locations ( name )")
+          .eq("company_id", companyId).is("resolved_at", null).order("created_at", { ascending: false }).limit(20),
+        // Jobs: quedó a medias / Tune-Up con alertas (si la tabla aún no existe, no trae nada)
+        sb.from("job_alerts").select("id, job_id, kind, title, body, created_at")
           .eq("company_id", companyId).is("resolved_at", null).order("created_at", { ascending: false }).limit(20),
       ]);
       if (error || !data) return;
       const d = data as Digest;
       const stockList = alerts.error ? [] : stockNotices((alerts.data ?? []) as unknown as StockAlertRow[], d.reads ?? []);
-      const list = [...buildNotices(d), ...stockList].slice(0, 50);
+      const jobList = jobAlerts.error ? [] : jobNotices((jobAlerts.data ?? []) as JobAlertRow[], d.reads ?? []);
+      const list = [...buildNotices(d), ...jobList, ...stockList].slice(0, 50);
       // Algo cambió (el cliente abrió, aceptó, pagaste…): refresca la pantalla, menos en formularios
       if (version.current !== null && d.version && d.version !== version.current && !/\/(new|edit)(\/|$)/.test(window.location.pathname)) router.refresh();
       if (d.version) version.current = d.version;

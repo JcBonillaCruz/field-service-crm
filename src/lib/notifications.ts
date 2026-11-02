@@ -1,6 +1,6 @@
 import { daysBetween, money, today } from "@/lib/sales";
 
-export type NoticeKind = "overdue" | "due_today" | "due_soon" | "low_stock" | "activity";
+export type NoticeKind = "overdue" | "due_today" | "due_soon" | "job" | "low_stock" | "activity";
 export type Notice = { id: string; key: string; kind: NoticeKind; title: string; body: string; href: string; when: string };
 
 // Lo que devuelve la función get_company_notifications_digest (1 sola llamada a la base de datos)
@@ -33,7 +33,7 @@ export function buildNotices(d: Digest): Notice[] {
     items.push({ id, key: id, kind: "activity", title: a.message, body: a.detail ?? (a.entity === "quote" ? "Quote" : "Invoice"),
       href: `/dashboard/${a.entity === "quote" ? "quotes" : "invoices"}/${a.entity_id}`, when: a.created_at });
   }
-  const rank: Record<NoticeKind, number> = { overdue: 0, due_today: 1, due_soon: 2, low_stock: 3, activity: 4 };
+  const rank: Record<NoticeKind, number> = { overdue: 0, due_today: 1, due_soon: 2, job: 3, low_stock: 4, activity: 5 };
   items.sort((a, b) => rank[a.kind] - rank[b.kind] || (a.kind === "activity" ? b.when.localeCompare(a.when) : a.when.localeCompare(b.when)));
   const read = new Set(d.reads ?? []);
   return items.filter((n) => !read.has(n.key)).slice(0, 40);
@@ -47,6 +47,18 @@ export function stockNotices(rows: StockAlertRow[], reads: string[]): Notice[] {
     const id = `ls-${r.id}`;
     const n: Notice = { id, key: id, kind: "low_stock", title: Number(r.qty) <= 0 ? `Out of stock: ${r.items?.name ?? "item"}` : `Low stock: ${r.items?.name ?? "item"}`,
       body: `${r.inventory_locations?.name ?? "Location"} · ${Number(r.qty)} left (alert at ${Number(r.min_qty)})`, href: `/dashboard/inventory/${r.item_id}`, when: r.created_at };
+    return n;
+  }).filter((n) => !read.has(n.key));
+}
+
+// Jobs: trabajos que quedaron a medias (re-agendar) y Tune-Ups con lecturas fuera de rango (tabla job_alerts)
+export type JobAlertRow = { id: string; job_id: string; kind: string; title: string; body: string | null; created_at: string };
+export function jobNotices(rows: JobAlertRow[], reads: string[]): Notice[] {
+  const read = new Set(reads);
+  return rows.map((r) => {
+    const id = `ja-${r.id}`;
+    const n: Notice = { id, key: id, kind: "job", title: r.title, body: r.body ?? (r.kind === "needs_followup" ? "Book the next visit" : "Job alert"),
+      href: r.kind === "needs_followup" ? "/dashboard/jobs/schedule" : `/dashboard/jobs/${r.job_id}/edit`, when: r.created_at };
     return n;
   }).filter((n) => !read.has(n.key));
 }

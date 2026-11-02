@@ -6,7 +6,7 @@ import { useNotifications } from "@/components/NotificationsProvider";
 import type { NoticeKind } from "@/lib/notifications";
 
 const TONE: Record<NoticeKind, string> = {
-  overdue: "bg-[#ffe8ee] text-[#be123c]", due_today: "bg-[#fff0e6] text-[#c2410c]", due_soon: "bg-[#fff6e0] text-[#b45309]", low_stock: "bg-[#fff4ec] text-[#ea580c]", activity: "bg-[#e7f7ec] text-[#15803d]",
+  overdue: "bg-[#ffe8ee] text-[#be123c]", due_today: "bg-[#fff0e6] text-[#c2410c]", due_soon: "bg-[#fff6e0] text-[#b45309]", job: "bg-[#eef4ff] text-[#2563eb]", low_stock: "bg-[#fff4ec] text-[#ea580c]", activity: "bg-[#e7f7ec] text-[#15803d]",
 };
 
 // Campanita: solo muestra lo NO leído. Los datos vienen de un único proveedor compartido
@@ -56,7 +56,7 @@ export default function NotificationsBell() {
                       className="flex gap-3 px-4 py-3 transition-colors hover:bg-[#f6fbfa]">
                       <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${TONE[n.kind]}`}>
                         <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                          {n.kind === "activity" ? <path d="M5 12.5 9.5 17 19 7" /> : n.kind === "low_stock" ? <path d="M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9" /> : <path d="M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" />}
+                          {n.kind === "activity" ? <path d="M5 12.5 9.5 17 19 7" /> : n.kind === "low_stock" ? <path d="M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9" /> : n.kind === "job" ? <path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M10 14h4" /> : <path d="M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" />}
                         </svg>
                       </span>
                       <span className="min-w-0 flex-1">
