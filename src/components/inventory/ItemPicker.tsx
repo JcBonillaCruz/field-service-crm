@@ -8,16 +8,18 @@ import BarcodeScanner from "@/components/catalog/BarcodeScanner";
 import { InvItem, qtyFmt } from "@/lib/inventory";
 
 // Agregar un producto a la lista: buscar por nombre o SKU, o escanear su código
-export default function ItemPicker({ items, onPick, available, placeholder = "Add an item: search by name or SKU", onNotFound }: {
+export default function ItemPicker({ items, onPick, available, placeholder = "Add an item: search by name or SKU", onNotFound, barcodes = {} }: {
   items: InvItem[]; onPick: (it: InvItem) => void; available?: (id: string) => number; placeholder?: string; onNotFound?: (code: string) => void;
+  barcodes?: Record<string, string>; // códigos extra → producto
 }) {
   const [q, setQ] = useState("");
   const [scan, setScan] = useState(false);
   const t = q.trim().toLowerCase();
-  const list = (t ? items.filter((i) => `${i.name} ${i.sku ?? ""}`.toLowerCase().includes(t)) : items).slice(0, 40);
+  const list = (t ? items.filter((i) => `${i.name} ${i.sku ?? ""}`.toLowerCase().includes(t) || barcodes[t] === i.id) : items).slice(0, 40);
   function scanned(code: string) {
     setScan(false);
-    const it = items.find((i) => (i.sku ?? "").trim().toLowerCase() === code.trim().toLowerCase());
+    const k = code.trim().toLowerCase();
+    const it = items.find((i) => (i.sku ?? "").trim().toLowerCase() === k) ?? items.find((i) => i.id === barcodes[k]);
     if (it) onPick(it); else onNotFound?.(code);
   }
   return (

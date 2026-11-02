@@ -13,8 +13,8 @@ import { InvItem, InvLocation, InvStock, invError, pingAlerts, qtyFmt, usd } fro
 type Result = { items: number; missing: number; extra: number; missing_cost: number };
 
 // Conteo físico: cuentas lo que de verdad hay. La diferencia queda firmada y, si es una van, a nombre de su técnico.
-export default function CountForm({ companyId, items, stock, locations, initialLocation }: {
-  companyId: string; items: InvItem[]; stock: InvStock[]; locations: InvLocation[]; initialLocation?: string;
+export default function CountForm({ companyId, items, stock, locations, initialLocation, barcodes = {} }: {
+  barcodes?: Record<string, string>; companyId: string; items: InvItem[]; stock: InvStock[]; locations: InvLocation[]; initialLocation?: string;
 }) {
   const router = useRouter();
   const [loc, setLoc] = useState(initialLocation && locations.some((l) => l.id === initialLocation) ? initialLocation : locations[0]?.id ?? "");
@@ -96,7 +96,7 @@ export default function CountForm({ companyId, items, stock, locations, initialL
         <div className="px-5 py-7 sm:px-8">
           <SectionTitle>What you counted</SectionTitle>
           <div className="max-w-[820px] space-y-4">
-            <ItemPicker items={items.filter((i) => !list.some((x) => x.id === i.id))} onPick={(it) => setExtra((l) => [...l, it])} placeholder="Found something not listed? Search or scan it"
+            <ItemPicker barcodes={barcodes} items={items.filter((i) => !list.some((x) => x.id === i.id))} onPick={(it) => setExtra((l) => [...l, it])} placeholder="Found something not listed? Search or scan it"
               onNotFound={(code) => setError(`Code ${code} isn't in your inventory.`)} />
             {list.length === 0 ? (
               <p className="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">This location has no stock yet.</p>

@@ -11,6 +11,6 @@ export default async function NewCountPage({ searchParams }: { searchParams: { l
   const { supabase, current } = await getSession();
   if (!current) redirect("/dashboard");
   if (!canManageInventory(current.role)) return <NoAccess />;
-  const { items, stock, locations } = await loadInventory(supabase, current.id);
-  return <CountForm companyId={current.id} items={items} stock={stock} locations={locations} initialLocation={searchParams.location} />;
+  const { items, stock, locations, barcodes } = await loadInventory(supabase, current.id);
+  return <CountForm barcodes={barcodes} companyId={current.id} items={items} stock={stock} locations={locations} initialLocation={searchParams.location} />;
 }

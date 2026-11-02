@@ -20,7 +20,7 @@ import {
 } from "@/lib/inventory";
 
 type Props = {
-  companyId: string; needsSql: boolean; children: React.ReactNode;
+  companyId: string; needsSql: boolean; children: React.ReactNode; barcodes?: Record<string, string>;
   items: InvItem[]; stock: InvStock[]; locations: InvLocation[]; categories: InvCategory[]; photos: InvPhoto[];
 };
 type StatusFilter = "all" | StockStatus;
@@ -53,7 +53,7 @@ const plus = (
 //   · Sin producto abierto → lista completa (KPIs, filtros, tabla).
 //   · Producto abierto → 3 paneles: menú lateral | lista compacta | ficha.
 //   · Nuevo / Editar / Scan / Settings → solo el menú lateral y esa pantalla.
-export default function InventoryWorkspace({ companyId, needsSql, items, stock, locations, categories, photos, children }: Props) {
+export default function InventoryWorkspace({ companyId, needsSql, items, stock, locations, categories, photos, children, barcodes = {} }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const [q, setQ] = useState("");
@@ -111,9 +111,11 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
       if (status !== "all" && r.status !== status) return false;
       if (!terms.length) return true;
       const blob = `${r.name} ${r.sku ?? ""} ${r.description ?? ""}`.toLowerCase();
+      // También encuentra el producto por cualquiera de sus códigos extra
+      if (barcodes[q.trim().toLowerCase()] === r.id) return true;
       return terms.every((t) => blob.includes(t));
     });
-  }, [rows, q, cat, status]);
+  }, [rows, q, cat, status, barcodes]);
 
   useEffect(() => { if (isForm) setFilterSheet(false); }, [isForm]);
   if (isForm) return <>{children}</>;

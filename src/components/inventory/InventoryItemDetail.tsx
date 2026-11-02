@@ -11,6 +11,7 @@ import { Toast } from "@/components/sales/SalesBits";
 import QuickAdjust from "@/components/inventory/QuickAdjust";
 import Link from "next/link";
 import { BarcodeSvg, QrSvg, downloadBarcodePng } from "@/components/inventory/Barcode";
+import ExtraCodes from "@/components/inventory/ExtraCodes";
 import {
   InvCategory, InvItem, InvLocation, InvMovement, InvPhoto, InvStock, MOVE_LABEL, STATUS_META,
   invError, pingAlerts, qtyFmt, statusOf, usd,
@@ -19,7 +20,8 @@ import {
 const TABS = ["Overview", "History"];
 
 // Ficha del producto (panel derecho de la vista dividida; en celular, pantalla completa)
-export default function InventoryItemDetail({ companyId, item, stock, locations, categories, photos, justCreated = false }: {
+export default function InventoryItemDetail({ companyId, item, stock, locations, categories, photos, justCreated = false, barcodes = [], buying }: {
+  barcodes?: { id: string; code: string; label: string | null }[]; buying?: { purchase_unit: string | null; units_per_purchase: number };
   justCreated?: boolean; companyId: string; item: InvItem; stock: InvStock[]; locations: InvLocation[]; categories: InvCategory[]; photos: InvPhoto[];
 }) {
   const router = useRouter();
@@ -170,6 +172,12 @@ export default function InventoryItemDetail({ companyId, item, stock, locations,
                   <button type="button" onClick={() => downloadBarcodePng(item.sku as string, item.name)} className="rounded-lg border border-slate-200 px-3.5 py-2 text-[14px] font-medium text-slate-700 hover:border-[#14a39a] hover:text-[#0f766e]">Download image</button>
                 </div>
               </div>
+            )}
+
+            {/* Otros códigos del mismo producto (otras marcas, código de la caja) */}
+            <ExtraCodes companyId={companyId} itemId={item.id} initial={barcodes} />
+            {buying && buying.units_per_purchase > 1 && (
+              <p className="mx-5 mt-3 rounded-xl bg-slate-50 px-4 py-2.5 text-[13.5px] text-slate-600">Bought by <b>{buying.purchase_unit || "box"}</b> of <b>{buying.units_per_purchase}</b> {item.unit ?? "units"} — receiving 1 {buying.purchase_unit || "box"} adds {buying.units_per_purchase} to stock.</p>
             )}
 
             {/* Números */}

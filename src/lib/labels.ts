@@ -17,13 +17,21 @@ export const PAPERS: Paper[] = [
   { id: "roll4x6", name: "Label printer · 4 × 6 in", hint: "Thermal shipping labels · bins and boxes", kind: "roll", w: 4, h: 6 },
 ];
 
-export type Template = { id: "basic" | "qr" | "price" | "big"; name: string; text: string };
+export type TemplateId = "basic" | "detailed" | "qr" | "barcode" | "price" | "big" | "photo" | "brand" | "dual" | "compact";
+export type Template = { id: TemplateId; name: string; text: string; tag?: string };
+// 10 diseños (como inFlow): se ven en la galería con tu producto real y se puede marcar uno como favorito ★
 export const TEMPLATES: Template[] = [
   { id: "basic", name: "Basic", text: "Name, barcode and SKU" },
-  { id: "qr", name: "QR Code", text: "QR + name, SKU and price" },
+  { id: "detailed", name: "Detailed", text: "QR + name, SKU, unit and price", tag: "Recommended" },
+  { id: "qr", name: "QR Code", text: "Big QR with name and SKU" },
+  { id: "barcode", name: "Barcode only", text: "Just the barcode and SKU" },
   { id: "price", name: "Price tag", text: "Name, big price and barcode" },
-  { id: "big", name: "Bin / Shelf", text: "Big name and barcode for bins" },
+  { id: "big", name: "Bin / Shelf", text: "Big name to read from far" },
+  { id: "photo", name: "With photo", text: "Product photo, name and barcode" },
+  { id: "brand", name: "Company band", text: "Your company on top" },
+  { id: "dual", name: "QR + Barcode", text: "Both codes on one label" },
+  { id: "compact", name: "Mini", text: "Fits the smallest labels" },
 ];
 
-export type LabelItem = { id: string; name: string; sku: string; price: number; unit: string | null };
+export type LabelItem = { id: string; name: string; sku: string; price: number; unit: string | null; image_url?: string | null; category?: string | null };
 export const perPage = (p: Paper) => (p.kind === "sheet" ? (p.cols ?? 1) * (p.rows ?? 1) : 1);

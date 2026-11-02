@@ -17,11 +17,12 @@ import { InvCategory, InvItem, InvLocation, InvPhoto, InvStock, MAX_PHOTOS, comp
 type Props = {
   companyId: string; item?: InvItem; scannedSku?: string;
   locations: InvLocation[]; categories: InvCategory[]; photos?: InvPhoto[]; stock?: InvStock[];
+  buying?: { purchase_unit: string | null; units_per_purchase: number };
 };
 type Pending = { key: string; file: Blob; preview: string };
 
 // Nuevo / Editar producto de inventario: pantalla completa (solo el menú y este formulario), igual que New Item en Finances
-export default function InventoryItemForm({ companyId, item, scannedSku, locations, categories: initialCats, photos = [], stock = [] }: Props) {
+export default function InventoryItemForm({ companyId, item, scannedSku, locations, categories: initialCats, photos = [], stock = [], buying }: Props) {
   const router = useRouter();
   const back = item ? `/dashboard/inventory/${item.id}` : "/dashboard/inventory";
   const def = locations.find((l) => l.is_default) ?? locations[0];
@@ -37,6 +38,9 @@ export default function InventoryItemForm({ companyId, item, scannedSku, locatio
   const [cost, setCost] = useState(item ? String(item.cost_price || "") : "");
   const [price, setPrice] = useState(item ? String(item.selling_price || "") : "");
   const [description, setDescription] = useState(item?.description ?? "");
+  // Compra por caja (opcional): "Box" de 12 → al recibir 1 caja entran 12 al stock
+  const [buyUnit, setBuyUnit] = useState(buying?.purchase_unit ?? "");
+  const [perBuy, setPerBuy] = useState(buying && buying.units_per_purchase > 1 ? String(buying.units_per_purchase) : "");
   const [saved, setSaved] = useState<InvPhoto[]>(photos);
   const [pending, setPending] = useState<Pending[]>([]);
   const [saving, setSaving] = useState(false);
@@ -142,6 +146,10 @@ export default function InventoryItemForm({ companyId, item, scannedSku, locatio
         if (minErr) { setSaving(false); return setError(invError(minErr)); }
       }
     }
+    const per = Number(perBuy) || 1;
+    if (buyUnit.trim() || per !== (buying?.units_per_purchase ?? 1)) {
+      await supabase.from("items").update({ purchase_unit: buyUnit.trim() || null, units_per_purchase: per > 0 ? per : 1 }).eq("id", id);
+    }
     await bustCache("catalog");
     router.push(item ? `/dashboard/inventory/${id}` : `/dashboard/inventory/${id}?created=1`);
     router.refresh();
@@ -221,6 +229,13 @@ export default function InventoryItemForm({ companyId, item, scannedSku, locatio
                 <input id="inv-qty" inputMode="decimal" value={qty} placeholder="0" onChange={(e) => setQty(e.target.value.replace(/[^0-9.]/g, ""))} className={`${inputClass} tabular-nums`} />
               </FormRow>
             )}
+            <FormRow label="Buy in" htmlFor="inv-buy" width="max-w-[340px]" hint="Optional. If you buy it by the box (e.g. Box of 12), receiving 1 box adds 12 to stock.">
+              <div className="flex items-center gap-2">
+                <input id="inv-buy" value={buyUnit} onChange={(e) => setBuyUnit(e.target.value)} placeholder="Box, Case, Roll..." className={inputClass} />
+                <span className="shrink-0 text-[14px] text-slate-500">of</span>
+                <input inputMode="decimal" value={perBuy} onChange={(e) => setPerBuy(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="12" aria-label="Units per purchase unit" className={`${inputClass} w-24 tabular-nums`} />
+              </div>
+            </FormRow>
             <FormRow label="Low stock alert" htmlFor="inv-min" width="max-w-[340px]" hint="When this location has this many or fewer, the item is marked Low Stock.">
               <input id="inv-min" inputMode="decimal" value={min} placeholder="e.g. 3" onChange={(e) => setMin(e.target.value.replace(/[^0-9.]/g, ""))} className={`${inputClass} tabular-nums`} />
             </FormRow>

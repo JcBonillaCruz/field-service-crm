@@ -11,7 +11,7 @@ import { InvLocation, invError, pingAlerts, qtyFmt, usd } from "@/lib/inventory"
 
 type Found = {
   found: true;
-  item: { id: string; name: string; sku: string; unit: string | null; image_url: string | null; selling_price: number; cost_price: number | null };
+  item: { id: string; name: string; sku: string; unit: string | null; image_url: string | null; selling_price: number; cost_price: number | null; purchase_unit?: string | null; units_per_purchase?: number };
   stock: { location_id: string; name: string; kind: string; qty: number; min_qty: number }[];
 };
 type Missing = { found: false; catalog_item: { id: string; name: string; item_type: string } | null };
@@ -134,6 +134,10 @@ function FoundCard({ companyId, data, locations, onChanged }: { companyId: strin
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const it = data.item;
+  // Entrada rápida: por pieza o por caja, y costo opcional (si lo compraste con recibo) → actualiza el costo promedio
+  const per = Number(it.units_per_purchase ?? 1) || 1;
+  const [byBox, setByBox] = useState(false);
+  const [cost, setCost] = useState("");
   const total = data.stock.reduce((s, r) => s + Number(r.qty), 0);
   const at = (id: string) => Number(data.stock.find((s) => s.location_id === id)?.qty ?? 0);
   const n = Number(qty);
@@ -142,15 +146,22 @@ function FoundCard({ companyId, data, locations, onChanged }: { companyId: strin
     if (!n || n <= 0) return setMsg({ ok: false, text: "Enter a quantity." });
     if (mode === "remove" && n > at(loc)) return setMsg({ ok: false, text: `Only ${qtyFmt(at(loc))} in this location.` });
     setBusy(true);
-    const { error } = await createClient().rpc("inv_move", mode === "add"
-      ? { p_company: companyId, p_item: it.id, p_kind: "receive", p_qty: n, p_from: null, p_to: loc, p_reason: "Received (scan)" }
-      : { p_company: companyId, p_item: it.id, p_kind: "adjust", p_qty: n, p_from: loc, p_to: null, p_reason: "Removed (scan)" });
+    const units = mode === "add" && byBox ? n * per : n;
+    const unitCost = cost.trim() ? Number(cost) / (byBox ? per : 1) : null;
+    const sb = createClient();
+    let { error } = mode === "add"
+      ? await sb.rpc("inv_receive", { p_company: companyId, p_item: it.id, p_location: loc, p_qty: units, p_unit_cost: unitCost, p_note: byBox ? `${n} ${it.purchase_unit || "box"} × ${per}` : null })
+      : await sb.rpc("inv_move", { p_company: companyId, p_item: it.id, p_kind: "adjust", p_qty: n, p_from: loc, p_to: null, p_reason: "Removed (scan)" });
+    // Sin el SQL 4.5: entra igual, sin costo
+    if (error && mode === "add" && /inv_receive/.test(error.message ?? "")) {
+      ({ error } = await sb.rpc("inv_move", { p_company: companyId, p_item: it.id, p_kind: "receive", p_qty: units, p_from: null, p_to: loc, p_reason: "Received (scan)" }));
+    }
     setBusy(false);
     if (error) return setMsg({ ok: false, text: invError(error) });
     if (navigator.vibrate) navigator.vibrate(40);
     pingAlerts();
-    setMsg({ ok: true, text: `${mode === "add" ? "Added" : "Removed"} ${qtyFmt(n)} ${it.unit ?? ""}` });
-    setQty("1");
+    setMsg({ ok: true, text: `${mode === "add" ? "Added" : "Removed"} ${qtyFmt(units)} ${it.unit ?? ""}${mode === "add" && byBox ? ` (${qtyFmt(n)} ${it.purchase_unit || "box"})` : ""}` });
+    setQty("1"); setCost("");
     onChanged();
   }
 
@@ -194,6 +205,27 @@ function FoundCard({ companyId, data, locations, onChanged }: { companyId: strin
           <button type="button" onClick={() => setQty(String((n || 0) + 1))} className="h-12 w-12 shrink-0 rounded-xl border border-slate-200 text-xl text-slate-600 active:scale-95">+</button>
         </div>
         {locations.length > 1 && <SelectMenu ariaLabel="Location" value={loc} onChange={setLoc} options={locations.map((l) => ({ value: l.id, label: `${l.name} · ${qtyFmt(at(l.id))}` }))} />}
+        {mode === "add" && per > 1 && (
+          <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
+            {[false, true].map((b) => (
+              <button key={String(b)} type="button" onClick={() => setByBox(b)}
+                className={`rounded-lg py-2 text-[14px] font-medium transition-all ${byBox === b ? "bg-white text-[#0f766e] shadow-sm" : "text-slate-500"}`}>
+                {b ? `${it.purchase_unit || "Box"} of ${qtyFmt(per)}` : `Each (${it.unit || "unit"})`}
+              </button>
+            ))}
+          </div>
+        )}
+        {mode === "add" && (
+          <label className="flex items-center gap-3 text-[14px] text-slate-600">
+            <span className="shrink-0">Cost per {byBox ? (it.purchase_unit || "box").toLowerCase() : (it.unit || "unit")} <span className="text-slate-400">(optional)</span></span>
+            <span className="flex min-w-0 flex-1 items-center rounded-xl border border-slate-200 bg-slate-50 focus-within:border-[#0f766e] focus-within:bg-white">
+              <span className="pl-3 text-slate-400">$</span>
+              <input value={cost} inputMode="decimal" onChange={(e) => setCost(e.target.value.replace(/[^0-9.]/g, ""))} placeholder={it.cost_price ? String(Number(it.cost_price) * (byBox ? per : 1)) : "0.00"}
+                className="h-11 min-w-0 flex-1 bg-transparent px-2 text-[15px] tabular-nums focus:outline-none" />
+            </span>
+          </label>
+        )}
+        {mode === "add" && byBox && Number(qty) > 0 && <p className="text-[13px] text-slate-500">Adds <b>{qtyFmt(Number(qty) * per)}</b> {it.unit || "units"} to stock.</p>}
         {msg && <p role="status" className={`rounded-lg px-3 py-2 text-[14px] ${msg.ok ? "bg-[#e7f6f1] text-[#0f766e]" : "bg-red-50 text-red-700"}`}>{msg.text}</p>}
         <div className="flex gap-2">
           <button type="button" disabled={busy} onClick={apply}

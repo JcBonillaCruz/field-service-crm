@@ -11,6 +11,6 @@ export default async function NewTransferPage({ searchParams }: { searchParams: 
   const { supabase, current } = await getSession();
   if (!current) redirect("/dashboard");
   if (!canManageInventory(current.role)) return <NoAccess />;
-  const { items, stock, locations } = await loadInventory(supabase, current.id);
-  return <TransferForm companyId={current.id} items={items} stock={stock} locations={locations} initialTo={searchParams.to} initialFrom={searchParams.from} />;
+  const { items, stock, locations, barcodes } = await loadInventory(supabase, current.id);
+  return <TransferForm barcodes={barcodes} companyId={current.id} items={items} stock={stock} locations={locations} initialTo={searchParams.to} initialFrom={searchParams.from} />;
 }

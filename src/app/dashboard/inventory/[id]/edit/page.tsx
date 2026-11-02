@@ -13,5 +13,5 @@ export default async function EditInventoryItemPage({ params }: { params: { id: 
   if (!canManageInventory(current.role)) return <NoAccess />;
   const data = await loadInventoryItem(supabase, current.id, params.id);
   if (!data) notFound();
-  return <InventoryItemForm companyId={current.id} item={data.item} locations={data.locations} categories={data.categories} photos={data.photos} stock={data.stock} />;
+  return <InventoryItemForm companyId={current.id} item={data.item} locations={data.locations} categories={data.categories} photos={data.photos} stock={data.stock} buying={data.buying} />;
 }

@@ -12,8 +12,8 @@ import { InvItem, InvLocation, InvStock, invError, pingAlerts, qtyFmt } from "@/
 type Line = { item: InvItem; qty: string };
 
 // Nueva transferencia (resurtir una van): pantalla completa. Varios productos de una vez, todo o nada.
-export default function TransferForm({ companyId, items, stock, locations, initialTo, initialFrom }: {
-  companyId: string; items: InvItem[]; stock: InvStock[]; locations: InvLocation[]; initialTo?: string; initialFrom?: string;
+export default function TransferForm({ companyId, items, stock, locations, initialTo, initialFrom, barcodes = {} }: {
+  barcodes?: Record<string, string>; companyId: string; items: InvItem[]; stock: InvStock[]; locations: InvLocation[]; initialTo?: string; initialFrom?: string;
 }) {
   const router = useRouter();
   const def = locations.find((l) => l.is_default) ?? locations[0];
@@ -76,7 +76,7 @@ export default function TransferForm({ companyId, items, stock, locations, initi
                 <button type="button" onClick={addSuggested} className="rounded-lg bg-[#d97706] px-3 py-1.5 text-[13.5px] font-semibold text-white hover:bg-[#b45309]">Add suggested</button>
               </div>
             )}
-            <ItemPicker items={withStock} onPick={(it) => add(it)} available={(id) => at(id, from)}
+            <ItemPicker barcodes={barcodes} items={withStock} onPick={(it) => add(it)} available={(id) => at(id, from)}
               onNotFound={(code) => setError(`No stock with code ${code} in the source location.`)} />
             {lines.length === 0 ? (
               <p className="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">Search, scan or use the suggestions to add parts.</p>

@@ -7,18 +7,19 @@ import SelectMenu from "@/components/ui/SelectMenu";
 import { FormHeader } from "@/components/catalog/FormBits";
 import ItemPicker from "@/components/inventory/ItemPicker";
 import { BarcodeSvg, QrSvg } from "@/components/inventory/Barcode";
-import { LabelItem, PAPERS, Paper, TEMPLATES, Template, perPage } from "@/lib/labels";
+import { LabelItem, PAPERS, Paper, TEMPLATES, TemplateId, perPage } from "@/lib/labels";
 import { InvItem, usd } from "@/lib/inventory";
 
 type Line = { item: LabelItem; qty: number };
-type Opts = { template: Template["id"]; showPrice: boolean; showCompany: boolean };
+type Opts = { template: TemplateId; showPrice: boolean; showCompany: boolean };
 
 // Diseñador de etiquetas: elige plantilla y papel, cuántas de cada producto, y se imprime en hojas de stickers o en rollo
-export default function LabelDesigner({ companyName, items, initial, stock }: {
-  companyName: string; items: LabelItem[]; initial: { id: string; qty: number }[]; stock: Record<string, number>;
+export default function LabelDesigner({ companyName, items, initial, stock, barcodes = {} }: {
+  barcodes?: Record<string, string>; companyName: string; items: LabelItem[]; initial: { id: string; qty: number }[]; stock: Record<string, number>;
 }) {
   const [lines, setLines] = useState<Line[]>(() => initial.map((x) => ({ item: items.find((i) => i.id === x.id)!, qty: x.qty })).filter((l) => l.item));
-  const [template, setTemplate] = useState<Template["id"]>("basic");
+  const [template, setTemplate] = useState<TemplateId>("basic");
+  const [fav, setFav] = useState<TemplateId | null>(null);
   const [paperId, setPaperId] = useState("avery5160");
   const [start, setStart] = useState(1);
   const [showPrice, setShowPrice] = useState(true);
@@ -27,9 +28,9 @@ export default function LabelDesigner({ companyName, items, initial, stock }: {
   useEffect(() => setMounted(true), []);
   // Recuerda la última plantilla y papel en este equipo
   useEffect(() => {
-    try { const s = JSON.parse(localStorage.getItem("bp-labels") || "{}"); if (s.template) setTemplate(s.template); if (s.paper) setPaperId(s.paper); if (typeof s.showPrice === "boolean") setShowPrice(s.showPrice); if (typeof s.showCompany === "boolean") setShowCompany(s.showCompany); } catch { /* */ }
+    try { const s = JSON.parse(localStorage.getItem("bp-labels") || "{}"); if (s.fav) setFav(s.fav); if (s.fav || s.template) setTemplate(s.fav || s.template); if (s.paper) setPaperId(s.paper); if (typeof s.showPrice === "boolean") setShowPrice(s.showPrice); if (typeof s.showCompany === "boolean") setShowCompany(s.showCompany); } catch { /* */ }
   }, []);
-  useEffect(() => { try { localStorage.setItem("bp-labels", JSON.stringify({ template, paper: paperId, showPrice, showCompany })); } catch { /* */ } }, [template, paperId, showPrice, showCompany]);
+  useEffect(() => { try { localStorage.setItem("bp-labels", JSON.stringify({ template, fav, paper: paperId, showPrice, showCompany })); } catch { /* */ } }, [template, fav, paperId, showPrice, showCompany]);
 
   const paper = PAPERS.find((p) => p.id === paperId) ?? PAPERS[0];
   const opts: Opts = { template, showPrice, showCompany };
@@ -49,22 +50,6 @@ export default function LabelDesigner({ companyName, items, initial, stock }: {
       <div className="flex-1 lg:grid lg:grid-cols-[420px_minmax(0,1fr)]">
         {/* Ajustes */}
         <div className="space-y-6 border-b border-slate-200 bg-[#fafbfc] px-5 py-6 lg:border-b-0 lg:border-r">
-          <section>
-            <p className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-slate-400">Template</p>
-            <div className="grid grid-cols-2 gap-2.5">
-              {TEMPLATES.map((t) => (
-                <button key={t.id} type="button" onClick={() => setTemplate(t.id)} aria-pressed={template === t.id}
-                  className={`group rounded-xl border bg-white p-2.5 text-left transition-all ${template === t.id ? "border-[#0f766e] ring-1 ring-[#0f766e]" : "border-slate-200 hover:border-[#14a39a] hover:shadow-sm"}`}>
-                  <div className="flex h-[58px] items-center justify-center overflow-hidden rounded-lg bg-slate-50">
-                    <div style={{ transform: "scale(0.62)" }}><Label item={lines[0]?.item ?? SAMPLE} paper={{ ...PAPERS[0] }} opts={{ ...opts, template: t.id }} company={companyName} outline /></div>
-                  </div>
-                  <p className="mt-1.5 text-[13.5px] font-semibold text-[#0b1f3a]">{t.name}</p>
-                  <p className="text-[11.5px] leading-tight text-slate-500">{t.text}</p>
-                </button>
-              ))}
-            </div>
-          </section>
-
           <section className="space-y-3">
             <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Paper</p>
             <SelectMenu ariaLabel="Paper" value={paperId} onChange={(v) => { setPaperId(v); setStart(1); }} options={PAPERS.map((p) => ({ value: p.id, label: p.name }))} />
@@ -82,7 +67,7 @@ export default function LabelDesigner({ companyName, items, initial, stock }: {
 
           <section className="space-y-3">
             <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Products</p>
-            <ItemPicker items={pickable.filter((i) => !lines.some((l) => l.item.id === i.id))} onPick={add} placeholder="Add a product: search or scan" />
+            <ItemPicker barcodes={barcodes} items={pickable.filter((i) => !lines.some((l) => l.item.id === i.id))} onPick={add} placeholder="Add a product: search or scan" />
             {lines.length === 0 ? <p className="rounded-xl border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500">Add the products you want labels for.</p> : (
               <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
                 {lines.map((l) => (
@@ -110,6 +95,36 @@ export default function LabelDesigner({ companyName, items, initial, stock }: {
 
         {/* Vista previa */}
         <div className="bg-[#eef1f4] px-4 py-6 lg:px-8">
+          {/* Galería de diseños (con tu producto real) */}
+          <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="flex items-center gap-2 text-[15px] font-semibold text-[#0b1f3a]">
+                <svg viewBox="0 0 24 24" className="h-5 w-5 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 6h16v12H4zM7 9v6M9.5 9v6M12 9v6M15 9v6M17 9v6" /></svg>
+                Label designs
+              </p>
+              <p className="text-[12.5px] text-slate-500">★ = your default design</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-5">
+              {TEMPLATES.map((t) => (
+                <div key={t.id} role="button" tabIndex={0} onClick={() => setTemplate(t.id)} onKeyDown={(e) => { if (e.key === "Enter") setTemplate(t.id); }} aria-pressed={template === t.id}
+                  className={`group relative cursor-pointer rounded-xl border p-2.5 transition-all duration-150 ${template === t.id ? "border-[#0f766e] bg-[#f3fbf8] ring-1 ring-[#0f766e]" : "border-slate-200 bg-[#fafbfc] hover:-translate-y-0.5 hover:border-[#14a39a] hover:shadow-md"}`}>
+                  <div className="flex items-center justify-between gap-1">
+                    <p className="flex min-w-0 items-center gap-1 text-[13px] font-semibold text-[#0b1f3a]">
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setFav(fav === t.id ? null : t.id); }} aria-label={fav === t.id ? "Remove default" : "Make default"} title={fav === t.id ? "Default design" : "Make it my default"}
+                        className={`shrink-0 text-[15px] leading-none transition-transform hover:scale-125 ${fav === t.id ? "text-[#f59e0b]" : "text-slate-300 hover:text-[#f59e0b]"}`}>★</button>
+                      <span className="truncate">{t.name}</span>
+                    </p>
+                    {t.tag && <span className="shrink-0 rounded-full bg-[#eef6ff] px-1.5 py-0.5 text-[10px] font-semibold text-[#2563eb]">{t.tag}</span>}
+                  </div>
+                  <div className="mt-2 flex h-[74px] items-center justify-center overflow-hidden rounded-lg bg-white shadow-[inset_0_0_0_1px_#eef1f4]">
+                    <div style={{ transform: "scale(0.7)" }}><Label item={lines[0]?.item ?? SAMPLE} paper={PAPERS[0]} opts={{ ...opts, template: t.id }} company={companyName} outline /></div>
+                  </div>
+                  <p className="mt-1.5 truncate text-[11.5px] text-slate-500">{t.text}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <p className="text-[14px] text-slate-600"><b className="text-[#0b1f3a]">{labels.length}</b> label{labels.length === 1 ? "" : "s"} · {pages.length} {paper.kind === "sheet" ? `sheet${pages.length === 1 ? "" : "s"}` : "on the roll"}</p>
             <div className="flex gap-2">
@@ -201,6 +216,90 @@ function Label({ item, paper, opts, company, outline }: { item: LabelItem; paper
           {opts.showPrice && <div style={{ ...one, fontSize: pt(9, 5, 20), fontWeight: 700 }}>{usd(item.price)}</div>}
         </div>
         <QrBox size={q} value={item.sku} />
+      </div>
+    );
+  }
+  if (opts.template === "detailed") {
+    const q = h - pad * 2;
+    return (
+      <div style={{ ...box, gap: `${pad}in`, alignItems: "center" }}>
+        <div style={{ width: `${q}in`, height: `${q}in`, flexShrink: 0 }}><QrSvg value={item.sku} className="h-full w-full" /></div>
+        <div style={{ minWidth: 0, flex: 1, display: "flex", flexDirection: "column", gap: "0.015in" }}>
+          {co}
+          <div style={{ ...one, fontSize: pt(8.5, 5, 18), fontWeight: 700 }}>{item.name}</div>
+          <div style={{ ...one, fontSize: pt(6.5, 4.5, 13), fontFamily: "monospace" }}>{item.sku}</div>
+          <div style={{ ...one, fontSize: pt(6, 4, 12), color: "#333" }}>{[item.category, item.unit && `per ${item.unit}`].filter(Boolean).join(" · ")}</div>
+          {opts.showPrice && <div style={{ ...one, fontSize: pt(8.5, 5, 18), fontWeight: 700 }}>{usd(item.price)}</div>}
+        </div>
+      </div>
+    );
+  }
+  if (opts.template === "barcode") {
+    return (
+      <div style={{ ...box, flexDirection: "column", justifyContent: "center", gap: "0.02in" }}>
+        <div style={{ height: `${h * 0.62}in` }}><BarcodeSvg value={item.sku} className="block h-full w-full" /></div>
+        <div style={{ ...one, fontSize: pt(7, 4, 18), fontFamily: "monospace", textAlign: "center", letterSpacing: "0.12em" }}>{item.sku}</div>
+      </div>
+    );
+  }
+  if (opts.template === "photo") {
+    const q = h - pad * 2;
+    return (
+      <div style={{ ...box, gap: `${pad}in`, alignItems: "center" }}>
+        <div style={{ width: `${q}in`, height: `${q}in`, flexShrink: 0, borderRadius: "0.04in", overflow: "hidden", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {item.image_url
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={item.image_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            : <span style={{ fontSize: pt(10, 6, 24), fontWeight: 800, color: "#94a3b8" }}>{item.name.slice(0, 1)}</span>}
+        </div>
+        <div style={{ minWidth: 0, flex: 1, height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "0.04in" }}>
+            <span style={{ ...one, fontSize: pt(8, 4.5, 18), fontWeight: 700 }}>{item.name}</span>
+            {opts.showPrice && <span style={{ ...one, fontSize: pt(7.5, 4.5, 16), fontWeight: 700, flexShrink: 0 }}>{usd(item.price)}</span>}
+          </div>
+          <div style={{ height: `${h * 0.4}in` }}><BarcodeSvg value={item.sku} className="block h-full w-full" /></div>
+          <div style={{ ...one, fontSize: pt(5.5, 4, 12), fontFamily: "monospace" }}>{item.sku}</div>
+        </div>
+      </div>
+    );
+  }
+  if (opts.template === "brand") {
+    return (
+      <div style={{ ...box, padding: 0, flexDirection: "column" }}>
+        <div style={{ ...one, background: "#000", color: "#fff", fontSize: pt(6, 4.5, 14), fontWeight: 700, padding: `${pad * 0.6}in ${pad}in`, textTransform: "uppercase", letterSpacing: "0.06em" }}>{company}</div>
+        <div style={{ flex: 1, padding: `${pad * 0.6}in ${pad}in ${pad}in`, display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "0.04in" }}>
+            <span style={{ ...one, fontSize: pt(7.5, 4.5, 18), fontWeight: 700 }}>{item.name}</span>
+            {opts.showPrice && <span style={{ ...one, fontSize: pt(7.5, 4.5, 18), fontWeight: 700, flexShrink: 0 }}>{usd(item.price)}</span>}
+          </div>
+          <div style={{ height: `${h * 0.3}in` }}><BarcodeSvg value={item.sku} className="block h-full w-full" /></div>
+          <div style={{ ...one, fontSize: pt(5.5, 4, 12), fontFamily: "monospace", textAlign: "center" }}>{item.sku}</div>
+        </div>
+      </div>
+    );
+  }
+  if (opts.template === "dual") {
+    const q = h - pad * 2;
+    return (
+      <div style={{ ...box, gap: `${pad}in`, alignItems: "stretch" }}>
+        <div style={{ minWidth: 0, flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          {co}
+          <div style={{ ...one, fontSize: pt(8, 4.5, 18), fontWeight: 700 }}>{item.name}</div>
+          <div style={{ height: `${h * 0.4}in` }}><BarcodeSvg value={item.sku} className="block h-full w-full" /></div>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "0.04in", fontSize: pt(5.5, 4, 12) }}>
+            <span style={{ ...one, fontFamily: "monospace" }}>{item.sku}</span>{opts.showPrice && <b style={one}>{usd(item.price)}</b>}
+          </div>
+        </div>
+        <div style={{ width: `${q * 0.82}in`, alignSelf: "center", height: `${q * 0.82}in`, flexShrink: 0 }}><QrSvg value={item.sku} className="h-full w-full" /></div>
+      </div>
+    );
+  }
+  if (opts.template === "compact") {
+    return (
+      <div style={{ ...box, flexDirection: "column", justifyContent: "center", alignItems: "stretch", gap: "0.01in", textAlign: "center" }}>
+        <div style={{ ...one, fontSize: pt(9, 4, 16), fontWeight: 700 }}>{item.name}</div>
+        <div style={{ height: `${h * 0.34}in` }}><BarcodeSvg value={item.sku} className="block h-full w-full" /></div>
+        <div style={{ ...one, fontSize: pt(7, 3.5, 12), fontFamily: "monospace" }}>{item.sku}{opts.showPrice ? ` · ${usd(item.price)}` : ""}</div>
       </div>
     );
   }
