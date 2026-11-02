@@ -34,6 +34,11 @@ export default function VisitPopover({ v, rect, pinned, onClose, onEnter, onLeav
           {v.arrival_window_min > 0 && <p className="text-[12px] text-slate-400">Arrival {fmtTime(start)} – {fmtTime(addMinutes(start, v.arrival_window_min))}</p>}
         </div>
         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-semibold ring-1 ${st.badge}`}>{st.label}</span>
+        <Link prefetch={false} href={`/dashboard/jobs/${v.job_id}/edit`} aria-label="Edit job" title="Edit job"
+          className="group/ed flex h-7 shrink-0 items-center gap-1 rounded-lg px-2 text-[12.5px] font-semibold text-[#0f766e] transition-colors hover:bg-[#e9f7f4]">
+          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 transition-transform duration-200 group-hover/ed:-rotate-12 group-hover/ed:scale-110" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" /></svg>
+          Edit
+        </Link>
         {(pinned || mobile) && (
           <button type="button" onClick={onClose} aria-label="Close" className="-mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
             <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>

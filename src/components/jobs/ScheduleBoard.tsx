@@ -207,7 +207,8 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
     flash(msg);
     load();
     const after = techIds ?? v.tech_ids;
-    const moved = start.getTime() !== new Date(v.starts_at).getTime() || end.getTime() !== new Date(v.ends_at).getTime();
+    // Solo cuenta como "cambio de hora" si cambió el inicio (día u hora). Estirar la duración es interno: no se avisa a nadie.
+    const moved = start.getTime() !== new Date(v.starts_at).getTime();
     notify({ visitId: v.visit_id, assigned: after.filter((t) => !v.tech_ids.includes(t)), unassigned: v.tech_ids.filter((t) => !after.includes(t)), moved });
     // ¿Avisar al cliente del cambio de hora?
     if (moved && v.customer_id) {
@@ -456,10 +457,10 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
   return (
     <div className="flex h-[calc(100dvh-4rem)] flex-col bg-white">
       {/* Barra de herramientas: fecha a la izquierda; Vista, Filtros, bandeja y Nuevo a la derecha */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-2 lg:px-5 lg:py-2.5">
+      <div className="flex items-center gap-1.5 border-b border-slate-200 px-2.5 py-2 sm:gap-2 sm:px-3 lg:px-5 lg:py-2.5">
         <div className="flex min-w-0 flex-1 items-center gap-1">
           <button type="button" onClick={() => setAnchor(dayStart(new Date()))}
-            className="h-9 shrink-0 rounded-lg border border-slate-200 px-3 text-[13.5px] font-semibold text-slate-700 transition-colors hover:border-[#14a39a] hover:bg-[#f3fbf8]">Today</button>
+            className="h-9 shrink-0 rounded-lg border border-slate-200 px-2.5 text-[13.5px] font-semibold text-slate-700 transition-colors hover:border-[#14a39a] hover:bg-[#f3fbf8]">Today</button>
           {([-1, 1] as const).map((d) => (
             <button key={d} type="button" aria-label={d < 0 ? "Previous" : "Next"} onClick={() => setAnchor((a) => shiftAnchor(view, a, d))}
               className="flex h-9 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800">
@@ -471,7 +472,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
           {loading && <span className="ml-1 h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-[#14a39a] border-t-transparent" aria-label="Loading" />}
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
           <ViewMenu value={view} onChange={setView} />
           <FiltersMenu statusF={statusF} setStatusF={setStatusF} counts={counts} team={techs} techF={techF} setTechF={setTechF}
             types={types.filter((t) => t.is_active)} typeF={typeF} setTypeF={setTypeF}
@@ -568,8 +569,8 @@ function ViewMenu({ value, onChange }: { value: CalView; onChange: (v: CalView) 
     <Listbox value={value} onChange={onChange}>
       <ListboxButton className={btn} aria-label="Calendar view">
         <svg viewBox="0 0 24 24" className="h-4 w-4 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={VIEW_ICON[value]} /></svg>
-        <span>{VIEWS.find((v) => v.id === value)?.label}</span>
-        <span className="text-slate-400"><Chevron /></span>
+        <span className="hidden sm:inline">{VIEWS.find((v) => v.id === value)?.label}</span>
+        <span className="hidden text-slate-400 sm:inline"><Chevron /></span>
       </ListboxButton>
       <ListboxOptions anchor="bottom end" transition className={`${panelClass} w-48`}>
         {VIEWS.map((v) => (
@@ -701,9 +702,10 @@ function DateJump({ label, anchor, days, weekStartsOn, onPick }: { label: string
   const today = new Date();
   return (
     <Popover className="relative min-w-0">
-      <PopoverButton className="group ml-0.5 flex min-w-0 items-center gap-1 rounded-lg px-1.5 py-1 text-left transition-colors hover:bg-slate-100 focus:outline-none data-[open]:bg-[#e9f7f4]">
-        <span className="truncate whitespace-nowrap text-[15.5px] font-semibold tracking-tight text-[#0b1f3a] sm:text-[17px] lg:text-[19px]">{label}</span>
-        <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-500 transition-transform duration-200 group-data-[open]:rotate-180" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
+      <PopoverButton aria-label={label} title={label} className="group ml-0.5 flex h-9 min-w-0 items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 sm:border-transparent text-left transition-colors hover:bg-slate-100 focus:outline-none data-[open]:bg-[#e9f7f4]">
+        <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-[#0f766e] sm:hidden" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4" /></svg>
+        <span className="hidden truncate whitespace-nowrap text-[17px] font-semibold tracking-tight text-[#0b1f3a] sm:inline lg:text-[19px]">{label}</span>
+        <svg viewBox="0 0 20 20" className="hidden h-4 w-4 text-slate-500 transition-transform duration-200 group-data-[open]:rotate-180 sm:block" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
       </PopoverButton>
       <PopoverPanel anchor="bottom start" transition className="z-[100] mt-2 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-[0_16px_44px_rgba(15,40,60,0.2)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0">
         {({ close }) => (

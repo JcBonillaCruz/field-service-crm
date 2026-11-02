@@ -30,11 +30,18 @@ export function TechDots({ techs, size = 22, max = 2 }: { techs: TechChip[]; siz
 
 // Ícono pequeño del estado de la visita (en camino, trabajando, pausado, terminado)
 export function StatusGlyph({ s, className = "h-3.5 w-3.5" }: { s: CalVisit["visit_status"]; className?: string }) {
+  // En camino: camioneta morada más grande que "maneja" (se mueve un poquito)
+  if (s === "on_my_way") return (
+    <span title="On my way" className="flex h-[22px] items-center rounded-full bg-[#ede9fe] px-1.5 ring-1 ring-[#c4b5fd]">
+      <svg viewBox="0 0 24 24" className="h-[15px] w-[15px] animate-[bp-drive_1.1s_ease-in-out_infinite] motion-reduce:animate-none" fill="none" stroke="#6d28d9" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-label="On my way">
+        <path d="M3 12h11V6H3zM14 9h3l3 3v3h-6M7 18a1.6 1.6 0 1 0 0-3.2A1.6 1.6 0 0 0 7 18zM17 18a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2z" />
+      </svg>
+    </span>
+  );
   if (s === "in_progress") return <span className="relative flex h-2.5 w-2.5" title="In progress"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#f59e0b] opacity-60" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#f59e0b]" /></span>;
-  const path = s === "on_my_way" ? "M3 12h11V6H3zM14 9h3l3 3v3h-6M7 18a1.6 1.6 0 1 0 0-3.2A1.6 1.6 0 0 0 7 18zM17 18a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2z"
-    : s === "paused" || s === "on_hold" ? "M9 6v12M15 6v12" : s === "completed" ? "M5 12.5 9.5 17 19 7" : null;
+  const path = s === "paused" || s === "on_hold" ? "M9 6v12M15 6v12" : s === "completed" ? "M5 12.5 9.5 17 19 7" : null;
   if (!path) return null;
-  const color = s === "on_my_way" ? "#7c3aed" : s === "completed" ? "#0f766e" : "#e11d48";
+  const color = s === "completed" ? "#0f766e" : "#e11d48";
   return <svg viewBox="0 0 24 24" className={className} fill="none" stroke={color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-label={s}><path d={path} /></svg>;
 }
 

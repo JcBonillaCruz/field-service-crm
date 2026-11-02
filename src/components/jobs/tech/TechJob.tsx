@@ -70,6 +70,8 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
     });
     setBusy("");
     if (e) { setError(e.hint || jobError(e)); return; }
+    // Aviso a la oficina (campana + push): para que el dueño sepa al momento y pueda cobrar antes de que te vayas
+    fetch("/api/jobs/tech-event", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ visitId: visit.id, action }) }).catch(() => null);
     if (action === "hold") { setHoldOpen(false); setReason(""); setHoldNote(""); }
     flash({ on_my_way: "On your way. The customer and office can see it.", start: "Job started", resume: "Work resumed", pause: "Paused", hold: "Sent to the office to schedule the next visit", finish: "Job finished. Great work!" }[action]);
     load();

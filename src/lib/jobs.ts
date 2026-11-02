@@ -141,8 +141,9 @@ export function rangeLabel(view: CalView, anchor: Date, weekStartsOn: number): s
   if (view === "day") return anchor.toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric", year: "numeric" });
   const days = viewDays(view, anchor, weekStartsOn);
   const a = days[0], b = days[days.length - 1];
-  const sameMonth = a.getMonth() === b.getMonth();
-  return `${a.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${b.toLocaleDateString("en-US", sameMonth ? { day: "numeric", year: "numeric" } : { month: "short", day: "numeric", year: "numeric" })}`;
+  const mon = (d: Date) => d.toLocaleDateString("en-US", { month: "short" });
+  // "Nov 1 – 7, 2026" · "Oct 29 – Nov 4, 2026"
+  return a.getMonth() === b.getMonth() ? `${mon(a)} ${a.getDate()} – ${b.getDate()}, ${b.getFullYear()}` : `${mon(a)} ${a.getDate()} – ${mon(b)} ${b.getDate()}, ${b.getFullYear()}`;
 }
 
 export const addressLine = (a: SiteAddress) => (a ? [a.street, a.unit, a.city, [a.state, a.zip].filter(Boolean).join(" ")].filter((x) => x && String(x).trim()).join(", ") : "");

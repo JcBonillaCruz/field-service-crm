@@ -96,6 +96,16 @@ export default function NotificationsProvider({ companyId, userId, enabled, tech
     } catch { /* sin conexión */ } finally { busy.current = false; lastAt.current = Date.now(); }
   }, [enabled, companyId, router, tech, userId]);
 
+  // Avisos de trabajos al instante (técnico en camino, empezó, terminó…): sin esperar los 90 s
+  useEffect(() => {
+    if (!enabled || !companyId) return;
+    const sb = createClient();
+    const ch = sb.channel(`notices-${userId}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "job_notices", filter: `user_id=eq.${userId}` }, () => load(true))
+      .subscribe();
+    return () => { sb.removeChannel(ch); };
+  }, [enabled, companyId, userId, load]);
+
   // Cambio de compañía: empezar de cero
   useEffect(() => { version.current = null; known.current = null; setItems([]); }, [companyId]);
 
@@ -142,6 +152,7 @@ export default function NotificationsProvider({ companyId, userId, enabled, tech
       const sub = (await reg.pushManager.getSubscription()) ?? await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(VAPID) });
       const res = await fetch("/api/push/subscribe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sub.toJSON()) });
       if (!res.ok) { setPushMsg((await res.json().catch(() => ({}))).error || "It couldn't be turned on."); return; }
+      try { localStorage.removeItem("bp-push-off"); } catch { /* */ }
       setPush("on"); chime();
     } catch { setPushMsg("This device can't receive alerts. On iPhone, add BrightPro to your Home Screen first."); }
   }, []);
@@ -149,9 +160,14 @@ export default function NotificationsProvider({ companyId, userId, enabled, tech
   // las alertas pasan a esa cuenta). Antes se quedaban con la cuenta anterior y por eso dejaban de llegar.
   useEffect(() => {
     if (!enabled || !companyId || !("serviceWorker" in navigator) || !VAPID || Notification.permission !== "granted") return;
-    navigator.serviceWorker.getRegistration("/sw.js").then(async (reg) => {
-      const sub = await reg?.pushManager.getSubscription();
+    try { if (localStorage.getItem("bp-push-off") === "1") return; } catch { /* */ } // la persona las apagó a propósito
+    navigator.serviceWorker.register("/sw.js").then(async (reg) => {
+      await navigator.serviceWorker.ready;
+      // Si ya diste permiso, no vuelve a preguntar: se registra solo (aunque el navegador haya borrado el registro)
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(VAPID) }).catch(() => null);
       if (!sub) return;
+      setPush("on");
       await fetch("/api/push/subscribe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sub.toJSON()) }).catch(() => undefined);
     }).catch(() => undefined);
   }, [enabled, companyId, userId]);
@@ -162,6 +178,7 @@ export default function NotificationsProvider({ companyId, userId, enabled, tech
     setPushMsg(r?.ok && j.sent > 0 ? "Test sent. It should ring in a few seconds." : (j.error || "No alert reached this device. Turn alerts off and on again."));
   }, []);
   const disablePush = useCallback(async () => {
+    try { localStorage.setItem("bp-push-off", "1"); } catch { /* */ }
     const reg = await navigator.serviceWorker.getRegistration("/sw.js");
     const sub = await reg?.pushManager.getSubscription();
     if (sub) { await fetch("/api/push/subscribe", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ endpoint: sub.endpoint }) }); await sub.unsubscribe(); }
