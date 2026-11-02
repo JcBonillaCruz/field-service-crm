@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
@@ -12,7 +12,8 @@ import Avatar from "@/components/Avatar";
 import SelectMenu from "@/components/ui/SelectMenu";
 import { Toast } from "@/components/sales/SalesBits";
 import { ActiveArt, InviteArt, MembersArt, TechArt } from "@/components/team/TeamArt";
-import { Invite, Member, ROLE_INFO, fmtDate, inviteLink, teamError } from "@/lib/team";
+import { Invite, Member, PRESENCE_DOT, ROLE_INFO, fmtDate, inviteLink, presenceOf, teamError } from "@/lib/team";
+import RowActions from "@/components/ui/RowActions";
 
 type Tab = "members" | "invites";
 
@@ -26,6 +27,10 @@ export default function TeamView({ companyId, members, invites, vanOf, me, myRol
   const [role, setRole] = useState("all");
   const [toast, setToast] = useState("");
   const say = (t: string) => { setToast(t); setTimeout(() => setToast(""), 2400); };
+  // Presencia en vivo: se actualiza cada minuto
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const t = setInterval(() => { setNow(Date.now()); router.refresh(); }, 60000); return () => clearInterval(t); }, [router]);
+  const onlineCount = members.filter((m) => m.is_active && presenceOf(m, now).tone === "on").length;
   const kpi = {
     total: members.length, active: members.filter((m) => m.is_active).length,
     techs: members.filter((m) => m.role === "technician" && m.is_active).length, pending: invites.length,
@@ -90,7 +95,7 @@ export default function TeamView({ companyId, members, invites, vanOf, me, myRol
 
       <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
         <Kpi label="Total members" value={kpi.total} Art={MembersArt} hint="Everyone with access" onClick={() => { setTab("members"); setRole("all"); }} />
-        <Kpi label="Active" value={kpi.active} Art={ActiveArt} hint={`${kpi.total - kpi.active} inactive`} />
+        <Kpi label="Online now" value={onlineCount} Art={ActiveArt} hint={`${kpi.active} active members · ${kpi.total - kpi.active} inactive`} />
         <Kpi label="Technicians" value={kpi.techs} Art={TechArt} hint="Active in the field" onClick={() => { setTab("members"); setRole("technician"); }} />
         <Kpi label="Pending invites" value={kpi.pending} Art={InviteArt} hint={kpi.pending ? "Waiting to join" : "No pending invites"} onClick={() => setTab("invites")} />
       </div>
@@ -116,14 +121,15 @@ export default function TeamView({ companyId, members, invites, vanOf, me, myRol
               <table className="w-full min-w-[900px] text-left text-[14px]">
                 <thead><tr className="border-b border-slate-200 bg-[#fafbfc] text-[12px] font-semibold uppercase tracking-wide text-slate-500">
                   <th className="px-4 py-3">Member</th><th className="px-3 py-3">Role</th><th className="px-3 py-3">Job title</th><th className="px-3 py-3">Phone</th>
-                  <th className="px-3 py-3">Van</th><th className="px-3 py-3">Joined</th><th className="px-3 py-3">Status</th><th className="w-14 px-4 py-3" />
+                  <th className="px-3 py-3">Van</th><th className="px-3 py-3">Connection</th><th className="px-3 py-3">Status</th><th className="w-36 px-4 py-3" />
                 </tr></thead>
                 <tbody>
                   {shown.map((m) => (
                     <tr key={m.user_id} className="group border-b border-slate-100 transition-colors last:border-0 hover:bg-[#f6fbfa]">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <Avatar name={m.full_name} url={m.avatar_url} seed={m.user_id} size={38} />
+                          <span className="relative shrink-0"><Avatar name={m.full_name} url={m.avatar_url} seed={m.user_id} size={38} />
+                            <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-white ${PRESENCE_DOT[presenceOf(m, now).tone]}`} /></span>
                           <div className="min-w-0"><p className="truncate font-semibold text-[#0b1f3a]">{m.full_name}{m.user_id === me && <span className="ml-1.5 text-[12px] font-normal text-slate-400">(you)</span>}</p><p className="truncate text-[12.5px] text-slate-500">{m.email}</p></div>
                         </div>
                       </td>
@@ -131,9 +137,14 @@ export default function TeamView({ companyId, members, invites, vanOf, me, myRol
                       <td className="px-3 py-3 text-slate-600">{m.job_title || <span className="text-slate-300">—</span>}</td>
                       <td className="px-3 py-3 text-slate-600">{m.phone ? <a href={`tel:${m.phone}`} className="hover:text-[#0f766e]">{m.phone}</a> : <span className="text-slate-300">—</span>}</td>
                       <td className="px-3 py-3 text-slate-600">{vanOf[m.user_id] || <span className="text-slate-300">—</span>}</td>
-                      <td className="px-3 py-3 text-slate-600">{fmtDate(m.joined_at)}</td>
+                      <td className="px-3 py-3"><PresenceTag m={m} now={now} /></td>
                       <td className="px-3 py-3"><StatusPill on={m.is_active} /></td>
-                      <td className="px-4 py-3 text-right"><RowMenu m={m} canTouch={canTouch(m)} onToggle={() => toggle(m)} onRemove={() => removeMember(m)} /></td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {canTouch(m) && <RowActions label={m.full_name} editHref={`/dashboard/team/${m.user_id}/edit`} onDelete={() => removeMember(m)} />}
+                          <RowMenu m={m} canTouch={canTouch(m)} onToggle={() => toggle(m)} onRemove={() => removeMember(m)} />
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -142,11 +153,12 @@ export default function TeamView({ companyId, members, invites, vanOf, me, myRol
             <ul className="divide-y divide-slate-100 lg:hidden">
               {shown.map((m) => (
                 <li key={m.user_id} className="flex items-center gap-3 px-4 py-3">
-                  <Avatar name={m.full_name} url={m.avatar_url} seed={m.user_id} size={44} />
+                  <span className="relative shrink-0"><Avatar name={m.full_name} url={m.avatar_url} seed={m.user_id} size={44} />
+                    <span className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full ring-2 ring-white ${PRESENCE_DOT[presenceOf(m, now).tone]}`} /></span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[15.5px] font-semibold text-[#0b1f3a]">{m.full_name}</p>
                     <p className="truncate text-[12.5px] text-slate-500">{[m.job_title, vanOf[m.user_id], m.phone].filter(Boolean).join(" · ") || m.email}</p>
-                    <div className="mt-1 flex items-center gap-1.5"><RolePill r={m.role} />{!m.is_active && <StatusPill on={false} />}</div>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5"><RolePill r={m.role} />{!m.is_active && <StatusPill on={false} />}<PresenceTag m={m} now={now} small /></div>
                   </div>
                   <RowMenu m={m} canTouch={canTouch(m)} onToggle={() => toggle(m)} onRemove={() => removeMember(m)} />
                 </li>
@@ -237,5 +249,15 @@ function RowMenu({ m, canTouch, onToggle, onRemove }: { m: Member; canTouch: boo
         {canTouch && <MenuItem><button type="button" onClick={onRemove} className={`${item} text-red-600`}>Remove from team</button></MenuItem>}
       </MenuItems>
     </Menu>
+  );
+}
+
+function PresenceTag({ m, now, small }: { m: Member; now: number; small?: boolean }) {
+  const p = presenceOf(m, now);
+  const tone = p.tone === "on" ? "text-[#15803d]" : p.tone === "idle" ? "text-[#b45309]" : "text-[#be123c]";
+  return (
+    <span title={p.detail} className={`inline-flex items-center gap-1.5 whitespace-nowrap ${small ? "text-[12px]" : "text-[13px]"} font-medium ${tone}`}>
+      <span className={`h-2 w-2 rounded-full ${PRESENCE_DOT[p.tone]} ${p.tone === "on" ? "shadow-[0_0_0_3px_rgba(34,197,94,0.2)]" : ""}`} />{p.label}
+    </span>
   );
 }

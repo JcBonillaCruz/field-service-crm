@@ -11,6 +11,7 @@ import {
   addressError, addressIsEmpty, cleanAddress, emailError, newEmail, newPhone, phoneError,
 } from "@/lib/customers";
 import AddressFields from "@/components/customers/AddressFields";
+import JobSitesEditor from "@/components/customers/JobSitesEditor";
 import PhoneList from "@/components/customers/PhoneList";
 import EmailList from "@/components/customers/EmailList";
 import SelectMenu from "@/components/ui/SelectMenu";
@@ -288,19 +289,9 @@ export default function CustomerForm({
         {tab === "sites" && (
           <div className="max-w-4xl">
             <p className="text-[15px] text-slate-600">Add every house or property you work at for this customer, like each home a builder sends you. Invoices can go to a specific job site instead of the office.</p>
-            <div className="mt-5 space-y-5">
-              {sites.map((s, i) => (
-                <div key={i} className="rounded-xl border border-slate-200 p-4 sm:p-5">
-                  <div className="mb-4 flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-slate-700">Job site {i + 1}</p>
-                    <button type="button" onClick={() => setSites((l) => l.filter((_, j) => j !== i))} className="text-sm font-medium text-red-600 hover:underline">Remove</button>
-                  </div>
-                  <AddressFields idPrefix={`site-${i}`} value={s} onChange={(a) => { setSites((l) => l.map((x, j) => (j === i ? a : x))); clear(); }} />
-                </div>
-              ))}
+            <div className="mt-5">
+              <JobSitesEditor sites={sites} onChange={(l) => { setSites(l); clear(); }} defaultCountry={billing.country || "US"} defaultState={billing.state} />
             </div>
-            <button type="button" onClick={() => setSites((l) => [...l, { ...EMPTY_ADDRESS, country: billing.country || "US", state: l.length ? "" : billing.state }])}
-              className="mt-4 text-sm font-semibold text-[#0f766e] hover:underline">+ Add job site</button>
           </div>
         )}
 

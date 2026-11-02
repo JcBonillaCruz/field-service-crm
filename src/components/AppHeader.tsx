@@ -63,7 +63,7 @@ export default function AppHeader({
         {/* ===== Escritorio: barra completa ===== */}
         <div className="hidden min-w-0 flex-1 items-center gap-2 lg:flex">
           <RecentMenu />
-          <TopSearch />
+          {current?.role !== "technician" && <TopSearch />}
 
           <div className="ml-auto flex items-center gap-1">
             <Popover className="relative">
@@ -79,7 +79,7 @@ export default function AppHeader({
             </Popover>
 
             <CompanySwitcher companies={companies} currentId={currentId} userId={user.id} onSwitch={switchTo} onNewCompany={() => setCreating(true)} />
-            <QuickCreate />
+            {current?.role !== "technician" && <QuickCreate />}
             <NotificationsBell />
 
             <Link prefetch={false} href="/dashboard/settings" aria-label="Settings" title="All Settings" className="group flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-white/70 hover:text-[#0f766e]">

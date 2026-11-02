@@ -6,7 +6,29 @@ import { Role } from "@/lib/types";
 export type Member = {
   user_id: string; full_name: string; email: string; avatar_url: string | null; role: Role;
   is_active: boolean; job_title: string | null; phone: string | null; joined_at: string | null;
+  last_seen_at?: string | null; last_active_at?: string | null; last_sign_in_at?: string | null;
 };
+
+// Conexión: verde = usando la app ahora · naranja = la app abierta pero sin moverse · rojo = desconectado
+export type Presence = { tone: "on" | "idle" | "off"; label: string; detail: string };
+const ago = (ms: number) => {
+  const m = Math.round(ms / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h} h ago`;
+  const d = Math.round(h / 24);
+  return `${d} day${d === 1 ? "" : "s"} ago`;
+};
+export function presenceOf(m: Pick<Member, "last_seen_at" | "last_active_at" | "last_sign_in_at">, now = Date.now()): Presence {
+  const seen = m.last_seen_at ? now - new Date(m.last_seen_at).getTime() : Infinity;
+  const active = m.last_active_at ? now - new Date(m.last_active_at).getTime() : Infinity;
+  if (seen < 3 * 60000 && active < 3 * 60000) return { tone: "on", label: "Active now", detail: "Using BrightPro right now" };
+  if (seen < 3 * 60000) return { tone: "idle", label: `Idle · ${ago(active)}`, detail: active === Infinity ? "App open, not active" : `App open · last activity ${ago(active)}` };
+  if (seen !== Infinity) return { tone: "off", label: `Offline · ${ago(seen)}`, detail: `Last seen ${new Date(m.last_seen_at as string).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` };
+  return { tone: "off", label: m.last_sign_in_at ? `Offline · ${ago(now - new Date(m.last_sign_in_at).getTime())}` : "Never signed in", detail: m.last_sign_in_at ? "Signed in before presence tracking" : "Hasn't opened the app yet" };
+}
+export const PRESENCE_DOT: Record<Presence["tone"], string> = { on: "bg-[#22c55e]", idle: "bg-[#f59e0b]", off: "bg-[#e11d48]" };
 export type Invite = {
   id: string; email: string; full_name: string | null; role: Exclude<Role, "owner">; job_title: string | null; phone: string | null;
   token: string; invited_by_name: string | null; created_at: string; expires_at: string; accepted_at: string | null; revoked_at: string | null;

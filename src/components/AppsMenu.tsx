@@ -21,13 +21,14 @@ export const APPS: App[] = [
     tone: ["#fff7e6", "#fde7c2", "#d97706"], hint: "Parts by barcode, per warehouse and per van", parts: ["Items", "Scan", "Vans", "Alerts"] },
 ];
 
-export function AppsGrid({ onPick, layout = "grid" }: { role?: Role | null; onPick?: () => void; layout?: "grid" | "wide" | "stack" }) {
+export function AppsGrid({ role, onPick, layout = "grid" }: { role?: Role | null; onPick?: () => void; layout?: "grid" | "wide" | "stack" }) {
   const stack = layout === "stack";
   const path = usePathname() || "";
   const current = path.startsWith("/dashboard/tools/qr") ? "qr" : path.startsWith("/dashboard/inventory") ? "inventory" : "finance";
   return (
     <div className={`grid ${stack ? "gap-2" : "gap-3"} ${layout === "wide" ? "grid-cols-2" : stack ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"}`}>
-      {APPS.map((a, i) => {
+      {/* El técnico solo ve Inventory (y Jobs cuando salga): nada de finanzas ni QR */}
+      {APPS.filter((a) => role !== "technician" || a.id === "inventory").map((a, i) => {
         const on = current === a.id;
         return (
           <Link prefetch={false} key={a.id} href={a.href} onClick={() => onPick?.()} style={{ animationDelay: `${i * 40}ms` }}

@@ -10,6 +10,10 @@ import ExportModal from "@/components/customers/ExportModal";
 import { sheetItem } from "@/components/ui/sheet";
 import { Toast } from "@/components/sales/SalesBits";
 import QuickAdjust from "@/components/inventory/QuickAdjust";
+import RowActions from "@/components/ui/RowActions";
+import { confirmDelete } from "@/lib/confirm";
+import { createClient } from "@/lib/supabase/client";
+import { bustCache } from "@/lib/cache-client";
 import { ItemsArt, LowArt, OutArt, ValueArt } from "@/components/inventory/KpiArt";
 import {
   InvCategory, InvItem, InvLocation, InvPhoto, InvStock, STATUS_META, StockStatus, qtyFmt, statusOf, usd,
@@ -110,6 +114,16 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
   const clearFilters = () => { setQ(""); setCat("all"); setStatus("all"); };
   const catOptions = [{ value: "all", label: "All categories" }, ...categories.map((c) => ({ value: c.id, label: c.name })), { value: "none", label: "No category" }];
   const open = (id: string) => router.push(`${BASE}/${id}`);
+  async function removeItem(r: Row) {
+    if (!(await confirmDelete({ title: `Delete "${r.name}"?`, message: "The product, its stock in every location, its photos and its movement history will be deleted.", download: { filename: r.name, data: { item: r } } }))) return;
+    const sb = createClient();
+    const { error } = await sb.from("items").delete().eq("id", r.id);
+    if (error) return say("It couldn't be deleted. It may be used in a quote or invoice.");
+    const paths = photos.filter((p) => p.item_id === r.id).map((p) => p.path);
+    if (paths.length) await sb.storage.from("item-images").remove(paths);
+    await bustCache("catalog");
+    say(`"${r.name}" deleted`); router.refresh();
+  }
 
   const searchBox = (
     <div className="relative min-w-0 flex-1 basis-60">
@@ -250,7 +264,10 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
                               <p className="text-slate-500">{usd(r.cost_price)}</p>
                               <p className="font-medium text-[#0b1f3a]">{usd(r.selling_price)}</p>
                             </td>
-                            <td className="px-4 py-3"><div className="flex justify-end"><QuickAdjust companyId={companyId} item={r} locations={locations} rows={r.rows} onDone={changed} /></div></td>
+                            <td className="px-4 py-3"><div className="flex items-center justify-end gap-2">
+                              <RowActions label={r.name} editHref={`${BASE}/${r.id}/edit`} onDelete={() => removeItem(r)} />
+                              <QuickAdjust companyId={companyId} item={r} locations={locations} rows={r.rows} onDone={changed} />
+                            </div></td>
                           </tr>
                         ))}
                       </tbody>

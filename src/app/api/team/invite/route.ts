@@ -52,23 +52,31 @@ export async function POST(request: NextRequest) {
     else {
       const company = esc(current.name), who = esc(user.fullName || "Your team"), first = esc((invite.full_name ?? "").split(" ")[0] || "there");
       const role = ROLE_INFO[invite.role as keyof typeof ROLE_INFO]?.label ?? invite.role;
-      // Correo personal y sencillo (como si lo escribiera el dueño): ayuda a que Gmail lo ponga en "Principal" y no en "Promociones".
-      // Sin imágenes ni diseño de anuncio, con versión de solo texto y "Responder" va directo al dueño.
+      // Correo con la marca de la compañía (logo + nombre), limpio y personal: sin colores de anuncio, una sola acción,
+      // versión de solo texto y "Responder" va al dueño. Así Gmail lo trata como correo normal y no como promoción.
       const note = (b.note ?? "").trim().slice(0, 600);
-      const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1f2937;max-width:560px">
-        <p>Hi ${first},</p>
-        ${note ? `<p>${esc(note).replace(/\n/g, "<br>")}</p>` : `<p>I added you to ${company} on BrightPro as ${esc(role)}. This is where we'll handle our work${invite.role === "technician" ? ", jobs and the parts in your van" : ""}.</p>`}
-        <p>To get started, open this link and create your password:<br><a href="${link}">${link}</a></p>
-        <p>The link works for 14 days. If you have any question, just reply to this email.</p>
-        <p>Thanks,<br>${who}<br>${company}</p></div>`;
-      const text = `Hi ${(invite.full_name ?? "").split(" ")[0] || "there"},\n\n${note || `I added you to ${current.name} on BrightPro as ${role}.`}\n\nTo get started, open this link and create your password:\n${link}\n\nThe link works for 14 days. If you have any question, just reply to this email.\n\nThanks,\n${user.fullName || ""}\n${current.name}`;
+      const roleLine = invite.role === "technician" ? "your jobs and the parts in your van" : "our customers, quotes and invoices";
+      const logo = current.logoUrl ? `<img src="${esc(current.logoUrl)}" alt="${company}" style="max-height:52px;max-width:200px;display:block;margin:0 0 18px">` : `<p style="margin:0 0 18px;font-size:18px;font-weight:bold;color:#0b1f3a">${company}</p>`;
+      const html = `<div style="background:#f6f7f9;padding:24px 12px;font-family:Arial,Helvetica,sans-serif">
+        <div style="max-width:540px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:28px 30px;color:#1f2937;font-size:15px;line-height:1.6">
+          ${logo}
+          <p style="margin:0 0 14px">Hi ${first},</p>
+          ${note ? `<p style="margin:0 0 14px">${esc(note).replace(/\n/g, "<br>")}</p>` : `<p style="margin:0 0 14px">You've been added to the <b>${company}</b> team as <b>${esc(role)}</b>. We use BrightPro to manage ${roleLine}.</p>`}
+          <p style="margin:0 0 22px">Create your account to get started:</p>
+          <p style="margin:0 0 22px"><a href="${link}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;font-weight:bold;padding:12px 24px;border-radius:8px">Create my account</a></p>
+          <p style="margin:0 0 6px;font-size:13px;color:#6b7280">Or open this link: <a href="${link}" style="color:#0f766e;word-break:break-all">${link}</a></p>
+          <p style="margin:0 0 22px;font-size:13px;color:#6b7280">It works for 14 days. Questions? Just reply to this email.</p>
+          <p style="margin:0">${who}<br><span style="color:#6b7280">${company}</span></p>
+        </div>
+        <p style="max-width:540px;margin:12px auto 0;text-align:center;font-size:11.5px;color:#9ca3af">Sent by ${company} with BrightPro</p></div>`;
+      const text = `Hi ${(invite.full_name ?? "").split(" ")[0] || "there"},\n\n${note || `You've been added to the ${current.name} team as ${role}. We use BrightPro to manage ${roleLine}.`}\n\nCreate your account to get started:\n${link}\n\nIt works for 14 days. Questions? Just reply to this email.\n\n${user.fullName || ""}\n${current.name}`;
       const sender = (process.env.TEAM_FROM_EMAIL || from);
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          from: `${(user.fullName || current.name).replace(/[<>"]/g, "")} via BrightPro <${sender}>`, to: [invite.email],
+          from: `${current.name.replace(/[<>"]/g, "")} <${sender}>`, to: [invite.email],
           reply_to: user.email ? [user.email] : undefined,
-          subject: `${user.fullName ? user.fullName.split(" ")[0] : current.name} added you to ${current.name}`,
+          subject: `${current.name} invited you to join the team`,
           html, text, headers: { "X-Entity-Ref-ID": invite.id },
         }),
       }).catch(() => null);

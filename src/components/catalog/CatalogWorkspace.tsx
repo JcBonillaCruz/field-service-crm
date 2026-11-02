@@ -1,6 +1,9 @@
 "use client";
 
 import { confirmDelete } from "@/lib/confirm";
+import RowActions from "@/components/ui/RowActions";
+
+const rowName = (r: object) => String((r as { name?: string; code?: string }).name ?? (r as { code?: string }).code ?? "record");
 import { bustCache } from "@/lib/cache-client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -131,17 +134,17 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
   }
 
   const table = module === "items" ? "items" : "coupons";
-  async function bulk(action: "active" | "inactive" | "delete") {
-    const ids = Array.from(checked);
+  async function bulk(action: "active" | "inactive" | "delete", only?: string[], name?: string) {
+    const ids = only ?? Array.from(checked);
     if (!ids.length) return;
-    if (action === "delete" && !(await confirmDelete({ title: `Delete ${ids.length} ${ids.length === 1 ? info.singular.toLowerCase() : info.plural.toLowerCase()}?`,
+    if (action === "delete" && !(await confirmDelete({ title: name ? `Delete "${name}"?` : `Delete ${ids.length} ${ids.length === 1 ? info.singular.toLowerCase() : info.plural.toLowerCase()}?`,
       download: { filename: table, data: async () => (await createClient().from(table).select("*").in("id", ids)).data } }))) return;
     setBusy(action);
     const db = createClient().from(table);
     const { error } = action === "delete" ? await db.delete().in("id", ids) : await db.update({ is_active: action === "active" }).in("id", ids);
     setBusy("");
-    if (error) return flash(action === "delete" ? "Some records couldn't be deleted." : "The status couldn't be changed.");
-    setChecked(new Set());
+    if (error) return flash(action === "delete" ? (only ? "It couldn't be deleted. It may be used in a quote or invoice." : "Some records couldn't be deleted.") : "The status couldn't be changed.");
+    if (!only) setChecked(new Set());
     await bustCache("catalog");
     if (action === "delete" && selectedId && ids.includes(selectedId)) router.replace(base);
     router.refresh();
@@ -330,7 +333,7 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
                 <colgroup>
                   <col style={{ width: 44 }} /><col style={{ width: 44 }} />
                   {columns.map((c) => <col key={c.key} style={{ width: widths[c.key] ?? c.width }} />)}
-                  <col />
+                  <col style={{ width: 100 }} />
                 </colgroup>
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-[#fafbfc] text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
@@ -356,13 +359,15 @@ export default function CatalogWorkspace({ module, rows, customViews, companyId,
                 <tbody>
                   {list.map((r) => (
                     <tr key={r.id} onClick={() => router.push(`${base}/${r.id}`)}
-                      className={`cursor-pointer transition-colors ${checked.has(r.id) ? "bg-[#e9f7f4]" : "hover:bg-[#f0faf7]"}`}>
+                      className={`group cursor-pointer transition-colors ${checked.has(r.id) ? "bg-[#e9f7f4]" : "hover:bg-[#f0faf7]"}`}>
                       <td className="border-b border-slate-100 py-3 pl-4" />
                       <td className="border-b border-slate-100 py-3" onClick={(e) => e.stopPropagation()}>
                         <input type="checkbox" checked={checked.has(r.id)} onChange={() => toggleOne(r.id)} aria-label="Select" className="h-4 w-4 cursor-pointer rounded accent-[#0f766e]" />
                       </td>
                       {columns.map((c) => <Cell key={c.key} module={module} r={r} k={c.key} align={c.align} base={base} />)}
-                      <td className="border-b border-slate-100" />
+                      <td className="border-b border-slate-100 pr-3">
+                        <RowActions label={rowName(r)} editHref={`${base}/${r.id}/edit`} onDelete={() => bulk("delete", [r.id], rowName(r))} className="justify-end" />
+                      </td>
                     </tr>
                   ))}
                 </tbody>

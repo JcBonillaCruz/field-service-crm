@@ -60,12 +60,12 @@ export function FormHeader({ title, closeHref }: { title: string; closeHref: str
   );
 }
 
-export function SaveBar({ saving, cancelHref, error, onDelete, deleteLabel = "Delete" }: {
-  saving: boolean; cancelHref: string; error?: string; onDelete?: () => void; deleteLabel?: string;
+export function SaveBar({ saving, cancelHref, error, onDelete, deleteLabel = "Delete", saveLabel = "Save" }: {
+  saving: boolean; cancelHref: string; error?: string; onDelete?: () => void; deleteLabel?: string; saveLabel?: string;
 }) {
   return (
     <div className="sticky bottom-0 z-10 mt-10 flex flex-wrap items-center gap-3 border-t border-slate-200 bg-white px-5 py-3 sm:px-8">
-      <button type="submit" disabled={saving} className="rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white transition-colors hover:bg-[#0c5f59] disabled:opacity-60">{saving ? "Saving..." : "Save"}</button>
+      <button type="submit" disabled={saving} className="rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white transition-colors hover:bg-[#0c5f59] disabled:opacity-60">{saving ? "Saving..." : saveLabel}</button>
       <Link prefetch={false} href={cancelHref} className="rounded-lg border border-slate-200 bg-white px-5 py-2.5 text-[15px] font-medium text-slate-700 hover:bg-slate-50">Cancel</Link>
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       {onDelete && <button type="button" onClick={onDelete} className="ml-auto text-sm font-medium text-red-600 hover:underline">{deleteLabel}</button>}

@@ -14,6 +14,9 @@ import { cityLine } from "@/lib/customers";
 import { listColors } from "@/lib/types";
 import { ListRow, MOBILE_FILTERS, VIEWS, filterLabel, filterSortCustomers, readListParams } from "@/lib/customer-list";
 import { sheetItem } from "@/components/ui/sheet";
+import RowActions from "@/components/ui/RowActions";
+import { confirmDelete } from "@/lib/confirm";
+import { createClient } from "@/lib/supabase/client";
 
 const dash = <span className="text-slate-300">—</span>;
 const COLS = "md:grid-cols-[2fr_1.6fr_2fr_1.3fr_1.4fr]";
@@ -301,7 +304,7 @@ function CompactRow({ c, active, color }: { c: ListRow; active: boolean; color?:
           <span className="block truncate text-xs text-slate-500">{subtitle(c)}</span>
         </span>
       </Link>
-      <QuickEdit id={c.id} name={c.display_name} className="right-2" />
+      <QuickEdit id={c.id} name={c.display_name} className="right-2" compact />
     </li>
   );
 }
@@ -334,16 +337,22 @@ function WideRow({ c, color }: { c: ListRow; color?: string }) {
   );
 }
 
-// Lápiz de edición rápida que aparece al pasar el mouse por la fila
-function QuickEdit({ id, name, className }: { id: string; name: string; className: string }) {
+// Botones rápidos al pasar el mouse por la fila: editar y eliminar (con la alerta de siempre)
+function QuickEdit({ id, name, className, compact = false }: { id: string; name: string; className: string; compact?: boolean }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  async function remove() {
+    if (!(await confirmDelete({ title: `Delete ${name}?`, message: "The customer and all their addresses will be deleted and can't be recovered.",
+      download: { filename: name, data: async () => (await createClient().from("customers").select("*, customer_addresses(*)").eq("id", id).maybeSingle()).data } }))) return;
+    const { error } = await createClient().from("customers").delete().eq("id", id);
+    if (error) return alert("The customer couldn't be deleted. It may be used in a quote or invoice.");
+    if (pathname.includes(id)) router.replace("/dashboard/customers");
+    router.refresh();
+  }
   return (
-    <Link prefetch={false} href={`/dashboard/customers/${id}/edit`} aria-label={`Edit ${name}`} title="Edit"
-      className={`group/edit absolute top-1/2 hidden h-9 w-9 -translate-y-1/2 scale-90 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 opacity-0 shadow-sm transition-all duration-200 ease-out hover:scale-110 hover:border-[#14a39a] hover:bg-[#e9f7f4] hover:text-[#0f766e] hover:shadow-md focus-visible:opacity-100 group-hover:scale-100 group-hover:opacity-100 md:flex ${className}`}>
-      <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] transition-transform duration-200 group-hover/edit:-rotate-12" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-        <path d="M12 20h9" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </Link>
+    <span className={`absolute top-1/2 hidden -translate-y-1/2 md:block ${className}`}>
+      <RowActions label={name} editHref={`/dashboard/customers/${id}/edit`} onDelete={compact ? undefined : remove} />
+    </span>
   );
 }
 

@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { confirmDelete } from "@/lib/confirm";
+import { ROLE_INFO } from "@/lib/team";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Role, formatPhone } from "@/lib/types";
@@ -11,7 +14,12 @@ import ShareInvite from "@/components/team/ShareInvite";
 import { tempPassword } from "@/lib/team";
 
 // Invitar a alguien: pantalla completa (menú + formulario). Al terminar: enlace para WhatsApp / mensaje y correo.
-export default function InviteForm({ myRole, companyName, initialRole }: { myRole: Role; companyName: string; initialRole: Exclude<Role, "owner"> }) {
+type Existing = { id: string; email: string; name: string; role: string };
+type PendingInv = { id: string; email: string; full_name: string | null; created_at: string };
+
+export default function InviteForm({ myRole, companyName, initialRole, members: initialMembers = [], invites: initialInvites = [] }: {
+  myRole: Role; companyName: string; initialRole: Exclude<Role, "owner">; members?: Existing[]; invites?: PendingInv[];
+}) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -25,6 +33,25 @@ export default function InviteForm({ myRole, companyName, initialRole }: { myRol
   const [pass, setPass] = useState(() => tempPassword());
   const [creds, setCreds] = useState<{ loginUrl: string; email: string; password: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  // Antes de enviar: pantalla para revisar los datos. Y aviso si ese correo ya está en el equipo o ya tiene invitación.
+  const [review, setReview] = useState(false);
+  const [members, setMembers] = useState(initialMembers);
+  const [pending, setPending] = useState(initialInvites);
+  const emailKey = email.trim().toLowerCase();
+  const dupMember = emailKey ? members.find((m) => m.email?.toLowerCase() === emailKey) : undefined;
+  const dupInvite = emailKey ? pending.find((i) => i.email.toLowerCase() === emailKey) : undefined;
+  async function cancelInvite(id: string) {
+    const { error: err } = await createClient().from("company_invites").update({ revoked_at: new Date().toISOString() }).eq("id", id);
+    if (err) return setError("The invitation couldn't be cancelled.");
+    setPending((l) => l.filter((i) => i.id !== id)); setError("");
+  }
+  async function removeExisting(m: Existing) {
+    if (!(await confirmDelete({ title: `Remove ${m.name} from the team?`, message: "If they don't belong to any other company, their login is deleted too, so you can add them again from zero." }))) return;
+    const res = await fetch("/api/team/remove", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user_id: m.id }) }).catch(() => null);
+    const data = res ? await res.json().catch(() => ({})) : {};
+    if (!res?.ok) return setError(data.error || "It couldn't be removed.");
+    setMembers((l) => l.filter((x) => x.id !== m.id)); setError("");
+  }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState<{ link: string; emailed: boolean; emailNote: string } | null>(null);
@@ -34,6 +61,9 @@ export default function InviteForm({ myRole, companyName, initialRole }: { myRol
     e.preventDefault();
     if (!name.trim()) return setError("Enter the person's name.");
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) return setError("Enter a valid email address.");
+    if (dupMember) return setError("This email is already on your team.");
+    if (dupInvite) return setError("This email already has a pending invitation. Cancel it first to send a new one.");
+    if (!review) { if (mode === "create" && pass.trim().length < 8) return setError("The temporary password needs at least 8 characters."); setError(""); setReview(true); return; }
     if (mode === "create" && pass.trim().length < 8) return setError("The temporary password needs at least 8 characters.");
     setSaving(true); setError("");
     const body = { full_name: name.trim(), email: email.trim(), role, job_title: job.trim(), phone: phone.trim() };
@@ -41,10 +71,9 @@ export default function InviteForm({ myRole, companyName, initialRole }: { myRol
       body: JSON.stringify(mode === "invite" ? { ...body, send, note } : { ...body, password: pass.trim() }) }).catch(() => null);
     const data = res ? await res.json().catch(() => ({})) : {};
     setSaving(false);
-    if (!res?.ok) return setError(data.error || "It couldn't be saved. Try again.");
+    if (!res?.ok) { setReview(false); return setError(data.error || "It couldn't be saved. Try again."); }
     if (mode === "invite") setDone({ link: data.link, emailed: data.emailed, emailNote: data.emailNote });
     else setCreds({ loginUrl: data.loginUrl, email: data.email, password: data.password });
-    router.refresh();
   }
 
   if (creds) {
@@ -101,6 +130,32 @@ export default function InviteForm({ myRole, companyName, initialRole }: { myRol
     );
   }
 
+  if (review) {
+    const rows: [string, string][] = [["Name", name.trim()], ["Email", email.trim()], ["Role", ROLE_INFO[role].label], ...(job.trim() ? [["Job title", job.trim()] as [string, string]] : []), ...(phone.trim() ? [["Phone", phone.trim()] as [string, string]] : []),
+      ["How", mode === "invite" ? (send ? "Invitation by email + link for WhatsApp/text" : "Invitation link (no email)") : "Login with temporary password"], ...(mode === "create" ? [["Temporary password", pass.trim()] as [string, string]] : [])];
+    return (
+      <form onSubmit={submit} className="flex min-h-[calc(100vh-4rem)] flex-col bg-white">
+        <FormHeader title="Check before sending" closeHref="/dashboard/team" />
+        <div className="mx-auto w-full max-w-lg px-5 py-10">
+          <p className="text-[15px] text-slate-600">Make sure everything is right. {mode === "invite" ? `${name.split(" ")[0]} will get the invitation as soon as you send it.` : `${name.split(" ")[0]}'s login will be created right away.`}</p>
+          <dl className="mt-5 divide-y divide-slate-100 rounded-xl border border-slate-200 text-[14.5px]">
+            {rows.map(([k, v]) => (
+              <div key={k} className="flex items-start justify-between gap-4 px-4 py-3"><dt className="shrink-0 text-slate-500">{k}</dt><dd className="min-w-0 break-words text-right font-semibold text-[#0b1f3a]">{v}</dd></div>
+            ))}
+          </dl>
+          {mode === "invite" && note.trim() && <p className="mt-3 rounded-xl bg-slate-50 px-4 py-3 text-[14px] italic text-slate-600">&ldquo;{note.trim()}&rdquo;</p>}
+          {error && <p role="alert" className="mt-4 text-sm text-red-600">{error}</p>}
+          <div className="mt-8 flex gap-3">
+            <button type="button" onClick={() => setReview(false)} disabled={saving} className="rounded-lg border border-slate-200 px-5 py-3 text-[15px] font-medium text-slate-700 hover:bg-slate-50">Edit</button>
+            <button type="submit" disabled={saving} className="flex-1 rounded-lg bg-[#0f766e] py-3 text-[15px] font-semibold text-white transition-colors hover:bg-[#0c5f59] disabled:opacity-60">
+              {saving ? "Working..." : mode === "invite" ? "Send invitation" : "Create login"}
+            </button>
+          </div>
+        </div>
+      </form>
+    );
+  }
+
   return (
     <form onSubmit={submit} noValidate autoComplete="off" className="flex min-h-[calc(100vh-4rem)] flex-col bg-white">
       <FormHeader title="Add Team Member" closeHref="/dashboard/team" />
@@ -121,6 +176,21 @@ export default function InviteForm({ myRole, companyName, initialRole }: { myRol
           </FormRow>
           <FormRow label="Email" htmlFor="tm-email" required width="max-w-[460px]" hint="They sign in with this email. The invitation also goes here.">
             <input id="tm-email" type="email" inputMode="email" value={email} onChange={(e) => { setEmail(e.target.value); setError(""); }} placeholder="name@example.com" className={inputClass} />
+            {dupMember && (
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[13.5px] text-amber-900">
+                <span><b>{dupMember.name}</b> is already on your team ({ROLE_INFO[dupMember.role as Role]?.label ?? dupMember.role}).</span>
+                <span className="flex gap-2">
+                  <Link prefetch={false} href={`/dashboard/team/${dupMember.id}/edit`} className="font-semibold text-[#0f766e] hover:underline">Edit</Link>
+                  {dupMember.role !== "owner" && <button type="button" onClick={() => removeExisting(dupMember)} className="font-semibold text-red-600 hover:underline">Remove</button>}
+                </span>
+              </div>
+            )}
+            {!dupMember && dupInvite && (
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[13.5px] text-amber-900">
+                <span>Already invited on {new Date(dupInvite.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}.</span>
+                <button type="button" onClick={() => cancelInvite(dupInvite.id)} className="font-semibold text-red-600 hover:underline">Cancel that invitation</button>
+              </div>
+            )}
           </FormRow>
           <FormRow label="Job title" htmlFor="tm-job" width="max-w-[460px]">
             <input id="tm-job" value={job} onChange={(e) => setJob(e.target.value)} placeholder="e.g. HVAC Technician, Dispatcher" className={inputClass} />
@@ -155,7 +225,7 @@ export default function InviteForm({ myRole, companyName, initialRole }: { myRol
           )}
         </div>
       </div>
-      <SaveBar saving={saving} cancelHref="/dashboard/team" error={error} />
+      <SaveBar saving={saving} cancelHref="/dashboard/team" error={error} saveLabel="Review" />
     </form>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { confirmDelete } from "@/lib/confirm";
+import RowActions from "@/components/ui/RowActions";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -123,11 +124,11 @@ export default function SalesWorkspace({ module, rows, customViews, companyId, p
   }
 
   const table = module === "subscriptions" ? "subscriptions" : "sales_docs";
-  async function bulk(action: "sent" | "cancel" | "delete") {
-    const ids = Array.from(checked);
+  async function bulk(action: "sent" | "cancel" | "delete", only?: string[], name?: string) {
+    const ids = only ?? Array.from(checked);
     if (!ids.length) return;
     const noun = ids.length === 1 ? info.singular.toLowerCase() : info.plural.toLowerCase();
-    if (action === "delete" && !(await confirmDelete({ title: `Delete ${ids.length} ${noun}?`, download: { filename: table, data: async () => (await createClient().from(table).select("*").in("id", ids)).data } }))) return;
+    if (action === "delete" && !(await confirmDelete({ title: name ? `Delete ${info.singular.toLowerCase()} ${name}?` : `Delete ${ids.length} ${noun}?`, download: { filename: table, data: async () => (await createClient().from(table).select("*").in("id", ids)).data } }))) return;
     if (action === "cancel" && !window.confirm(`Cancel ${ids.length} ${noun}?`)) return;
     setBusy(action);
     const supabase = createClient();
@@ -137,7 +138,7 @@ export default function SalesWorkspace({ module, rows, customViews, companyId, p
         : await supabase.from("sales_docs").update({ status: "sent", sent_at: now }).in("id", ids).eq("status", "draft");
     setBusy("");
     if (error) return flash(action === "delete" ? "Some records couldn't be deleted." : "The status couldn't be changed.");
-    setChecked(new Set());
+    if (!only) setChecked(new Set());
     if (action === "delete" && selectedId && ids.includes(selectedId)) router.replace(base);
     router.refresh();
     flash(action === "delete" ? "Deleted." : action === "cancel" ? "Cancelled." : "Marked as sent.");
@@ -308,7 +309,7 @@ export default function SalesWorkspace({ module, rows, customViews, companyId, p
                 <colgroup>
                   <col style={{ width: 44 }} /><col style={{ width: 44 }} />
                   {columns.map((c) => <col key={c.key} style={{ width: widths[c.key] ?? c.width }} />)}
-                  <col />
+                  <col style={{ width: 100 }} />
                 </colgroup>
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-[#fafbfc] text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
@@ -333,13 +334,16 @@ export default function SalesWorkspace({ module, rows, customViews, companyId, p
                 </thead>
                 <tbody>
                   {list.map((r) => (
-                    <tr key={r.id} onClick={() => router.push(`${base}/${r.id}`)} className={`cursor-pointer transition-colors ${checked.has(r.id) ? "bg-[#e9f7f4]" : "hover:bg-[#f0faf7]"}`}>
+                    <tr key={r.id} onClick={() => router.push(`${base}/${r.id}`)} className={`group cursor-pointer transition-colors ${checked.has(r.id) ? "bg-[#e9f7f4]" : "hover:bg-[#f0faf7]"}`}>
                       <td className="border-b border-slate-100 py-3 pl-4" />
                       <td className="border-b border-slate-100 py-3" onClick={(e) => e.stopPropagation()}>
                         <input type="checkbox" checked={checked.has(r.id)} onChange={() => toggleOne(r.id)} aria-label="Select" className="h-4 w-4 cursor-pointer rounded accent-[#0f766e]" />
                       </td>
                       {columns.map((c) => <Cell key={c.key} module={module} r={r} k={c.key} align={c.align} base={base} />)}
-                      <td className="border-b border-slate-100" />
+                      <td className="border-b border-slate-100 pr-3">
+                        <RowActions label={String((r as { number?: string }).number ?? "")} editHref={`${base}/${r.id}/edit`}
+                          onDelete={() => bulk("delete", [r.id], String((r as { number?: string }).number ?? ""))} className="justify-end" />
+                      </td>
                     </tr>
                   ))}
                 </tbody>

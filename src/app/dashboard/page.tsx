@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import NoCompanyWelcome from "@/components/NoCompanyWelcome";
 import { getSession } from "@/lib/session";
 import Dashboard from "@/components/dashboard/Dashboard"; // celular (sin cambios)
@@ -14,6 +15,9 @@ export default async function DashboardPage({ searchParams }: { searchParams?: {
     const { data: invites } = await supabase.rpc("my_pending_invites");
     return <NoCompanyWelcome firstName={firstName} invites={(invites ?? []) as { token: string; company_name: string; role: string; invited_by_name: string | null }[]} />;
   }
+
+  // El técnico no ve finanzas: va directo a su van
+  if (current.role === "technician") redirect("/dashboard/inventory/van");
 
   // Clientes y Ventas en paralelo (antes uno esperaba al otro)
   const [{ data: typeRows }, dash] = await Promise.all([
