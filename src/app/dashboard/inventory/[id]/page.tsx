@@ -7,11 +7,11 @@ import InventoryItemDetail from "@/components/inventory/InventoryItemDetail";
 
 export const dynamic = "force-dynamic";
 
-export default async function InventoryItemPage({ params }: { params: { id: string } }) {
+export default async function InventoryItemPage({ params, searchParams }: { params: { id: string }; searchParams: { created?: string } }) {
   const { supabase, current } = await getSession();
   if (!current) redirect("/dashboard");
   if (!canManageInventory(current.role)) return <NoAccess />;
   const data = await loadInventoryItem(supabase, current.id, params.id);
   if (!data) notFound();
-  return <InventoryItemDetail companyId={current.id} {...data} />;
+  return <InventoryItemDetail companyId={current.id} {...data} justCreated={searchParams.created === "1"} />;
 }

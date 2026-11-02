@@ -143,7 +143,7 @@ export default function InventoryItemForm({ companyId, item, scannedSku, locatio
       }
     }
     await bustCache("catalog");
-    router.push(`/dashboard/inventory/${id}`);
+    router.push(item ? `/dashboard/inventory/${id}` : `/dashboard/inventory/${id}?created=1`);
     router.refresh();
   }
 

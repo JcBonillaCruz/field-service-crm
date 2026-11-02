@@ -9,6 +9,8 @@ import { CloseButton, ICONS, MoreMenu, PencilButton, Tabs } from "@/components/c
 import { useSwipe } from "@/components/ui/useSwipe";
 import { Toast } from "@/components/sales/SalesBits";
 import QuickAdjust from "@/components/inventory/QuickAdjust";
+import Link from "next/link";
+import { BarcodeSvg, QrSvg, downloadBarcodePng } from "@/components/inventory/Barcode";
 import {
   InvCategory, InvItem, InvLocation, InvMovement, InvPhoto, InvStock, MOVE_LABEL, STATUS_META,
   invError, pingAlerts, qtyFmt, statusOf, usd,
@@ -17,8 +19,8 @@ import {
 const TABS = ["Overview", "History"];
 
 // Ficha del producto (panel derecho de la vista dividida; en celular, pantalla completa)
-export default function InventoryItemDetail({ companyId, item, stock, locations, categories, photos }: {
-  companyId: string; item: InvItem; stock: InvStock[]; locations: InvLocation[]; categories: InvCategory[]; photos: InvPhoto[];
+export default function InventoryItemDetail({ companyId, item, stock, locations, categories, photos, justCreated = false }: {
+  justCreated?: boolean; companyId: string; item: InvItem; stock: InvStock[]; locations: InvLocation[]; categories: InvCategory[]; photos: InvPhoto[];
 }) {
   const router = useRouter();
   const pics = photos;
@@ -144,6 +146,31 @@ export default function InventoryItemDetail({ companyId, item, stock, locations,
                 <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold ring-1 ${meta.badge}`}><span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />{meta.label}</span>
               </div>
             </div>
+
+            {/* Recién creado: imprimir su etiqueta */}
+            {justCreated && item.sku && (
+              <div className="mx-5 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#bfe6da] bg-[#f3fbf8] px-4 py-3">
+                <p className="text-[14.5px] text-[#0b3d38]"><b>Item created.</b> Print its barcode labels now?</p>
+                <Link prefetch={false} href={`/dashboard/inventory/labels?items=${item.id}&qty=stock`} className="rounded-lg bg-[#0f766e] px-4 py-2 text-[14px] font-semibold text-white hover:bg-[#0c5f59]">Print labels</Link>
+              </div>
+            )}
+
+            {/* Código de barras del SKU (se genera solo) */}
+            {item.sku && (
+              <div className="mx-5 mt-4 flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="min-w-[180px] flex-1">
+                  <div className="h-16"><BarcodeSvg value={item.sku} className="block h-full w-full" /></div>
+                  <p className="mt-1 text-center font-mono text-[13px] tracking-[0.12em] text-slate-700">{item.sku}</p>
+                </div>
+                <div className="h-16 w-16 shrink-0"><QrSvg value={item.sku} className="h-full w-full" /></div>
+                <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:flex-col">
+                  <Link prefetch={false} href={`/dashboard/inventory/labels?items=${item.id}`} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0f766e] px-3.5 py-2 text-[14px] font-semibold text-white hover:bg-[#0c5f59]">
+                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M7 8V3h10v5M6 17H4V9h16v8h-2M7 14h10v7H7z" /></svg>Print labels
+                  </Link>
+                  <button type="button" onClick={() => downloadBarcodePng(item.sku as string, item.name)} className="rounded-lg border border-slate-200 px-3.5 py-2 text-[14px] font-medium text-slate-700 hover:border-[#14a39a] hover:text-[#0f766e]">Download image</button>
+                </div>
+              </div>
+            )}
 
             {/* Números */}
             <div className="grid grid-cols-2 gap-3 px-5 py-4 sm:grid-cols-4">

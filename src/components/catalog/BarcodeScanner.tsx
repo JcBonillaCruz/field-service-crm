@@ -1,5 +1,7 @@
 "use client";
 
+import { playBeep, primeBeep } from "@/lib/beep";
+
 import { useEffect, useRef, useState } from "react";
 
 type Detector = { detect: (src: HTMLVideoElement) => Promise<{ rawValue: string }[]> };
@@ -32,6 +34,7 @@ export default function BarcodeScanner({ open, onClose, onCode, everywhere = fal
   // El aviso del código se guarda en una referencia: así la cámara no se reinicia cada vez que la pantalla se redibuja
   const codeRef = useRef(onCode);
   codeRef.current = onCode;
+  useEffect(() => { if (open) primeBeep(); }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -55,7 +58,7 @@ export default function BarcodeScanner({ open, onClose, onCode, everywhere = fal
           try {
             const found = await detector.detect(video.current);
             const code = found[0]?.rawValue?.trim();
-            if (code && !done && !stopped) { done = true; clearInterval(timer); if (navigator.vibrate) navigator.vibrate(80); codeRef.current(code); }
+            if (code && !done && !stopped) { done = true; clearInterval(timer); if (navigator.vibrate) navigator.vibrate(80); playBeep(); codeRef.current(code); }
           } catch { /* sigue intentando */ }
           reading = false;
         }, 300);

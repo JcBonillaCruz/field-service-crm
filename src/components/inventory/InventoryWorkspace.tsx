@@ -28,7 +28,7 @@ type Row = InvItem & { rows: InvStock[]; total: number; status: StockStatus; val
 
 const BASE = "/dashboard/inventory";
 // Pantallas propias (solo menú + esa pantalla): no son productos
-const RESERVED = new Set(["new", "scan", "settings", "locations", "transfers", "movements", "counts", "reports", "van", "usage"]);
+const RESERVED = new Set(["new", "scan", "settings", "locations", "transfers", "movements", "counts", "reports", "van", "usage", "labels"]);
 const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "All" }, { value: "in", label: "In Stock" }, { value: "low", label: "Low Stock" }, { value: "out", label: "Out of Stock" },
 ];
@@ -59,6 +59,8 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("all");
   const [status, setStatus] = useState<StatusFilter>("all");
+  // Ver el inventario de: todo · solo bodegas · solo vans · una ubicación
+  const [where, setWhere] = useState("all");
   const [filterSheet, setFilterSheet] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [toast, setToast] = useState("");
@@ -75,11 +77,18 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
   const changed = useCallback((msg: string, ok: boolean) => { say(msg); if (ok) router.refresh(); }, [router, say]);
 
   const rows: Row[] = useMemo(() => {
+    const inScope = (locId: string) => {
+      if (where === "all") return true;
+      const l = locations.find((x) => x.id === locId);
+      if (where === "warehouses") return l?.kind === "warehouse";
+      if (where === "vans") return l?.kind === "van";
+      return locId === where;
+    };
     const byItem = new Map<string, InvStock[]>();
-    stock.forEach((s) => { const l = byItem.get(s.item_id) ?? []; l.push(s); byItem.set(s.item_id, l); });
+    stock.filter((s) => inScope(s.location_id)).forEach((s) => { const l = byItem.get(s.item_id) ?? []; l.push(s); byItem.set(s.item_id, l); });
     const thumbs = new Map<string, string>();
     photos.forEach((p) => { if (!thumbs.has(p.item_id)) thumbs.set(p.item_id, p.url); });
-    return items.map((it) => {
+    return items.filter((it) => where === "all" || (byItem.get(it.id) ?? []).some((x) => Number(x.qty) !== 0 || Number(x.min_qty) > 0)).map((it) => {
       const r = byItem.get(it.id) ?? [];
       const total = r.reduce((s, x) => s + Number(x.qty), 0);
       return {
@@ -87,7 +96,7 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
         thumb: thumbs.get(it.id) ?? it.image_url, places: locations.filter((l) => r.some((x) => x.location_id === l.id && Number(x.qty) > 0)),
       };
     });
-  }, [items, stock, photos, locations]);
+  }, [items, stock, photos, locations, where]);
 
   const kpi = useMemo(() => ({
     total: rows.length, units: rows.reduce((s, r) => s + Math.max(0, r.total), 0),
@@ -110,8 +119,14 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
   if (isForm) return <>{children}</>;
 
   const catName = (id: string | null) => categories.find((c) => c.id === id)?.name ?? "";
-  const filtersOn = cat !== "all" || status !== "all" || q.trim() !== "";
-  const clearFilters = () => { setQ(""); setCat("all"); setStatus("all"); };
+  const filtersOn = cat !== "all" || status !== "all" || q.trim() !== "" || where !== "all";
+  const clearFilters = () => { setQ(""); setCat("all"); setStatus("all"); setWhere("all"); };
+  const whereOptions = [
+    { value: "all", label: "All locations" },
+    ...(locations.some((l) => l.kind === "warehouse") ? [{ value: "warehouses", label: "All warehouses" }] : []),
+    ...(locations.some((l) => l.kind === "van") ? [{ value: "vans", label: "All vans" }] : []),
+    ...locations.map((l) => ({ value: l.id, label: `${l.kind === "van" ? "🚚 " : "🏬 "}${l.name}` })),
+  ];
   const catOptions = [{ value: "all", label: "All categories" }, ...categories.map((c) => ({ value: c.id, label: c.name })), { value: "none", label: "No category" }];
   const open = (id: string) => router.push(`${BASE}/${id}`);
   async function removeItem(r: Row) {
@@ -174,6 +189,10 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
                   className="hidden h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[14px] font-medium text-slate-600 transition-colors hover:border-[#14a39a] hover:text-[#0f766e] lg:flex">
                   <Svg d={ICON.export} className="h-[18px] w-[18px]" /> Export
                 </button>
+                <Link prefetch={false} href={`${BASE}/labels?items=${shown.slice(0, 200).map((r) => r.id).join(",")}`} title="Print barcode labels"
+                  className="hidden h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[14px] font-medium text-slate-600 transition-colors hover:border-[#14a39a] hover:text-[#0f766e] sm:flex">
+                  <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M7 8V3h10v5M6 17H4V9h16v8h-2M7 14h10v7H7z" /></svg> Labels
+                </Link>
                 <Link prefetch={false} href={`${BASE}/scan`} aria-label="Scan barcode" title="Scan barcode"
                   className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[14px] font-medium text-[#0f766e] transition-colors hover:border-[#14a39a] hover:bg-[#e9f7f4]">
                   <Svg d={ICON.scan} /><span className="hidden sm:inline">Scan</span>
@@ -206,13 +225,14 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
               <div className="mt-5 flex flex-wrap items-center gap-2.5">
                 {searchBox}
                 <div className="hidden gap-2.5 lg:flex">
+                  <FilterSelect value={where} onChange={setWhere} options={whereOptions} width="w-52" />
                   <FilterSelect value={cat} onChange={setCat} options={catOptions} width="w-52" />
                   <FilterSelect value={status} onChange={(v) => setStatus(v as StatusFilter)} options={STATUS_OPTIONS} width="w-44" prefix="Status:" />
                 </div>
                 <button type="button" onClick={() => setFilterSheet(true)} aria-label="Filters"
-                  className={`relative flex h-11 w-11 items-center justify-center rounded-xl border bg-white lg:hidden ${cat !== "all" || status !== "all" ? "border-[#0f766e] text-[#0f766e]" : "border-slate-200 text-slate-500"}`}>
+                  className={`relative flex h-11 w-11 items-center justify-center rounded-xl border bg-white lg:hidden ${cat !== "all" || status !== "all" || where !== "all" ? "border-[#0f766e] text-[#0f766e]" : "border-slate-200 text-slate-500"}`}>
                   <Svg d={ICON.filter} />
-                  {(cat !== "all" || status !== "all") && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#e8713a]" />}
+                  {(cat !== "all" || status !== "all" || where !== "all") && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#e8713a]" />}
                 </button>
                 {filtersOn && <button type="button" onClick={clearFilters} className="hidden text-sm font-medium text-[#0f766e] hover:underline lg:block">Clear</button>}
               </div>
@@ -326,11 +346,21 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
       <BottomSheet open={filterSheet} onClose={() => setFilterSheet(false)} title="Filter"
         footer={(
           <div className="flex gap-3">
-            <button type="button" onClick={() => { setCat("all"); setStatus("all"); }} className="flex-1 rounded-xl border border-slate-200 py-3 text-[15px] font-medium text-slate-700">Reset</button>
+            <button type="button" onClick={() => { setCat("all"); setStatus("all"); setWhere("all"); }} className="flex-1 rounded-xl border border-slate-200 py-3 text-[15px] font-medium text-slate-700">Reset</button>
             <button type="button" onClick={() => setFilterSheet(false)} className="flex-1 rounded-xl bg-[#0f766e] py-3 text-[15px] font-semibold text-white">Show {shown.length}</button>
           </div>
         )}>
         <div className="space-y-5 px-4 py-4">
+          <div>
+            <p className="mb-2 px-1 text-[12px] font-semibold uppercase tracking-wide text-slate-400">Location</p>
+            <div className="space-y-1">
+              {whereOptions.map((o) => (
+                <button key={o.value} type="button" onClick={() => setWhere(o.value)} className={sheetItem(where === o.value)}>
+                  <span className="truncate">{o.label}</span>{where === o.value && <CheckMark />}
+                </button>
+              ))}
+            </div>
+          </div>
           <div>
             <p className="mb-2 px-1 text-[12px] font-semibold uppercase tracking-wide text-slate-400">Stock status</p>
             <div className="space-y-1">
