@@ -13,9 +13,10 @@ const Icon = ({ d }: { d: string }) => (
 );
 
 // Tarjeta flotante sencilla (como Housecall Pro): cliente, teléfono, costo, urgencia, día y hora
-export default function VisitPopover({ v, rect, pinned, onClose, onEnter, onLeave, onUnschedule, canSeeMoney }: {
+export type OfficeAction = "resume" | "pause" | "finish" | "reopen";
+export default function VisitPopover({ v, rect, pinned, onClose, onEnter, onLeave, onUnschedule, onAction, canSeeMoney }: {
   v: CalVisit; rect: DOMRect; pinned: boolean; onClose: () => void; onEnter: () => void; onLeave: () => void;
-  onUnschedule: (v: CalVisit) => void; canSeeMoney: boolean;
+  onUnschedule: (v: CalVisit) => void; onAction: (v: CalVisit, a: OfficeAction) => void; canSeeMoney: boolean;
 }) {
   // Terminado: cuándo empezó y cuándo terminó de verdad
   const [times, setTimes] = useState<{ started_at: string | null; finished_at: string | null } | null>(null);
@@ -60,8 +61,19 @@ export default function VisitPopover({ v, rect, pinned, onClose, onEnter, onLeav
         {v.techs.length > 0 && <div className="flex justify-between gap-3"><span className="text-slate-500">Technician</span><span className="truncate">{v.techs.map((t) => t.name).join(", ")}</span></div>}
         {canSeeMoney && <div className="flex justify-between gap-3"><span className="text-slate-500">Amount</span><span className="font-semibold text-[#0b1f3a]">{usd(v.estimated_total)}</span></div>}
       </div>
+      <div className="border-t border-slate-100 px-4 py-2">
+        <button type="button" onClick={() => onAction(v, "reopen")} className="text-[12.5px] font-semibold text-slate-500 hover:text-[#0f766e]">Reopen job</button>
+      </div>
     </div>
   );
+  const actBtn = (label: string, a: OfficeAction, tone: "teal" | "plain" | "green") => (
+    <button key={a} type="button" onClick={() => onAction(v, a)}
+      className={`rounded-lg px-3 py-1.5 text-[13px] font-semibold transition-colors ${tone === "teal" ? "bg-[#0f766e] text-white hover:bg-[#0c5f59]" : tone === "green" ? "bg-[#16a34a] text-white hover:bg-[#15803d]" : "border border-slate-200 text-slate-700 hover:bg-slate-50"}`}>{label}</button>
+  );
+  const st2 = v.visit_status;
+  const actions = st2 === "paused" || st2 === "on_hold" ? [actBtn("Resume work", "resume", "teal"), actBtn("Finish job", "finish", "plain")]
+    : st2 === "in_progress" || st2 === "on_my_way" ? [actBtn("Finish job", "finish", "green"), actBtn("Pause", "pause", "plain")]
+    : st2 === "scheduled" ? [actBtn("Mark as done", "finish", "plain")] : [];
 
   const card = (
     <div role="dialog" aria-label={`Job ${v.number}`} onMouseEnter={onEnter} onMouseLeave={onLeave} onPointerDown={(e) => e.stopPropagation()}
@@ -99,9 +111,11 @@ export default function VisitPopover({ v, rect, pinned, onClose, onEnter, onLeav
         <div className="flex items-center gap-2.5"><Icon d="M12 9v4M12 17h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
           <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: pr.color }} />{pr.label} priority</span></div>
       </div>
-      {v.visit_status === "scheduled" && pinned && (
-        <div className="border-t border-slate-100 px-4 py-2">
-          <button type="button" onClick={() => onUnschedule(v)} className="text-[12.5px] font-semibold text-slate-500 hover:text-[#b45309]">Move to Unscheduled</button>
+      {(actions.length > 0 || v.visit_status === "scheduled") && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-4 py-2.5">
+          {(st2 === "paused" || st2 === "on_hold") && <p className="w-full text-[12px] text-[#be123c]">{st2 === "paused" ? "The technician paused this job." : "Left for follow-up. Resume it today or drag it from To schedule to book the next visit."}</p>}
+          {actions}
+          {v.visit_status === "scheduled" && <button type="button" onClick={() => onUnschedule(v)} className="ml-auto text-[12.5px] font-semibold text-slate-500 hover:text-[#b45309]">Unschedule</button>}
         </div>
       )}
     </div>

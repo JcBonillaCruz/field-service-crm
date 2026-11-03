@@ -91,6 +91,7 @@ const INVENTORY_NAV: NavItem[] = [
 // Jobs: calendario (Schedule) para la oficina; el técnico ve solo sus trabajos
 const JOBS_NAV: NavItem[] = [
   { label: "Schedule", href: "/dashboard/jobs/schedule", addHref: "/dashboard/jobs/new", addLabel: "Job", roles: MANAGE, icon: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M8 14h3M13 14h3M8 17h3" },
+  { label: "Assign jobs", href: "/dashboard/jobs/assign", roles: MANAGE, icon: "M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2.5 15a5.5 5.5 0 0 1 11 0M14 12h7M18 9l3 3-3 3" },
   { label: "Jobs", roles: MANAGE, icon: "M9 4h6v3H9zM7 5.5H5.5v15h13v-15H17M8.5 11h7M8.5 14.5h7M8.5 18h4" },
   { label: "My Jobs", href: "/dashboard/jobs/mine", roles: ["technician"], icon: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M8 14h3M8 17h6" },
   { label: "Team", href: "/dashboard/team", roles: ["owner", "manager"], icon: "M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6" },

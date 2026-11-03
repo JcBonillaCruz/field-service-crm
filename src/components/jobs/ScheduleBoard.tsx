@@ -14,7 +14,7 @@ import { Col, GridApi, Handlers, Hit, Preview } from "@/components/jobs/cal-shar
 import TimeGrid from "@/components/jobs/TimeGrid";
 import DispatchGrid from "@/components/jobs/DispatchGrid";
 import MonthGrid from "@/components/jobs/MonthGrid";
-import VisitPopover from "@/components/jobs/VisitPopover";
+import VisitPopover, { OfficeAction } from "@/components/jobs/VisitPopover";
 import JobTray from "@/components/jobs/JobTray";
 import { TechDot } from "@/components/jobs/EventBar";
 import { Check, Chevron, optionClass, panelClass } from "@/components/ui/SearchSelect";
@@ -215,6 +215,15 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
       if (settings.notify_customer === "always") notifyCustomerNow(v);
       else if (settings.notify_customer !== "never") setAsk({ v, start });
     }
+  }
+  // La oficina reanuda, pausa, termina o reabre (sin GPS; queda firmado en el historial)
+  async function officeAction(v: CalVisit, a: OfficeAction) {
+    if (a === "finish" && !window.confirm(`Mark ${v.customer_name || v.number} as finished?`)) return;
+    setPop(null);
+    const { error } = await createClient().rpc("job_office_action", { p_visit: v.visit_id, p_action: a, p_reason: null, p_note: null });
+    if (error) { flash(error.hint || jobError(error), "error"); return; }
+    flash({ resume: "Work resumed", pause: "Job paused", finish: "Job marked as finished", reopen: "Job reopened" }[a]);
+    load();
   }
   async function unschedule(v: CalVisit) {
     setPop(null);
@@ -522,7 +531,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
 
       {pop && (
         <VisitPopover v={pop.v} rect={pop.rect} pinned={pop.pinned} canSeeMoney={canSeeMoney}
-          onClose={() => setPop(null)} onUnschedule={unschedule}
+          onClose={() => setPop(null)} onUnschedule={unschedule} onAction={officeAction}
           onEnter={() => { clearTimeout(hideT.current); }}
           onLeave={() => { if (!pop.pinned) hideT.current = setTimeout(() => setPop((p) => (p?.pinned ? p : null)), 200); }} />
       )}

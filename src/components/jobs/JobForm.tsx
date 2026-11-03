@@ -75,6 +75,16 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
   // Solo técnicos (si ya estaba asignado alguien de la oficina, también se muestra para poder quitarlo)
   const techFirst = useMemo(() => team.filter((m) => m.role === "technician" || (visit?.tech_ids ?? []).includes(m.user_id)), [team, visit]);
   const [notifyCust, setNotifyCust] = useState(settings.notify_customer === "always");
+  // Con muchos técnicos: buscador y solo se muestran los elegidos + los que coinciden (máx. 12)
+  const [techQ, setTechQ] = useState("");
+  const manyTechs = techFirst.length > 8;
+  const techShown = useMemo(() => {
+    if (!manyTechs) return techFirst;
+    const q = techQ.trim().toLowerCase();
+    const sel = techFirst.filter((m) => techIds.includes(m.user_id));
+    const rest = techFirst.filter((m) => !techIds.includes(m.user_id) && (!q || m.full_name.toLowerCase().includes(q))).slice(0, q ? 12 : 6);
+    return [...sel, ...rest];
+  }, [manyTechs, techFirst, techQ, techIds]);
   const activeTypes = types.filter((t) => t.is_active || t.id === typeId);
 
   // Direcciones (Job Sites) del cliente elegido
@@ -362,7 +372,10 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
               <FormRow label="Technicians" hint="The first one is the lead: their color paints the bar on the calendar." alignTop width="max-w-[640px]">
                 {techFirst.length === 0 ? <p className="pt-2 text-[13.5px] text-slate-500">No technicians yet. Invite them in Team with the Technician role.</p> : (
                   <div className="flex flex-wrap gap-2">
-                    {techFirst.map((m) => {
+                    {manyTechs && (
+                      <input value={techQ} onChange={(e) => setTechQ(e.target.value)} placeholder={`Search ${techFirst.length} technicians`} className={`${inputClass} mb-1 w-full`} />
+                    )}
+                    {techShown.map((m) => {
                       const i = techIds.indexOf(m.user_id);
                       const on = i >= 0;
                       return (
@@ -378,6 +391,7 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
                         </div>
                       );
                     })}
+                    <p className="w-full text-[12px] text-slate-400">Optional. You can also assign later in <b className="font-semibold text-slate-500">Assign jobs</b> by dragging the job onto a technician.</p>
                   </div>
                 )}
               </FormRow>
