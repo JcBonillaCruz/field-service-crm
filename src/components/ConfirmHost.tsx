@@ -2,12 +2,41 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { DeleteAsk, downloadJson, onDeleteAsk } from "@/lib/confirm";
+import { AskConfirm, DeleteAsk, downloadJson, onAskConfirm, onDeleteAsk } from "@/lib/confirm";
 
 type Pending = DeleteAsk & { resolve: (ok: boolean) => void };
 
 // Ventana de advertencia para borrar (una sola para toda la app, siempre por encima de todo)
-export default function ConfirmHost() {
+// Pregunta Sí / No con el diseño de BrightPro (en vez del cuadro del navegador con la URL)
+function AskHost() {
+  const [ask, setAsk] = useState<(AskConfirm & { resolve: (ok: boolean) => void }) | null>(null);
+  useEffect(() => { onAskConfirm((p) => setAsk(p)); return () => onAskConfirm(null); }, []);
+  useEffect(() => {
+    if (!ask) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { ask.resolve(false); setAsk(null); } };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [ask]);
+  if (!ask || typeof document === "undefined") return null;
+  const done = (ok: boolean) => { ask.resolve(ok); setAsk(null); };
+  const tone = ask.tone === "danger" ? "bg-[#be123c] hover:bg-[#9f1239]" : ask.tone === "green" ? "bg-[#16a34a] hover:bg-[#15803d]" : "bg-[#0f766e] hover:bg-[#0c5f59]";
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-slate-900/40 p-0 animate-[bp-fade_0.15s_ease-out] sm:items-center sm:p-4" onClick={() => done(false)}>
+      <div role="alertdialog" aria-modal="true" aria-labelledby="bp-ask-title" onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md rounded-t-3xl bg-white p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-[0_24px_60px_rgba(15,40,60,0.3)] animate-[bp-sheet_0.22s_ease-out] sm:rounded-2xl sm:pb-6">
+        <h2 id="bp-ask-title" className="text-[19px] font-semibold text-[#0b1f3a]">{ask.title}</h2>
+        {ask.message && <p className="mt-2 text-[14.5px] leading-relaxed text-slate-600">{ask.message}</p>}
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button type="button" onClick={() => done(false)} className="rounded-xl px-5 py-3 text-[15px] font-semibold text-slate-600 hover:bg-slate-100 sm:py-2.5">{ask.cancelLabel ?? "Cancel"}</button>
+          <button type="button" autoFocus onClick={() => done(true)} className={`rounded-xl px-5 py-3 text-[15px] font-semibold text-white transition-colors sm:py-2.5 ${tone}`}>{ask.confirmLabel ?? "Yes"}</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function DeleteHost() {
   const [ask, setAsk] = useState<Pending | null>(null);
   const [agree, setAgree] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -84,4 +113,8 @@ export default function ConfirmHost() {
     </div>,
     document.body,
   );
+}
+
+export default function ConfirmHost() {
+  return <><DeleteHost /><AskHost /></>;
 }

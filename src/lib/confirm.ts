@@ -27,3 +27,16 @@ export function downloadJson(filename: string, data: unknown) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
+
+// =====================================================================
+// Pregunta normal (Sí / No) con el diseño de la app — reemplaza window.confirm, que muestra la URL del sitio.
+// Uso:  if (!(await askConfirm({ title: "Finish this job?", confirmLabel: "Finish job" }))) return;
+// =====================================================================
+export type AskConfirm = { title: string; message?: string; confirmLabel?: string; cancelLabel?: string; tone?: "teal" | "green" | "danger" };
+type AskPending = AskConfirm & { resolve: (ok: boolean) => void };
+let askListener: ((p: AskPending) => void) | null = null;
+export function onAskConfirm(fn: ((p: AskPending) => void) | null) { askListener = fn; }
+export function askConfirm(ask: AskConfirm): Promise<boolean> {
+  if (!askListener) return Promise.resolve(typeof window !== "undefined" && window.confirm(ask.title));
+  return new Promise((resolve) => askListener!({ ...ask, resolve }));
+}

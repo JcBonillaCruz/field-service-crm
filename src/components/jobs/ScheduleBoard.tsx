@@ -1,5 +1,6 @@
 "use client";
 
+import { askConfirm } from "@/lib/confirm";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -218,7 +219,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
   }
   // La oficina reanuda, pausa, termina o reabre (sin GPS; queda firmado en el historial)
   async function officeAction(v: CalVisit, a: OfficeAction) {
-    if (a === "finish" && !window.confirm(`Mark ${v.customer_name || v.number} as finished?`)) return;
+    if (a === "finish" && !(await askConfirm({ title: `Mark ${v.customer_name || v.number} as finished?`, message: "The job closes and shows as completed on the calendar.", confirmLabel: "Mark as finished", tone: "green" }))) return;
     setPop(null);
     const { error } = await createClient().rpc("job_office_action", { p_visit: v.visit_id, p_action: a, p_reason: null, p_note: null });
     if (error) { flash(error.hint || jobError(error), "error"); return; }

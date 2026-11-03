@@ -1,6 +1,6 @@
 "use client";
 
-import { confirmDelete } from "@/lib/confirm";
+import { confirmDelete, askConfirm } from "@/lib/confirm";
 import { bustCache } from "@/lib/cache-client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -74,7 +74,7 @@ export default function ItemForm({ companyId, item, clone, scannedSku }: { compa
     const supabase = createClient();
     if (!item && warnDup) {
       const { data: dup } = await supabase.from("items").select("id").eq("company_id", companyId).ilike("name", name.trim()).limit(1);
-      if (dup?.length && !window.confirm(`An item named "${name.trim()}" already exists. Save anyway?`)) { setSaving(false); return; }
+      if (dup?.length && !(await askConfirm({ title: `An item named "${name.trim()}" already exists`, message: "Do you want to save it anyway?", confirmLabel: "Save anyway" }))) { setSaving(false); return; }
     }
     const row = {
       name: name.trim(), item_type: type, unit: unit.trim() || null, sku: sku.trim() || null, image_url: image || null,

@@ -1,5 +1,6 @@
 "use client";
 
+import { askConfirm } from "@/lib/confirm";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, btnGhost, btnPrimary } from "@/components/sales/SalesBits";
@@ -41,7 +42,7 @@ export default function ShareActions({ token, canRespond, defaultName }: { token
   const [agree, setAgree] = useState(false);
   const [error, setError] = useState("");
   async function respond(accept: boolean) {
-    if (!accept && !window.confirm("Decline this quote?")) return;
+    if (!accept && !(await askConfirm({ title: "Decline this quote?", confirmLabel: "Decline", tone: "danger" }))) return;
     if (accept) {
       if (name.trim().length < 2) return setError("Type your full name.");
       if (!sig) return setError("Please sign in the box.");

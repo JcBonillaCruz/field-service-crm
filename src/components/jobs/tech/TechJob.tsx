@@ -1,5 +1,6 @@
 "use client";
 
+import { askConfirm } from "@/lib/confirm";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -61,7 +62,7 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
 
   async function act(action: "on_my_way" | "start" | "resume" | "pause" | "hold" | "finish") {
     if (!visit) return;
-    if (action === "finish" && !window.confirm("Finish this job?")) return;
+    if (action === "finish" && !(await askConfirm({ title: "Finish this job?", message: missing ? `There are still ${missing} required checklist task(s).` : "The office gets an alert right away so they can send the invoice.", confirmLabel: "Finish job", tone: "green" }))) return;
     setBusy(action); setError("");
     const pos = action === "pause" ? null : await gps();
     const { error: e } = await createClient().rpc("tech_action", {

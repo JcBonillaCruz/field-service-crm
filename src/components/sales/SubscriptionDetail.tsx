@@ -1,6 +1,6 @@
 "use client";
 
-import { confirmDelete } from "@/lib/confirm";
+import { confirmDelete, askConfirm } from "@/lib/confirm";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -55,7 +55,7 @@ export default function SubscriptionDetail({ data, prefs, actor }: {
     if (error) return flash("It couldn't be deleted.");
     router.replace(base); router.refresh();
   }
-  const cancel = () => window.confirm(`Cancel ${sub.number}? No more invoices will be created.`) && update({ status: "cancelled", cancelled_at: new Date().toISOString() }, "Subscription cancelled");
+  const cancel = async () => (await askConfirm({ title: `Cancel ${sub.number}?`, message: "No more invoices will be created.", confirmLabel: "Cancel subscription", cancelLabel: "Keep it", tone: "danger" })) && update({ status: "cancelled", cancelled_at: new Date().toISOString() }, "Subscription cancelled");
 
   const more: ToolItem[] = [
     { label: s.key === "paused" ? "Resume" : "Pause", icon: s.key === "paused" ? I.play : I.pause, onClick: () => update({ status: s.key === "paused" ? "live" : "paused" }, s.key === "paused" ? "Subscription resumed" : "Subscription paused"), hidden: !["live", "future", "paused"].includes(s.key) },

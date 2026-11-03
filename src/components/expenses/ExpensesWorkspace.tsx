@@ -1,6 +1,6 @@
 "use client";
 
-import { confirmDelete } from "@/lib/confirm";
+import { confirmDelete, askConfirm } from "@/lib/confirm";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions, Menu, MenuButton, MenuItem, MenuItems, Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
@@ -254,7 +254,7 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
       reference: ci.ref >= 0 ? r[ci.ref]?.trim() || null : null, notes: ci.notes >= 0 ? r[ci.notes]?.trim() || null : null,
     })).filter((x) => Number(x.amount) > 0);
     if (!data.length) return flash("No rows with an amount were found.");
-    if (!window.confirm(`Import ${data.length} ${data.length === 1 ? cfg.one : cfg.many}?`)) return;
+    if (!(await askConfirm({ title: `Import ${data.length} ${data.length === 1 ? cfg.one : cfg.many}?`, confirmLabel: "Import" }))) return;
     const { error } = await createClient().from(cfg.table).insert(data);
     if (error) return flash(`The import failed. ${cfg.sql}`);
     router.refresh(); flash(`${data.length} ${cfg.many} imported.`);

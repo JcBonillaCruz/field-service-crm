@@ -1,6 +1,6 @@
 "use client";
 
-import { confirmDelete } from "@/lib/confirm";
+import { confirmDelete, askConfirm } from "@/lib/confirm";
 import RowActions from "@/components/ui/RowActions";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -129,7 +129,7 @@ export default function SalesWorkspace({ module, rows, customViews, companyId, p
     if (!ids.length) return;
     const noun = ids.length === 1 ? info.singular.toLowerCase() : info.plural.toLowerCase();
     if (action === "delete" && !(await confirmDelete({ title: name ? `Delete ${info.singular.toLowerCase()} ${name}?` : `Delete ${ids.length} ${noun}?`, download: { filename: table, data: async () => (await createClient().from(table).select("*").in("id", ids)).data } }))) return;
-    if (action === "cancel" && !window.confirm(`Cancel ${ids.length} ${noun}?`)) return;
+    if (action === "cancel" && !(await askConfirm({ title: `Cancel ${ids.length} ${noun}?`, confirmLabel: "Cancel them", cancelLabel: "Keep", tone: "danger" }))) return;
     setBusy(action);
     const supabase = createClient();
     const now = new Date().toISOString();

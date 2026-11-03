@@ -1,6 +1,6 @@
 "use client";
 
-import { confirmDelete } from "@/lib/confirm";
+import { confirmDelete, askConfirm } from "@/lib/confirm";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import UploadChoices from "@/components/ui/UploadChoices";
@@ -259,7 +259,7 @@ export function ShareModal({ open, onClose, doc, actor, companyName = "" }: { op
     setToken(t); setBusy(false); router.refresh();
   }
   async function disable() {
-    if (!window.confirm("Disable this link? Anyone who has it won't be able to open it anymore.")) return;
+    if (!(await askConfirm({ title: "Disable this link?", message: "Anyone who has it won't be able to open it anymore.", confirmLabel: "Disable link", tone: "danger" }))) return;
     await db().from("sales_docs").update({ share_token: null }).eq("id", doc.id);
     setToken(null); router.refresh();
   }

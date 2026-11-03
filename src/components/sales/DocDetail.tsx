@@ -1,6 +1,6 @@
 "use client";
 
-import { confirmDelete } from "@/lib/confirm";
+import { confirmDelete, askConfirm } from "@/lib/confirm";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -97,7 +97,7 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
     router.replace(base); router.refresh();
   }
   async function voidInvoice() {
-    if (!window.confirm(`Void ${doc.number}? A void invoice stays in your records but can't be paid.`)) return;
+    if (!(await askConfirm({ title: `Void ${doc.number}?`, message: "A void invoice stays in your records but can't be paid.", confirmLabel: "Void invoice", tone: "danger" }))) return;
     await setStatus("void", "Invoice marked as void");
   }
   async function toggleReminders() {
