@@ -26,12 +26,10 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [tq, setTq] = useState("");
-  const [mode, setMode] = useState<"unassigned" | "all">("unassigned");
   const [picked, setPicked] = useState<string | null>(null);   // tocar para asignar (celular)
   const [dragId, setDragId] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [pulse, setPulse] = useState<string | null>(null);
-  const [openTech, setOpenTech] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; error?: boolean } | null>(null);
   const reqId = useRef(0);
 
@@ -96,28 +94,60 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
       body: JSON.stringify({ visitId: rowId, assigned: next.filter((t) => !before.includes(t)), unassigned: before.filter((t) => !next.includes(t)) }) }).catch(() => null);
   }
 
+  // Orden de los técnicos (se arrastran para acomodarlos; se guarda en este navegador)
+  const ORDER_KEY = `bp-assign-order-${companyId}`;
+  const [order, setOrder] = useState<string[]>([]);
+  useEffect(() => { try { setOrder(JSON.parse(localStorage.getItem(ORDER_KEY) || "[]")); } catch { /* */ } }, [ORDER_KEY]);
+  function moveTech(id: string, beforeId: string) {
+    if (id === beforeId) return;
+    const base = sortedTechs.map((t) => t.user_id).filter((x) => x !== id);
+    const i = base.indexOf(beforeId);
+    base.splice(i < 0 ? base.length : i, 0, id);
+    setOrder(base);
+    try { localStorage.setItem(ORDER_KEY, JSON.stringify(base)); } catch { /* */ }
+  }
+
+  // A la izquierda SOLO los que no tienen técnico: al asignarlo desaparece (así no se asigna dos veces)
   const shownJobs = useMemo(() => {
     const term = fold(q.trim());
-    return rows.filter((r) => (mode === "all" || r.tech_ids.length === 0)
+    return rows.filter((r) => r.tech_ids.length === 0
       && (!term || fold(`${r.number} ${r.customer_name} ${r.customer_phone ?? ""} ${r.title ?? ""} ${addressLine(r.site_address)}`).includes(term)));
-  }, [rows, q, mode]);
-  const count = useMemo(() => {
-    const m = new Map<string, number>();
-    rows.forEach((r) => r.tech_ids.forEach((t) => m.set(t, (m.get(t) ?? 0) + 1)));
-    return m;
-  }, [rows]);
+  }, [rows, q]);
   const hours = (id: string) => rows.filter((r) => r.tech_ids.includes(id) && r.starts_at && r.ends_at)
     .reduce((a, r) => a + (new Date(r.ends_at!).getTime() - new Date(r.starts_at!).getTime()) / 3600000, 0);
+  const sortedTechs = useMemo(() => {
+    const pos = new Map(order.map((id, i) => [id, i]));
+    return [...techs].sort((x, y) => (pos.get(x.user_id) ?? 9999) - (pos.get(y.user_id) ?? 9999) || x.full_name.localeCompare(y.full_name));
+  }, [techs, order]);
   const shownTechs = useMemo(() => {
     const term = fold(tq.trim()), digits = tq.replace(/\D/g, "");
-    return techs.filter((t) => !term || fold(`${t.full_name} ${t.email ?? ""} ${t.job_title ?? ""}`).includes(term) || (digits.length >= 3 && (t.phone ?? "").replace(/\D/g, "").includes(digits)));
-  }, [techs, tq]);
-  const unassignedCount = rows.filter((r) => r.tech_ids.length === 0).length;
+    return sortedTechs.filter((t) => !term || fold(`${t.full_name} ${t.email ?? ""} ${t.job_title ?? ""}`).includes(term) || (digits.length >= 3 && (t.phone ?? "").replace(/\D/g, "").includes(digits)));
+  }, [sortedTechs, tq]);
   const pickedRow = rows.find((r) => r.id === picked);
+
+  // Arrastrar: "job:<visita>" (trabajo) o "tech:<técnico>" (acomodar técnicos)
+  const onDropTech = (e: React.DragEvent, techId: string) => {
+    e.preventDefault(); setOver(null); setDragId(null);
+    const data = e.dataTransfer.getData("text/plain");
+    if (data.startsWith("tech:")) moveTech(data.slice(5), techId);
+    else if (data.startsWith("job:")) assign(data.slice(4), techId);
+  };
+  const jobDrag = (id: string) => ({
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => { e.stopPropagation(); e.dataTransfer.setData("text/plain", `job:${id}`); e.dataTransfer.effectAllowed = "move"; setDragId(id); },
+    onDragEnd: () => { setDragId(null); setOver(null); },
+  });
 
   const rangeBtn = (k: Range, label: string) => (
     <button type="button" onClick={() => setRange(k)}
       className={`rounded-md px-3 py-1.5 text-[13px] font-semibold transition-all ${range === k ? "bg-white text-[#0f766e] shadow-sm" : "text-slate-500 hover:text-[#0b1f3a]"}`}>{label}</button>
+  );
+  const search = (value: string, set: (v: string) => void, ph: string) => (
+    <div className="relative min-w-0 flex-1">
+      <svg viewBox="0 0 20 20" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
+      <input value={value} onChange={(e) => set(e.target.value)} placeholder={ph}
+        className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-[14px] focus:border-[#0f766e] focus:bg-white focus:outline-none" />
+    </div>
   );
 
   return (
@@ -133,109 +163,101 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-4 p-3 lg:grid-cols-[minmax(0,1fr)_24rem] lg:p-5">
-        {/* Trabajos */}
-        <section className="flex min-h-0 flex-col rounded-2xl border border-slate-200 bg-white">
-          <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 p-3">
-            <div className="flex rounded-lg bg-slate-100 p-0.5">
-              {([["unassigned", `Unassigned (${unassignedCount})`], ["all", `All (${rows.length})`]] as const).map(([k, l]) => (
-                <button key={k} type="button" onClick={() => setMode(k)} className={`rounded-md px-3 py-1.5 text-[13px] font-semibold transition-all ${mode === k ? "bg-white text-[#0f766e] shadow-sm" : "text-slate-500"}`}>{l}</button>
-              ))}
-            </div>
-            <div className="relative min-w-[12rem] flex-1">
-              <svg viewBox="0 0 20 20" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search jobs: customer, phone, address, #"
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-[14px] focus:border-[#0f766e] focus:bg-white focus:outline-none" />
-            </div>
+      {/* Mitad y mitad: trabajos sin técnico | técnicos */}
+      <div className="grid min-h-0 flex-1 gap-4 p-3 lg:grid-cols-2 lg:p-5">
+        <section
+          onDragOver={(e) => { if (dragId && rows.find((r) => r.id === dragId)?.tech_ids.length) { e.preventDefault(); setOver("__left"); } }}
+          onDragLeave={() => setOver((o) => (o === "__left" ? null : o))}
+          onDrop={(e) => { e.preventDefault(); setOver(null); setDragId(null); const d = e.dataTransfer.getData("text/plain"); if (d.startsWith("job:")) assign(d.slice(4), null); }}
+          className={`flex min-h-0 flex-col rounded-2xl border bg-white transition-colors ${over === "__left" ? "border-[#f59e0b] bg-[#fffaf0]" : "border-slate-200"}`}>
+          <div className="flex items-center gap-2 border-b border-slate-100 p-3">
+            <p className="shrink-0 text-[14px] font-semibold text-[#0b1f3a]">To assign <span className={`ml-1 rounded-full px-2 py-0.5 text-[12px] ${shownJobs.length ? "bg-[#fff4e0] text-[#b45309]" : "bg-slate-100 text-slate-400"}`}>{rows.filter((r) => !r.tech_ids.length).length}</span></p>
+            {search(q, setQ, "Search: customer, phone, address, #")}
           </div>
-          <div className="min-h-[14rem] flex-1 space-y-2 overflow-y-auto p-3">
-            {loading && [0, 1, 2].map((i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-slate-100" />)}
-            {!loading && shownJobs.length === 0 && (
+          <div className="min-h-[12rem] flex-1 overflow-y-auto p-3">
+            {over === "__left" && <p className="mb-2 rounded-lg border-2 border-dashed border-[#f59e0b] py-2 text-center text-[13px] font-semibold text-[#b45309]">Drop here to unassign</p>}
+            {loading ? (
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-[4.6rem] animate-pulse rounded-xl bg-slate-100" />)}</div>
+            ) : shownJobs.length === 0 ? (
               <div className="px-4 py-12 text-center">
-                <p className="text-[15px] font-semibold text-[#0b1f3a]">{mode === "unassigned" ? "Every job has a technician" : "No jobs here"}</p>
-                <p className="mt-1 text-[13px] text-slate-500">{mode === "unassigned" ? "Nice! Switch to All to move jobs between technicians." : "Try another day or clear the search."}</p>
+                <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#e7f6f1] text-[#0f766e]"><svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5 9.5 17 19 7" /></svg></span>
+                <p className="mt-3 text-[15px] font-semibold text-[#0b1f3a]">{q ? "No jobs match" : "Every job has a technician"}</p>
+                <p className="mt-1 text-[13px] text-slate-500">To move a job to someone else, drag it from one technician to another.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-2">
+                {shownJobs.map((r) => {
+                  const s = r.starts_at ? new Date(r.starts_at) : null;
+                  const sel = picked === r.id;
+                  return (
+                    <div key={r.id} {...jobDrag(r.id)} onClick={() => setPicked(sel ? null : r.id)}
+                      className={`group cursor-grab select-none rounded-xl border bg-white px-3 py-2 transition-all duration-100 active:cursor-grabbing ${sel ? "border-[#0f766e] ring-4 ring-[#14a39a]/15" : "border-slate-200 hover:-translate-y-0.5 hover:border-[#14a39a] hover:shadow-[0_8px_18px_rgba(15,40,60,0.09)]"} ${dragId === r.id ? "opacity-40" : ""}`}
+                      style={{ borderTop: `3px solid ${r.type_color ?? "#94a3b8"}` }}>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[12px] font-semibold text-slate-500">{s ? `${fmtDayShort(s).replace(/^\w+, /, "")} · ${fmtTime(s)}` : "No date"}</span>
+                        {(r.priority === "urgent" || r.priority === "high") && <span className={`rounded-full px-1.5 text-[10px] font-bold uppercase ${r.priority === "urgent" ? "bg-[#ffe4e6] text-[#be123c]" : "bg-[#fff4e0] text-[#b45309]"}`}>{r.priority}</span>}
+                      </div>
+                      <p className="mt-0.5 truncate text-[14px] font-semibold text-[#0b1f3a]">{r.customer_name || r.number}</p>
+                      <p className="truncate text-[12px] text-slate-500">{[r.type_name ?? r.title, addressLine(r.site_address).split(",")[0]].filter(Boolean).join(" · ") || `#${r.number}`}</p>
+                    </div>
+                  );
+                })}
               </div>
             )}
-            {shownJobs.map((r) => {
-              const s = r.starts_at ? new Date(r.starts_at) : null;
-              const tech = r.tech_ids[0] ? techs.find((t) => t.user_id === r.tech_ids[0]) : null;
-              const sel = picked === r.id;
-              return (
-                <div key={r.id} draggable
-                  onDragStart={(e) => { e.dataTransfer.setData("text/plain", r.id); e.dataTransfer.effectAllowed = "move"; setDragId(r.id); }}
-                  onDragEnd={() => { setDragId(null); setOver(null); }}
-                  onClick={() => setPicked(sel ? null : r.id)}
-                  className={`flex cursor-grab items-center gap-3 rounded-xl border bg-white px-3 py-2.5 transition-all active:cursor-grabbing ${sel ? "border-[#0f766e] ring-4 ring-[#14a39a]/15" : "border-slate-200 hover:-translate-y-px hover:border-[#14a39a] hover:shadow-[0_6px_16px_rgba(15,40,60,0.08)]"} ${dragId === r.id ? "opacity-40" : ""}`}
-                  style={{ borderLeft: `3px solid ${r.type_color ?? "#94a3b8"}` }}>
-                  <div className="w-[4.6rem] shrink-0">
-                    {s ? <><p className="text-[13px] font-semibold text-[#0b1f3a]">{fmtTime(s)}</p><p className="text-[11px] text-slate-400">{fmtDayShort(s)}</p></>
-                      : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">No date</span>}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-1.5 truncate text-[14.5px] font-semibold text-[#0b1f3a]">
-                      {(r.priority === "urgent" || r.priority === "high") && <span className={`h-2 w-2 shrink-0 rounded-full ${r.priority === "urgent" ? "bg-[#e11d48]" : "bg-[#f59e0b]"}`} />}
-                      <span className="truncate">{r.customer_name || r.number}</span>
-                    </p>
-                    <p className="truncate text-[12.5px] text-slate-500">{[r.type_name ?? r.title, addressLine(r.site_address)].filter(Boolean).join(" · ") || `#${r.number}`}</p>
-                  </div>
-                  {tech ? <span className="flex shrink-0 items-center gap-1.5 text-[12px] text-slate-500"><TechDot t={tech} size={22} ring={false} /><span className="hidden sm:inline">{tech.full_name.split(" ")[0]}</span></span>
-                    : <span className="shrink-0 rounded-full border border-dashed border-slate-300 px-2 py-0.5 text-[11px] font-semibold text-slate-400">Unassigned</span>}
-                  <svg viewBox="0 0 20 20" className="hidden h-4 w-4 shrink-0 text-slate-300 lg:block" fill="currentColor"><circle cx="7" cy="5" r="1.4" /><circle cx="13" cy="5" r="1.4" /><circle cx="7" cy="10" r="1.4" /><circle cx="13" cy="10" r="1.4" /><circle cx="7" cy="15" r="1.4" /><circle cx="13" cy="15" r="1.4" /></svg>
-                </div>
-              );
-            })}
           </div>
         </section>
 
-        {/* Técnicos */}
         <section className="flex min-h-0 flex-col rounded-2xl border border-slate-200 bg-white">
-          <div className="border-b border-slate-100 p-3">
-            <p className="mb-2 text-[14px] font-semibold text-[#0b1f3a]">Technicians <span className="font-normal text-slate-400">({techs.length})</span></p>
-            <input value={tq} onChange={(e) => setTq(e.target.value)} placeholder="Search by name, phone or email"
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[14px] focus:border-[#0f766e] focus:bg-white focus:outline-none" />
+          <div className="flex items-center gap-2 border-b border-slate-100 p-3">
+            <p className="shrink-0 text-[14px] font-semibold text-[#0b1f3a]">Technicians <span className="font-normal text-slate-400">({techs.length})</span></p>
+            {search(tq, setTq, "Search by name, phone or email")}
           </div>
-          <div className="min-h-[14rem] flex-1 space-y-2 overflow-y-auto p-3">
+          <div className="min-h-[12rem] flex-1 overflow-y-auto p-3">
             {techs.length === 0 && <p className="px-3 py-10 text-center text-[13.5px] text-slate-500">No technicians yet. Invite them in Team with the Technician role.</p>}
-            {shownTechs.map((t) => {
-              const n = count.get(t.user_id) ?? 0, h = hours(t.user_id), isOver = over === t.user_id, open = openTech === t.user_id;
-              const mine = rows.filter((r) => r.tech_ids.includes(t.user_id));
-              return (
-                <div key={t.user_id}
-                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (over !== t.user_id) setOver(t.user_id); }}
-                  onDragLeave={() => setOver((o) => (o === t.user_id ? null : o))}
-                  onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData("text/plain"); setOver(null); setDragId(null); if (id) assign(id, t.user_id); }}
-                  className={`rounded-xl border transition-all duration-150 ${isOver ? "scale-[1.02] border-[#0f766e] bg-[#f3fbf8] shadow-[0_10px_24px_rgba(15,118,110,0.18)]" : picked ? "border-dashed border-[#14a39a] bg-white" : "border-slate-200 bg-white"}`}>
-                  <button type="button" onClick={() => (picked ? assign(picked, t.user_id) : setOpenTech(open ? null : t.user_id))}
-                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left">
-                    <TechDot t={t} size={36} ring={false} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[14.5px] font-semibold text-[#0b1f3a]">{t.full_name}</span>
-                      <span className="block truncate text-[12px] text-slate-500">{[t.job_title, t.phone].filter(Boolean).join(" · ") || t.email}</span>
-                    </span>
-                    <span className="text-right">
-                      <span className={`inline-flex min-w-[2rem] items-center justify-center rounded-full px-2 py-0.5 text-[13px] font-bold transition-transform ${n ? "bg-[#0f766e] text-white" : "bg-slate-100 text-slate-400"} ${pulse === t.user_id ? "animate-[bp-pop-in_0.5s_ease-out] scale-110" : ""}`}>{n}</span>
-                      {h > 0 && <span className="block text-[11px] text-slate-400">{h.toFixed(1)}h</span>}
-                    </span>
-                  </button>
-                  {picked && pickedRow && <p className="border-t border-dashed border-[#bfe7de] px-3 py-1.5 text-[12px] font-semibold text-[#0f766e]">Tap to assign {pickedRow.customer_name || pickedRow.number}</p>}
-                  {open && !picked && (
-                    <div className="space-y-1 border-t border-slate-100 px-3 py-2 animate-[bp-fade_0.2s_ease-out]">
-                      {mine.length === 0 && <p className="py-1 text-[12.5px] text-slate-400">No jobs in these dates.</p>}
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] items-start gap-2.5">
+              {shownTechs.map((t) => {
+                const mine = rows.filter((r) => r.tech_ids.includes(t.user_id)).sort((x, y) => (x.starts_at ?? "z").localeCompare(y.starts_at ?? "z"));
+                const n = mine.length, h = hours(t.user_id), isOver = over === t.user_id;
+                return (
+                  <div key={t.user_id}
+                    onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (over !== t.user_id) setOver(t.user_id); }}
+                    onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver((o) => (o === t.user_id ? null : o)); }}
+                    onDrop={(e) => onDropTech(e, t.user_id)}
+                    className={`rounded-xl border transition-all duration-150 ${isOver ? "scale-[1.02] border-[#0f766e] bg-[#f3fbf8] shadow-[0_12px_26px_rgba(15,118,110,0.18)]" : picked ? "border-dashed border-[#14a39a] bg-white" : "border-slate-200 bg-white hover:shadow-[0_6px_16px_rgba(15,40,60,0.06)]"}`}
+                    style={{ borderTop: `3px solid ${t.color}` }}>
+                    <div draggable onDragStart={(e) => { e.dataTransfer.setData("text/plain", `tech:${t.user_id}`); e.dataTransfer.effectAllowed = "move"; }}
+                      onClick={() => picked && assign(picked, t.user_id)}
+                      className={`flex items-center gap-2.5 px-3 py-2.5 ${picked ? "cursor-pointer" : "cursor-grab"}`} title="Drag to reorder technicians">
+                      <TechDot t={t} size={34} ring={false} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[14px] font-semibold text-[#0b1f3a]">{t.full_name}</span>
+                        <span className="block truncate text-[11.5px] text-slate-500">{[t.job_title, t.phone].filter(Boolean).join(" · ") || t.email}</span>
+                      </span>
+                      <span className="text-right">
+                        <span className={`inline-flex min-w-[1.9rem] items-center justify-center rounded-full px-2 py-0.5 text-[13px] font-bold ${n ? "bg-[#0f766e] text-white" : "bg-slate-100 text-slate-400"} ${pulse === t.user_id ? "animate-[bp-pop-in_0.5s_ease-out]" : ""}`}>{n}</span>
+                        {h > 0 && <span className="block text-[10.5px] text-slate-400">{h.toFixed(1)}h</span>}
+                      </span>
+                    </div>
+                    {picked && pickedRow && <button type="button" onClick={() => assign(picked, t.user_id)} className="w-full border-t border-dashed border-[#bfe7de] px-3 py-1.5 text-left text-[12px] font-semibold text-[#0f766e]">Tap to assign {pickedRow.customer_name || pickedRow.number}</button>}
+                    <div className="space-y-1 border-t border-slate-100 px-2 py-2">
+                      {mine.length === 0 && <p className="px-1 py-1.5 text-center text-[12px] text-slate-400">{isOver ? "Drop to assign" : "No jobs · drop one here"}</p>}
                       {mine.map((r) => (
-                        <div key={r.id} className="flex items-center gap-2 rounded-lg px-1 py-1 text-[13px]">
-                          <span className="w-16 shrink-0 text-slate-500">{r.starts_at ? fmtTime(new Date(r.starts_at)) : "No date"}</span>
+                        <div key={r.id} {...jobDrag(r.id)} title="Drag to another technician"
+                          className={`flex cursor-grab items-center gap-2 rounded-lg px-2 py-1.5 text-[12.5px] transition-colors active:cursor-grabbing hover:bg-slate-50 ${dragId === r.id ? "opacity-40" : ""}`}
+                          style={{ background: `${r.type_color ?? "#94a3b8"}12` }}>
+                          <span className="w-14 shrink-0 font-semibold text-slate-500">{r.starts_at ? fmtTime(new Date(r.starts_at)) : "No date"}</span>
                           <span className="min-w-0 flex-1 truncate text-[#0b1f3a]">{r.customer_name || r.number}</span>
                           <button type="button" onClick={() => assign(r.id, null)} title="Unassign" aria-label="Unassign"
-                            className="flex h-6 w-6 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
-                            <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M5 5l10 10M15 5 5 15" /></svg>
+                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
+                            <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M5 5l10 10M15 5 5 15" /></svg>
                           </button>
                         </div>
                       ))}
                     </div>
-                  )}
-                </div>
-              );
-            })}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </section>
       </div>

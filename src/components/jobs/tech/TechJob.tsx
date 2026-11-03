@@ -76,6 +76,18 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
     flash({ on_my_way: "On your way. The customer and office can see it.", start: "Job started", resume: "Work resumed", pause: "Paused", hold: "Sent to the office to schedule the next visit", finish: "Job finished. Great work!" }[action]);
     load();
   }
+  // Regresar a un trabajo que quedó a medias (ya llegó la pieza, etc.)
+  async function resumeHold() {
+    if (!visit) return;
+    setBusy("back"); setError("");
+    const pos = await gps();
+    const { error: e } = await createClient().rpc("tech_resume_hold", { p_visit: visit.id, p_lat: pos?.coords.latitude ?? null, p_lng: pos?.coords.longitude ?? null, p_accuracy: pos?.coords.accuracy ?? null });
+    setBusy("");
+    if (e) { setError(e.hint || jobError(e)); return; }
+    fetch("/api/jobs/tech-event", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ visitId: visit.id, action: "resume" }) }).catch(() => null);
+    flash("Back on the job. Your time is running again.");
+    load();
+  }
   async function toggle(c: Check) {
     setD((x) => x && ({ ...x, checklist: x.checklist.map((k) => (k.id === c.id ? { ...k, done: !k.done } : k)) }));
     const { error: e } = await createClient().rpc("tech_check", { p_item: c.id, p_done: !c.done, p_visit: visit?.id ?? null });
@@ -152,7 +164,16 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
         </div>
       )}
       {j.description && <div className={`${card} mt-3 px-4 py-3`}><p className="text-[12.5px] font-semibold text-slate-500">Job details</p><p className="mt-0.5 whitespace-pre-line text-[14.5px] text-[#0b1f3a]">{j.description}</p></div>}
-      {st === "on_hold" && <p className="mt-3 rounded-2xl bg-[#fff1f2] px-4 py-3 text-[14px] text-[#be123c]">Left for follow-up: {holdLabel(j.hold_reason)}. The office will schedule the next visit.</p>}
+      {st === "on_hold" && (
+        <div className="mt-3 rounded-2xl border border-[#fecdd3] bg-[#fff1f2] px-4 py-3">
+          <p className="text-[14px] font-semibold text-[#be123c]">Left for follow-up: {holdLabel(j.hold_reason)}</p>
+          <p className="mt-0.5 text-[13px] text-[#be123c]/80">The office can schedule the next visit, or if you&apos;re back at the job now (the part arrived), continue it here.</p>
+          <button type="button" onClick={resumeHold} disabled={busy === "back"}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[#0f766e] py-3 text-[15px] font-semibold text-white shadow-[0_8px_20px_rgba(15,118,110,0.25)] active:scale-[0.98] disabled:opacity-60">
+            {busy === "back" ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <Icon d="M8 5v14l11-7z" />}I&apos;m back — continue this job
+          </button>
+        </div>
+      )}
 
       {/* Checklist */}
       {d.checklist.length > 0 && (
