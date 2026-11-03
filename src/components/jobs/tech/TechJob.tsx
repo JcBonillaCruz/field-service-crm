@@ -8,7 +8,7 @@ import { inputClass } from "@/components/customers/ui";
 import {
   HOLD_REASONS, SiteAddress, TechChip, VISIT_LABEL, VisitStatus, addMinutes, addressLine, fmtDayShort, fmtTime, holdLabel, jobError, mapsLink, usd,
 } from "@/lib/jobs";
-import { TechDot } from "@/components/jobs/EventBar";
+import { StatusArt, TechDot } from "@/components/jobs/EventBar";
 
 type Visit = { id: string; visit_no: number; status: VisitStatus; starts_at: string | null; ends_at: string | null; arrival_window_min: number; techs: TechChip[]; started_at: string | null };
 type Line = { id: string; name: string; description: string | null; quantity: number; unit: string | null; kind: string; source: string; rate?: number; amount?: number };
@@ -110,6 +110,9 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
   const maps = mapsLink(j.site_address), addr = addressLine(j.site_address);
   const st = visit?.status ?? "scheduled";
   const canWork = ["on_my_way", "in_progress", "paused"].includes(st);
+  // Terminado o cancelado: se puede ver todo, pero ya no se cambia nada
+  const readOnly = st === "completed" || st === "cancelled";
+  const doneAt = (visit as (Visit & { finished_at?: string | null }) | null)?.finished_at;
   const missing = d.checklist.filter((c) => c.is_required && !c.done).length;
   const notes = d.events.filter((x) => x.kind === "note").reverse();
 
@@ -129,6 +132,13 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
       </div>
 
       {error && <p className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-[14px] text-red-700">{error}</p>}
+      {st === "completed" && (
+        <div className="mt-3 flex items-center gap-3 rounded-2xl border border-[#bbf7d0] bg-[#f0fdf4] px-4 py-3">
+          <StatusArt s="completed" size={36} />
+          <div><p className="text-[15px] font-semibold text-[#15803d]">Completed</p>
+            <p className="text-[13px] text-slate-600">{doneAt ? `Finished ${new Date(doneAt).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}. ` : ""}This job is closed and can&apos;t be changed.</p></div>
+        </div>
+      )}
 
       {/* Cuándo, dónde y contacto */}
       <div className={`${card} mt-4 divide-y divide-slate-100`}>
@@ -182,7 +192,7 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
             {missing > 0 ? <span className="text-[12px] font-semibold text-[#be123c]">{missing} required left</span> : <span className="text-[12px] font-semibold text-[#0f766e]">All done</span>}</div>
           <div className="mt-2 space-y-1">
             {d.checklist.map((c) => (
-              <button key={c.id} type="button" onClick={() => toggle(c)} className="flex w-full items-center gap-3 rounded-xl px-1 py-2 text-left active:bg-slate-50">
+              <button key={c.id} type="button" onClick={() => !readOnly && toggle(c)} disabled={readOnly} className="flex w-full items-center gap-3 rounded-xl px-1 py-2 text-left active:bg-slate-50 disabled:cursor-default">
                 <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${c.done ? "border-[#0f766e] bg-[#0f766e] text-white" : "border-slate-300"}`}>
                   {c.done && <Icon d="m5 12.5 4.5 4.5L19 7" className="h-4 w-4" />}
                 </span>
@@ -220,10 +230,11 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
       {/* Notas */}
       <div className={`${card} mt-3 px-4 py-3`}>
         <p className="text-[15px] font-semibold text-[#0b1f3a]">Notes</p>
-        <div className="mt-2 flex gap-2">
+        {!readOnly && <div className="mt-2 flex gap-2">
           <input value={note} onChange={(ev) => setNote(ev.target.value)} placeholder="What you found or did" className={inputClass} />
           <button type="button" onClick={addNote} disabled={busy === "note"} className="shrink-0 rounded-lg border border-slate-200 px-4 text-[14px] font-semibold text-[#0f766e] disabled:opacity-60">Add</button>
-        </div>
+        </div>}
+        {readOnly && notes.length === 0 && <p className="mt-1 text-[13.5px] text-slate-400">No notes.</p>}
         {notes.map((n) => (
           <div key={n.id} className="mt-2 rounded-xl bg-slate-50 px-3 py-2"><p className="text-[14px] text-[#0b1f3a]">{n.detail}</p>
             <p className="text-[11.5px] text-slate-400">{n.actor_name} · {new Date(n.created_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</p></div>
