@@ -9,6 +9,15 @@ import { StatusArt, TechDot } from "@/components/jobs/EventBar";
 import { CardMenu, OpsCard, liveStatus } from "@/components/jobs/ops/OpsBits";
 
 type Line = { key: string; job: string; user: string; d: string; color: string; lead: boolean; flow: "fast" | "slow" | "none"; ex: number; ey: number };
+// Colores de persona (fuertes) y de tarjeta (suaves, empezando por el menta de la marca)
+const PERSON_COLORS = ["#db2777", "#2563eb", "#0f766e", "#7c3aed", "#ea580c", "#0891b2", "#65a30d", "#c026d3", "#4f46e5", "#ca8a04", "#dc2626", "#0d9488"];
+const CARD_TINTS: { bg: string; border: string }[] = [
+  { bg: "#e9f7f4", border: "#bfe6dc" }, { bg: "#eaf3fe", border: "#c6dcf8" }, { bg: "#f2effe", border: "#d9d0f7" }, { bg: "#fff2e9", border: "#f8d6bf" },
+  { bg: "#fdeff4", border: "#f4cadb" }, { bg: "#fcf8e3", border: "#ece0a8" }, { bg: "#eef6e9", border: "#cfe3c2" }, { bg: "#e7f7fa", border: "#bce4ec" },
+  { bg: "#f8eefb", border: "#e5cff0" }, { bg: "#f7f2eb", border: "#e3d6c3" }, { bg: "#eef0fe", border: "#cfd5f7" }, { bg: "#fff0ee", border: "#f6cdc6" },
+];
+// Fila + columna·7: la de arriba/abajo y la de al lado nunca tienen el mismo color
+const tintAt = (row: number, col: number) => CARD_TINTS[(row + col * 7) % CARD_TINTS.length];
 type Show = "in_progress" | "assigned" | "delayed" | "unassigned" | "done";
 const SHOW: { v: Show; label: string; dot: string }[] = [
   { v: "in_progress", label: "In progress", dot: "bg-[#f59e0b]" },
@@ -28,7 +37,7 @@ const SHOW: { v: Show; label: string; dot: string }[] = [
 //   · Arrastra un trabajo a una persona (asignar · pasarlo · agregar ayudante), entre tarjetas (ordenar)
 //     o a "Unassigned" (quitarlo, pide nota). Arrastra a una persona para cambiar el orden.
 // =====================================================================
-export default function OpsConnections({ companyId, jobs, groupOf, team, now, menuFor, isAfter, hrefFor, onChanged, onUnassign, period }: {
+export default function OpsConnections({ companyId, jobs: rawJobs, groupOf, team, now, menuFor, isAfter, hrefFor, onChanged, onUnassign, period }: {
   companyId: string; period?: React.ReactNode; jobs: OpsJob[]; groupOf: (j: OpsJob) => OpsGroup; team: TeamMember[]; now: number;
   menuFor?: (j: OpsJob, g: OpsGroup) => CardMenu; isAfter?: (j: OpsJob) => boolean; hrefFor?: (j: OpsJob, g: OpsGroup) => string | undefined;
   onChanged: (msg: string, notify?: Record<string, unknown>, error?: boolean) => void;
@@ -62,22 +71,37 @@ export default function OpsConnections({ companyId, jobs, groupOf, team, now, me
   });
   const showAll = () => { const all = SHOW.map((x) => x.v); setShow(all); try { localStorage.setItem(SK, JSON.stringify(all)); } catch { /* */ } };
 
-  const counts = useMemo(() => { const m = new Map<string, number>(); jobs.forEach((j) => m.set(groupOf(j), (m.get(groupOf(j)) ?? 0) + 1)); return m; }, [jobs, groupOf]);
-  const visible = useMemo(() => jobs.filter((j) => show.includes(groupOf(j) as Show) && (!onlyUser || j.techs.some((t) => t.user_id === onlyUser))), [jobs, show, onlyUser, groupOf]);
-
   // Personas: quien recibe trabajos + quien aparece en los trabajos
   const people = useMemo(() => {
     const byId = new Map(team.map((m) => [m.user_id, m]));
     const ids = new Set(team.filter(receivesJobs).map((m) => m.user_id));
-    jobs.forEach((j) => j.techs.forEach((t) => ids.add(t.user_id)));
-    const fromJobs = new Map(jobs.flatMap((j) => j.techs).map((t) => [t.user_id, t]));
+    rawJobs.forEach((j) => j.techs.forEach((t) => ids.add(t.user_id)));
+    const fromJobs = new Map(rawJobs.flatMap((j) => j.techs).map((t) => [t.user_id, t]));
     const list = Array.from(ids).map((id) => {
       const m = byId.get(id), t = fromJobs.get(id);
       return { id, name: m?.full_name ?? t?.name ?? "Team member", initials: m?.initials ?? t?.initials ?? "?", color: m?.color ?? t?.color ?? "#94a3b8", avatar_url: m?.avatar_url ?? t?.avatar_url ?? null };
     });
     const pos = new Map(pOrder.map((id, i) => [id, i]));
-    return list.sort((a, b) => (pos.get(a.id) ?? 9999) - (pos.get(b.id) ?? 9999) || a.name.localeCompare(b.name));
-  }, [team, jobs, pOrder]);
+    const sorted = list.sort((a, b) => (pos.get(a.id) ?? 9999) - (pos.get(b.id) ?? 9999) || a.name.localeCompare(b.name));
+    // Que dos personas nunca tengan el mismo color aquí: si se repite, se le da otro de la paleta
+    const used = new Set<string>();
+    return sorted.map((p) => {
+      let c = p.color.toLowerCase();
+      if (used.has(c)) c = PERSON_COLORS.find((x) => !used.has(x)) ?? c;
+      used.add(c);
+      return { ...p, color: c };
+    });
+  }, [team, rawJobs, pOrder]);
+  // Los trabajos con los colores de cada persona ya sin repetir (líneas, puntitos y avatares)
+  const jobs = useMemo(() => {
+    const col = new Map(people.map((p) => [p.id, p.color]));
+    return rawJobs.map((j) => ({ ...j, techs: j.techs.map((t) => ({ ...t, color: col.get(t.user_id) ?? t.color })) }));
+  }, [rawJobs, people]);
+
+
+
+  const counts = useMemo(() => { const m = new Map<string, number>(); jobs.forEach((j) => m.set(groupOf(j), (m.get(groupOf(j)) ?? 0) + 1)); return m; }, [jobs, groupOf]);
+  const visible = useMemo(() => jobs.filter((j) => show.includes(groupOf(j) as Show) && (!onlyUser || j.techs.some((t) => t.user_id === onlyUser))), [jobs, show, onlyUser, groupOf]);
 
   // Orden de las tarjetas: el que acomodaste a mano; si no, por persona (casi no se cruzan las líneas) y por hora
   const ordered = useMemo(() => {
@@ -344,13 +368,14 @@ export default function OpsConnections({ companyId, jobs, groupOf, team, now, me
                     Completed · {doneCount}
                   </p>
                 )}
-                {col.jobs.map((j) => {
+                {col.jobs.map((j, ri) => {
                   const g = groupOf(j);
                   const dim = hoverJob ? hoverJob !== j.id : hoverUser ? !j.techs.some((t) => t.user_id === hoverUser) : false;
                   return (
                     <div key={j.id} {...target(`j-${j.id}`, (e) => dropOnJob(j.id, e))}
                       className={`relative rounded-xl bg-white transition-shadow ${over === `j-${j.id}` && drag?.kind === "job" && drag.id !== j.id ? "shadow-[-4px_0_0_0_#14a39a]" : ""}`}>
                       <OpsCard job={j} group={g} now={now} tiny afterHours={isAfter?.(j)} href={hrefFor?.(j, g)} menu={menuFor?.(j, g)} dim={dim}
+                        tint={tintAt(ri, ci)}
                         ports={j.techs.map((t) => (g === "delayed" ? "#e11d48" : t.color))}
                         dragging={drag?.kind === "job" && drag.id === j.id}
                         innerRef={(el) => { if (el) jobEls.current.set(j.id, el); else jobEls.current.delete(j.id); }}

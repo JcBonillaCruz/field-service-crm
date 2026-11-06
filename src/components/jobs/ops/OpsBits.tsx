@@ -69,8 +69,9 @@ export type CardMenu = { label: string; onClick: () => void; danger?: boolean; i
 
 // Tarjeta de un trabajo (Operations) — chiquita, como las de Assign jobs.
 // Toque = ficha completa (o Assign jobs si no tiene a nadie) · ⋯ = acciones · se arrastra entre columnas
-export function OpsCard({ job, group, now, innerRef, onHover, dim = false, menu, drag, dragging = false, afterHours = false, href, tiny = false, ports }: {
+export function OpsCard({ job, group, now, innerRef, onHover, dim = false, menu, drag, dragging = false, afterHours = false, href, tiny = false, ports, tint }: {
   job: OpsJob; group: OpsGroup; now: number; compact?: boolean; afterHours?: boolean; href?: string;
+  tint?: { bg: string; border: string }; // Conexiones: toda la tarjeta de un color suave (sin la rayita de arriba)
   tiny?: boolean; ports?: string[]; // tiny = 30% más chica (Conexiones) · ports = colores de las personas conectadas
   innerRef?: (el: HTMLDivElement | null) => void; onHover?: (on: boolean) => void; dim?: boolean;
   menu?: CardMenu; drag?: React.HTMLAttributes<HTMLDivElement> & { draggable?: boolean }; dragging?: boolean;
@@ -91,9 +92,10 @@ export function OpsCard({ job, group, now, innerRef, onHover, dim = false, menu,
       onMouseEnter={() => onHover?.(true)} onMouseLeave={() => onHover?.(false)} {...drag}
       title={delay ? `${delay.label} · ${delay.detail}` : live ? LIVE_TEXT[live] : undefined}
       className={`group/card relative cursor-pointer select-none rounded-xl border ${tiny ? "px-2 py-1.5" : "px-2.5 py-2"} transition-all duration-100 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]
-        ${done ? "border-[#e2e8f0] bg-[#f1f5f9]" : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-[#14a39a] hover:shadow-[0_8px_18px_rgba(15,40,60,0.09)]"}
+        ${tint ? "hover:-translate-y-0.5 hover:shadow-[0_8px_18px_rgba(15,40,60,0.10)] hover:brightness-[0.98]" : done ? "border-[#e2e8f0] bg-[#f1f5f9]" : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-[#14a39a] hover:shadow-[0_8px_18px_rgba(15,40,60,0.09)]"}
         ${drag?.draggable ? "active:cursor-grabbing" : ""} ${dim ? "opacity-35" : ""} ${dragging ? "opacity-40" : ""}`}
-      style={{ borderTop: `3px solid ${done ? "#16a34a" : delay ? "#e11d48" : color}` }}>
+      style={tint ? { background: tint.bg, borderColor: tint.border, ...(delay && !done ? { borderTop: "3px solid #e11d48" } : {}) }
+        : { borderTop: `3px solid ${done ? "#16a34a" : delay ? "#e11d48" : color}` }}>
       {ports && ports.length > 0 && (
         <span className="pointer-events-none absolute -left-[5px] top-1/2 flex -translate-y-1/2 flex-col gap-0.5">
           {ports.map((c, i) => <span key={i} className="h-2 w-2 rounded-full ring-2 ring-white" style={{ background: c }} />)}
