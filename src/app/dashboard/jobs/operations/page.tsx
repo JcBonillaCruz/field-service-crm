@@ -14,5 +14,6 @@ export default async function OperationsPage() {
   if (!canManageJobs(current.role)) redirect("/dashboard/jobs/mine");
   const data = await loadJobBasics(supabase, current.id);
   if (data.needsSql) return <JobsNeedSql />;
-  return <OperationsCenter companyId={current.id} team={data.team} weekStartsOn={data.settings.week_starts_on} canDelete={current.role === "owner" || current.role === "manager"} hours={data.settings} />;
+  return <OperationsCenter companyId={current.id} team={data.team} weekStartsOn={data.settings.week_starts_on} canDelete={current.role === "owner" || current.role === "manager"} hours={data.settings}
+    money={current.role === "owner" ? "owner" : current.role === "manager" ? "manager" : null} />;
 }

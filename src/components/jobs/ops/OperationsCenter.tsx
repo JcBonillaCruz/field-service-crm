@@ -6,21 +6,38 @@ import { useRouter } from "next/navigation";
 import { Menu, MenuButton, MenuItem, MenuItems, Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { createClient } from "@/lib/supabase/client";
 import { JobSettings, TeamMember, addDays, addressLine, afterHoursOf, dayStart, jobError, receivesJobs, startOfMonth, startOfWeek } from "@/lib/jobs";
-import { OPS_GROUPS, OpsGroup, OpsJob, delayOf, fold, groupOf as groupAt } from "@/lib/operations";
+import { OPS_GROUPS, OpsGroup, OpsJob, delayOf, fold, groupOf as groupAt, progressOf } from "@/lib/operations";
 import { TechDot } from "@/components/jobs/EventBar";
-import { CardMenu, GroupArt, OpsCard } from "@/components/jobs/ops/OpsBits";
+import { CardMenu, GroupArt, OpsCard, ProgressRing } from "@/components/jobs/ops/OpsBits";
 import OpsConnections from "@/components/jobs/ops/OpsConnections";
 import { MoveTarget, OpsAsk, OpsDialog } from "@/components/jobs/ops/OpsDialogs";
 
 type View = "board" | "connections";
-type When = "today" | "week" | "month" | "quarter" | "all";
+type When = "today" | "week" | "last_week" | "month" | "last_month" | "quarter" | "all";
 const WHEN: { v: When; label: string; hint: string }[] = [
   { v: "today", label: "Today", hint: "Jobs of today" },
   { v: "week", label: "This week", hint: "Sunday to Saturday" },
+  { v: "last_week", label: "Last week", hint: "The week before this one" },
   { v: "month", label: "This month", hint: "The whole month" },
-  { v: "quarter", label: "3 months", hint: "Last and next 3 months" },
+  { v: "last_month", label: "Last month", hint: "The month before this one" },
+  { v: "quarter", label: "3 months", hint: "The last 3 months (and the next 3 for open jobs)" },
   { v: "all", label: "All time", hint: "Everything, including old completed jobs" },
 ];
+// Filtro propio de cada columna: periodo (o el de la página) + búsqueda
+type ColFilter = { when: When | null; q: string };
+const NO_FILTER: ColFilter = { when: null, q: "" };
+function rangeOf(w: When, now: number, weekStartsOn: number, done: boolean): [Date, Date] | null {
+  const today = dayStart(new Date(now)), wk = startOfWeek(today, weekStartsOn);
+  switch (w) {
+    case "today": return [today, addDays(today, 1)];
+    case "week": return [wk, addDays(wk, 7)];
+    case "last_week": return [addDays(wk, -7), wk];
+    case "month": return [startOfMonth(today), new Date(today.getFullYear(), today.getMonth() + 1, 1)];
+    case "last_month": return [new Date(today.getFullYear(), today.getMonth() - 1, 1), startOfMonth(today)];
+    case "quarter": return [addDays(today, -91), done ? addDays(today, 1) : addDays(today, 92)];
+    default: return null;
+  }
+}
 const MOVABLE: OpsGroup[] = ["unassigned", "assigned", "in_progress"];
 const ICON = {
   open: "M14 4h6v6M20 4l-9 9M10 6H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5",
@@ -38,8 +55,9 @@ const btn = "inline-flex h-10 items-center gap-2 rounded-lg border border-slate-
 // Centro de Operaciones: todos los trabajos en 5 grupos, en vivo.
 // Sin asignar · Asignados · En progreso · Retrasados · Terminados
 // =====================================================================
-export default function OperationsCenter({ companyId, team, weekStartsOn, canDelete, hours }: {
+export default function OperationsCenter({ companyId, team, weekStartsOn, canDelete, hours, money }: {
   companyId: string; team: TeamMember[]; weekStartsOn: number; canDelete: boolean; hours: Pick<JobSettings, "day_start" | "day_end" | "business_days">;
+  money: "owner" | "manager" | null; // quién ve dinero arriba (la oficina no)
 }) {
   const router = useRouter();
   const [jobs, setJobs] = useState<OpsJob[]>([]);
@@ -49,6 +67,8 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
   const [view, setView] = useState<View>("board");
   const [when, setWhenState] = useState<When>("week");
   const [ask, setAsk] = useState<OpsAsk | null>(null);
+  const [colF, setColF] = useState<Record<OpsGroup, ColFilter>>({ unassigned: NO_FILTER, assigned: NO_FILTER, in_progress: NO_FILTER, delayed: NO_FILTER, done: NO_FILTER });
+  const setCol = (g: OpsGroup, f: Partial<ColFilter>) => setColF((m) => ({ ...m, [g]: { ...m[g], ...f } }));
   const [toast, setToast] = useState<{ m: string; err?: boolean } | null>(null);
   const flash = (m: string, err = false) => { setToast({ m, err }); setTimeout(() => setToast((t) => (t?.m === m ? null : t)), err ? 5000 : 2600); };
   // Orden de las columnas y de las tarjetas (cada quien lo acomoda a su gusto; se guarda en este navegador)
@@ -79,12 +99,12 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
 
   const load = useCallback(async () => {
     const id = ++reqId.current;
-    const since = when === "all" ? new Date(2000, 0, 1) : addDays(dayStart(new Date()), -95);
+    const since = when === "all" || colF.done.when === "all" ? new Date(2000, 0, 1) : addDays(dayStart(new Date()), -100);
     const { data, error: err } = await createClient().rpc("ops_board", { p_company: companyId, p_done_since: since.toISOString() });
     if (id !== reqId.current) return;
     if (err) { setError(jobError(err)); setLoading(false); return; }
     setError(""); setJobs((data ?? []) as OpsJob[]); setLoading(false); setUpdatedAt(Date.now());
-  }, [companyId, when]);
+  }, [companyId, when, colF.done.when]);
 
   useEffect(() => { load(); }, [load]);
   // En vivo: cuando alguien asigna, mueve o el colaborador cambia de estado
@@ -107,36 +127,37 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
   const groupOf = useCallback((j: OpsJob) => groupAt(j, now), [now]);
   const isAfter = useCallback((j: OpsJob) => afterHoursOf(j.visit?.starts_at ? new Date(j.visit.starts_at) : null, j.visit?.ends_at ? new Date(j.visit.ends_at) : null, hours), [hours]);
 
-  const shown = useMemo(() => {
-    const term = fold(q.trim()), digits = q.replace(/\D/g, "");
-    const today = dayStart(new Date(now));
-    const ranges: Record<When, [Date, Date] | null> = {
-      today: [today, addDays(today, 1)],
-      week: [startOfWeek(today, weekStartsOn), addDays(startOfWeek(today, weekStartsOn), 7)],
-      month: [startOfMonth(today), new Date(today.getFullYear(), today.getMonth() + 1, 1)],
-      quarter: [addDays(today, -91), addDays(today, 92)],
-      all: null,
-    };
-    const [from, to] = ranges[when] ?? [null, null];
-    return jobs.filter((j) => {
-      if (term && !(fold(`${j.number} ${j.customer_name} ${j.title ?? ""} ${j.type_name ?? ""} ${addressLine(j.site_address)} ${j.techs.map((t) => t.name).join(" ")}`).includes(term)
-        || (digits.length >= 3 && (j.customer_phone ?? "").replace(/\D/g, "").includes(digits)))) return false;
-      if (people.length && !(people.includes(UNASSIGNED) && !j.techs.length) && !j.techs.some((t) => people.includes(t.user_id))) return false;
-      if (from && to) {
-        const g = groupOf(j);
-        const s = j.visit?.starts_at ? new Date(j.visit.starts_at) : null;
-        const doneAt = j.completed_at ? new Date(j.completed_at) : null;
-        const inRange = (d: Date | null) => Boolean(d && d >= from && d < to);
-        // Lo que está pasando ahora (y lo atrasado o sin fecha) siempre se ve; lo demás según su fecha
-        if (!(g === "in_progress" || g === "delayed" || (!s && g !== "done") || (g !== "done" && inRange(s)) || (g === "done" && inRange(doneAt ?? s)))) return false;
-      }
-      return true;
-    });
-  }, [jobs, q, people, when, now, weekStartsOn, groupOf]);
+  const matches = useCallback((j: OpsJob, query: string) => {
+    const term = fold(query.trim()), digits = query.replace(/\D/g, "");
+    if (!term) return true;
+    return fold(`${j.number} ${j.customer_name} ${j.title ?? ""} ${j.type_name ?? ""} ${addressLine(j.site_address)} ${j.techs.map((t) => t.name).join(" ")}`).includes(term)
+      || (digits.length >= 3 && (j.customer_phone ?? "").replace(/\D/g, "").includes(digits));
+  }, []);
+  // ¿Entra en el periodo? Terminados por la fecha en que se terminaron; los demás por su fecha agendada.
+  // Con el periodo de la página, lo que está pasando ahora y lo atrasado siempre se ve; si la columna tiene su propio filtro, se respeta tal cual.
+  const inPeriod = useCallback((j: OpsJob, g: OpsGroup, w: When, own: boolean) => {
+    const r = rangeOf(w, now, weekStartsOn, g === "done"); if (!r) return true;
+    const [from, to] = r;
+    const s = j.visit?.starts_at ? new Date(j.visit.starts_at) : null;
+    const d = g === "done" ? (j.completed_at ? new Date(j.completed_at) : s) : s;
+    if (!d) return g !== "done"; // sin fecha: siempre a la vista (necesita atención)
+    if (!own && (g === "in_progress" || g === "delayed")) return true;
+    return d >= from && d < to;
+  }, [now, weekStartsOn]);
+
+  const shown = useMemo(() => jobs.filter((j) => {
+    if (!matches(j, q)) return false;
+    if (people.length && !(people.includes(UNASSIGNED) && !j.techs.length) && !j.techs.some((t) => people.includes(t.user_id))) return false;
+    return true;
+  }), [jobs, q, people, matches]);
 
   const byGroup = useMemo(() => {
     const m = Object.fromEntries(OPS_GROUPS.map((g) => [g.id, [] as OpsJob[]])) as Record<OpsGroup, OpsJob[]>;
-    shown.forEach((j) => m[groupOf(j)].push(j));
+    shown.forEach((j) => {
+      const g = groupOf(j), f = colF[g];
+      if (!inPeriod(j, g, f.when ?? when, Boolean(f.when)) || !matches(j, f.q)) return;
+      m[g].push(j);
+    });
     // Retrasados: el más tarde primero · Terminados: el más reciente primero
     m.delayed.sort((a, b) => (delayOf(b, now)?.minutes ?? 0) - (delayOf(a, now)?.minutes ?? 0));
     m.done.sort((a, b) => (b.completed_at ?? "").localeCompare(a.completed_at ?? ""));
@@ -148,9 +169,25 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
       m[g].sort((a, b) => (pos.get(a.id) ?? 9999 + (base.get(a.id) ?? 0)) - (pos.get(b.id) ?? 9999 + (base.get(b.id) ?? 0)));
     });
     return m;
-  }, [shown, groupOf, now, cardOrder]);
+  }, [shown, groupOf, now, cardOrder, colF, when, inPeriod, matches]);
 
-  const connJobs = useMemo(() => shown.filter((j) => !focus || groupOf(j) === focus), [shown, focus, groupOf]);
+  const connJobs = useMemo(() => (focus ? byGroup[focus] : OPS_GROUPS.flatMap((g) => byGroup[g.id])), [byGroup, focus]);
+
+  // ---------- Progreso total y dinero del periodo ----------
+  const totals = useMemo(() => {
+    const all = OPS_GROUPS.flatMap((g) => byGroup[g.id]);
+    const pct = all.length ? Math.round(all.reduce((a, j) => a + progressOf(j), 0) / all.length) : 0;
+    const open = all.filter((j) => j.status !== "completed");
+    const openPct = open.length ? Math.round(open.reduce((a, j) => a + progressOf(j), 0) / open.length) : 0;
+    return { pct, openPct, total: all.length, done: byGroup.done.length, working: byGroup.in_progress.length, late: byGroup.delayed.length };
+  }, [byGroup]);
+  const [cash, setCash] = useState<Money | null>(null);
+  useEffect(() => {
+    if (!money) return;
+    const r = rangeOf(when, Date.now(), weekStartsOn, true);
+    createClient().rpc("ops_money", { p_company: companyId, p_from: r?.[0].toISOString() ?? null, p_to: r?.[1].toISOString() ?? null })
+      .then(({ data, error: e }) => setCash(e ? null : (data as Money)), () => setCash(null));
+  }, [companyId, when, weekStartsOn, money, updatedAt]);
   const filtersOn = people.length ? 1 : 0;
   const peopleList = useMemo(() => {
     const ids = new Set(jobs.flatMap((j) => j.techs.map((t) => t.user_id)));
@@ -260,6 +297,8 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
 
       {error && <p role="alert" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[14px] text-amber-800">{error}</p>}
 
+      <Overview totals={totals} cash={cash} money={money} period={WHEN.find((w) => w.v === when)!.label} />
+
       {/* Resumen de los 5 grupos (tocar = ver solo ese grupo) */}
       <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5">
         {ordered.map((g) => {
@@ -309,7 +348,10 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
                     <span className={`h-2.5 w-2.5 rounded-full ${g.dot}`} />
                     <p className="text-[13.5px] font-semibold text-[#0b1f3a]">{g.label}</p>
                     <span className="rounded-full bg-white px-2 py-0.5 text-[12px] font-semibold text-slate-500 ring-1 ring-slate-200">{byGroup[g.id].length}</span>
-                    {focus && <button type="button" onClick={() => setFocus(null)} className="ml-auto text-[12.5px] font-semibold text-[#0f766e] hover:underline">Show all groups</button>}
+                    <span className="ml-auto flex items-center gap-1.5">
+                      {focus && <button type="button" onClick={() => setFocus(null)} className="text-[12.5px] font-semibold text-[#0f766e] hover:underline">Show all</button>}
+                      <ColumnFilter label={g.label} f={colF[g.id]} pageWhen={when} onChange={(f) => setCol(g.id, f)} />
+                    </span>
                   </div>
                   {drag?.kind === "card" && drag.from !== g.id && (
                     <p className={`mx-2 mt-2 rounded-lg border-2 border-dashed py-1.5 text-center text-[12px] font-semibold ${can ? "border-[#14a39a] text-[#0f766e]" : "border-slate-300 text-slate-400"}`}>
@@ -342,7 +384,10 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
                 </button>
               ))}
             </div>
-            <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} className="mt-2.5 min-h-[50vh] space-y-2">
+            <div className="mt-2 flex items-center justify-end">
+              <ColumnFilter label={OPS_GROUPS.find((x) => x.id === mobileGroup)!.label} f={colF[mobileGroup]} pageWhen={when} onChange={(f) => setCol(mobileGroup, f)} wide />
+            </div>
+            <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} className="mt-2 min-h-[50vh] space-y-2">
               <div key={mobileGroup} className="space-y-2 animate-[bp-fade_0.2s_ease-out]">
                 {loading ? [0, 1, 2].map((i) => <div key={i} className="h-24 animate-pulse rounded-xl bg-white" />)
                   : byGroup[mobileGroup].length === 0 ? <EmptyGroup g={mobileGroup} />
@@ -463,8 +508,96 @@ function WhenMenu({ when, setWhen }: { when: When; setWhen: (v: When) => void })
             </button>
           </MenuItem>
         ))}
-        <p className="px-3 pb-1 pt-2 text-[11.5px] text-slate-400">Jobs in progress, delayed or without a date always show.</p>
+        <p className="px-3 pb-1 pt-2 text-[11.5px] text-slate-400">For the whole page and the earnings. Each column can have its own filter (funnel icon).</p>
       </MenuItems>
     </Menu>
+  );
+}
+
+type Money = { owner: boolean; jobs_done: number; revenue: number; collected: number; pipeline: number; open_jobs: number;
+  labor: number | null; materials: number | null; hours: number | null; missing_rates: number | null; salaried: number | null; profit: number | null };
+const money$ = (v: number | null | undefined) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(v) || 0);
+
+// Arriba de todo: progreso total + ingresos, costos y ganancia del periodo (costos y ganancia SOLO el dueño)
+function Overview({ totals, cash, money, period }: {
+  totals: { pct: number; openPct: number; total: number; done: number; working: number; late: number };
+  cash: Money | null; money: "owner" | "manager" | null; period: string;
+}) {
+  const margin = cash?.profit != null && cash.revenue > 0 ? Math.round((cash.profit / cash.revenue) * 100) : null;
+  const stat = (label: string, value: string, hint: string, tone = "text-[#0b1f3a]", art?: React.ReactNode) => (
+    <div className="group min-w-0 rounded-xl px-3 py-2 transition-colors hover:bg-[#f6f9fc]">
+      <p className="flex items-center gap-1.5 truncate text-[12px] font-medium text-slate-500">{art}{label}</p>
+      <p className={`mt-0.5 truncate text-[20px] font-semibold tabular-nums tracking-tight ${tone}`}>{value}</p>
+      <p className="truncate text-[11.5px] text-slate-400">{hint}</p>
+    </div>
+  );
+  return (
+    <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-3 lg:p-4">
+      <div className="flex flex-wrap items-center gap-3 lg:gap-5">
+        <div className="flex items-center gap-3 pr-2">
+          <ProgressRing pct={totals.pct} size={64} stroke={6} color="#0f766e" />
+          <div>
+            <p className="text-[12px] font-semibold uppercase tracking-wide text-slate-400">Total progress · {period}</p>
+            <p className="text-[15px] font-semibold text-[#0b1f3a]">{totals.done} of {totals.total} job{totals.total === 1 ? "" : "s"} completed</p>
+            <p className="text-[12.5px] text-slate-500">Open jobs are {totals.openPct}% along · {totals.working} working · <span className={totals.late ? "font-semibold text-[#be123c]" : ""}>{totals.late} delayed</span></p>
+          </div>
+        </div>
+        {money && cash && (
+          <div className="grid min-w-0 flex-1 grid-cols-2 gap-1 border-slate-100 sm:grid-cols-3 lg:border-l lg:pl-4 xl:grid-cols-5">
+            {stat("Earned", money$(cash.revenue), `${cash.jobs_done} completed job${cash.jobs_done === 1 ? "" : "s"}`)}
+            {stat("Collected", money$(cash.collected), cash.revenue > cash.collected ? `${money$(cash.revenue - cash.collected)} still to collect` : "All collected", "text-[#0f766e]")}
+            {stat("Open jobs", money$(cash.pipeline), `${cash.open_jobs} job${cash.open_jobs === 1 ? "" : "s"} not finished yet`)}
+            {money === "owner" && cash.profit != null ? (
+              <>
+                {stat("Costs", money$((cash.labor ?? 0) + (cash.materials ?? 0)), `Labor ${money$(cash.labor)} · Materials ${money$(cash.materials)}`, "text-[#b45309]")}
+                {stat("Profit", money$(cash.profit), margin != null ? `${margin}% margin${cash.missing_rates ? ` · ${cash.missing_rates} without pay rate` : ""}` : "No completed jobs yet",
+                  cash.profit >= 0 ? "text-[#15803d]" : "text-[#be123c]",
+                  <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="4.5" y="9" width="11" height="7.5" rx="1.5" /><path d="M7 9V7a3 3 0 0 1 6 0v2" /></svg>)}
+              </>
+            ) : null}
+          </div>
+        )}
+      </div>
+      {money === "owner" && cash && ((cash.missing_rates ?? 0) > 0 || (cash.salaried ?? 0) > 0) && (
+        <p className="mt-2 rounded-lg bg-[#f6f9fc] px-3 py-1.5 text-[12px] text-slate-500">
+          {(cash.missing_rates ?? 0) > 0 && <>Some collaborators don&apos;t have a pay rate yet, so their labor counts as $0. Add it in Team → Edit. </>}
+          {(cash.salaried ?? 0) > 0 && <>Salaried people aren&apos;t counted per job.</>}
+        </p>
+      )}
+    </section>
+  );
+}
+
+// Filtro de cada columna (embudo): su propio periodo + buscar dentro de esa columna
+function ColumnFilter({ label, f, pageWhen, onChange, wide = false }: { label: string; f: ColFilter; pageWhen: When; onChange: (f: Partial<ColFilter>) => void; wide?: boolean }) {
+  const on = Boolean(f.when || f.q);
+  const cur = f.when ? WHEN.find((w) => w.v === f.when)!.label : null;
+  const chip = (sel: boolean) => `rounded-full border px-2.5 py-1 text-[12.5px] font-semibold transition-colors ${sel ? "border-[#2563eb] bg-[#eef4ff] text-[#2563eb]" : "border-slate-200 text-slate-600 hover:border-slate-300"}`;
+  return (
+    <Popover className="relative">
+      <PopoverButton aria-label={`Filter ${label}`} title={`Filter ${label}`}
+        className={`flex h-7 items-center gap-1 rounded-lg px-1.5 text-[12px] font-semibold transition-colors focus:outline-none data-[open]:bg-[#eef4ff] ${on ? "bg-[#eef4ff] text-[#2563eb]" : "text-slate-400 hover:bg-white hover:text-[#0b1f3a]"} ${wide ? "border border-slate-200 bg-white px-3 text-[13px]" : ""}`}>
+        <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 5h13l-5 6v4.5l-3 1.5v-6z" /></svg>
+        {(wide || on) && <span className="max-w-[6rem] truncate">{cur ?? (f.q ? "Search" : `Filter ${label}`)}</span>}
+      </PopoverButton>
+      <PopoverPanel anchor="bottom end" transition
+        className="z-[100] mt-2 w-[min(19rem,calc(100vw-1.5rem))] rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_18px_48px_rgba(15,40,60,0.2)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0">
+        <div className="flex items-center justify-between">
+          <p className="text-[14.5px] font-semibold text-[#0b1f3a]">{label}</p>
+          {on && <button type="button" onClick={() => onChange({ when: null, q: "" })} className="text-[12.5px] font-semibold text-[#0f766e] hover:underline">Clear</button>}
+        </div>
+        <div className="relative mt-3">
+          <svg viewBox="0 0 20 20" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
+          <input value={f.q} onChange={(e) => onChange({ q: e.target.value })} placeholder={`Search in ${label}`}
+            className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 pl-8 pr-3 text-[13.5px] focus:border-[#0f766e] focus:bg-white focus:outline-none" />
+        </div>
+        <p className="mb-1.5 mt-3 text-[12px] font-semibold text-slate-500">Period</p>
+        <div className="flex flex-wrap gap-1.5">
+          <button type="button" onClick={() => onChange({ when: null })} className={chip(!f.when)}>Same as page · {WHEN.find((w) => w.v === pageWhen)!.label}</button>
+          {WHEN.map((w) => <button key={w.v} type="button" onClick={() => onChange({ when: w.v })} className={chip(f.when === w.v)}>{w.label}</button>)}
+        </div>
+        <p className="mt-3 text-[11.5px] text-slate-400">{label === "Completed" ? "By the day the job was finished." : "By the scheduled day. Jobs without a date always show."}</p>
+      </PopoverPanel>
+    </Popover>
   );
 }
