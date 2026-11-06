@@ -254,7 +254,7 @@ export default function OpsConnections({ companyId, jobs, groupOf, team, now, me
           </svg>
         ))}
 
-        <div className="relative grid grid-cols-[7.5rem_2.5rem_minmax(0,1fr)] sm:grid-cols-[11.5rem_5rem_minmax(0,1fr)] lg:grid-cols-[12rem_7rem_minmax(0,1fr)]">
+        <div className="relative grid grid-cols-[12rem_minmax(7rem,15rem)_15.5rem] justify-start">
           {/* Colaboradores */}
           <div className="relative z-10 space-y-2 self-start">
             {people.map((p) => {
@@ -290,9 +290,9 @@ export default function OpsConnections({ companyId, jobs, groupOf, team, now, me
             )}
           </div>
           <div />
-          {/* Trabajos: tarjetas chiquitas que llenan de izquierda a derecha */}
-          <div className="relative z-10 grid content-start gap-x-4 gap-y-2.5 [grid-template-columns:repeat(auto-fill,minmax(10.5rem,1fr))]">
-            {ordered.length === 0 && <p className="col-span-full rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-[13px] text-slate-500">No jobs with these filters.</p>}
+          {/* Trabajos: una columna de tarjetas chiquitas a la derecha (como antes, pero las personas a la izquierda) */}
+          <div className="relative z-10 space-y-2">
+            {ordered.length === 0 && <p className="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-[13px] text-slate-500">No jobs with these filters.</p>}
             {ordered.map((j) => {
               const g = groupOf(j);
               const dim = hoverJob ? hoverJob !== j.id : hoverUser ? !j.techs.some((t) => t.user_id === hoverUser) : false;

@@ -69,8 +69,9 @@ export type CardMenu = { label: string; onClick: () => void; danger?: boolean; i
 
 // Tarjeta de un trabajo (Operations) — chiquita, como las de Assign jobs.
 // Toque = ficha completa (o Assign jobs si no tiene a nadie) · ⋯ = acciones · se arrastra entre columnas
-export function OpsCard({ job, group, now, innerRef, onHover, dim = false, menu, drag, dragging = false, afterHours = false, href }: {
+export function OpsCard({ job, group, now, innerRef, onHover, dim = false, menu, drag, dragging = false, afterHours = false, href, tiny = false, ports }: {
   job: OpsJob; group: OpsGroup; now: number; compact?: boolean; afterHours?: boolean; href?: string;
+  tiny?: boolean; ports?: string[]; // tiny = 30% más chica (Conexiones) · ports = colores de las personas conectadas
   innerRef?: (el: HTMLDivElement | null) => void; onHover?: (on: boolean) => void; dim?: boolean;
   menu?: CardMenu; drag?: React.HTMLAttributes<HTMLDivElement> & { draggable?: boolean }; dragging?: boolean;
 }) {
@@ -89,12 +90,17 @@ export function OpsCard({ job, group, now, innerRef, onHover, dim = false, menu,
     <div ref={innerRef} role="link" tabIndex={0} onClick={open} onKeyDown={(e) => { if (e.key === "Enter") open(); }}
       onMouseEnter={() => onHover?.(true)} onMouseLeave={() => onHover?.(false)} {...drag}
       title={delay ? `${delay.label} · ${delay.detail}` : live ? LIVE_TEXT[live] : undefined}
-      className={`group/card relative cursor-pointer select-none rounded-xl border px-2.5 py-2 transition-all duration-100 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]
+      className={`group/card relative cursor-pointer select-none rounded-xl border ${tiny ? "px-2 py-1.5" : "px-2.5 py-2"} transition-all duration-100 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]
         ${done ? "border-[#e2e8f0] bg-[#f1f5f9]" : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-[#14a39a] hover:shadow-[0_8px_18px_rgba(15,40,60,0.09)]"}
         ${drag?.draggable ? "active:cursor-grabbing" : ""} ${dim ? "opacity-35" : ""} ${dragging ? "opacity-40" : ""}`}
       style={{ borderTop: `3px solid ${done ? "#16a34a" : delay ? "#e11d48" : color}` }}>
+      {ports && ports.length > 0 && (
+        <span className="pointer-events-none absolute -left-[5px] top-1/2 flex -translate-y-1/2 flex-col gap-0.5">
+          {ports.map((c, i) => <span key={i} className="h-2 w-2 rounded-full ring-2 ring-white" style={{ background: c }} />)}
+        </span>
+      )}
       <div className="flex items-center gap-1.5">
-        <span className={`min-w-0 flex-1 truncate text-[11.5px] font-semibold ${delay ? "text-[#be123c]" : "text-slate-500"}`}>{delay ? delay.label : when}</span>
+        <span className={`min-w-0 flex-1 truncate ${tiny ? "text-[10.5px]" : "text-[11.5px]"} font-semibold ${delay ? "text-[#be123c]" : "text-slate-500"}`}>{delay ? delay.label : when}</span>
         {!done && (job.priority === "urgent" || job.priority === "high") && (
           <span className={`shrink-0 rounded-full px-1.5 text-[9.5px] font-bold uppercase ${job.priority === "urgent" ? "bg-[#ffe4e6] text-[#be123c]" : "bg-[#fff4e0] text-[#b45309]"}`}>{job.priority}</span>
         )}
@@ -103,18 +109,18 @@ export function OpsCard({ job, group, now, innerRef, onHover, dim = false, menu,
       </div>
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
-          <p className={`truncate text-[13.5px] font-semibold leading-snug ${done ? "text-slate-600" : "text-[#0b1f3a]"}`}>{job.customer_name || job.title || `#${job.number}`}</p>
-          <p className="truncate text-[11.5px] text-slate-500">
+          <p className={`truncate ${tiny ? "text-[12px]" : "text-[13.5px]"} font-semibold leading-snug ${done ? "text-slate-600" : "text-[#0b1f3a]"}`}>{job.customer_name || job.title || `#${job.number}`}</p>
+          <p className={`truncate ${tiny ? "text-[10.5px]" : "text-[11.5px]"} text-slate-500`}>
             {[job.type_name ?? job.title, addr].filter(Boolean).join(" · ") || `#${job.number}`}
           </p>
         </div>
-        {done ? <StatusArt s="completed" size={24} />
-          : live ? <span className="relative"><StatusArt s={live} size={26} /></span>
-          : <ProgressRing pct={pct} size={28} stroke={3} color={GROUP_TONE[group]} />}
+        {done ? <StatusArt s="completed" size={tiny ? 18 : 24} />
+          : live ? <span className="relative"><StatusArt s={live} size={tiny ? 20 : 26} /></span>
+          : <ProgressRing pct={pct} size={tiny ? 22 : 28} stroke={3} color={GROUP_TONE[group]} />}
       </div>
-      <div className="mt-1 flex items-center gap-1.5">
-        <TechDots techs={job.techs} size={18} max={3} />
-        {job.techs.length === 1 && <span className="truncate text-[11px] font-medium text-slate-500">{job.techs[0].name.split(" ")[0]}</span>}
+      <div className={`${tiny ? "mt-0.5" : "mt-1"} flex items-center gap-1.5`}>
+        <TechDots techs={job.techs} size={tiny ? 15 : 18} max={3} />
+        {job.techs.length === 1 && !tiny && <span className="truncate text-[11px] font-medium text-slate-500">{job.techs[0].name.split(" ")[0]}</span>}
         <span className="ml-auto flex items-center gap-1.5">
           {done ? <span className="text-[10px] font-semibold uppercase tracking-wide text-[#16a34a]">{STAGE_LABEL(job)}</span>
             : group === "unassigned" && !job.techs.length ? (
