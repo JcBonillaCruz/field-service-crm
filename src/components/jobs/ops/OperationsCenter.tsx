@@ -82,7 +82,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
   const [q, setQ] = useState("");
   const [people, setPeople] = useState<string[]>([]);
   const [focus, setFocus] = useState<OpsGroup | null>(null); // al tocar un resumen: solo ese grupo
-  const [mobileGroup, setMobileGroup] = useState<OpsGroup>("unassigned");
+  const [mobileGroup, setMobileGroup] = useState<OpsGroup>("assigned");
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   const reqId = useRef(0);
 
@@ -213,8 +213,6 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
     const i = colOrder.indexOf(mobileGroup);
     setMobileGroup(colOrder[Math.min(colOrder.length - 1, Math.max(0, i + (dx < 0 ? 1 : -1)))]);
   };
-  const tabStrip = useRef<HTMLDivElement>(null);
-  useEffect(() => { tabStrip.current?.querySelector(`[data-g="${mobileGroup}"]`)?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" }); }, [mobileGroup]);
 
   const ordered = colOrder.map((id) => OPS_GROUPS.find((g) => g.id === id)!);
   const columns = focus ? ordered.filter((g) => g.id === focus) : ordered;
@@ -280,38 +278,57 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
       {/* Encabezado */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="mr-auto min-w-0">
-          <h1 className="flex items-center gap-2.5 text-[22px] font-semibold tracking-tight text-[#0b1f3a]">
-            Operations
-          </h1>
+          <h1 className="text-[22px] font-semibold tracking-tight text-[#0b1f3a]">Operations</h1>
           <p className="text-[13px] text-slate-500">Every job, who&apos;s on it and how far along it is{updatedAt ? ` · updated ${new Date(updatedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}.</p>
         </div>
-        <div className="relative order-last w-full sm:order-none sm:w-72">
+        {/* Computadora */}
+        <div className="relative hidden w-72 lg:block">
           <svg viewBox="0 0 20 20" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search job, customer, phone, address" aria-label="Search jobs"
             className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 text-[14px] focus:border-[#0f766e] focus:outline-none focus:ring-4 focus:ring-[#14a39a]/15" />
           {q && <button type="button" onClick={() => setQ("")} aria-label="Clear search" className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
             <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M5 5l10 10M15 5 5 15" /></svg></button>}
         </div>
-        <WhenMenu when={when} setWhen={setWhen} />
-        <ViewMenu view={view} setView={pickView} />
-        <FiltersMenu people={people} setPeople={setPeople} list={peopleList} active={filtersOn} />
-        <Link prefetch={false} href="/dashboard/jobs/new" className="group/n inline-flex h-10 items-center gap-1.5 rounded-lg bg-[#0f766e] px-4 text-[14.5px] font-semibold text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59]">
-          <svg viewBox="0 0 20 20" className="h-5 w-5 transition-transform duration-200 group-hover/n:rotate-90" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>
-          <span className="hidden sm:inline">New job</span>
-        </Link>
+        <div className="hidden items-center gap-3 lg:flex">
+          <WhenMenu when={when} setWhen={setWhen} />
+          <ViewMenu view={view} setView={pickView} />
+          <FiltersMenu people={people} setPeople={setPeople} list={peopleList} active={filtersOn} />
+          <Link prefetch={false} href="/dashboard/jobs/new" className="group/n inline-flex h-10 items-center gap-1.5 rounded-lg bg-[#0f766e] px-4 text-[14.5px] font-semibold text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59]">
+            <svg viewBox="0 0 20 20" className="h-5 w-5 transition-transform duration-200 group-hover/n:rotate-90" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>New job
+          </Link>
+        </div>
       </div>
+      {/* Celular: arriba Vista y Filtros (con su nombre) · luego buscar · luego el periodo */}
+      <div className="mt-3 space-y-2 lg:hidden">
+        <div className="grid grid-cols-2 gap-2">
+          <ViewMenu view={view} setView={pickView} mobile />
+          <FiltersMenu people={people} setPeople={setPeople} list={peopleList} active={filtersOn} mobile />
+        </div>
+        <div className="relative">
+          <svg viewBox="0 0 20 20" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search job, customer, phone, address" aria-label="Search jobs"
+            className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 text-[14px] focus:border-[#0f766e] focus:outline-none focus:ring-4 focus:ring-[#14a39a]/15" />
+          {q && <button type="button" onClick={() => setQ("")} aria-label="Clear search" className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
+            <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M5 5l10 10M15 5 5 15" /></svg></button>}
+        </div>
+        <div className="flex justify-end"><WhenMenu when={when} setWhen={setWhen} /></div>
+      </div>
+      <Link prefetch={false} href="/dashboard/jobs/new" aria-label="New job"
+        className="fixed bottom-6 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#0f766e] text-white shadow-lg shadow-[#0f766e]/30 transition-transform active:scale-95 lg:hidden">
+        <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+      </Link>
 
       {error && <p role="alert" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[14px] text-amber-800">{error}</p>}
 
       <Overview totals={totals} cash={cash} money={money} period={WHEN.find((w) => w.v === when)!.label} />
 
       {/* Resumen de los 5 grupos (tocar = ver solo ese grupo) */}
-      <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5">
+      <div className="mt-4 hidden gap-2.5 sm:grid sm:grid-cols-3 xl:grid-cols-5">
         {ordered.map((g) => {
           const n = byGroup[g.id].length, on = focus === g.id;
           return (
             <button key={g.id} type="button" onClick={() => { setFocus(on ? null : g.id); setMobileGroup(g.id); }}
-              className={`group rounded-2xl border bg-white p-3 text-left transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(15,40,60,0.09)] lg:p-3.5 ${on ? "border-[#0f766e] ring-4 ring-[#14a39a]/10" : "border-slate-200 hover:border-slate-300"} ${g.id === "done" ? "col-span-2 sm:col-span-1" : ""}`}>
+              className={`group rounded-2xl border bg-white p-3 text-left transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(15,40,60,0.09)] lg:p-3.5 ${on ? "border-[#0f766e] ring-4 ring-[#14a39a]/10" : "border-slate-200 hover:border-slate-300"} `}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate text-[12.5px] font-medium text-slate-500">{g.label}</p>
@@ -395,25 +412,19 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
             })}
           </div>
 
-          {/* Celular: pestañas que se deslizan */}
+          {/* Celular: un desplegable para el grupo (empieza en Asignados), su periodo, y tarjetas chiquitas en 2 columnas */}
           <div className="mt-4 lg:hidden">
-            <div ref={tabStrip} className="-mx-3 flex gap-1.5 overflow-x-auto px-3 pb-1 [scrollbar-width:none]">
-              {ordered.map((g) => (
-                <button key={g.id} data-g={g.id} type="button" onClick={() => setMobileGroup(g.id)}
-                  className={`flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-[14px] font-semibold transition-colors ${mobileGroup === g.id ? "bg-[#0b1f3a] text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>
-                  <span className={`h-2 w-2 rounded-full ${g.dot}`} />{g.label}<span className={mobileGroup === g.id ? "text-white/70" : "text-slate-400"}>{byGroup[g.id].length}</span>
-                </button>
-              ))}
-            </div>
-            <div className="mt-2 flex items-center justify-end">
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1"><GroupPicker groups={ordered} value={mobileGroup} onChange={setMobileGroup} counts={byGroup} /></div>
               <ColumnTools label={OPS_GROUPS.find((x) => x.id === mobileGroup)!.label} f={colF[mobileGroup]} pageWhen={when} onChange={(f) => setCol(mobileGroup, f)} wide />
             </div>
-            <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} className="mt-2 min-h-[50vh] space-y-2">
-              <div key={mobileGroup} className="space-y-2 animate-[bp-fade_0.2s_ease-out]">
-                {loading ? [0, 1, 2].map((i) => <div key={i} className="h-24 animate-pulse rounded-xl bg-white" />)
+            <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} className="mt-2.5 min-h-[50vh]">
+              <div key={mobileGroup} className="animate-[bp-fade_0.2s_ease-out]">
+                {loading ? <div className="grid grid-cols-2 gap-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-20 animate-pulse rounded-xl bg-white" />)}</div>
                   : byGroup[mobileGroup].length === 0 ? <EmptyGroup g={mobileGroup} />
-                  : byGroup[mobileGroup].map((j) => <OpsCard key={j.id} job={j} group={mobileGroup} now={now} afterHours={isAfter(j)} href={hrefFor(j, mobileGroup)} menu={menuFor(j, mobileGroup)} />)}
+                  : <div className="grid grid-cols-2 gap-2">{byGroup[mobileGroup].map((j) => <OpsCard key={j.id} job={j} group={mobileGroup} now={now} tiny afterHours={isAfter(j)} href={hrefFor(j, mobileGroup)} menu={menuFor(j, mobileGroup)} />)}</div>}
               </div>
+              <p className="mt-3 text-center text-[11.5px] text-slate-400">Swipe left or right to change group</p>
             </div>
           </div>
         </>
@@ -445,7 +456,7 @@ function EmptyGroup({ g }: { g: OpsGroup }) {
   );
 }
 
-function ViewMenu({ view, setView }: { view: View; setView: (v: View) => void }) {
+function ViewMenu({ view, setView, mobile = false }: { view: View; setView: (v: View) => void; mobile?: boolean }) {
   const opts: { v: View; label: string; hint: string; d: string }[] = [
     { v: "board", label: "Board", hint: "Jobs in 5 groups", d: "M4 5h4v14H4zM10 5h4v9h-4zM16 5h4v11h-4z" },
     { v: "connections", label: "Connections", hint: "Lines from jobs to people", d: "M6 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM6 21a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM8 5c5 0 4 7 8 7M8 19c5 0 4-7 8-7" },
@@ -453,9 +464,9 @@ function ViewMenu({ view, setView }: { view: View; setView: (v: View) => void })
   const cur = opts.find((o) => o.v === view)!;
   return (
     <Menu>
-      <MenuButton className={btn} aria-label="View">
-        <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={cur.d} /></svg>
-        <span className="hidden sm:inline">{cur.label}</span>
+      <MenuButton className={`${btn} ${mobile ? "w-full justify-between" : ""}`} aria-label="View">
+        <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] shrink-0 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={cur.d} /></svg>
+        <span className={mobile ? "min-w-0 flex-1 truncate text-left" : ""}>{mobile && <span className="font-normal text-slate-400">View · </span>}{cur.label}</span>
         <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-400" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
       </MenuButton>
       <MenuItems anchor="bottom end" transition className="z-[100] mt-1 w-60 rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_12px_40px_rgba(15,40,60,0.16)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
@@ -473,13 +484,13 @@ function ViewMenu({ view, setView }: { view: View; setView: (v: View) => void })
   );
 }
 
-function FiltersMenu({ people, setPeople, list, active }: { people: string[]; setPeople: (v: string[]) => void; list: TeamMember[]; active: number }) {
+function FiltersMenu({ people, setPeople, list, active, mobile = false }: { people: string[]; setPeople: (v: string[]) => void; list: TeamMember[]; active: number; mobile?: boolean }) {
   const toggle = (id: string) => setPeople(people.includes(id) ? people.filter((x) => x !== id) : [...people, id]);
   return (
     <Popover className="relative">
-      <PopoverButton className={btn} aria-label="Filters">
-        <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
-        <span className="hidden sm:inline">Filters</span>
+      <PopoverButton className={`${btn} ${mobile ? "w-full" : ""}`} aria-label="Filters">
+        <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+        <span>{mobile ? "Filters · people" : "Filters"}</span>
         {active > 0 && <span className="rounded-full bg-[#0f766e] px-1.5 text-[11px] text-white">{active}</span>}
       </PopoverButton>
       <PopoverPanel anchor="bottom end" transition
@@ -612,9 +623,9 @@ function Overview({ totals, cash, money, period }: {
   const margin = cash?.profit != null && cash.revenue > 0 ? Math.round((cash.profit / cash.revenue) * 100) : null;
   const stat = (label: string, value: number, hint: string, tip: React.ReactNode, tone = "text-[#0b1f3a]", art?: React.ReactNode, right = false) => (
     <Tip tip={tip} right={right}>
-      <div className="cursor-default rounded-xl px-3 py-2 transition-colors duration-150 hover:bg-slate-50">
+      <div className="cursor-default rounded-xl px-2 py-1.5 transition-colors duration-150 hover:bg-slate-50 sm:px-3 sm:py-2">
         <p className="flex items-center gap-1.5 truncate text-[12px] font-medium text-slate-500">{art}{label}</p>
-        <p className={`mt-0.5 truncate text-[20px] font-semibold tabular-nums tracking-tight ${tone}`}><Count value={value} money /></p>
+        <p className={`mt-0.5 truncate text-[17px] font-semibold tabular-nums tracking-tight sm:text-[20px] ${tone}`}><Count value={value} money /></p>
         <p className="truncate text-[11.5px] text-slate-400">{hint}</p>
       </div>
     </Tip>
@@ -634,7 +645,7 @@ function Overview({ totals, cash, money, period }: {
             <BigRing pct={totals.pct} />
             <div>
               <p className="text-[12px] font-semibold uppercase tracking-wide text-slate-400">Total progress · {period}</p>
-              <p className="text-[15px] font-semibold text-[#0b1f3a]"><Count value={totals.done} /> of <Count value={totals.total} /> job{totals.total === 1 ? "" : "s"} completed</p>
+              <p className="text-[14px] font-semibold text-[#0b1f3a] sm:text-[15px]"><Count value={totals.done} /> of <Count value={totals.total} /> job{totals.total === 1 ? "" : "s"} completed</p>
               <p className="text-[12.5px] text-slate-500">Open jobs are {totals.openPct}% along · {totals.working} working · <span className={totals.late ? "font-semibold text-[#be123c]" : ""}>{totals.late} delayed</span></p>
             </div>
           </div>
@@ -668,7 +679,7 @@ function Overview({ totals, cash, money, period }: {
         )}
       </div>
       {money === "owner" && cash && ((cash.missing_rates ?? 0) > 0 || (cash.salaried ?? 0) > 0) && (
-        <p className="mt-2 rounded-lg bg-[#f6f9fc] px-3 py-1.5 text-[12px] text-slate-500">
+        <p className="mt-2 rounded-lg bg-[#f6f9fc] px-3 py-1.5 text-[11.5px] text-slate-500 sm:text-[12px]">
           {(cash.missing_rates ?? 0) > 0 && <>Some collaborators don&apos;t have a pay rate yet, so their labor counts as $0. Add it in Team → Edit. </>}
           {(cash.salaried ?? 0) > 0 && <>Salaried people aren&apos;t counted per job.</>}
         </p>
@@ -765,5 +776,31 @@ function RangeModal({ label, from, to, onClose, onApply }: { label: string; from
       </div>
       <p className="mt-3 text-[13px] text-slate-500">{lo ? (hi && hi !== lo ? `${fmtD(lo)} – ${fmtD(hi)}` : `${fmtD(lo)} · tap another day for a range`) : "Tap a day. Tap a second day to pick a range."}</p>
     </Modal>
+  );
+}
+
+// Celular: el grupo se escoge en un desplegable (con su número y su color)
+function GroupPicker({ groups, value, onChange, counts }: { groups: typeof OPS_GROUPS; value: OpsGroup; onChange: (g: OpsGroup) => void; counts: Record<OpsGroup, OpsJob[]> }) {
+  const cur = groups.find((g) => g.id === value)!;
+  return (
+    <Menu>
+      <MenuButton className="flex h-11 w-full items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 text-left focus:outline-none data-[open]:border-[#0f766e] data-[open]:ring-4 data-[open]:ring-[#14a39a]/15">
+        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${cur.dot}`} />
+        <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-[#0b1f3a]">{cur.label}</span>
+        <span className={`rounded-full px-2 py-0.5 text-[12px] font-bold ${value === "delayed" && counts[value].length ? "bg-[#ffe4e6] text-[#be123c]" : "bg-slate-100 text-slate-600"}`}>{counts[value].length}</span>
+        <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate-400" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
+      </MenuButton>
+      <MenuItems anchor="bottom start" transition className="z-[100] mt-1 w-[var(--button-width)] rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_12px_40px_rgba(15,40,60,0.16)] transition duration-100 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
+        {groups.map((g) => (
+          <MenuItem key={g.id}>
+            <button type="button" onClick={() => onChange(g.id)} className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left data-[focus]:bg-[#eef4ff] ${value === g.id ? "bg-[#eef4ff]" : ""}`}>
+              <GroupArt g={g.id} size={30} />
+              <span className="min-w-0 flex-1"><span className="block text-[14.5px] font-semibold text-[#0b1f3a]">{g.label}</span><span className="block text-[12px] text-slate-500">{g.hint}</span></span>
+              <span className="text-[14px] font-bold tabular-nums text-slate-600">{counts[g.id].length}</span>
+            </button>
+          </MenuItem>
+        ))}
+      </MenuItems>
+    </Menu>
   );
 }

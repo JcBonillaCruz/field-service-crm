@@ -79,9 +79,9 @@ export default function TimeGrid({ cols, visits, visStart, visEnd, workStart, wo
   const nowMin = minutesOf(now);
 
   return (
-    <div ref={scroller} className="relative h-full overflow-auto overscroll-contain">
+    <div ref={scroller} className="relative h-full touch-manipulation overflow-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
       {/* Encabezado de columnas (fijo arriba) */}
-      <div className="sticky top-0 z-20 flex border-b border-slate-200 bg-white/95 backdrop-blur">
+      <div className="sticky top-0 z-20 flex w-max min-w-full border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="sticky left-0 z-10 w-14 shrink-0 bg-white/95" />
         {cols.map((c) => {
           const n = byCol.get(c.key)?.length ?? 0;
@@ -108,9 +108,9 @@ export default function TimeGrid({ cols, visits, visStart, visEnd, workStart, wo
         })}
       </div>
 
-      <div className="flex" style={{ height }}>
+      <div className="flex w-max min-w-full" style={{ height }}>
         {/* Horas a la izquierda */}
-        <div className="sticky left-0 z-10 w-14 shrink-0 bg-white">
+        <div className="sticky left-0 z-20 w-14 shrink-0 border-r border-slate-100 bg-white">
           {hours.map((m) => (
             <span key={m} className="absolute right-2 -translate-y-1/2 text-[11px] text-slate-400" style={{ top: (m - visStart) * PX }}>{m === visStart ? "" : fmtHour(m)}</span>
           ))}

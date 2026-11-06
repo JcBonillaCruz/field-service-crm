@@ -74,7 +74,7 @@ export default function DispatchGrid({ days, rows, visits, dStart, dEnd, preview
   for (let m = dStart; m < dEnd; m += 60) hours.push(m);
 
   return (
-    <div ref={scroller} className="relative h-full overflow-auto overscroll-contain bg-white">
+    <div ref={scroller} className="relative h-full touch-manipulation overflow-auto overscroll-contain bg-white">
       <div style={{ width: NAME_W + dayW * days.length }}>
         {/* Encabezado: días y horas */}
         <div className="sticky top-0 z-20 flex border-b border-slate-200 bg-white">
@@ -133,7 +133,7 @@ export default function DispatchGrid({ days, rows, visits, dStart, dEnd, preview
                     <div key={`${p.v.visit_id}-${p.dayIdx}`} role="button" tabIndex={0}
                       onPointerDown={(e) => handlers.onVisitDown(e, p.v, col, "move")}
                       onMouseEnter={(e) => handlers.onVisitHover(p.v, e.currentTarget)} onMouseLeave={() => handlers.onVisitHover(null, null)}
-                      className={`group/bar absolute flex cursor-grab select-none items-center gap-1.5 overflow-hidden rounded-md border-l-[3px] px-2 text-left text-[#0b1f3a] transition-[box-shadow,opacity] duration-100 [touch-action:none] hover:z-10 hover:shadow-[0_6px_16px_rgba(15,40,60,0.14)] active:cursor-grabbing ${handlers.draggingId === p.v.visit_id ? "opacity-40" : ""} ${p.v.visit_status === "cancelled" ? "opacity-60" : ""}`}
+                      className={`group/bar absolute flex cursor-grab select-none items-center gap-1.5 overflow-hidden rounded-md border-l-[3px] px-2 text-left text-[#0b1f3a] transition-[box-shadow,opacity] duration-100 touch-manipulation hover:z-10 hover:shadow-[0_6px_16px_rgba(15,40,60,0.14)] active:cursor-grabbing ${handlers.draggingId === p.v.visit_id ? "opacity-40" : ""} ${p.v.visit_status === "cancelled" ? "opacity-60" : ""}`}
                       style={{ left: left + 1, width, top: p.lane * LANE_H + 7, height: LANE_H - 6, ...(p.v.visit_status === "completed" ? { background: "#f1f5f9", borderLeftColor: "#16a34a", color: "#64748b" } : { background: tint(color, 0.13), borderLeftColor: color }) }}>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[12px] font-semibold leading-tight">{p.v.customer_name || p.v.number}</span>

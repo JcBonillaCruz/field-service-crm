@@ -45,7 +45,7 @@ export default function JobTray({ jobs, trayRef, draggingId, dropActive, onDown,
           const color = j.type_color ?? "#94a3b8";
           return (
             <div key={j.id} role="button" tabIndex={0} onPointerDown={(e) => onDown(e, j)}
-              className={`group cursor-grab select-none rounded-xl border border-slate-200 bg-white p-2.5 transition-[box-shadow,transform,border-color] duration-100 [touch-action:none] hover:-translate-y-px hover:border-[#14a39a] hover:shadow-[0_8px_20px_rgba(15,40,60,0.10)] active:cursor-grabbing ${draggingId === j.id ? "opacity-40" : ""}`}
+              className={`group cursor-grab select-none rounded-xl border border-slate-200 bg-white p-2.5 transition-[box-shadow,transform,border-color] duration-100 touch-manipulation hover:-translate-y-px hover:border-[#14a39a] hover:shadow-[0_8px_20px_rgba(15,40,60,0.10)] active:cursor-grabbing ${draggingId === j.id ? "opacity-40" : ""}`}
               style={{ borderLeft: `3px solid ${color}` }}>
               <div className="flex items-start justify-between gap-2">
                 <p className="min-w-0 truncate text-[13.5px] font-semibold text-[#0b1f3a]">{j.customer_name || j.title || j.number}</p>

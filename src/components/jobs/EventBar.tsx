@@ -95,7 +95,7 @@ export function EventBar({ v, start, end, compact, dragging, onDown, onResizeDow
     <div role="button" tabIndex={0} aria-label={`${v.customer_name}, ${fmtTime(start)}${completed ? ", completed" : ""}`}
       onPointerDown={onDown}
       onMouseEnter={(e) => onHover(e.currentTarget)} onMouseLeave={() => onHover(null)}
-      className={`group/bar absolute inset-0 flex cursor-grab select-none flex-col overflow-hidden rounded-lg border-l-[3px] pl-1.5 pr-1 text-left transition-[box-shadow,opacity] duration-100 [touch-action:none] hover:z-10 hover:shadow-[0_6px_18px_rgba(15,40,60,0.14)] active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] ${dragging ? "opacity-40" : ""} ${done ? "text-slate-500" : "text-[#0b1f3a]"}`}
+      className={`group/bar absolute inset-0 flex cursor-grab select-none flex-col overflow-hidden rounded-lg border-l-[3px] pl-1.5 pr-1 text-left transition-[box-shadow,opacity] duration-100 touch-manipulation hover:z-10 hover:shadow-[0_6px_18px_rgba(15,40,60,0.14)] active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] ${dragging ? "opacity-40" : ""} ${done ? "text-slate-500" : "text-[#0b1f3a]"}`}
       style={done ? { background: "#f1f5f9", borderLeftColor: completed ? "#16a34a" : "#cbd5e1" } : { background: tint(color, 0.13), borderLeftColor: color }}>
       <div className={`flex min-w-0 items-start gap-1 ${compact ? "pt-0.5" : "pt-1"}`}>
         <div className="min-w-0 flex-1">
@@ -133,7 +133,7 @@ export function EventChip({ v, dragging, onDown, onHover }: { v: CalVisit; dragg
   const color = barColor(v);
   return (
     <div role="button" tabIndex={0} onPointerDown={onDown} onMouseEnter={(e) => onHover(e.currentTarget)} onMouseLeave={() => onHover(null)}
-      className={`flex w-full cursor-grab select-none items-center gap-1 truncate rounded-md px-1.5 py-0.5 text-left text-[11.5px] leading-snug text-[#0b1f3a] transition-shadow [touch-action:none] hover:shadow-[0_3px_10px_rgba(15,40,60,0.12)] ${dragging ? "opacity-40" : ""} ${v.visit_status === "completed" ? "text-slate-500" : ""}`}
+      className={`flex w-full cursor-grab select-none items-center gap-1 truncate rounded-md px-1.5 py-0.5 text-left text-[11.5px] leading-snug text-[#0b1f3a] transition-shadow touch-manipulation hover:shadow-[0_3px_10px_rgba(15,40,60,0.12)] ${dragging ? "opacity-40" : ""} ${v.visit_status === "completed" ? "text-slate-500" : ""}`}
       style={{ background: v.visit_status === "completed" ? "#f1f5f9" : tint(color, 0.13) }}>
       {v.visit_status === "completed" || v.visit_status === "on_my_way" || v.visit_status === "in_progress"
         ? <StatusArt s={v.visit_status} size={14} />

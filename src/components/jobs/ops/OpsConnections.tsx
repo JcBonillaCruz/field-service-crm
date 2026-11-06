@@ -7,37 +7,61 @@ import { OpsGroup, OpsJob } from "@/lib/operations";
 import { StatusArt, TechDot } from "@/components/jobs/EventBar";
 import { CardMenu, OpsCard, liveStatus } from "@/components/jobs/ops/OpsBits";
 
-type Seg = { key: string; job: string; user: string; d: string; color: string; flow: "fast" | "slow" | "none"; ex: number; ey: number };
-const NONE = "__none";
+type Line = { key: string; job: string; user: string; d: string; color: string; lead: boolean; flow: "fast" | "slow" | "none"; ex: number; ey: number };
+type Show = "in_progress" | "assigned" | "delayed" | "unassigned" | "done";
+const SHOW: { v: Show; label: string; dot: string }[] = [
+  { v: "in_progress", label: "In progress", dot: "bg-[#f59e0b]" },
+  { v: "assigned", label: "Assigned", dot: "bg-[#2563eb]" },
+  { v: "delayed", label: "Delayed", dot: "bg-[#e11d48]" },
+  { v: "unassigned", label: "Unassigned", dot: "bg-slate-400" },
+  { v: "done", label: "Completed", dot: "bg-[#16a34a]" },
+];
 
 // =====================================================================
-// Vista "Conexiones" por persona: cada colaborador tiene su carril con SUS trabajos
-// (de izquierda a derecha y luego hacia abajo, usando toda la pantalla).
-// Las líneas salen de la persona y corren por los espacios entre tarjetas (no por encima).
-// Arrastra una tarjeta a otra persona para pasársela (Ctrl/⌥ = agregarla como ayudante),
-// al carril "Sin asignar" para quitarla, o arrastra a la persona para cambiar el orden.
+// Conexiones: colaboradores a la izquierda, trabajos (tarjetas chiquitas) llenando
+// de izquierda a derecha, y líneas curvas animadas que los unen.
+//   · Filtros: qué estados ver (en progreso, asignados, atrasados, sin asignar, terminados) y una persona.
+//   · Arrastra un trabajo a una persona (asignar · pasarlo · agregar ayudante), entre tarjetas (ordenar)
+//     o a "Unassigned" (quitarlo, pide nota). Arrastra a una persona para cambiar el orden.
 // =====================================================================
 export default function OpsConnections({ companyId, jobs, groupOf, team, now, menuFor, isAfter, hrefFor, onChanged, onUnassign }: {
   companyId: string; jobs: OpsJob[]; groupOf: (j: OpsJob) => OpsGroup; team: TeamMember[]; now: number;
   menuFor?: (j: OpsJob, g: OpsGroup) => CardMenu; isAfter?: (j: OpsJob) => boolean; hrefFor?: (j: OpsJob, g: OpsGroup) => string | undefined;
   onChanged: (msg: string, notify?: Record<string, unknown>, error?: boolean) => void;
-  onUnassign: (j: OpsJob) => void; // último colaborador → pide la nota (Sin asignar)
+  onUnassign: (j: OpsJob) => void;
 }) {
   const wrap = useRef<HTMLDivElement>(null);
-  const cardEls = useRef(new Map<string, HTMLElement>());   // clave: persona|trabajo
+  const jobEls = useRef(new Map<string, HTMLElement>());
   const userEls = useRef(new Map<string, HTMLElement>());
-  const gridEls = useRef(new Map<string, HTMLElement>());
-  const [segs, setSegs] = useState<Seg[]>([]);
+  const [lines, setLines] = useState<Line[]>([]);
   const [h, setH] = useState(0);
   const [hoverJob, setHoverJob] = useState<string | null>(null);
   const [hoverUser, setHoverUser] = useState<string | null>(null);
-  const [drag, setDrag] = useState<{ kind: "job"; job: string; from: string } | { kind: "person"; id: string } | null>(null);
+  const [onlyUser, setOnlyUser] = useState<string | null>(null);
+  const [show, setShow] = useState<Show[]>(["in_progress", "assigned", "delayed", "unassigned"]);
+  const [drag, setDrag] = useState<{ kind: "job"; id: string } | { kind: "person"; id: string } | null>(null);
   const [over, setOver] = useState<string | null>(null);
-  const [order, setOrder] = useState<string[]>([]);
-  const KEY = `bp-ops-lanes-${companyId}`;
-  useEffect(() => { try { setOrder(JSON.parse(localStorage.getItem(KEY) || "[]")); } catch { /* */ } }, [KEY]);
+  const [pOrder, setPOrder] = useState<string[]>([]);
+  const [jOrder, setJOrder] = useState<string[]>([]);
+  const PK = `bp-ops-people-${companyId}`, JK = `bp-ops-conn-jobs-${companyId}`, SK = `bp-ops-conn-show-${companyId}`;
+  useEffect(() => {
+    try {
+      setPOrder(JSON.parse(localStorage.getItem(PK) || "[]")); setJOrder(JSON.parse(localStorage.getItem(JK) || "[]"));
+      const sv = JSON.parse(localStorage.getItem(SK) || "null") as Show[] | null; if (Array.isArray(sv) && sv.length) setShow(sv);
+    } catch { /* */ }
+  }, [PK, JK, SK]);
+  const toggleShow = (v: Show) => setShow((cur) => {
+    const next = cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v];
+    const out = next.length ? next : cur;
+    try { localStorage.setItem(SK, JSON.stringify(out)); } catch { /* */ }
+    return out;
+  });
+  const showAll = () => { const all = SHOW.map((x) => x.v); setShow(all); try { localStorage.setItem(SK, JSON.stringify(all)); } catch { /* */ } };
 
-  // Personas: los que reciben trabajos + cualquiera que tenga uno en pantalla
+  const counts = useMemo(() => { const m = new Map<string, number>(); jobs.forEach((j) => m.set(groupOf(j), (m.get(groupOf(j)) ?? 0) + 1)); return m; }, [jobs, groupOf]);
+  const visible = useMemo(() => jobs.filter((j) => show.includes(groupOf(j) as Show) && (!onlyUser || j.techs.some((t) => t.user_id === onlyUser))), [jobs, show, onlyUser, groupOf]);
+
+  // Personas: quien recibe trabajos + quien aparece en los trabajos
   const people = useMemo(() => {
     const byId = new Map(team.map((m) => [m.user_id, m]));
     const ids = new Set(team.filter(receivesJobs).map((m) => m.user_id));
@@ -47,47 +71,53 @@ export default function OpsConnections({ companyId, jobs, groupOf, team, now, me
       const m = byId.get(id), t = fromJobs.get(id);
       return { id, name: m?.full_name ?? t?.name ?? "Team member", initials: m?.initials ?? t?.initials ?? "?", color: m?.color ?? t?.color ?? "#94a3b8", avatar_url: m?.avatar_url ?? t?.avatar_url ?? null };
     });
-    const pos = new Map(order.map((id, i) => [id, i]));
-    const count = (id: string) => jobs.filter((j) => j.techs.some((t) => t.user_id === id)).length;
-    return list.sort((a, b) => (pos.get(a.id) ?? 9999) - (pos.get(b.id) ?? 9999) || count(b.id) - count(a.id) || a.name.localeCompare(b.name));
-  }, [team, jobs, order]);
+    const pos = new Map(pOrder.map((id, i) => [id, i]));
+    return list.sort((a, b) => (pos.get(a.id) ?? 9999) - (pos.get(b.id) ?? 9999) || a.name.localeCompare(b.name));
+  }, [team, jobs, pOrder]);
 
-  const byTime = (a: OpsJob, b: OpsJob) => (a.visit?.starts_at ?? "z").localeCompare(b.visit?.starts_at ?? "z");
-  const laneJobs = useMemo(() => {
-    const m = new Map<string, OpsJob[]>();
-    people.forEach((p) => m.set(p.id, jobs.filter((j) => j.techs.some((t) => t.user_id === p.id)).sort(byTime)));
-    m.set(NONE, jobs.filter((j) => !j.techs.length).sort(byTime));
+  // Orden de las tarjetas: el que acomodaste a mano; si no, por persona (casi no se cruzan las líneas) y por hora
+  const ordered = useMemo(() => {
+    const pp = new Map(people.map((p, i) => [p.id, i]));
+    const jp = new Map(jOrder.map((id, i) => [id, i]));
+    const rank = (j: OpsJob) => (j.techs.length ? Math.min(...j.techs.map((t) => pp.get(t.user_id) ?? 999)) : 1000);
+    return [...visible].sort((a, b) => (jp.get(a.id) ?? 9999) - (jp.get(b.id) ?? 9999) || rank(a) - rank(b) || (a.visit?.starts_at ?? "z").localeCompare(b.visit?.starts_at ?? "z"));
+  }, [visible, people, jOrder]);
+
+  const stats = useMemo(() => {
+    const m = new Map<string, { total: number; done: number; live: ReturnType<typeof liveStatus> }>();
+    jobs.forEach((j) => j.techs.forEach((t) => {
+      const x = m.get(t.user_id) ?? { total: 0, done: 0, live: null };
+      x.total++; if (groupOf(j) === "done") x.done++;
+      const l = liveStatus(j);
+      if (l === "in_progress" || (l && !x.live)) x.live = l === "on_hold" ? x.live : l;
+      m.set(t.user_id, x);
+    }));
     return m;
-  }, [people, jobs]);
+  }, [jobs, groupOf]);
 
-  // ---------- Líneas: persona → espacio de arriba de la fila → espacio a la izquierda de la tarjeta → tarjeta ----------
+  // ---------- Líneas curvas: de la persona al borde izquierdo de cada tarjeta ----------
   const measure = useCallback(() => {
     const root = wrap.current; if (!root) return;
     const box = root.getBoundingClientRect();
     setH(root.scrollHeight);
-    const out: Seg[] = [];
-    people.forEach((p) => {
-      const u = userEls.current.get(p.id), grid = gridEls.current.get(p.id); if (!u || !grid) return;
-      const ru = u.getBoundingClientRect(), rg = grid.getBoundingClientRect();
-      const px = ru.right - box.left, py = ru.top - box.top + ru.height / 2;
-      const gx = rg.left - box.left - 7;
-      (laneJobs.get(p.id) ?? []).forEach((j) => {
-        const c = cardEls.current.get(`${p.id}|${j.id}`); if (!c) return;
-        const rc = c.getBoundingClientRect();
-        const cx = rc.left - box.left, cy = rc.top - box.top + Math.min(26, rc.height / 2), rowY = rc.top - box.top - 7;
-        const lx = cx - 7;
-        const g = groupOf(j);
-        const tech = j.techs.find((t) => t.user_id === p.id);
-        const d = Math.abs(lx - gx) < 2
-          ? `M${px} ${py} H${gx} V${cy} H${cx}`
-          : `M${px} ${py} H${gx} V${rowY} H${lx} V${cy} H${cx}`;
-        out.push({ key: `${p.id}-${j.id}`, job: j.id, user: p.id, d, ex: cx, ey: cy,
-          color: g === "delayed" ? "#e11d48" : g === "done" ? "#94a3b8" : tech?.color ?? p.color,
+    const out: Line[] = [];
+    ordered.forEach((j) => {
+      const c = jobEls.current.get(j.id); if (!c) return;
+      const rc = c.getBoundingClientRect();
+      const x2 = rc.left - box.left, y2 = rc.top - box.top + rc.height / 2;
+      const g = groupOf(j);
+      j.techs.forEach((t) => {
+        const u = userEls.current.get(t.user_id); if (!u) return;
+        const ru = u.getBoundingClientRect();
+        const x1 = ru.right - box.left, y1 = ru.top - box.top + ru.height / 2;
+        const dx = Math.max(50, (x2 - x1) * 0.45);
+        out.push({ key: `${j.id}-${t.user_id}`, job: j.id, user: t.user_id, d: `M${x1} ${y1} C${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`, ex: x2, ey: y2,
+          color: g === "delayed" ? "#e11d48" : t.color, lead: t.is_lead,
           flow: g === "in_progress" || g === "delayed" ? "fast" : g === "done" ? "none" : "slow" });
       });
     });
-    setSegs(out);
-  }, [people, laneJobs, groupOf]);
+    setLines(out);
+  }, [ordered, groupOf]);
 
   useLayoutEffect(() => {
     measure();
@@ -98,10 +128,11 @@ export default function OpsConnections({ companyId, jobs, groupOf, team, now, me
     return () => { ro.disconnect(); window.removeEventListener("resize", measure); clearTimeout(t); };
   }, [measure]);
 
-  const lit = (s: Seg) => (hoverJob ? s.job === hoverJob : hoverUser ? s.user === hoverUser : true);
+  const focus = hoverJob || hoverUser;
+  const lit = (l: Line) => (hoverJob ? l.job === hoverJob : hoverUser ? l.user === hoverUser : true);
   const nameOf = (id: string) => people.find((p) => p.id === id)?.name ?? "this person";
 
-  // ---------- Mover / agregar / quitar ----------
+  // ---------- Arrastrar y soltar ----------
   async function setPeople(j: OpsJob, next: string[], msg: string) {
     if (!j.visit) return onChanged("This job has no visit to assign.", undefined, true);
     const before = j.techs.map((t) => t.user_id);
@@ -110,128 +141,178 @@ export default function OpsConnections({ companyId, jobs, groupOf, team, now, me
     if (error) return onChanged(error.hint || jobError(error), undefined, true);
     onChanged(msg, { visitId: j.visit.id, assigned: next.filter((x) => !before.includes(x)), unassigned: before.filter((x) => !next.includes(x)) });
   }
-  function dropOnLane(to: string, e: React.DragEvent) {
-    e.preventDefault();
-    const d = drag; setDrag(null); setOver(null);
-    if (!d) return;
+  function dropOnPerson(pid: string, e: React.DragEvent) {
+    e.preventDefault(); e.stopPropagation();
+    const d = drag; setDrag(null); setOver(null); if (!d) return;
     if (d.kind === "person") {
-      if (to === NONE || d.id === to) return;
+      if (d.id === pid) return;
       const ids = people.map((p) => p.id).filter((x) => x !== d.id);
-      ids.splice(Math.max(0, ids.indexOf(to)), 0, d.id);
-      setOrder(ids); try { localStorage.setItem(KEY, JSON.stringify(ids)); } catch { /* */ }
+      ids.splice(Math.max(0, ids.indexOf(pid)), 0, d.id);
+      setPOrder(ids); try { localStorage.setItem(PK, JSON.stringify(ids)); } catch { /* */ }
       return;
     }
-    const j = jobs.find((x) => x.id === d.job); if (!j || d.from === to) return;
-    const ids = j.techs.map((t) => t.user_id);
-    const label = j.customer_name || `#${j.number}`;
-    if (to === NONE) {
-      if (d.from === NONE) return;
-      if (ids.length <= 1) return onUnassign(j); // sin nadie: pide la nota
-      return setPeople(j, ids.filter((x) => x !== d.from), `${nameOf(d.from)} removed from ${label}`);
-    }
-    if (ids.includes(to)) return onChanged(`${nameOf(to)} is already on ${label}`);
-    const add = d.from === NONE || e.ctrlKey || e.altKey || e.metaKey;
-    const next = add ? [...ids, to] : ids.map((x) => (x === d.from ? to : x));
-    setPeople(j, next, add ? `${nameOf(to)} added to ${label}` : `${label} moved from ${nameOf(d.from)} to ${nameOf(to)}`);
+    const j = jobs.find((x) => x.id === d.id); if (!j || groupOf(j) === "done") return;
+    const ids = j.techs.map((t) => t.user_id), label = j.customer_name || `#${j.number}`;
+    if (ids.includes(pid)) return onChanged(`${nameOf(pid)} is already on ${label}`);
+    // Sin nadie → se asigna · con 1 persona → se le pasa (Ctrl/⌥ = ayudante) · con varias → se agrega como ayudante
+    if (!ids.length) return setPeople(j, [pid], `${label} → ${nameOf(pid)}`);
+    if (ids.length === 1 && !(e.ctrlKey || e.altKey || e.metaKey)) return setPeople(j, [pid], `${label} moved from ${nameOf(ids[0])} to ${nameOf(pid)}`);
+    setPeople(j, [...ids, pid], `${nameOf(pid)} added to ${label}`);
   }
-  const laneProps = (id: string) => ({
-    onDragOver: (e: React.DragEvent) => { if (drag) { e.preventDefault(); if (over !== id) setOver(id); } },
-    onDragLeave: (e: React.DragEvent) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver((o) => (o === id ? null : o)); },
-    onDrop: (e: React.DragEvent) => dropOnLane(id, e),
+  function dropOnJob(targetId: string, e: React.DragEvent) {
+    if (drag?.kind !== "job") return;
+    e.preventDefault(); e.stopPropagation();
+    const id = drag.id; setDrag(null); setOver(null);
+    if (id === targetId) return;
+    const ids = ordered.map((x) => x.id).filter((x) => x !== id);
+    ids.splice(Math.max(0, ids.indexOf(targetId)), 0, id);
+    setJOrder(ids); try { localStorage.setItem(JK, JSON.stringify(ids)); } catch { /* */ }
+  }
+  function dropOnUnassigned(e: React.DragEvent) {
+    e.preventDefault(); const d = drag; setDrag(null); setOver(null);
+    if (d?.kind !== "job") return;
+    const j = jobs.find((x) => x.id === d.id);
+    if (j && j.techs.length && groupOf(j) !== "done") onUnassign(j);
+  }
+  const target = (key: string, onDrop: (e: React.DragEvent) => void) => ({
+    onDragOver: (e: React.DragEvent) => { if (drag) { e.preventDefault(); e.stopPropagation(); if (over !== key) setOver(key); } },
+    onDragLeave: (e: React.DragEvent) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver((o) => (o === key ? null : o)); },
+    onDrop,
   });
 
-  if (!jobs.length && !people.length) return (
-    <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
-      <p className="text-[15px] font-semibold text-[#0b1f3a]">No jobs to connect</p>
-      <p className="mt-1 text-[13px] text-slate-500">Change the filters or the date to see more jobs.</p>
-    </div>
-  );
-
-  const lanes: { id: string; person: (typeof people)[number] | null }[] = [...people.map((p) => ({ id: p.id, person: p })), { id: NONE, person: null }];
+  const chip = (on: boolean) => `inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-semibold transition-colors ${on ? "border-[#0f766e] bg-[#e9f7f4] text-[#0f766e]" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`;
+  const allOn = show.length === SHOW.length;
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-slate-100 px-4 py-2.5 text-[12px] text-slate-500">
-        <span className="font-semibold text-[#0b1f3a]">Connections</span>
-        <span className="inline-flex items-center gap-1.5"><svg width="26" height="6"><path d="M1 3h24" stroke="#2563eb" strokeWidth="2.5" strokeDasharray="5 5" /></svg>Assigned</span>
-        <span className="inline-flex items-center gap-1.5"><svg width="26" height="6"><path d="M1 3h24" stroke="#d97706" strokeWidth="2.5" strokeDasharray="5 5" /></svg>Working now</span>
-        <span className="inline-flex items-center gap-1.5"><svg width="26" height="6"><path d="M1 3h24" stroke="#e11d48" strokeWidth="2.5" strokeDasharray="5 5" /></svg>Delayed</span>
-        <span className="inline-flex items-center gap-1.5"><svg width="26" height="6"><path d="M1 3h24" stroke="#94a3b8" strokeWidth="2" /></svg>Done</span>
-        <span className="ml-auto hidden lg:inline">Drag a job to another person to hand it over · hold Ctrl (⌥) to add a helper · drag a person to reorder</span>
+      {/* Qué ver */}
+      <div className="flex items-center gap-1.5 overflow-x-auto border-b border-slate-100 px-3 py-2.5 [scrollbar-width:none] lg:flex-wrap lg:px-4">
+        <span className="mr-1 shrink-0 text-[13px] font-semibold text-[#0b1f3a]">Show</span>
+        <button type="button" onClick={showAll} className={chip(allOn)}>All</button>
+        {SHOW.map((x) => (
+          <button key={x.v} type="button" onClick={() => toggleShow(x.v)} className={chip(show.includes(x.v))}>
+            <span className={`h-2 w-2 rounded-full ${x.dot}`} />{x.label}<span className="font-normal opacity-60">{counts.get(x.v) ?? 0}</span>
+          </button>
+        ))}
+        {onlyUser && (
+          <button type="button" onClick={() => setOnlyUser(null)} className="ml-1 inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#0b1f3a] py-1 pl-1 pr-2.5 text-[12px] font-semibold text-white">
+            {(() => { const p = people.find((x) => x.id === onlyUser); return p ? <TechDot t={p} size={18} ring={false} /> : null; })()}
+            Only {nameOf(onlyUser).split(" ")[0]}<span className="opacity-70">✕</span>
+          </button>
+        )}
+        <span className="ml-auto hidden text-[11.5px] text-slate-400 xl:inline">Tap a person to see only their jobs · drag a job onto a person to assign it (Ctrl/⌥ adds a helper)</span>
       </div>
-      <div ref={wrap} className="relative overflow-hidden p-3 sm:p-4">
-        <svg className="pointer-events-none absolute left-0 top-0 w-full" height={h} aria-hidden="true">
-          {segs.map((s) => (
-            <g key={s.key} style={{ opacity: lit(s) ? 1 : 0.07, transition: "opacity 150ms" }}>
-              <path d={s.d} fill="none" stroke={s.color} strokeOpacity={0.16} strokeWidth={4} strokeLinejoin="round" strokeLinecap="round" />
-              <path d={s.d} fill="none" stroke={s.color} strokeWidth={1.6} strokeLinejoin="round" strokeLinecap="round"
-                strokeDasharray={s.flow === "none" ? undefined : "5 7"} strokeOpacity={s.flow === "none" ? 0.5 : 1}>
-                {s.flow !== "none" && <animate attributeName="stroke-dashoffset" from="24" to="0" dur={s.flow === "fast" ? "0.6s" : "1.6s"} repeatCount="indefinite" />}
-              </path>
-              <circle cx={s.ex} cy={s.ey} r={2.6} fill={s.color} />
-            </g>
-          ))}
-        </svg>
 
-        <div className="relative space-y-3">
-          {lanes.map(({ id, person: p }) => {
-            const list = laneJobs.get(id) ?? [];
-            const live = list.map(liveStatus).find((x) => x === "in_progress") ?? list.map(liveStatus).find((x) => x === "on_my_way" || x === "paused") ?? null;
-            const done = list.filter((j) => groupOf(j) === "done").length;
-            const isOver = over === id && drag?.kind === "job" && drag.from !== id;
-            if (!p && !list.length && !(drag?.kind === "job")) return null;
-            return (
-              <div key={id} {...laneProps(id)}
-                className={`grid grid-cols-[8.5rem_minmax(0,1fr)] gap-x-[14px] rounded-xl transition-colors sm:grid-cols-[11rem_minmax(0,1fr)] ${isOver ? "bg-[#eef9f6] ring-2 ring-[#14a39a]/40" : ""}`}>
-                {/* Persona */}
-                <div className="pt-[10px]">
-                  {p ? (
-                    <div ref={(el) => { if (el) userEls.current.set(p.id, el); else userEls.current.delete(p.id); }}
-                      draggable onDragStart={(e) => { e.dataTransfer.setData("text/plain", `person:${p.id}`); e.dataTransfer.effectAllowed = "move"; setDrag({ kind: "person", id: p.id }); }}
-                      onDragEnd={() => { setDrag(null); setOver(null); }}
-                      onMouseEnter={() => setHoverUser(p.id)} onMouseLeave={() => setHoverUser(null)}
-                      title="Drag to reorder"
-                      className={`group sticky top-20 flex cursor-grab items-center gap-2 rounded-xl border bg-white px-2 py-1.5 transition-all duration-100 hover:shadow-[0_8px_18px_rgba(15,40,60,0.09)] active:cursor-grabbing ${hoverJob && !list.some((j) => j.id === hoverJob) ? "opacity-40" : ""} ${drag?.kind === "person" && drag.id === p.id ? "opacity-40" : ""}`}
-                      style={{ borderColor: `${p.color}55`, borderLeft: `3px solid ${p.color}` }}>
-                      <span className="relative"><TechDot t={p} size={26} ring={false} />
-                        {live === "in_progress" && <span className="absolute -right-0.5 -top-0.5 h-2 w-2 animate-pulse rounded-full bg-[#f59e0b] ring-2 ring-white" />}</span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[12.5px] font-semibold text-[#0b1f3a]">{p.name}</span>
-                        <span className="block truncate text-[11px] text-slate-500">{list.length} job{list.length === 1 ? "" : "s"}{done ? ` · ${done} done` : ""}</span>
-                      </span>
-                      {live && <StatusArt s={live} size={20} />}
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-white px-2 py-1.5">
-                      <span className="h-[26px] w-[26px] shrink-0 rounded-full border border-dashed border-slate-400" />
-                      <span className="min-w-0"><span className="block text-[12.5px] font-semibold text-slate-600">Unassigned</span><span className="block text-[11px] text-slate-400">{list.length ? `${list.length} job${list.length === 1 ? "" : "s"}` : "Drop to take off"}</span></span>
-                    </div>
-                  )}
-                </div>
-                {/* Sus trabajos: llenan de izquierda a derecha y luego hacia abajo */}
-                <div ref={(el) => { if (p) { if (el) gridEls.current.set(p.id, el); else gridEls.current.delete(p.id); } }}
-                  className="grid grid-cols-[repeat(auto-fill,minmax(12.5rem,1fr))] gap-[14px] pt-[10px]">
-                  {list.length === 0 && <p className={`rounded-xl border border-dashed px-3 py-3 text-center text-[12px] ${isOver ? "border-[#14a39a] text-[#0f766e]" : "border-slate-200 text-slate-400"}`}>{isOver ? "Drop to hand it over" : "No jobs · drop one here"}</p>}
-                  {list.map((j) => {
-                    const g = groupOf(j);
-                    const canDrag = g !== "done";
-                    return (
-                      <OpsCard key={j.id} job={j} group={g} now={now} afterHours={isAfter?.(j)} href={hrefFor?.(j, g)} menu={menuFor?.(j, g)}
-                        dim={Boolean(hoverJob && hoverJob !== j.id) || Boolean(hoverUser && hoverUser !== id)}
-                        dragging={drag?.kind === "job" && drag.job === j.id && drag.from === id}
-                        innerRef={(el) => { const k = `${id}|${j.id}`; if (el) cardEls.current.set(k, el); else cardEls.current.delete(k); }}
-                        onHover={(on) => setHoverJob(on ? j.id : null)}
-                        drag={canDrag ? {
-                          draggable: true,
-                          onDragStart: (e: React.DragEvent<HTMLDivElement>) => { e.stopPropagation(); e.dataTransfer.setData("text/plain", `job:${j.id}`); e.dataTransfer.effectAllowed = "move"; setDrag({ kind: "job", job: j.id, from: id }); },
-                          onDragEnd: () => { setDrag(null); setOver(null); },
-                        } : undefined} />
-                    );
-                  })}
-                </div>
+      {/* Celular: por persona, sus trabajos en 2 columnas (tocar la persona = solo sus trabajos) */}
+      <div className="space-y-4 p-3 lg:hidden">
+        {[...people.map((p) => ({ id: p.id, p })), { id: "__none", p: null }].map(({ id, p }) => {
+          const list = ordered.filter((j) => (p ? j.techs.some((t) => t.user_id === p.id) : !j.techs.length));
+          if (!list.length) return null;
+          const st = p ? stats.get(p.id) ?? { total: 0, done: 0, live: null } : null;
+          const color = p?.color ?? "#94a3b8";
+          return (
+            <div key={id}>
+              <button type="button" onClick={() => p && setOnlyUser((u) => (u === p.id ? null : p.id))}
+                className={`flex w-full items-center gap-2.5 rounded-xl border bg-white px-2.5 py-2 text-left ${onlyUser === id ? "ring-2 ring-[#0b1f3a]" : ""}`}
+                style={{ borderColor: `${color}55`, borderLeft: `3px solid ${color}` }}>
+                {p ? <TechDot t={p} size={28} ring={false} /> : <span className="h-7 w-7 rounded-full border border-dashed border-slate-400" />}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[14px] font-semibold text-[#0b1f3a]">{p ? p.name : "Unassigned"}</span>
+                  <span className="block text-[12px] text-slate-500">{list.length} job{list.length === 1 ? "" : "s"} here{st?.done ? ` · ${st.done} done` : ""}</span>
+                </span>
+                {st?.live && st.live !== "on_hold" && <StatusArt s={st.live} size={24} />}
+              </button>
+              <div className="ml-3 mt-2 grid grid-cols-2 gap-2 border-l-2 pl-3" style={{ borderColor: `${color}66` }}>
+                {list.map((j) => {
+                  const g = groupOf(j);
+                  return <OpsCard key={j.id} job={j} group={g} now={now} tiny afterHours={isAfter?.(j)} href={hrefFor?.(j, g)} menu={menuFor?.(j, g)} />;
+                })}
               </div>
-            );
-          })}
+            </div>
+          );
+        })}
+        {ordered.length === 0 && <p className="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-[13px] text-slate-500">No jobs with these filters.</p>}
+      </div>
+
+      <div ref={wrap} className="relative hidden overflow-hidden p-4 lg:block">
+        {/* Líneas detrás de las tarjetas; las de quien señalas pasan al frente */}
+        {[false, true].map((front) => (
+          <svg key={String(front)} className={`pointer-events-none absolute left-0 top-0 w-full ${front ? "z-20" : "z-0"}`} height={h} aria-hidden="true">
+            {lines.filter((l) => (front ? Boolean(focus) && lit(l) : !focus || !lit(l))).map((l) => {
+              const on = !focus || lit(l);
+              return (
+                <g key={l.key} style={{ opacity: on ? 1 : 0.08, transition: "opacity 150ms" }}>
+                  <path d={l.d} fill="none" stroke={l.color} strokeOpacity={0.16} strokeWidth={l.lead ? 5 : 3.5} strokeLinecap="round" />
+                  <path d={l.d} fill="none" stroke={l.color} strokeWidth={l.lead ? 2.2 : 1.6} strokeLinecap="round"
+                    strokeDasharray={l.flow === "none" ? undefined : "6 9"} strokeOpacity={l.flow === "none" ? 0.45 : 1}>
+                    {l.flow !== "none" && <animate attributeName="stroke-dashoffset" from="30" to="0" dur={l.flow === "fast" ? "0.7s" : "1.8s"} repeatCount="indefinite" />}
+                  </path>
+                  <circle cx={l.ex} cy={l.ey} r={3} fill={l.color} />
+                </g>
+              );
+            })}
+          </svg>
+        ))}
+
+        <div className="relative grid grid-cols-[7.5rem_2.5rem_minmax(0,1fr)] sm:grid-cols-[11.5rem_5rem_minmax(0,1fr)] lg:grid-cols-[12rem_7rem_minmax(0,1fr)]">
+          {/* Colaboradores */}
+          <div className="relative z-10 space-y-2 self-start">
+            {people.map((p) => {
+              const st = stats.get(p.id) ?? { total: 0, done: 0, live: null };
+              const dim = hoverJob ? !ordered.find((j) => j.id === hoverJob)?.techs.some((t) => t.user_id === p.id) : hoverUser ? hoverUser !== p.id : false;
+              const isOver = over === `p-${p.id}` && drag?.kind === "job";
+              return (
+                <div key={p.id} ref={(el) => { if (el) userEls.current.set(p.id, el); else userEls.current.delete(p.id); }}
+                  draggable onDragStart={(e) => { e.dataTransfer.setData("text/plain", `person:${p.id}`); e.dataTransfer.effectAllowed = "move"; setDrag({ kind: "person", id: p.id }); }}
+                  onDragEnd={() => { setDrag(null); setOver(null); }}
+                  {...target(`p-${p.id}`, (e) => dropOnPerson(p.id, e))}
+                  onClick={() => setOnlyUser((u) => (u === p.id ? null : p.id))}
+                  onMouseEnter={() => setHoverUser(p.id)} onMouseLeave={() => setHoverUser(null)}
+                  title="Tap to see only their jobs · drag to reorder"
+                  className={`group flex cursor-pointer items-center gap-2 rounded-xl border bg-white px-2 py-1.5 transition-all duration-100 hover:-translate-y-0.5 hover:shadow-[0_8px_18px_rgba(15,40,60,0.09)] active:cursor-grabbing
+                    ${dim ? "opacity-35" : ""} ${isOver ? "scale-[1.03] ring-2 ring-[#14a39a]" : ""} ${onlyUser === p.id ? "ring-2 ring-[#0b1f3a]" : ""} ${drag?.kind === "person" && drag.id === p.id ? "opacity-40" : ""}`}
+                  style={{ borderColor: `${p.color}55`, borderLeft: `3px solid ${p.color}` }}>
+                  <span className="relative"><TechDot t={p} size={26} ring={false} />
+                    {st.live === "in_progress" && <span className="absolute -right-0.5 -top-0.5 h-2 w-2 animate-pulse rounded-full bg-[#f59e0b] ring-2 ring-white" />}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[12.5px] font-semibold text-[#0b1f3a]">{p.name}</span>
+                    <span className="block truncate text-[11px] text-slate-500">{isOver ? "Drop to assign" : `${st.total} job${st.total === 1 ? "" : "s"}${st.done ? ` · ${st.done} done` : ""}`}</span>
+                  </span>
+                  {st.live && st.live !== "on_hold" && <span className="hidden sm:inline-flex"><StatusArt s={st.live} size={20} /></span>}
+                </div>
+              );
+            })}
+            {drag?.kind === "job" && (
+              <div {...target("unassigned", dropOnUnassigned)}
+                className={`flex items-center gap-2 rounded-xl border-2 border-dashed px-2 py-2 text-[12px] font-semibold transition-colors ${over === "unassigned" ? "border-[#f59e0b] bg-[#fffaf0] text-[#b45309]" : "border-slate-300 text-slate-500"}`}>
+                <span className="h-[22px] w-[22px] shrink-0 rounded-full border border-dashed border-current" />Drop to unassign
+              </div>
+            )}
+          </div>
+          <div />
+          {/* Trabajos: tarjetas chiquitas que llenan de izquierda a derecha */}
+          <div className="relative z-10 grid content-start gap-x-4 gap-y-2.5 [grid-template-columns:repeat(auto-fill,minmax(10.5rem,1fr))]">
+            {ordered.length === 0 && <p className="col-span-full rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-[13px] text-slate-500">No jobs with these filters.</p>}
+            {ordered.map((j) => {
+              const g = groupOf(j);
+              const dim = hoverJob ? hoverJob !== j.id : hoverUser ? !j.techs.some((t) => t.user_id === hoverUser) : false;
+              return (
+                <div key={j.id} {...target(`j-${j.id}`, (e) => dropOnJob(j.id, e))}
+                  className={`rounded-xl transition-shadow ${over === `j-${j.id}` && drag?.kind === "job" && drag.id !== j.id ? "shadow-[-4px_0_0_0_#14a39a]" : ""}`}>
+                  <OpsCard job={j} group={g} now={now} tiny afterHours={isAfter?.(j)} href={hrefFor?.(j, g)} menu={menuFor?.(j, g)} dim={dim}
+                    ports={j.techs.map((t) => (g === "delayed" ? "#e11d48" : t.color))}
+                    dragging={drag?.kind === "job" && drag.id === j.id}
+                    innerRef={(el) => { if (el) jobEls.current.set(j.id, el); else jobEls.current.delete(j.id); }}
+                    onHover={(on) => setHoverJob(on ? j.id : null)}
+                    drag={{
+                      draggable: true,
+                      onDragStart: (e: React.DragEvent<HTMLDivElement>) => { e.stopPropagation(); e.dataTransfer.setData("text/plain", `job:${j.id}`); e.dataTransfer.effectAllowed = "move"; setDrag({ kind: "job", id: j.id }); },
+                      onDragEnd: () => { setDrag(null); setOver(null); },
+                    }} />
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

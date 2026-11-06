@@ -209,33 +209,36 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
           {fromOps && <a href="/dashboard/jobs/operations" className="mb-0.5 inline-flex items-center gap-1 text-[13px] font-semibold text-[#0f766e] hover:underline">
             <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 5 7.5 10l5 5" /></svg>Back to Operations</a>}
           <h1 className="text-[20px] font-semibold tracking-tight text-[#0b1f3a]">Assign jobs</h1>
-          <p className="text-[13px] text-slate-500">Drop a job on a person to assign it — then tap or drop on more people to add helpers. Drag it between people to move it.</p>
+          <p className="hidden text-[13px] text-slate-500 sm:block">Drop a job on a person to assign it — then tap or drop on more people to add helpers. Drag it between people to move it.</p>
+          <p className="text-[13px] text-slate-500 sm:hidden">Tap a job, then tap one or more people.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <div className="flex rounded-lg bg-slate-100 p-0.5">{rangeBtn("today", "Today")}{rangeBtn("tomorrow", "Tomorrow")}{rangeBtn("week", "This week")}</div>
-          <div className="w-44" onClick={() => setRange("date")}><DatePicker value={range === "date" ? date : ""} placeholder="Pick a day" onChange={(v) => { setDate(v); setRange("date"); }} /></div>
+          <div className="w-36 sm:w-44" onClick={() => setRange("date")}><DatePicker value={range === "date" ? date : ""} placeholder="Pick a day" onChange={(v) => { setDate(v); setRange("date"); }} /></div>
         </div>
       </div>
 
       {/* Mitad y mitad: trabajos sin técnico | técnicos */}
-      <div className="grid min-h-0 flex-1 gap-4 p-3 lg:grid-cols-2 lg:p-5">
+      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(0,1fr)] gap-4 p-3 lg:grid-cols-2 lg:p-5">
         <section
           onDragOver={(e) => { if (dragId && dragFrom) { e.preventDefault(); setOver("__left"); } }}
           onDragLeave={() => setOver((o) => (o === "__left" ? null : o))}
           onDrop={(e) => { e.preventDefault(); setOver(null); setDragId(null); setDragFrom(null); const [k, rowId, fromId] = e.dataTransfer.getData("text/plain").split(":"); if (k === "job" && fromId) removeFrom(rowId, fromId); }}
-          className={`flex min-h-0 flex-col rounded-2xl border bg-white transition-colors ${over === "__left" ? "border-[#f59e0b] bg-[#fffaf0]" : "border-slate-200"}`}>
+          className={`flex min-h-0 min-w-0 flex-col rounded-2xl border bg-white transition-colors ${over === "__left" ? "border-[#f59e0b] bg-[#fffaf0]" : "border-slate-200"}`}>
           <div className="flex items-center gap-2 border-b border-slate-100 p-3">
             <p className="shrink-0 text-[14px] font-semibold text-[#0b1f3a]">To assign <span className={`ml-1 rounded-full px-2 py-0.5 text-[12px] ${shownJobs.length ? "bg-[#fff4e0] text-[#b45309]" : "bg-slate-100 text-slate-400"}`}>{rows.filter((r) => !r.tech_ids.length).length}</span></p>
             {search(q, setQ, "Search: customer, phone, address, #")}
           </div>
           <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2">
-            <div className="flex rounded-lg bg-slate-100 p-0.5">
-              {([[false, "Unassigned"], [true, "All jobs"]] as [boolean, string][]).map(([v, l]) => (
+            <div className="flex shrink-0 rounded-full bg-slate-100 p-1">
+              {([[false, "Unassigned", "M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3.5 20a6.5 6.5 0 0 1 11-4.7M17 15h5"], [true, "All jobs", "M4 6h16M4 12h16M4 18h16"]] as [boolean, string, string][]).map(([v, l, d]) => (
                 <button key={l} type="button" onClick={() => setListAll(v)}
-                  className={`rounded-md px-3 py-1 text-[12.5px] font-semibold transition-all ${listAll === v ? "bg-white text-[#0f766e] shadow-sm" : "text-slate-500 hover:text-[#0b1f3a]"}`}>{l}</button>
+                  className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-[12.5px] font-semibold transition-all ${listAll === v ? "bg-white text-[#0f766e] shadow-sm" : "text-slate-500 hover:text-[#0b1f3a]"}`}>
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>{l}
+                </button>
               ))}
             </div>
-            <p className="min-w-0 truncate text-[12px] text-slate-500">{listAll ? "Drop a job on more people to add helpers" : "Tap a job, then tap one or more people"}</p>
+            <p className="hidden min-w-0 truncate text-[12px] text-slate-500 sm:block">{listAll ? "Drop a job on more people to add helpers" : "Tap a job, then tap one or more people"}</p>
           </div>
           <div className="min-h-[12rem] flex-1 overflow-y-auto p-3">
             {over === "__left" && <p className="mb-2 rounded-lg border-2 border-dashed border-[#f59e0b] py-2 text-center text-[13px] font-semibold text-[#b45309]">Drop here to take it off {dragFrom ? nameOf(dragFrom) : "this person"}</p>}
@@ -271,7 +274,7 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
           </div>
         </section>
 
-        <section className="flex min-h-0 flex-col rounded-2xl border border-slate-200 bg-white">
+        <section className="flex min-h-0 min-w-0 flex-col rounded-2xl border border-slate-200 bg-white">
           <div className="flex items-center gap-2 border-b border-slate-100 p-3">
             <p className="shrink-0 text-[14px] font-semibold text-[#0b1f3a]">Collaborators <span className="font-normal text-slate-400">({techs.length})</span></p>
             {search(tq, setTq, "Search by name, phone or email")}
