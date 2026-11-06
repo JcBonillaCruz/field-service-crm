@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Menu, MenuButton, MenuItem, MenuItems, Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { createClient } from "@/lib/supabase/client";
-import { JobSettings, TeamMember, addDays, addressLine, afterHoursOf, dayStart, jobError, receivesJobs, startOfMonth, startOfWeek } from "@/lib/jobs";
+import { JobSettings, TeamMember, addDays, addressLine, afterHoursOf, dayStart, fromIsoDay, isoDay, jobError, receivesJobs, startOfMonth, startOfWeek } from "@/lib/jobs";
+import { Modal, btnGhost, btnPrimary } from "@/components/sales/SalesBits";
 import { OPS_GROUPS, OpsGroup, OpsJob, delayOf, fold, groupOf as groupAt, progressOf } from "@/lib/operations";
 import { TechDot } from "@/components/jobs/EventBar";
 import { CardMenu, GroupArt, OpsCard, ProgressRing } from "@/components/jobs/ops/OpsBits";
@@ -24,8 +25,9 @@ const WHEN: { v: When; label: string; hint: string }[] = [
   { v: "all", label: "All time", hint: "Everything, including old completed jobs" },
 ];
 // Filtro propio de cada columna: periodo (o el de la página) + búsqueda
-type ColFilter = { when: When | null; q: string };
+type ColFilter = { when: When | "custom" | null; q: string; from?: string; to?: string }; // from/to = "yyyy-mm-dd" (calendario)
 const NO_FILTER: ColFilter = { when: null, q: "" };
+const fmtD = (iso: string) => fromIsoDay(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 function rangeOf(w: When, now: number, weekStartsOn: number, done: boolean): [Date, Date] | null {
   const today = dayStart(new Date(now)), wk = startOfWeek(today, weekStartsOn);
   switch (w) {
@@ -68,6 +70,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
   const [when, setWhenState] = useState<When>("week");
   const [ask, setAsk] = useState<OpsAsk | null>(null);
   const [colF, setColF] = useState<Record<OpsGroup, ColFilter>>({ unassigned: NO_FILTER, assigned: NO_FILTER, in_progress: NO_FILTER, delayed: NO_FILTER, done: NO_FILTER });
+  const [searchOpen, setSearchOpen] = useState<Partial<Record<OpsGroup, boolean>>>({});
   const setCol = (g: OpsGroup, f: Partial<ColFilter>) => setColF((m) => ({ ...m, [g]: { ...m[g], ...f } }));
   const [toast, setToast] = useState<{ m: string; err?: boolean } | null>(null);
   const flash = (m: string, err = false) => { setToast({ m, err }); setTimeout(() => setToast((t) => (t?.m === m ? null : t)), err ? 5000 : 2600); };
@@ -99,12 +102,14 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
 
   const load = useCallback(async () => {
     const id = ++reqId.current;
-    const since = when === "all" || colF.done.when === "all" ? new Date(2000, 0, 1) : addDays(dayStart(new Date()), -100);
+    const since = when === "all" || colF.done.when === "all" ? new Date(2000, 0, 1)
+      : colF.done.when === "custom" && colF.done.from ? new Date(Math.min(fromIsoDay(colF.done.from).getTime(), addDays(dayStart(new Date()), -100).getTime()))
+      : addDays(dayStart(new Date()), -100);
     const { data, error: err } = await createClient().rpc("ops_board", { p_company: companyId, p_done_since: since.toISOString() });
     if (id !== reqId.current) return;
     if (err) { setError(jobError(err)); setLoading(false); return; }
     setError(""); setJobs((data ?? []) as OpsJob[]); setLoading(false); setUpdatedAt(Date.now());
-  }, [companyId, when, colF.done.when]);
+  }, [companyId, when, colF.done.when, colF.done.from]);
 
   useEffect(() => { load(); }, [load]);
   // En vivo: cuando alguien asigna, mueve o el colaborador cambia de estado
@@ -135,15 +140,19 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
   }, []);
   // ¿Entra en el periodo? Terminados por la fecha en que se terminaron; los demás por su fecha agendada.
   // Con el periodo de la página, lo que está pasando ahora y lo atrasado siempre se ve; si la columna tiene su propio filtro, se respeta tal cual.
-  const inPeriod = useCallback((j: OpsJob, g: OpsGroup, w: When, own: boolean) => {
-    const r = rangeOf(w, now, weekStartsOn, g === "done"); if (!r) return true;
+  const inPeriod = useCallback((j: OpsJob, g: OpsGroup, f: ColFilter) => {
+    const own = Boolean(f.when);
+    let r: [Date, Date] | null;
+    if (f.when === "custom") r = f.from && f.to ? [fromIsoDay(f.from), addDays(fromIsoDay(f.to), 1)] : null;
+    else r = rangeOf(f.when ?? when, now, weekStartsOn, g === "done");
+    if (!r) return true;
     const [from, to] = r;
     const s = j.visit?.starts_at ? new Date(j.visit.starts_at) : null;
     const d = g === "done" ? (j.completed_at ? new Date(j.completed_at) : s) : s;
     if (!d) return g !== "done"; // sin fecha: siempre a la vista (necesita atención)
     if (!own && (g === "in_progress" || g === "delayed")) return true;
     return d >= from && d < to;
-  }, [now, weekStartsOn]);
+  }, [now, weekStartsOn, when]);
 
   const shown = useMemo(() => jobs.filter((j) => {
     if (!matches(j, q)) return false;
@@ -155,7 +164,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
     const m = Object.fromEntries(OPS_GROUPS.map((g) => [g.id, [] as OpsJob[]])) as Record<OpsGroup, OpsJob[]>;
     shown.forEach((j) => {
       const g = groupOf(j), f = colF[g];
-      if (!inPeriod(j, g, f.when ?? when, Boolean(f.when)) || !matches(j, f.q)) return;
+      if (!inPeriod(j, g, f) || !matches(j, f.q)) return;
       m[g].push(j);
     });
     // Retrasados: el más tarde primero · Terminados: el más reciente primero
@@ -350,9 +359,22 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
                     <span className="rounded-full bg-white px-2 py-0.5 text-[12px] font-semibold text-slate-500 ring-1 ring-slate-200">{byGroup[g.id].length}</span>
                     <span className="ml-auto flex items-center gap-1.5">
                       {focus && <button type="button" onClick={() => setFocus(null)} className="text-[12.5px] font-semibold text-[#0f766e] hover:underline">Show all</button>}
-                      <ColumnFilter label={g.label} f={colF[g.id]} pageWhen={when} onChange={(f) => setCol(g.id, f)} />
+                      <button type="button" onClick={() => setSearchOpen((m) => ({ ...m, [g.id]: !m[g.id] }))} aria-label={`Search in ${g.label}`} title={`Search in ${g.label}`}
+                        className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${searchOpen[g.id] || colF[g.id].q ? "bg-[#eef4ff] text-[#2563eb]" : "text-slate-400 hover:bg-white hover:text-[#0b1f3a]"}`}>
+                        <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg></button>
+                      <ColumnTools label={g.label} f={colF[g.id]} pageWhen={when} onChange={(f) => setCol(g.id, f)} />
                     </span>
                   </div>
+                  {colF[g.id].q !== "" || searchOpen[g.id] ? (
+                    <div className="relative mx-2 mt-2">
+                      <svg viewBox="0 0 20 20" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
+                      <input autoFocus value={colF[g.id].q} onChange={(e) => setCol(g.id, { q: e.target.value })} placeholder={`Search in ${g.label}`}
+                        className="h-8 w-full rounded-lg border border-slate-200 bg-white pl-8 pr-7 text-[13px] focus:border-[#0f766e] focus:outline-none" />
+                      <button type="button" onClick={() => { setCol(g.id, { q: "" }); setSearchOpen((m) => ({ ...m, [g.id]: false })); }} aria-label="Close search"
+                        className="absolute right-1.5 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
+                        <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M5 5l10 10M15 5 5 15" /></svg></button>
+                    </div>
+                  ) : null}
                   {drag?.kind === "card" && drag.from !== g.id && (
                     <p className={`mx-2 mt-2 rounded-lg border-2 border-dashed py-1.5 text-center text-[12px] font-semibold ${can ? "border-[#14a39a] text-[#0f766e]" : "border-slate-300 text-slate-400"}`}>
                       {can ? `Drop to move to ${g.label}` : g.id === "done" ? "Finish the job to complete it" : "Automatic — late jobs show here"}
@@ -385,7 +407,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
               ))}
             </div>
             <div className="mt-2 flex items-center justify-end">
-              <ColumnFilter label={OPS_GROUPS.find((x) => x.id === mobileGroup)!.label} f={colF[mobileGroup]} pageWhen={when} onChange={(f) => setCol(mobileGroup, f)} wide />
+              <ColumnTools label={OPS_GROUPS.find((x) => x.id === mobileGroup)!.label} f={colF[mobileGroup]} pageWhen={when} onChange={(f) => setCol(mobileGroup, f)} wide />
             </div>
             <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} className="mt-2 min-h-[50vh] space-y-2">
               <div key={mobileGroup} className="space-y-2 animate-[bp-fade_0.2s_ease-out]">
@@ -568,36 +590,93 @@ function Overview({ totals, cash, money, period }: {
   );
 }
 
-// Filtro de cada columna (embudo): su propio periodo + buscar dentro de esa columna
-function ColumnFilter({ label, f, pageWhen, onChange, wide = false }: { label: string; f: ColFilter; pageWhen: When; onChange: (f: Partial<ColFilter>) => void; wide?: boolean }) {
-  const on = Boolean(f.when || f.q);
-  const cur = f.when ? WHEN.find((w) => w.v === f.when)!.label : null;
-  const chip = (sel: boolean) => `rounded-full border px-2.5 py-1 text-[12.5px] font-semibold transition-colors ${sel ? "border-[#2563eb] bg-[#eef4ff] text-[#2563eb]" : "border-slate-200 text-slate-600 hover:border-slate-300"}`;
+// Periodo de cada columna: menú desplegable + "Pick dates" con calendario (rango de días)
+function ColumnTools({ label, f, pageWhen, onChange, wide = false }: { label: string; f: ColFilter; pageWhen: When; onChange: (f: Partial<ColFilter>) => void; wide?: boolean }) {
+  const [cal, setCal] = useState(false);
+  const pageLabel = WHEN.find((w) => w.v === pageWhen)!.label;
+  const cur = f.when === "custom" && f.from && f.to ? (f.from === f.to ? fmtD(f.from) : `${fmtD(f.from)} – ${fmtD(f.to)}`) : f.when ? WHEN.find((w) => w.v === f.when)?.label ?? pageLabel : pageLabel;
+  const on = Boolean(f.when);
+  const item = "flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-slate-700 data-[focus]:bg-[#eef4ff] data-[focus]:text-[#0b1f3a]";
+  const check = <svg viewBox="0 0 20 20" className="ml-auto h-3.5 w-3.5 text-[#2563eb]" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><path d="m5 10.5 3 3 7-7" /></svg>;
   return (
-    <Popover className="relative">
-      <PopoverButton aria-label={`Filter ${label}`} title={`Filter ${label}`}
-        className={`flex h-7 items-center gap-1 rounded-lg px-1.5 text-[12px] font-semibold transition-colors focus:outline-none data-[open]:bg-[#eef4ff] ${on ? "bg-[#eef4ff] text-[#2563eb]" : "text-slate-400 hover:bg-white hover:text-[#0b1f3a]"} ${wide ? "border border-slate-200 bg-white px-3 text-[13px]" : ""}`}>
-        <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 5h13l-5 6v4.5l-3 1.5v-6z" /></svg>
-        {(wide || on) && <span className="max-w-[6rem] truncate">{cur ?? (f.q ? "Search" : `Filter ${label}`)}</span>}
-      </PopoverButton>
-      <PopoverPanel anchor="bottom end" transition
-        className="z-[100] mt-2 w-[min(19rem,calc(100vw-1.5rem))] rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_18px_48px_rgba(15,40,60,0.2)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0">
-        <div className="flex items-center justify-between">
-          <p className="text-[14.5px] font-semibold text-[#0b1f3a]">{label}</p>
-          {on && <button type="button" onClick={() => onChange({ when: null, q: "" })} className="text-[12.5px] font-semibold text-[#0f766e] hover:underline">Clear</button>}
-        </div>
-        <div className="relative mt-3">
-          <svg viewBox="0 0 20 20" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
-          <input value={f.q} onChange={(e) => onChange({ q: e.target.value })} placeholder={`Search in ${label}`}
-            className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 pl-8 pr-3 text-[13.5px] focus:border-[#0f766e] focus:bg-white focus:outline-none" />
-        </div>
-        <p className="mb-1.5 mt-3 text-[12px] font-semibold text-slate-500">Period</p>
-        <div className="flex flex-wrap gap-1.5">
-          <button type="button" onClick={() => onChange({ when: null })} className={chip(!f.when)}>Same as page · {WHEN.find((w) => w.v === pageWhen)!.label}</button>
-          {WHEN.map((w) => <button key={w.v} type="button" onClick={() => onChange({ when: w.v })} className={chip(f.when === w.v)}>{w.label}</button>)}
-        </div>
-        <p className="mt-3 text-[11.5px] text-slate-400">{label === "Completed" ? "By the day the job was finished." : "By the scheduled day. Jobs without a date always show."}</p>
-      </PopoverPanel>
-    </Popover>
+    <>
+      <Menu>
+        <MenuButton aria-label={`Period for ${label}`} title={`Period for ${label}`}
+          className={`flex h-7 max-w-[8.5rem] items-center gap-1 rounded-lg px-1.5 text-[11.5px] font-semibold transition-colors focus:outline-none data-[open]:bg-[#eef4ff] data-[open]:text-[#2563eb] ${on ? "bg-[#eef4ff] text-[#2563eb]" : "text-slate-500 hover:bg-white hover:text-[#0b1f3a]"} ${wide ? "h-9 max-w-none border border-slate-200 bg-white px-3 text-[13px]" : ""}`}>
+          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4" /></svg>
+          <span className="truncate">{cur}</span>
+          <svg viewBox="0 0 20 20" className="h-3 w-3 shrink-0 opacity-60" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
+        </MenuButton>
+        <MenuItems anchor="bottom end" transition className="z-[100] mt-1 w-56 rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_12px_40px_rgba(15,40,60,0.16)] transition duration-100 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
+          <p className="px-2.5 pb-1 pt-0.5 text-[11.5px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+          <MenuItem><button type="button" onClick={() => onChange({ when: null })} className={item}>Same as page · {pageLabel}{!f.when && check}</button></MenuItem>
+          <div className="my-1 border-t border-slate-100" />
+          {WHEN.map((w) => (
+            <MenuItem key={w.v}><button type="button" onClick={() => onChange({ when: w.v })} className={item}>{w.label}{f.when === w.v && check}</button></MenuItem>
+          ))}
+          <div className="my-1 border-t border-slate-100" />
+          <MenuItem><button type="button" onClick={() => setCal(true)} className={`${item} font-semibold text-[#0f766e]`}>
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M8 14h2M12 14h2M8 17h2" /></svg>
+            Pick dates on the calendar…{f.when === "custom" && check}</button></MenuItem>
+        </MenuItems>
+      </Menu>
+      {cal && <RangeModal label={label} from={f.from} to={f.to} onClose={() => setCal(false)} onApply={(a, b) => { onChange({ when: "custom", from: a, to: b }); setCal(false); }} />}
+    </>
+  );
+}
+
+// Calendario para escoger un día o un rango (toca el primer día y luego el último)
+function RangeModal({ label, from, to, onClose, onApply }: { label: string; from?: string; to?: string; onClose: () => void; onApply: (a: string, b: string) => void }) {
+  const [a, setA] = useState<string | null>(from ?? null);
+  const [b, setB] = useState<string | null>(to ?? null);
+  const [month, setMonth] = useState(() => { const d = from ? fromIsoDay(from) : new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const first = new Date(month.getFullYear(), month.getMonth(), 1);
+  const cells = Array.from({ length: 42 }, (_, i) => addDays(first, i - first.getDay()));
+  const today = isoDay(new Date());
+  const pick = (iso: string) => {
+    if (!a || (a && b)) { setA(iso); setB(null); return; }
+    if (iso < a) { setB(a); setA(iso); } else setB(iso);
+  };
+  const lo = a && b ? (a < b ? a : b) : a, hi = a && b ? (a < b ? b : a) : a;
+  const quick: [string, () => [Date, Date]][] = [
+    ["Yesterday", () => { const d = addDays(dayStart(new Date()), -1); return [d, d]; }],
+    ["Last 7 days", () => [addDays(dayStart(new Date()), -6), dayStart(new Date())]],
+    ["Last 30 days", () => [addDays(dayStart(new Date()), -29), dayStart(new Date())]],
+    ["Next 7 days", () => [dayStart(new Date()), addDays(dayStart(new Date()), 6)]],
+  ];
+  return (
+    <Modal open onClose={onClose} title={`${label} · pick dates`} width="max-w-md" footer={<>
+      <button type="button" disabled={!a} onClick={() => a && onApply(lo!, hi ?? lo!)} className={btnPrimary}>Show these days</button>
+      <button type="button" onClick={onClose} className={btnGhost}>Cancel</button></>}>
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        {quick.map(([l, fn]) => (
+          <button key={l} type="button" onClick={() => { const [x, y] = fn(); setA(isoDay(x)); setB(isoDay(y)); setMonth(new Date(x.getFullYear(), x.getMonth(), 1)); }}
+            className="rounded-full border border-slate-200 px-3 py-1 text-[12.5px] font-semibold text-slate-600 transition-colors hover:border-[#14a39a] hover:text-[#0f766e]">{l}</button>
+        ))}
+      </div>
+      <div className="flex items-center justify-between">
+        <button type="button" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} aria-label="Previous month" className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
+          <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 5 7.5 10l5 5" /></svg></button>
+        <p className="text-[15px] font-semibold text-[#0b1f3a]">{month.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</p>
+        <button type="button" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} aria-label="Next month" className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
+          <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M7.5 5 12.5 10l-5 5" /></svg></button>
+      </div>
+      <div className="mt-2 grid grid-cols-7 text-center text-[11.5px] font-semibold text-slate-400">{["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => <span key={d} className="py-1">{d}</span>)}</div>
+      <div className="grid grid-cols-7 gap-y-1">
+        {cells.map((d) => {
+          const iso = isoDay(d), inMonth = d.getMonth() === month.getMonth();
+          const edge = iso === lo || iso === hi, inside = lo && hi && iso > lo && iso < hi;
+          return (
+            <button key={iso} type="button" onClick={() => pick(iso)}
+              className={`mx-auto flex h-9 w-full items-center justify-center text-[13.5px] transition-colors
+                ${edge ? "rounded-lg bg-[#0f766e] font-semibold text-white" : inside ? "bg-[#e9f7f4] text-[#0f766e]" : "rounded-lg hover:bg-slate-100"}
+                ${!inMonth && !edge ? "text-slate-300" : !edge && !inside ? "text-slate-700" : ""} ${iso === today && !edge ? "font-bold text-[#0f766e]" : ""}`}>
+              {d.getDate()}
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-3 text-[13px] text-slate-500">{lo ? (hi && hi !== lo ? `${fmtD(lo)} – ${fmtD(hi)}` : `${fmtD(lo)} · tap another day for a range`) : "Tap a day. Tap a second day to pick a range."}</p>
+    </Modal>
   );
 }

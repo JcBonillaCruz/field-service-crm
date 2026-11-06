@@ -118,7 +118,7 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
   const notes = d.events.filter((x) => x.kind === "note").reverse();
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 pb-40 pt-3 lg:pt-6">
+    <div className="mx-auto w-full max-w-2xl px-4 pb-32 pt-3 lg:pt-6">
       <Link prefetch={false} href="/dashboard/jobs/mine" className="inline-flex items-center gap-1 rounded-lg py-1 text-[14px] font-semibold text-[#0f766e]">
         <Icon d="m15 6-6 6 6 6" className="h-4 w-4" /> My jobs
       </Link>
@@ -245,17 +245,28 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
       {/* Botones del trabajo (abajo, grandes, fáciles de tocar) */}
       {visit && !["completed", "cancelled", "on_hold", "unscheduled"].includes(st) && (
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur lg:left-64">
-          <div className="mx-auto flex max-w-2xl flex-col gap-2">
-            {st === "scheduled" && <Big onClick={() => act("on_my_way")} busy={busy === "on_my_way"} tone="violet" icon="M3 12h11V6H3zM14 9h3l3 3v3h-6M7 18a1.6 1.6 0 1 0 0-3.2A1.6 1.6 0 0 0 7 18zM17 18a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2z">On my way</Big>}
-            {(st === "scheduled" || st === "on_my_way") && <Big onClick={() => act("start")} busy={busy === "start"} tone={st === "on_my_way" ? "teal" : "light"} icon="M8 5v14l11-7z">Start job</Big>}
-            {st === "paused" && <Big onClick={() => act("resume")} busy={busy === "resume"} tone="teal" icon="M8 5v14l11-7z">Resume</Big>}
-            {(st === "in_progress" || st === "paused") && <Big onClick={() => act("finish")} busy={busy === "finish"} tone={st === "in_progress" ? "teal" : "light"} icon="M5 12.5 9.5 17 19 7">Finish job{missing ? ` (${missing} tasks left)` : ""}</Big>}
-            {(st === "in_progress" || st === "paused" || st === "on_my_way") && (
-              <div className="flex gap-2">
-                {st === "in_progress" && <button type="button" onClick={() => act("pause")} disabled={!!busy} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-[14px] font-semibold text-slate-700 active:scale-[0.98]">Pause</button>}
-                <button type="button" onClick={() => setHoldOpen(true)} disabled={!!busy} className="flex-1 rounded-xl border border-[#fecdd3] bg-[#fff1f2] py-2.5 text-[14px] font-semibold text-[#be123c] active:scale-[0.98]">Can&apos;t finish today</button>
-              </div>
-            )}
+          {(st === "in_progress" || st === "paused") && missing > 0 && (
+            <p className="mx-auto mb-2 max-w-2xl text-center text-[12.5px] font-medium text-[#b45309]">{missing} required checklist task{missing === 1 ? "" : "s"} left</p>
+          )}
+          <div className="mx-auto flex max-w-2xl items-stretch gap-2">
+            {st === "scheduled" && <>
+              <Big onClick={() => act("on_my_way")} busy={busy === "on_my_way"} tone="violet" icon="M3 12h11V6H3zM14 9h3l3 3v3h-6M7 18a1.6 1.6 0 1 0 0-3.2A1.6 1.6 0 0 0 7 18zM17 18a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2z">On my way</Big>
+              <Big onClick={() => act("start")} busy={busy === "start"} tone="light" icon="M8 5v14l11-7z">Start</Big>
+            </>}
+            {st === "on_my_way" && <>
+              <Small onClick={() => setHoldOpen(true)} disabled={!!busy} danger icon="M12 8v5M12 16.5h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z">Can&apos;t finish</Small>
+              <Big onClick={() => act("start")} busy={busy === "start"} tone="teal" icon="M8 5v14l11-7z">Start job</Big>
+            </>}
+            {st === "in_progress" && <>
+              <Small onClick={() => act("pause")} disabled={!!busy} icon="M9 6v12M15 6v12">Pause</Small>
+              <Small onClick={() => setHoldOpen(true)} disabled={!!busy} danger icon="M12 8v5M12 16.5h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z">Can&apos;t finish</Small>
+              <Big onClick={() => act("finish")} busy={busy === "finish"} tone="teal" icon="M5 12.5 9.5 17 19 7">Finish</Big>
+            </>}
+            {st === "paused" && <>
+              <Small onClick={() => setHoldOpen(true)} disabled={!!busy} danger icon="M12 8v5M12 16.5h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z">Can&apos;t finish</Small>
+              <Small onClick={() => act("finish")} disabled={!!busy} icon="M5 12.5 9.5 17 19 7">Finish</Small>
+              <Big onClick={() => act("resume")} busy={busy === "resume"} tone="teal" icon="M8 5v14l11-7z">Resume</Big>
+            </>}
           </div>
         </div>
       )}
@@ -277,16 +288,25 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
 
       {partOpen && visit && <PartPicker companyId={companyId} visitId={visit.id} onClose={() => setPartOpen(false)} onDone={(m) => { setPartOpen(false); flash(m); load(); }} />}
 
-      {toast && <div role="status" className="fixed bottom-44 left-1/2 z-[95] max-w-[90vw] -translate-x-1/2 rounded-xl bg-[#0b1f3a] px-4 py-2.5 text-[14px] font-medium text-white shadow-lg animate-[bp-pop-in_0.2s_ease-out]">{toast}</div>}
+      {toast && <div role="status" className="fixed bottom-28 left-1/2 z-[95] max-w-[90vw] -translate-x-1/2 rounded-xl bg-[#0b1f3a] px-4 py-2.5 text-[14px] font-medium text-white shadow-lg animate-[bp-pop-in_0.2s_ease-out]">{toast}</div>}
     </div>
   );
 }
 
 function Big({ children, onClick, busy, tone, icon }: { children: React.ReactNode; onClick: () => void; busy: boolean; tone: "teal" | "violet" | "light"; icon: string }) {
-  const cls = tone === "teal" ? "bg-[#0f766e] text-white shadow-[0_8px_20px_rgba(15,118,110,0.3)]" : tone === "violet" ? "bg-[#6d28d9] text-white shadow-[0_8px_20px_rgba(109,40,217,0.25)]" : "border border-slate-200 bg-white text-[#0b1f3a]";
+  const cls = tone === "teal" ? "bg-[#0f766e] text-white" : tone === "violet" ? "bg-[#6d28d9] text-white" : "border border-slate-200 bg-white text-[#0b1f3a]";
   return (
-    <button type="button" onClick={onClick} disabled={busy} className={`flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-[16px] font-semibold transition-transform active:scale-[0.98] disabled:opacity-60 ${cls}`}>
-      {busy ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Icon d={icon} />}{children}
+    <button type="button" onClick={onClick} disabled={busy} className={`flex h-12 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl px-3 text-[15px] font-semibold transition-transform active:scale-[0.98] disabled:opacity-60 ${cls}`}>
+      {busy ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Icon d={icon} className="h-[18px] w-[18px] shrink-0" />}<span className="truncate">{children}</span>
+    </button>
+  );
+}
+// Botón secundario (Pause · Can't finish) del mismo alto que el principal, para que nada quede encima
+function Small({ children, onClick, disabled, icon, danger = false }: { children: React.ReactNode; onClick: () => void; disabled?: boolean; icon: string; danger?: boolean }) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled}
+      className={`flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-xl border px-3 text-[13.5px] font-semibold transition-transform active:scale-[0.98] disabled:opacity-60 ${danger ? "border-[#fecdd3] bg-[#fff1f2] text-[#be123c]" : "border-slate-200 bg-white text-slate-700"}`}>
+      <Icon d={icon} className="h-4 w-4 shrink-0" />{children}
     </button>
   );
 }

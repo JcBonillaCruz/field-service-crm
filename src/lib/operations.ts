@@ -23,7 +23,7 @@ export const OPS_GROUPS: { id: OpsGroup; label: string; hint: string; tone: stri
   { id: "unassigned", label: "Unassigned", hint: "No collaborator yet", tone: "#64748b", dot: "bg-slate-400" },
   { id: "assigned", label: "Assigned", hint: "Ready to go", tone: "#2563eb", dot: "bg-[#2563eb]" },
   { id: "in_progress", label: "In progress", hint: "On the way or working", tone: "#d97706", dot: "bg-[#f59e0b]" },
-  { id: "delayed", label: "Delayed", hint: "Late start or over time", tone: "#e11d48", dot: "bg-[#e11d48]" },
+  { id: "delayed", label: "Delayed", hint: "Late and not started yet", tone: "#e11d48", dot: "bg-[#e11d48]" },
   { id: "done", label: "Completed", hint: "Finished jobs", tone: "#0f766e", dot: "bg-[#14a39a]" },
 ];
 
@@ -70,8 +70,11 @@ export function groupOf(j: OpsJob, now = Date.now()): OpsGroup {
   const working = s === "on_my_way" || s === "in_progress" || s === "paused";
   // Sin nadie asignado SIEMPRE va a "Sin asignar" (aunque ya vaya tarde: ahí se ve la etiqueta roja)
   if (!j.techs.length && !working) return "unassigned";
+  // Si alguien ya está trabajando (o va en camino, o lo pausó y lo retoma) va a "En progreso", aunque vaya tarde:
+  // la etiqueta roja de retraso se sigue viendo en la tarjeta.
+  if (working) return "in_progress";
   if (delayOf(j, now)) return "delayed";
-  if (working || j.status === "on_hold") return "in_progress";
+  if (j.status === "on_hold") return "in_progress";
   return "assigned";
 }
 
