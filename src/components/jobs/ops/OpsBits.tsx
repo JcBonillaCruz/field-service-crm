@@ -9,12 +9,12 @@ import { AfterHoursMoon, StatusArt, TechDots } from "@/components/jobs/EventBar"
 export const GROUP_TONE = Object.fromEntries(OPS_GROUPS.map((g) => [g.id, g.tone])) as Record<OpsGroup, string>;
 
 // Anillo de % de avance (se llena con animación cuando cambia)
-export function ProgressRing({ pct, size = 42, color = "#0f766e", stroke = 4 }: { pct: number; size?: number; color?: string; stroke?: number }) {
+export function ProgressRing({ pct, size = 42, color = "#0f766e", stroke = 4, track = "#e8edf2", fill }: { pct: number; size?: number; color?: string; stroke?: number; track?: string; fill?: string }) {
   const r = (size - stroke) / 2, c = 2 * Math.PI * r;
   return (
     <span className="relative inline-flex shrink-0" style={{ width: size, height: size }} title={`${pct}% done`} aria-label={`${pct}% done`}>
       <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e8edf2" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill={fill ?? "none"} stroke={track} strokeWidth={stroke} />
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round"
           strokeDasharray={c} strokeDashoffset={c * (1 - pct / 100)} style={{ transition: "stroke-dashoffset 700ms cubic-bezier(.2,.8,.2,1)" }} />
       </svg>
@@ -118,7 +118,10 @@ export function OpsCard({ job, group, now, innerRef, onHover, dim = false, menu,
         </div>
         {done ? <StatusArt s="completed" size={tiny ? 18 : 24} />
           : live ? <span className="relative"><StatusArt s={live} size={tiny ? 20 : 26} /></span>
-          : <ProgressRing pct={pct} size={tiny ? 22 : 28} stroke={3} color={GROUP_TONE[group]} />}
+          : tint
+            // Conexiones (tarjeta de color): anillo naranja fuerte sobre fondo blanco para que se lea bien
+            ? <ProgressRing pct={pct} size={tiny ? 24 : 28} stroke={3} color={delay ? "#e11d48" : "#ea580c"} track="#fde3d3" fill="#ffffff" />
+            : <ProgressRing pct={pct} size={tiny ? 22 : 28} stroke={3} color={GROUP_TONE[group]} />}
       </div>
       <div className={`${tiny ? "mt-0.5" : "mt-1"} flex items-center gap-1.5`}>
         <span className={`flex ${done && tint ? "opacity-60 grayscale" : ""}`}><TechDots techs={job.techs} size={tiny ? 15 : 18} max={3} /></span>
