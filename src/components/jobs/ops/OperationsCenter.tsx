@@ -570,48 +570,38 @@ function Count({ value, money = false, className = "" }: { value: number; money?
   );
 }
 
-// Anillo grande del progreso total: se llena al cargar, con degradado y brillo
-function BigRing({ pct }: { pct: number }) {
-  const size = 84, stroke = 10, r = (size - stroke) / 2, c = 2 * Math.PI * r;
-  const [shown, setShown] = useState(0);
-  useEffect(() => { const t = requestAnimationFrame(() => setShown(pct)); return () => cancelAnimationFrame(t); }, [pct]);
-  const num = useCountUp(pct, 1200);
+// Anillo del progreso total: el mismo estilo de los anillos del Dashboard de Finanzas (Collection rate / Quote win rate)
+function BigRing({ pct, color = "#14b8a6" }: { pct: number; color?: string }) {
+  const [p, setP] = useState(0);
+  useEffect(() => { const t = setTimeout(() => setP(Math.max(0, Math.min(100, pct)) / 100), 150); return () => clearTimeout(t); }, [pct]);
+  const num = useCountUp(pct, 1100);
+  const r = 34, c = 2 * Math.PI * r;
   return (
-    <span className="relative inline-flex shrink-0" style={{ width: size, height: size }}>
-      <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} className="-rotate-90 drop-shadow-[0_4px_10px_rgba(15,118,110,0.25)]">
-        <defs>
-          <linearGradient id="bp-ring-grad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#2dd4bf" /><stop offset="55%" stopColor="#14a39a" /><stop offset="100%" stopColor="#0f766e" />
-          </linearGradient>
-        </defs>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e7f3f1" strokeWidth={stroke} />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="url(#bp-ring-grad)" strokeWidth={stroke} strokeLinecap="round"
-          strokeDasharray={c} strokeDashoffset={c * (1 - shown / 100)} style={{ transition: "stroke-dashoffset 1200ms cubic-bezier(.2,.8,.2,1)" }} />
+    <span className="relative shrink-0">
+      <span className="absolute inset-[10px] rounded-full opacity-0 transition-all duration-300 group-hover/ring:inset-[6px] group-hover/ring:opacity-100" style={{ background: `${color}1f` }} />
+      <svg viewBox="0 0 84 84" className="relative h-[84px] w-[84px] -rotate-90 transition-transform duration-300 group-hover/ring:scale-105">
+        <circle cx="42" cy="42" r={r} fill="none" stroke="#eef2f6" strokeWidth="9" />
+        <circle cx="42" cy="42" r={r} fill="none" stroke={color} strokeWidth="9" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - p)}
+          className="group-hover/ring:[stroke-width:11]" style={{ transition: "stroke-dashoffset 1.1s cubic-bezier(.2,.8,.2,1), stroke-width .3s" }} />
+        <text x="42" y="47" textAnchor="middle" fontSize="16" fontWeight="700" fill="#0b1f3a" transform="rotate(90 42 42)">{Math.round(num)}%</text>
       </svg>
-      {/* brillo que gira alrededor */}
-      <span className="pointer-events-none absolute inset-0 animate-[spin_6s_linear_infinite] rounded-full motion-reduce:animate-none"
-        style={{ background: "conic-gradient(from 0deg, transparent 0 85%, rgba(255,255,255,.55) 92%, transparent 100%)", WebkitMask: `radial-gradient(circle, transparent ${r - stroke / 2}px, #000 ${r - stroke / 2}px, #000 ${r + stroke / 2}px, transparent ${r + stroke / 2}px)`, mask: `radial-gradient(circle, transparent ${r - stroke / 2}px, #000 ${r - stroke / 2}px, #000 ${r + stroke / 2}px, transparent ${r + stroke / 2}px)` }} />
-      <span className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-[20px] font-bold tabular-nums leading-none text-[#0b1f3a]">{Math.round(num)}%</span>
-        <span className="mt-0.5 text-[9.5px] font-semibold uppercase tracking-wide text-slate-400">done</span>
-      </span>
     </span>
   );
 }
 
-// Tarjetita que aparece al pasar el mouse (explica cada número)
+// Cuadrito chiquito al pasar el mouse: blanco con borde menta, aparece ARRIBA (no tapa lo de abajo)
 function Tip({ children, tip, wide = false, right = false }: { children: React.ReactNode; tip: React.ReactNode; wide?: boolean; right?: boolean }) {
   return (
     <div className="group/tip relative min-w-0">
       {children}
-      <div role="tooltip" className={`pointer-events-none absolute ${right ? "right-0" : "left-0"} top-full z-[60] mt-1.5 rounded-xl bg-[#0b1f3a] px-3.5 py-3 text-[12.5px] leading-relaxed text-white/90 opacity-0 shadow-[0_14px_36px_rgba(11,31,58,0.35)] transition-all duration-150 group-hover/tip:translate-y-0 group-hover/tip:opacity-100 ${wide ? "w-[22rem]" : "w-64"} max-w-[calc(100vw-2rem)] translate-y-1`}>
+      <div role="tooltip" className={`pointer-events-none absolute bottom-full ${right ? "right-0" : "left-0"} z-[60] mb-1.5 translate-y-1 rounded-xl border border-[#9fdccf] bg-white px-3 py-2 text-[12px] leading-snug text-slate-600 opacity-0 shadow-[0_8px_20px_rgba(15,118,110,0.12)] transition-all duration-150 group-hover/tip:translate-y-0 group-hover/tip:opacity-100 ${wide ? "w-64" : "w-52"} max-w-[calc(100vw-2rem)]`}>
         {tip}
       </div>
     </div>
   );
 }
-const Row = ({ l, v, tone = "" }: { l: string; v: string; tone?: string }) => (
-  <p className="flex justify-between gap-3"><span className="text-white/60">{l}</span><b className={`font-semibold tabular-nums ${tone}`}>{v}</b></p>
+const Row = ({ l, v, tone = "text-[#0b1f3a]" }: { l: string; v: string; tone?: string }) => (
+  <p className="flex justify-between gap-3"><span className="text-slate-500">{l}</span><b className={`font-semibold tabular-nums ${tone}`}>{v}</b></p>
 );
 
 // Arriba de todo: progreso total + ingresos, costos y ganancia del periodo (costos y ganancia SOLO el dueño)
@@ -622,9 +612,8 @@ function Overview({ totals, cash, money, period }: {
   const margin = cash?.profit != null && cash.revenue > 0 ? Math.round((cash.profit / cash.revenue) * 100) : null;
   const stat = (label: string, value: number, hint: string, tip: React.ReactNode, tone = "text-[#0b1f3a]", art?: React.ReactNode, right = false) => (
     <Tip tip={tip} right={right}>
-      <div className="cursor-help rounded-xl px-3 py-2 transition-all duration-150 hover:-translate-y-0.5 hover:bg-[#f6f9fc]">
-        <p className="flex items-center gap-1.5 truncate text-[12px] font-medium text-slate-500">{art}{label}
-          <svg viewBox="0 0 20 20" className="h-3 w-3 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="10" cy="10" r="7.5" /><path d="M10 9v4.5M10 6.5h.01" strokeLinecap="round" /></svg></p>
+      <div className="cursor-default rounded-xl px-3 py-2 transition-colors duration-150 hover:bg-slate-50">
+        <p className="flex items-center gap-1.5 truncate text-[12px] font-medium text-slate-500">{art}{label}</p>
         <p className={`mt-0.5 truncate text-[20px] font-semibold tabular-nums tracking-tight ${tone}`}><Count value={value} money /></p>
         <p className="truncate text-[11.5px] text-slate-400">{hint}</p>
       </div>
@@ -634,17 +623,14 @@ function Overview({ totals, cash, money, period }: {
     <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-3 lg:p-4">
       <div className="flex flex-wrap items-center gap-3 lg:gap-5">
         <Tip wide tip={<>
-          <p className="mb-1.5 font-semibold text-white">Total progress · {period}</p>
-          <Row l="Jobs in view" v={String(totals.total)} />
-          <Row l="Completed" v={String(totals.done)} tone="text-[#5eead4]" />
-          <Row l="In progress" v={String(totals.working)} tone="text-[#fcd34d]" />
-          <Row l="Delayed" v={String(totals.late)} tone="text-[#fda4af]" />
-          {totals.assigned != null && <Row l="Assigned, not started" v={String(totals.assigned)} />}
+          <p className="mb-1 font-semibold text-[#0f766e]">Average progress of {totals.total} jobs</p>
+          <Row l="Completed" v={String(totals.done)} tone="text-[#0f766e]" />
+          <Row l="In progress" v={String(totals.working)} tone="text-[#b45309]" />
+          <Row l="Delayed" v={String(totals.late)} tone="text-[#be123c]" />
+          {totals.assigned != null && <Row l="Assigned" v={String(totals.assigned)} />}
           {totals.unassigned != null && <Row l="Unassigned" v={String(totals.unassigned)} />}
-          <Row l="Open jobs average" v={`${totals.openPct}%`} />
-          <p className="mt-2 border-t border-white/10 pt-2 text-[11.5px] text-white/60">Each job adds its own %: assigned 10 · scheduled 20 · on the way 30 · started 45 · checklist up to 85 · completed 100. This ring is the average of all of them.</p>
         </>}>
-          <div className="flex cursor-help items-center gap-3 rounded-2xl pr-3 transition-colors hover:bg-[#f6fbfa]">
+          <div className="group/ring flex cursor-default items-center gap-3 rounded-2xl px-1 pr-3 transition-colors hover:bg-slate-50">
             <BigRing pct={totals.pct} />
             <div>
               <p className="text-[12px] font-semibold uppercase tracking-wide text-slate-400">Total progress · {period}</p>
@@ -656,32 +642,24 @@ function Overview({ totals, cash, money, period }: {
         {money && cash && (
           <div className="grid min-w-0 flex-1 grid-cols-2 gap-1 border-slate-100 sm:grid-cols-3 lg:border-l lg:pl-4 xl:grid-cols-5">
             {stat("Earned", cash.revenue, `${cash.jobs_done} completed job${cash.jobs_done === 1 ? "" : "s"}`, <>
-              <p className="mb-1 font-semibold text-white">Earned · {period}</p>
-              <p>What the completed jobs are worth: the invoice total, or the job&apos;s services if there&apos;s no invoice yet, or its estimate.</p>
-              <div className="mt-2"><Row l="Completed jobs" v={String(cash.jobs_done)} /><Row l="Earned" v={money$(cash.revenue)} /></div>
+              <p>Value of the completed jobs (invoice, services or estimate).</p>
             </>)}
             {stat("Collected", cash.collected, cash.revenue > cash.collected ? `${money$(cash.revenue - cash.collected)} still to collect` : "All collected", <>
-              <p className="mb-1 font-semibold text-white">Collected · {period}</p>
-              <p>Money already received on the invoices of those completed jobs.</p>
-              <div className="mt-2"><Row l="Collected" v={money$(cash.collected)} tone="text-[#5eead4]" /><Row l="Still to collect" v={money$(Math.max(0, cash.revenue - cash.collected))} tone="text-[#fda4af]" /></div>
+              <p>Money already paid on those jobs&apos; invoices.</p>
             </>, "text-[#0f766e]")}
             {stat("Open jobs", cash.pipeline, `${cash.open_jobs} job${cash.open_jobs === 1 ? "" : "s"} not finished yet`, <>
-              <p className="mb-1 font-semibold text-white">Open jobs</p>
-              <p>The estimated value of every job that isn&apos;t finished yet. It moves to Earned when the job is completed.</p>
-              <div className="mt-2"><Row l="Open jobs" v={String(cash.open_jobs)} /><Row l="Value" v={money$(cash.pipeline)} /></div>
+              <p>Estimated value of jobs not finished yet.</p>
             </>)}
             {money === "owner" && cash.profit != null ? (
               <>
                 {stat("Costs", (cash.labor ?? 0) + (cash.materials ?? 0), `Labor ${money$(cash.labor)} · Materials ${money$(cash.materials)}`, <>
-                  <p className="mb-1 font-semibold text-white">Costs · {period} <span className="font-normal text-white/50">· only you see this</span></p>
-                  <p>Labor uses the pay rates in Team: hourly × real hours on site, per job, or % of the job. Materials are counted at their cost.</p>
-                  <div className="mt-2"><Row l="Labor" v={money$(cash.labor)} /><Row l="Hours on site" v={`${Math.round((cash.hours ?? 0) * 10) / 10}h`} /><Row l="Materials" v={money$(cash.materials)} />
-                    {(cash.missing_rates ?? 0) > 0 && <p className="mt-1.5 text-[11.5px] text-[#fcd34d]">{cash.missing_rates} without a pay rate (counted as $0)</p>}</div>
+                  <Row l="Labor" v={money$(cash.labor)} /><Row l="Hours on site" v={`${Math.round((cash.hours ?? 0) * 10) / 10}h`} /><Row l="Materials" v={money$(cash.materials)} />
+                  <p className="mt-1 text-[11px] text-slate-400">Only you see this.</p>
                 </>, "text-[#b45309]", undefined, true)}
                 {stat("Profit", cash.profit, margin != null ? `${margin}% margin${cash.missing_rates ? ` · ${cash.missing_rates} without pay rate` : ""}` : "No completed jobs yet", <>
-                  <p className="mb-1 font-semibold text-white">Profit · {period} <span className="font-normal text-white/50">· only you see this</span></p>
-                  <div><Row l="Earned" v={money$(cash.revenue)} /><Row l="− Costs" v={money$((cash.labor ?? 0) + (cash.materials ?? 0))} />
-                    <Row l="= Profit" v={money$(cash.profit)} tone={cash.profit >= 0 ? "text-[#86efac]" : "text-[#fda4af]"} />{margin != null && <Row l="Margin" v={`${margin}%`} />}</div>
+                  <Row l="Earned" v={money$(cash.revenue)} /><Row l="− Costs" v={money$((cash.labor ?? 0) + (cash.materials ?? 0))} />
+                  <Row l="= Profit" v={money$(cash.profit)} tone={cash.profit >= 0 ? "text-[#15803d]" : "text-[#be123c]"} />
+                  <p className="mt-1 text-[11px] text-slate-400">Only you see this.</p>
                 </>, cash.profit >= 0 ? "text-[#15803d]" : "text-[#be123c]",
                   <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="4.5" y="9" width="11" height="7.5" rx="1.5" /><path d="M7 9V7a3 3 0 0 1 6 0v2" /></svg>, true)}
               </>
