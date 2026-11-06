@@ -28,6 +28,14 @@ const WHEN: { v: When; label: string; hint: string }[] = [
 type ColFilter = { when: When | "custom" | null; q: string; from?: string; to?: string }; // from/to = "yyyy-mm-dd" (calendario)
 const NO_FILTER: ColFilter = { when: null, q: "" };
 const fmtD = (iso: string) => fromIsoDay(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+// Periodo de la página movido con las flechas o escogido en el calendario (from/to = días incluidos)
+type Span = { unit: "day" | "week" | "month" | "range"; from: string; to: string };
+function spanLabel(s: Span) {
+  const a = fromIsoDay(s.from);
+  if (s.unit === "day" || s.from === s.to) return a.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  if (s.unit === "month") return a.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  return `${fmtD(s.from)} – ${fmtD(s.to)}`;
+}
 function rangeOf(w: When, now: number, weekStartsOn: number, done: boolean): [Date, Date] | null {
   const today = dayStart(new Date(now)), wk = startOfWeek(today, weekStartsOn);
   switch (w) {
@@ -76,6 +84,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
   }, []);
   const shownView: View = isMobile ? "connections" : view;
   const [when, setWhenState] = useState<When>("week");
+  const [span, setSpanState] = useState<Span | null>(null); // si hay uno, manda sobre "when"
   const [ask, setAsk] = useState<OpsAsk | null>(null);
   const [colF, setColF] = useState<Record<OpsGroup, ColFilter>>({ unassigned: NO_FILTER, assigned: NO_FILTER, in_progress: NO_FILTER, delayed: NO_FILTER, done: NO_FILTER });
   const [searchOpen, setSearchOpen] = useState<Partial<Record<OpsGroup, boolean>>>({});
@@ -98,26 +107,31 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
     try {
       const v = localStorage.getItem("bp-ops-view"); if (v === "board" || v === "connections") setView(v);
       const w = localStorage.getItem("bp-ops-when") as When | null; if (w && WHEN.some((x) => x.v === w)) setWhenState(w);
+      const sp = JSON.parse(localStorage.getItem("bp-ops-span") || "null") as Span | null; if (sp?.from && sp.to && sp.unit) setSpanState(sp);
       const c = JSON.parse(localStorage.getItem(`bp-ops-cols-${companyId}`) || "null") as OpsGroup[] | null;
       if (c && c.length === OPS_GROUPS.length && OPS_GROUPS.every((g) => c.includes(g.id))) setColOrder(c);
       setCardOrder(JSON.parse(localStorage.getItem(`bp-ops-cards-${companyId}`) || "{}"));
     } catch { /* */ }
   }, [companyId]);
-  const setWhen = (w: When) => { setWhenState(w); try { localStorage.setItem("bp-ops-when", w); } catch { /* */ } };
+  const setWhen = (w: When) => { setWhenState(w); setSpanState(null); try { localStorage.setItem("bp-ops-when", w); localStorage.removeItem("bp-ops-span"); } catch { /* */ } };
+  const setSpan = (sp: Span) => { setSpanState(sp); try { localStorage.setItem("bp-ops-span", JSON.stringify(sp)); } catch { /* */ } };
+  const periodLabel = span ? spanLabel(span) : WHEN.find((w) => w.v === when)!.label;
+  const pageRange = useCallback((done: boolean, at: number): [Date, Date] | null =>
+    span ? [fromIsoDay(span.from), addDays(fromIsoDay(span.to), 1)] : rangeOf(when, at, weekStartsOn, done), [span, when, weekStartsOn]);
   const saveCols = (c: OpsGroup[]) => { setColOrder(c); try { localStorage.setItem(`bp-ops-cols-${companyId}`, JSON.stringify(c)); } catch { /* */ } };
   const saveCards = (o: Record<string, string[]>) => { setCardOrder(o); try { localStorage.setItem(`bp-ops-cards-${companyId}`, JSON.stringify(o)); } catch { /* */ } };
   const pickView = (v: View) => { setView(v); try { localStorage.setItem("bp-ops-view", v); } catch { /* */ } };
 
   const load = useCallback(async () => {
     const id = ++reqId.current;
-    const since = when === "all" || colF.done.when === "all" ? new Date(2000, 0, 1)
-      : colF.done.when === "custom" && colF.done.from ? new Date(Math.min(fromIsoDay(colF.done.from).getTime(), addDays(dayStart(new Date()), -100).getTime()))
-      : addDays(dayStart(new Date()), -100);
+    const base = addDays(dayStart(new Date()), -100).getTime();
+    const since = (!span && when === "all") || colF.done.when === "all" ? new Date(2000, 0, 1)
+      : new Date(Math.min(base, span ? fromIsoDay(span.from).getTime() : base, colF.done.when === "custom" && colF.done.from ? fromIsoDay(colF.done.from).getTime() : base));
     const { data, error: err } = await createClient().rpc("ops_board", { p_company: companyId, p_done_since: since.toISOString() });
     if (id !== reqId.current) return;
     if (err) { setError(jobError(err)); setLoading(false); return; }
     setError(""); setJobs((data ?? []) as OpsJob[]); setLoading(false); setUpdatedAt(Date.now());
-  }, [companyId, when, colF.done.when, colF.done.from]);
+  }, [companyId, when, span, colF.done.when, colF.done.from]);
 
   useEffect(() => { load(); }, [load]);
   // En vivo: cuando alguien asigna, mueve o el colaborador cambia de estado
@@ -152,7 +166,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
     const own = Boolean(f.when);
     let r: [Date, Date] | null;
     if (f.when === "custom") r = f.from && f.to ? [fromIsoDay(f.from), addDays(fromIsoDay(f.to), 1)] : null;
-    else r = rangeOf(f.when ?? when, now, weekStartsOn, g === "done");
+    else r = f.when ? rangeOf(f.when, now, weekStartsOn, g === "done") : pageRange(g === "done", now);
     if (!r) return true;
     const [from, to] = r;
     const s = j.visit?.starts_at ? new Date(j.visit.starts_at) : null;
@@ -160,7 +174,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
     if (!d) return g !== "done"; // sin fecha: siempre a la vista (necesita atención)
     if (!own && (g === "in_progress" || g === "delayed")) return true;
     return d >= from && d < to;
-  }, [now, weekStartsOn, when]);
+  }, [now, weekStartsOn, pageRange]);
 
   const shown = useMemo(() => jobs.filter((j) => {
     if (!matches(j, q)) return false;
@@ -186,7 +200,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
       m[g].sort((a, b) => (pos.get(a.id) ?? 9999 + (base.get(a.id) ?? 0)) - (pos.get(b.id) ?? 9999 + (base.get(b.id) ?? 0)));
     });
     return m;
-  }, [shown, groupOf, now, cardOrder, colF, when, inPeriod, matches]);
+  }, [shown, groupOf, now, cardOrder, colF, inPeriod, matches]);
 
   const connJobs = useMemo(() => (focus ? byGroup[focus] : OPS_GROUPS.flatMap((g) => byGroup[g.id])), [byGroup, focus]);
 
@@ -201,10 +215,10 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
   const [cash, setCash] = useState<Money | null>(null);
   useEffect(() => {
     if (!money) return;
-    const r = rangeOf(when, Date.now(), weekStartsOn, true);
+    const r = pageRange(true, Date.now());
     createClient().rpc("ops_money", { p_company: companyId, p_from: r?.[0].toISOString() ?? null, p_to: r?.[1].toISOString() ?? null })
       .then(({ data, error: e }) => setCash(e ? null : (data as Money)), () => setCash(null));
-  }, [companyId, when, weekStartsOn, money, updatedAt]);
+  }, [companyId, pageRange, money, updatedAt]);
   const filtersOn = people.length ? 1 : 0;
   const peopleList = useMemo(() => {
     const ids = new Set(jobs.flatMap((j) => j.techs.map((t) => t.user_id)));
@@ -298,7 +312,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
             <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M5 5l10 10M15 5 5 15" /></svg></button>}
         </div>
         <div className="hidden items-center gap-3 lg:flex">
-          <WhenMenu when={when} setWhen={setWhen} />
+          {shownView === "board" && <PeriodNav when={when} span={span} label={periodLabel} setWhen={setWhen} setSpan={setSpan} weekStartsOn={weekStartsOn} />}
           <ViewMenu view={view} setView={pickView} />
           <FiltersMenu people={people} setPeople={setPeople} list={peopleList} active={filtersOn} />
           <Link prefetch={false} href="/dashboard/jobs/new" className="group/n inline-flex h-10 items-center gap-1.5 rounded-lg bg-[#0f766e] px-4 text-[14.5px] font-semibold text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59]">
@@ -316,7 +330,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
           {q && <button type="button" onClick={() => setQ("")} aria-label="Clear search" className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
             <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M5 5l10 10M15 5 5 15" /></svg></button>}
         </div>
-        <div className="flex justify-end"><WhenMenu when={when} setWhen={setWhen} /></div>
+        <div className="flex justify-end"><PeriodNav when={when} span={span} label={periodLabel} setWhen={setWhen} setSpan={setSpan} weekStartsOn={weekStartsOn} /></div>
       </div>
       <Link prefetch={false} href="/dashboard/jobs/new" aria-label="New job"
         className="fixed bottom-6 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#0f766e] text-white shadow-lg shadow-[#0f766e]/30 transition-transform active:scale-95 lg:hidden">
@@ -325,7 +339,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
 
       {error && <p role="alert" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[14px] text-amber-800">{error}</p>}
 
-      <Overview totals={totals} cash={cash} money={money} period={WHEN.find((w) => w.v === when)!.label} />
+      <Overview totals={totals} cash={cash} money={money} period={periodLabel} />
 
       {/* Resumen de los 5 grupos (tocar = ver solo ese grupo) */}
       <div className="mt-4 hidden gap-2.5 sm:grid sm:grid-cols-3 xl:grid-cols-5">
@@ -350,7 +364,8 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
       {shownView === "connections" ? (
         <div className="mt-4">
           {focus && <FocusNote label={OPS_GROUPS.find((g) => g.id === focus)!.label} onClear={() => setFocus(null)} />}
-          {loading ? <div className="h-80 animate-pulse rounded-2xl bg-white" /> : <OpsConnections companyId={companyId} jobs={connJobs} groupOf={groupOf} team={team} now={now} menuFor={menuFor} isAfter={isAfter} hrefFor={hrefFor}
+          {loading ? <div className="h-80 animate-pulse rounded-2xl bg-white" /> : <OpsConnections companyId={companyId}
+            period={<PeriodNav when={when} span={span} label={periodLabel} setWhen={setWhen} setSpan={setSpan} weekStartsOn={weekStartsOn} compact />} jobs={connJobs} groupOf={groupOf} team={team} now={now} menuFor={menuFor} isAfter={isAfter} hrefFor={hrefFor}
             onChanged={(m, n, err) => (err ? flash(m, true) : afterAction(m, n))}
             onUnassign={(j) => setAsk({ kind: "move", job: j, from: groupOf(j), to: "unassigned" })} />}
         </div>
@@ -383,7 +398,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
                       <button type="button" onClick={() => setSearchOpen((m) => ({ ...m, [g.id]: !m[g.id] }))} aria-label={`Search in ${g.label}`} title={`Search in ${g.label}`}
                         className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${searchOpen[g.id] || colF[g.id].q ? "bg-[#eef4ff] text-[#2563eb]" : "text-slate-400 hover:bg-white hover:text-[#0b1f3a]"}`}>
                         <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg></button>
-                      <ColumnTools label={g.label} f={colF[g.id]} pageWhen={when} onChange={(f) => setCol(g.id, f)} />
+                      <ColumnTools label={g.label} f={colF[g.id]} pageLabel={periodLabel} onChange={(f) => setCol(g.id, f)} />
                     </span>
                   </div>
                   {colF[g.id].q !== "" || searchOpen[g.id] ? (
@@ -421,7 +436,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
           <div className="mt-4 lg:hidden">
             <div className="flex items-center gap-2">
               <div className="min-w-0 flex-1"><GroupPicker groups={ordered} value={mobileGroup} onChange={setMobileGroup} counts={byGroup} /></div>
-              <ColumnTools label={OPS_GROUPS.find((x) => x.id === mobileGroup)!.label} f={colF[mobileGroup]} pageWhen={when} onChange={(f) => setCol(mobileGroup, f)} wide />
+              <ColumnTools label={OPS_GROUPS.find((x) => x.id === mobileGroup)!.label} f={colF[mobileGroup]} pageLabel={periodLabel} onChange={(f) => setCol(mobileGroup, f)} wide />
             </div>
             <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} className="mt-2.5 min-h-[50vh]">
               <div key={mobileGroup} className="animate-[bp-fade_0.2s_ease-out]">
@@ -526,34 +541,90 @@ function FiltersMenu({ people, setPeople, list, active, mobile = false }: { peop
   );
 }
 
-// Periodo: Hoy · Esta semana · Este mes · 3 meses · Todo (lo que está pasando ahora y lo atrasado siempre se ve)
-function WhenMenu({ when, setWhen }: { when: When; setWhen: (v: When) => void }) {
-  const cur = WHEN.find((w) => w.v === when)!;
+// Periodo de la página: ‹ menú › — el menú tiene Hoy, Semana, Mes… y el calendario.
+// Las flechas mueven el mismo tamaño: un día, una semana o un mes para atrás/adelante.
+function PeriodNav({ when, span, label, setWhen, setSpan, weekStartsOn, compact = false }: {
+  when: When; span: Span | null; label: string; setWhen: (v: When) => void; setSpan: (s: Span) => void; weekStartsOn: number; compact?: boolean;
+}) {
+  const [cal, setCal] = useState(false);
+  const today = dayStart(new Date()), wk = startOfWeek(today, weekStartsOn), mo = startOfMonth(today);
+  const endOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  // El periodo que se ve ahora, como días (para poder moverlo)
+  const cur: Span | null = span ?? (() => {
+    switch (when) {
+      case "today": return { unit: "day", from: isoDay(today), to: isoDay(today) };
+      case "week": return { unit: "week", from: isoDay(wk), to: isoDay(addDays(wk, 6)) };
+      case "last_week": return { unit: "week", from: isoDay(addDays(wk, -7)), to: isoDay(addDays(wk, -1)) };
+      case "month": return { unit: "month", from: isoDay(mo), to: isoDay(endOfMonth(mo)) };
+      case "last_month": { const m = new Date(mo.getFullYear(), mo.getMonth() - 1, 1); return { unit: "month", from: isoDay(m), to: isoDay(endOfMonth(m)) }; }
+      default: return null; // 3 meses / todo: sin flechas
+    }
+  })();
+  const move = (dir: 1 | -1) => {
+    if (!cur) return;
+    const a = fromIsoDay(cur.from), b = fromIsoDay(cur.to);
+    let next: Span;
+    if (cur.unit === "month") { const m = new Date(a.getFullYear(), a.getMonth() + dir, 1); next = { unit: "month", from: isoDay(m), to: isoDay(endOfMonth(m)) }; }
+    else {
+      const len = cur.unit === "day" ? 1 : cur.unit === "week" ? 7 : Math.round((b.getTime() - a.getTime()) / 86400000) + 1;
+      next = { unit: cur.unit, from: isoDay(addDays(a, dir * len)), to: isoDay(addDays(b, dir * len)) };
+    }
+    // Si cae en hoy / esta semana / este mes, vuelve a la opción normal (así el nombre dice "Today", "This week"…)
+    if (next.unit === "day" && next.from === isoDay(today)) return setWhen("today");
+    if (next.unit === "week" && next.from === isoDay(wk)) return setWhen("week");
+    if (next.unit === "month" && next.from === isoDay(mo)) return setWhen("month");
+    setSpan(next);
+  };
+  const arrow = (dir: 1 | -1) => (
+    <button type="button" onClick={() => move(dir)} disabled={!cur} aria-label={dir < 0 ? "Previous period" : "Next period"} title={dir < 0 ? "Previous" : "Next"}
+      className={`flex ${compact ? "h-9 w-8" : "h-10 w-9"} items-center justify-center text-slate-500 transition-colors hover:bg-[#eef8f5] hover:text-[#0f766e] disabled:cursor-default disabled:text-slate-300 disabled:hover:bg-transparent ${dir < 0 ? "rounded-l-lg" : "rounded-r-lg"}`}>
+      <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d={dir < 0 ? "M12.5 5 7.5 10l5 5" : "M7.5 5 12.5 10l-5 5"} /></svg>
+    </button>
+  );
+  const check = <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#2563eb]" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="m5 10.5 3 3 7-7" /></svg>;
   return (
-    <Menu>
-      <MenuButton className={btn} aria-label="Period">
-        <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4" /></svg>
-        <span>{cur.label}</span>
-        <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-400" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
-      </MenuButton>
-      <MenuItems anchor="bottom end" transition className="z-[100] mt-1 w-64 rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_12px_40px_rgba(15,40,60,0.16)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
-        {WHEN.map((w) => (
-          <MenuItem key={w.v}>
-            <button type="button" onClick={() => setWhen(w.v)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left data-[focus]:bg-[#eef4ff] ${when === w.v ? "bg-[#eef4ff]" : ""}`}>
-              <span className="min-w-0 flex-1"><span className="block text-[14px] font-semibold text-[#0b1f3a]">{w.label}</span><span className="block text-[12px] text-slate-500">{w.hint}</span></span>
-              {when === w.v && <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#2563eb]" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="m5 10.5 3 3 7-7" /></svg>}
+    <div className="flex shrink-0 items-stretch rounded-lg border border-slate-200 bg-white">
+      {arrow(-1)}
+      <Menu>
+        <MenuButton aria-label="Period" className={`flex ${compact ? "h-9 text-[13.5px]" : "h-10 text-[14px]"} items-center gap-2 border-x border-slate-200 px-3 font-medium text-slate-700 transition-colors hover:text-[#0f766e] data-[open]:text-[#0f766e] focus:outline-none`}>
+          <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4" /></svg>
+          <span className="whitespace-nowrap">{label}</span>
+          <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-400" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
+        </MenuButton>
+        <MenuItems anchor="bottom end" transition className="z-[100] mt-1 w-64 rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_12px_40px_rgba(15,40,60,0.16)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
+          {WHEN.map((w) => (
+            <MenuItem key={w.v}>
+              <button type="button" onClick={() => setWhen(w.v)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left data-[focus]:bg-[#eef4ff] ${!span && when === w.v ? "bg-[#eef4ff]" : ""}`}>
+                <span className="min-w-0 flex-1"><span className="block text-[14px] font-semibold text-[#0b1f3a]">{w.label}</span><span className="block text-[12px] text-slate-500">{w.hint}</span></span>
+                {!span && when === w.v && check}
+              </button>
+            </MenuItem>
+          ))}
+          <div className="my-1 border-t border-slate-100" />
+          <MenuItem>
+            <button type="button" onClick={() => setCal(true)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left data-[focus]:bg-[#eef4ff] ${span ? "bg-[#eef4ff]" : ""}`}>
+              <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M8 14h2M12 14h2M8 17h2" /></svg>
+              <span className="min-w-0 flex-1"><span className="block text-[14px] font-semibold text-[#0f766e]">Pick dates on the calendar…</span><span className="block text-[12px] text-slate-500">{span ? label : "A day or a range of days"}</span></span>
+              {span && check}
             </button>
           </MenuItem>
-        ))}
-        <p className="px-3 pb-1 pt-2 text-[11.5px] text-slate-400">For the whole page and the earnings. Each column can have its own filter (funnel icon).</p>
-      </MenuItems>
-    </Menu>
+          <p className="px-3 pb-1 pt-2 text-[11.5px] text-slate-400">Use ‹ › to go back or forward one day, week or month. Applies to the whole page and the earnings.</p>
+        </MenuItems>
+      </Menu>
+      {arrow(1)}
+      {cal && <RangeModal label="Operations" from={span?.from} to={span?.to} onClose={() => setCal(false)}
+        onApply={(a, b) => { setSpan({ unit: a === b ? "day" : "range", from: a, to: b }); setCal(false); }} />}
+    </div>
   );
 }
 
 type Money = { owner: boolean; jobs_done: number; revenue: number; collected: number; pipeline: number; open_jobs: number;
   labor: number | null; materials: number | null; hours: number | null; missing_rates: number | null; salaried: number | null; profit: number | null };
 const money$ = (v: number | null | undefined) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(v) || 0);
+// Que el texto chiquito no diga algo que no es: "All collected" con $0, o "no completed jobs" cuando sí hay
+const earnedHint = (c: Money) => `${c.jobs_done} completed job${c.jobs_done === 1 ? "" : "s"}${c.jobs_done && !c.revenue ? " · no price yet" : ""}`;
+const collectedHint = (c: Money) => c.revenue > c.collected ? `${money$(c.revenue - c.collected)} still to collect`
+  : c.revenue > 0 ? "All collected" : c.jobs_done ? "Nothing billed yet" : "Nothing to collect yet";
 
 // Número que se mueve: sube o baja hasta el valor nuevo cada vez que cambia
 function useCountUp(value: number, ms = 900) {
@@ -659,10 +730,10 @@ function Overview({ totals, cash, money, period }: {
         </Tip>
         {money && cash && (
           <div className="grid min-w-0 flex-1 grid-cols-2 gap-1 border-slate-100 sm:grid-cols-3 lg:border-l lg:pl-4 xl:grid-cols-5">
-            {stat("Earned", cash.revenue, `${cash.jobs_done} completed job${cash.jobs_done === 1 ? "" : "s"}`, <>
+            {stat("Earned", cash.revenue, earnedHint(cash), <>
               <p>Value of the completed jobs (invoice, services or estimate).</p>
             </>)}
-            {stat("Collected", cash.collected, cash.revenue > cash.collected ? `${money$(cash.revenue - cash.collected)} still to collect` : "All collected", <>
+            {stat("Collected", cash.collected, collectedHint(cash), <>
               <p>Money already paid on those jobs&apos; invoices.</p>
             </>, "text-[#0f766e]")}
             {stat("Open jobs", cash.pipeline, `${cash.open_jobs} job${cash.open_jobs === 1 ? "" : "s"} not finished yet`, <>
@@ -674,7 +745,7 @@ function Overview({ totals, cash, money, period }: {
                   <Row l="Labor" v={money$(cash.labor)} /><Row l="Hours on site" v={`${Math.round((cash.hours ?? 0) * 10) / 10}h`} /><Row l="Materials" v={money$(cash.materials)} />
                   <p className="mt-1 text-[11px] text-slate-400">Only you see this.</p>
                 </>, "text-[#b45309]", undefined, true)}
-                {stat("Profit", cash.profit, margin != null ? `${margin}% margin${cash.missing_rates ? ` · ${cash.missing_rates} without pay rate` : ""}` : "No completed jobs yet", <>
+                {stat("Profit", cash.profit, margin != null ? `${margin}% margin${cash.missing_rates ? ` · ${cash.missing_rates} without pay rate` : ""}` : cash.jobs_done ? "No price on the completed jobs yet" : "No completed jobs yet", <>
                   <Row l="Earned" v={money$(cash.revenue)} /><Row l="− Costs" v={money$((cash.labor ?? 0) + (cash.materials ?? 0))} />
                   <Row l="= Profit" v={money$(cash.profit)} tone={cash.profit >= 0 ? "text-[#15803d]" : "text-[#be123c]"} />
                   <p className="mt-1 text-[11px] text-slate-400">Only you see this.</p>
@@ -697,9 +768,8 @@ function Overview({ totals, cash, money, period }: {
 }
 
 // Periodo de cada columna: menú desplegable + "Pick dates" con calendario (rango de días)
-function ColumnTools({ label, f, pageWhen, onChange, wide = false }: { label: string; f: ColFilter; pageWhen: When; onChange: (f: Partial<ColFilter>) => void; wide?: boolean }) {
+function ColumnTools({ label, f, pageLabel, onChange, wide = false }: { label: string; f: ColFilter; pageLabel: string; onChange: (f: Partial<ColFilter>) => void; wide?: boolean }) {
   const [cal, setCal] = useState(false);
-  const pageLabel = WHEN.find((w) => w.v === pageWhen)!.label;
   const cur = f.when === "custom" && f.from && f.to ? (f.from === f.to ? fmtD(f.from) : `${fmtD(f.from)} – ${fmtD(f.to)}`) : f.when ? WHEN.find((w) => w.v === f.when)?.label ?? pageLabel : pageLabel;
   const on = Boolean(f.when);
   const item = "flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-slate-700 data-[focus]:bg-[#eef4ff] data-[focus]:text-[#0b1f3a]";
@@ -822,12 +892,12 @@ function MobileOverview({ totals, cash, money, period }: {
   const [open, setOpen] = useState(false);
   const canOpen = Boolean(money && cash);
   const rows = cash ? [
-    { label: "Earned", value: cash.revenue, hint: `${cash.jobs_done} completed job${cash.jobs_done === 1 ? "" : "s"}`, color: "#0b1f3a", text: "text-[#0b1f3a]" },
-    { label: "Collected", value: cash.collected, hint: cash.revenue > cash.collected ? `${money$(cash.revenue - cash.collected)} still to collect` : "All collected", color: "#14b8a6", text: "text-[#0f766e]" },
+    { label: "Earned", value: cash.revenue, hint: earnedHint(cash), color: "#0b1f3a", text: "text-[#0b1f3a]" },
+    { label: "Collected", value: cash.collected, hint: collectedHint(cash), color: "#14b8a6", text: "text-[#0f766e]" },
     { label: "Open jobs", value: cash.pipeline, hint: `${cash.open_jobs} not finished yet`, color: "#2563eb", text: "text-[#2563eb]" },
     ...(money === "owner" && cash.profit != null ? [
       { label: "Costs", value: (cash.labor ?? 0) + (cash.materials ?? 0), hint: `Labor ${money$(cash.labor)} · Materials ${money$(cash.materials)}`, color: "#f59e0b", text: "text-[#b45309]" },
-      { label: "Profit", value: cash.profit, hint: cash.revenue > 0 ? `${Math.round((cash.profit / cash.revenue) * 100)}% margin · only you see this` : "Only you see this", color: cash.profit >= 0 ? "#16a34a" : "#e11d48", text: cash.profit >= 0 ? "text-[#15803d]" : "text-[#be123c]" },
+      { label: "Profit", value: cash.profit, hint: cash.revenue > 0 ? `${Math.round((cash.profit / cash.revenue) * 100)}% margin · only you see this` : cash.jobs_done ? "No price on the completed jobs yet · only you see this" : "No completed jobs yet · only you see this", color: cash.profit >= 0 ? "#16a34a" : "#e11d48", text: cash.profit >= 0 ? "text-[#15803d]" : "text-[#be123c]" },
     ] : []),
   ] : [];
   const max = Math.max(1, ...rows.map((r) => Math.abs(r.value)));

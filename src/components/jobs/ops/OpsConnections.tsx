@@ -19,14 +19,17 @@ const SHOW: { v: Show; label: string; dot: string }[] = [
 ];
 
 // =====================================================================
-// Conexiones: colaboradores a la izquierda, trabajos (tarjetas chiquitas) llenando
-// de izquierda a derecha, y líneas curvas animadas que los unen.
+// Conexiones: colaboradores a la izquierda y sus trabajos (tarjetas chiquitas) en columnas
+// que se llenan de arriba abajo y siguen en la de al lado, como una ramificación:
+// primero los compartidos (2+ personas), luego los de cada persona en el orden de la lista.
+// Las líneas curvas pasan SIEMPRE por detrás de las tarjetas (se asoman en los huecos).
+// Si no caben todas las columnas, se pasa de pantalla con ‹ › (nunca scroll de lado).
 //   · Filtros: qué estados ver (en progreso, asignados, atrasados, sin asignar, terminados) y una persona.
 //   · Arrastra un trabajo a una persona (asignar · pasarlo · agregar ayudante), entre tarjetas (ordenar)
 //     o a "Unassigned" (quitarlo, pide nota). Arrastra a una persona para cambiar el orden.
 // =====================================================================
-export default function OpsConnections({ companyId, jobs, groupOf, team, now, menuFor, isAfter, hrefFor, onChanged, onUnassign }: {
-  companyId: string; jobs: OpsJob[]; groupOf: (j: OpsJob) => OpsGroup; team: TeamMember[]; now: number;
+export default function OpsConnections({ companyId, jobs, groupOf, team, now, menuFor, isAfter, hrefFor, onChanged, onUnassign, period }: {
+  companyId: string; period?: React.ReactNode; jobs: OpsJob[]; groupOf: (j: OpsJob) => OpsGroup; team: TeamMember[]; now: number;
   menuFor?: (j: OpsJob, g: OpsGroup) => CardMenu; isAfter?: (j: OpsJob) => boolean; hrefFor?: (j: OpsJob, g: OpsGroup) => string | undefined;
   onChanged: (msg: string, notify?: Record<string, unknown>, error?: boolean) => void;
   onUnassign: (j: OpsJob) => void;
@@ -80,9 +83,31 @@ export default function OpsConnections({ companyId, jobs, groupOf, team, now, me
   const ordered = useMemo(() => {
     const pp = new Map(people.map((p, i) => [p.id, i]));
     const jp = new Map(jOrder.map((id, i) => [id, i]));
-    const rank = (j: OpsJob) => (j.techs.length ? Math.min(...j.techs.map((t) => pp.get(t.user_id) ?? 999)) : 1000);
+    // Compartidos (2+ personas) arriba de todo; luego por persona; sin asignar al final
+    const rank = (j: OpsJob) => (!j.techs.length ? 100000 : (j.techs.length > 1 ? 0 : 1000) + Math.min(...j.techs.map((t) => pp.get(t.user_id) ?? 999)));
     return [...visible].sort((a, b) => (jp.get(a.id) ?? 9999) - (jp.get(b.id) ?? 9999) || rank(a) - rank(b) || (a.visit?.starts_at ?? "z").localeCompare(b.visit?.starts_at ?? "z"));
   }, [visible, people, jOrder]);
+
+  // ---------- Columnas que fluyen + pantallas ----------
+  // Alto de columna ≈ una pantalla; columnas que caben a lo ancho; el resto en la pantalla siguiente.
+  const [fit, setFit] = useState({ rows: 8, cols: 4 });
+  const [page, setPage] = useState(0);
+  const CARD_W = 248, COL_GAP = 20, PEOPLE_W = 192, LINES_W = 96, ROW_GAP = 8;
+  const fitNow = useCallback(() => {
+    const root = wrap.current; if (!root) return;
+    const first = jobEls.current.values().next().value as HTMLElement | undefined;
+    const cardH = (first?.offsetHeight || 74) + ROW_GAP;
+    const rows = Math.max(5, Math.floor((window.innerHeight - 150) / cardH));
+    const free = root.clientWidth - 32 - PEOPLE_W - LINES_W;
+    const cols = Math.max(1, Math.floor((free + COL_GAP) / (CARD_W + COL_GAP)));
+    setFit((f) => (f.rows === rows && f.cols === cols ? f : { rows, cols }));
+  }, []);
+  const perPage = fit.rows * fit.cols;
+  const pages = Math.max(1, Math.ceil(ordered.length / perPage));
+  const pg = Math.min(page, pages - 1);
+  useEffect(() => { if (page !== pg) setPage(pg); }, [page, pg]);
+  const pageJobs = useMemo(() => ordered.slice(pg * perPage, (pg + 1) * perPage), [ordered, pg, perPage]);
+  const rowsUsed = Math.min(fit.rows, Math.max(1, pageJobs.length));
 
   const stats = useMemo(() => {
     const m = new Map<string, { total: number; done: number; live: ReturnType<typeof liveStatus> }>();
@@ -102,7 +127,7 @@ export default function OpsConnections({ companyId, jobs, groupOf, team, now, me
     const box = root.getBoundingClientRect();
     setH(root.scrollHeight);
     const out: Line[] = [];
-    ordered.forEach((j) => {
+    pageJobs.forEach((j) => {
       const c = jobEls.current.get(j.id); if (!c) return;
       const rc = c.getBoundingClientRect();
       const x2 = rc.left - box.left, y2 = rc.top - box.top + rc.height / 2;
@@ -111,23 +136,25 @@ export default function OpsConnections({ companyId, jobs, groupOf, team, now, me
         const u = userEls.current.get(t.user_id); if (!u) return;
         const ru = u.getBoundingClientRect();
         const x1 = ru.right - box.left, y1 = ru.top - box.top + ru.height / 2;
-        const dx = Math.max(50, (x2 - x1) * 0.45);
+        // Curva suave: sale horizontal de la persona y llega horizontal al borde de la tarjeta
+        const dx = Math.max(50, Math.min(220, (x2 - x1) * 0.45));
         out.push({ key: `${j.id}-${t.user_id}`, job: j.id, user: t.user_id, d: `M${x1} ${y1} C${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`, ex: x2, ey: y2,
           color: g === "delayed" ? "#e11d48" : t.color, lead: t.is_lead,
           flow: g === "in_progress" || g === "delayed" ? "fast" : g === "done" ? "none" : "slow" });
       });
     });
     setLines(out);
-  }, [ordered, groupOf]);
+  }, [pageJobs, groupOf]);
 
   useLayoutEffect(() => {
-    measure();
-    const ro = new ResizeObserver(() => measure());
+    fitNow(); measure();
+    const ro = new ResizeObserver(() => { fitNow(); measure(); });
     if (wrap.current) ro.observe(wrap.current);
-    window.addEventListener("resize", measure);
-    const t = setTimeout(measure, 300);
-    return () => { ro.disconnect(); window.removeEventListener("resize", measure); clearTimeout(t); };
-  }, [measure]);
+    const onResize = () => { fitNow(); measure(); };
+    window.addEventListener("resize", onResize);
+    const t = setTimeout(onResize, 300);
+    return () => { ro.disconnect(); window.removeEventListener("resize", onResize); clearTimeout(t); };
+  }, [measure, fitNow]);
 
   const focus = hoverJob || hoverUser;
   const lit = (l: Line) => (hoverJob ? l.job === hoverJob : hoverUser ? l.user === hoverUser : true);
@@ -187,13 +214,25 @@ export default function OpsConnections({ companyId, jobs, groupOf, team, now, me
       {/* Qué ver */}
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-3 py-2.5 lg:px-4">
         <ShowPicker show={show} counts={counts} onToggle={toggleShow} onAll={showAll} />
+        {period && <div className="hidden lg:block">{period}</div>}
         {onlyUser && (
           <button type="button" onClick={() => setOnlyUser(null)} className="ml-1 inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#0b1f3a] py-1 pl-1 pr-2.5 text-[12px] font-semibold text-white">
             {(() => { const p = people.find((x) => x.id === onlyUser); return p ? <TechDot t={p} size={18} ring={false} /> : null; })()}
             Only {nameOf(onlyUser).split(" ")[0]}<span className="opacity-70">✕</span>
           </button>
         )}
-        <span className="ml-auto hidden text-[11.5px] text-slate-400 xl:inline">Tap a person to see only their jobs · drag a job onto a person to assign it (Ctrl/⌥ adds a helper)</span>
+        <span className="ml-auto hidden text-[11.5px] text-slate-400 2xl:inline">Tap a person to see only their jobs · drag a job onto a person to assign it (Ctrl/⌥ adds a helper)</span>
+        {pages > 1 && (
+          <div className="ml-auto hidden items-center gap-1 lg:flex 2xl:ml-3">
+            <button type="button" onClick={() => setPage(Math.max(0, pg - 1))} disabled={pg === 0} aria-label="Previous screen"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition-colors hover:border-[#14a39a] hover:text-[#0f766e] disabled:opacity-40 disabled:hover:border-slate-200 disabled:hover:text-slate-500">
+              <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 5 7.5 10l5 5" /></svg></button>
+            <span className="min-w-[4.5rem] text-center text-[12.5px] font-semibold tabular-nums text-slate-600">{pg + 1} / {pages}<span className="block text-[10.5px] font-normal text-slate-400">{pg * perPage + 1}–{Math.min(ordered.length, (pg + 1) * perPage)} of {ordered.length}</span></span>
+            <button type="button" onClick={() => setPage(Math.min(pages - 1, pg + 1))} disabled={pg >= pages - 1} aria-label="Next screen"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition-colors hover:border-[#14a39a] hover:text-[#0f766e] disabled:opacity-40 disabled:hover:border-slate-200 disabled:hover:text-slate-500">
+              <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M7.5 5 12.5 10l-5 5" /></svg></button>
+          </div>
+        )}
       </div>
 
       {/* Celular: por persona, sus trabajos en 2 columnas (tocar la persona = solo sus trabajos) */}
@@ -228,26 +267,23 @@ export default function OpsConnections({ companyId, jobs, groupOf, team, now, me
       </div>
 
       <div ref={wrap} className="relative hidden overflow-hidden p-4 lg:block">
-        {/* Líneas detrás de las tarjetas; las de quien señalas pasan al frente */}
-        {[false, true].map((front) => (
-          <svg key={String(front)} className={`pointer-events-none absolute left-0 top-0 w-full ${front ? "z-20" : "z-0"}`} height={h} aria-hidden="true">
-            {lines.filter((l) => (front ? Boolean(focus) && lit(l) : !focus || !lit(l))).map((l) => {
-              const on = !focus || lit(l);
-              return (
-                <g key={l.key} style={{ opacity: on ? 1 : 0.08, transition: "opacity 150ms" }}>
-                  <path d={l.d} fill="none" stroke={l.color} strokeOpacity={0.16} strokeWidth={l.lead ? 5 : 3.5} strokeLinecap="round" />
-                  <path d={l.d} fill="none" stroke={l.color} strokeWidth={l.lead ? 2.2 : 1.6} strokeLinecap="round"
-                    strokeDasharray={l.flow === "none" ? undefined : "6 9"} strokeOpacity={l.flow === "none" ? 0.45 : 1}>
-                    {l.flow !== "none" && <animate attributeName="stroke-dashoffset" from="30" to="0" dur={l.flow === "fast" ? "0.7s" : "1.8s"} repeatCount="indefinite" />}
-                  </path>
-                  <circle cx={l.ex} cy={l.ey} r={3} fill={l.color} />
-                </g>
-              );
-            })}
-          </svg>
-        ))}
+        {/* Líneas: UNA capa, siempre por detrás de las tarjetas. Las de quien señalas se ven más fuertes, pero siguen detrás. */}
+        <svg className="pointer-events-none absolute left-0 top-0 z-0 w-full" height={h} aria-hidden="true">
+          {lines.map((l) => {
+            const on = !focus || lit(l);
+            return (
+              <g key={l.key} style={{ opacity: on ? 1 : 0.1, transition: "opacity 120ms" }}>
+                <path d={l.d} fill="none" stroke={l.color} strokeOpacity={focus && on ? 0.22 : 0.12} strokeWidth={l.lead ? 5 : 3.5} strokeLinecap="round" />
+                <path d={l.d} fill="none" stroke={l.color} strokeWidth={(l.lead ? 2 : 1.5) + (focus && on ? 0.4 : 0)} strokeLinecap="round"
+                  strokeDasharray={l.flow === "none" ? undefined : "6 9"} strokeOpacity={l.flow === "none" ? (focus && on ? 0.7 : 0.4) : focus && on ? 1 : 0.75}>
+                  {l.flow !== "none" && <animate attributeName="stroke-dashoffset" from="30" to="0" dur={l.flow === "fast" ? "0.7s" : "1.8s"} repeatCount="indefinite" />}
+                </path>
+              </g>
+            );
+          })}
+        </svg>
 
-        <div className="relative grid grid-cols-[12rem_minmax(7rem,15rem)_15.5rem] justify-start">
+        <div className="relative grid grid-cols-[12rem_6rem_minmax(0,1fr)] justify-start">
           {/* Colaboradores */}
           <div className="relative z-10 space-y-2 self-start">
             {people.map((p) => {
@@ -283,15 +319,16 @@ export default function OpsConnections({ companyId, jobs, groupOf, team, now, me
             )}
           </div>
           <div />
-          {/* Trabajos: una columna de tarjetas chiquitas a la derecha (como antes, pero las personas a la izquierda) */}
-          <div className="relative z-10 space-y-2">
+          {/* Trabajos: columnas que se llenan de arriba abajo y siguen en la de al lado */}
+          <div className="relative z-10 grid content-start justify-start"
+            style={{ gridAutoFlow: "column", gridTemplateRows: `repeat(${rowsUsed}, auto)`, gridAutoColumns: `${CARD_W}px`, columnGap: COL_GAP, rowGap: ROW_GAP }}>
             {ordered.length === 0 && <p className="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-[13px] text-slate-500">No jobs with these filters.</p>}
-            {ordered.map((j) => {
+            {pageJobs.map((j) => {
               const g = groupOf(j);
               const dim = hoverJob ? hoverJob !== j.id : hoverUser ? !j.techs.some((t) => t.user_id === hoverUser) : false;
               return (
                 <div key={j.id} {...target(`j-${j.id}`, (e) => dropOnJob(j.id, e))}
-                  className={`rounded-xl transition-shadow ${over === `j-${j.id}` && drag?.kind === "job" && drag.id !== j.id ? "shadow-[-4px_0_0_0_#14a39a]" : ""}`}>
+                  className={`relative rounded-xl bg-white transition-shadow ${over === `j-${j.id}` && drag?.kind === "job" && drag.id !== j.id ? "shadow-[-4px_0_0_0_#14a39a]" : ""}`}>
                   <OpsCard job={j} group={g} now={now} tiny afterHours={isAfter?.(j)} href={hrefFor?.(j, g)} menu={menuFor?.(j, g)} dim={dim}
                     ports={j.techs.map((t) => (g === "delayed" ? "#e11d48" : t.color))}
                     dragging={drag?.kind === "job" && drag.id === j.id}
