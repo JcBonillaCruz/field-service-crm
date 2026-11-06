@@ -1,0 +1,313 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { Menu, MenuButton, MenuItem, MenuItems, Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
+import { createClient } from "@/lib/supabase/client";
+import { TeamMember, addDays, addressLine, dayStart, jobError, receivesJobs, startOfWeek } from "@/lib/jobs";
+import { OPS_GROUPS, OpsGroup, OpsJob, delayOf, fold, groupOf as groupAt } from "@/lib/operations";
+import { TechDot } from "@/components/jobs/EventBar";
+import { GroupArt, OpsCard } from "@/components/jobs/ops/OpsBits";
+import OpsConnections from "@/components/jobs/ops/OpsConnections";
+
+type View = "board" | "connections";
+type When = "all" | "today" | "week";
+const UNASSIGNED = "__none";
+const btn = "inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[14px] font-medium text-slate-700 transition-colors hover:border-[#14a39a] hover:text-[#0f766e] data-[open]:border-[#0f766e] data-[open]:text-[#0f766e] focus:outline-none";
+
+// =====================================================================
+// Centro de Operaciones: todos los trabajos en 5 grupos, en vivo.
+// Sin asignar · Asignados · En progreso · Retrasados · Terminados
+// =====================================================================
+export default function OperationsCenter({ companyId, team, weekStartsOn }: { companyId: string; team: TeamMember[]; weekStartsOn: number }) {
+  const [jobs, setJobs] = useState<OpsJob[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [now, setNow] = useState(() => Date.now());
+  const [view, setView] = useState<View>("board");
+  const [when, setWhen] = useState<When>("all");
+  const [q, setQ] = useState("");
+  const [people, setPeople] = useState<string[]>([]);
+  const [focus, setFocus] = useState<OpsGroup | null>(null); // al tocar un resumen: solo ese grupo
+  const [mobileGroup, setMobileGroup] = useState<OpsGroup>("unassigned");
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
+  const reqId = useRef(0);
+
+  useEffect(() => { try { const v = localStorage.getItem("bp-ops-view"); if (v === "board" || v === "connections") setView(v); } catch { /* */ } }, []);
+  const pickView = (v: View) => { setView(v); try { localStorage.setItem("bp-ops-view", v); } catch { /* */ } };
+
+  const load = useCallback(async () => {
+    const id = ++reqId.current;
+    const { data, error: err } = await createClient().rpc("ops_board", { p_company: companyId, p_done_since: addDays(dayStart(new Date()), -7).toISOString() });
+    if (id !== reqId.current) return;
+    if (err) { setError(jobError(err)); setLoading(false); return; }
+    setError(""); setJobs((data ?? []) as OpsJob[]); setLoading(false); setUpdatedAt(Date.now());
+  }, [companyId]);
+
+  useEffect(() => { load(); }, [load]);
+  // En vivo: cuando alguien asigna, mueve o el colaborador cambia de estado
+  useEffect(() => {
+    const sb = createClient();
+    let t: ReturnType<typeof setTimeout>;
+    const again = () => { clearTimeout(t); t = setTimeout(load, 600); };
+    const ch = sb.channel(`ops-${companyId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "jobs", filter: `company_id=eq.${companyId}` }, again)
+      .on("postgres_changes", { event: "*", schema: "public", table: "job_visits", filter: `company_id=eq.${companyId}` }, again)
+      .on("postgres_changes", { event: "*", schema: "public", table: "job_visit_techs", filter: `company_id=eq.${companyId}` }, again)
+      .subscribe();
+    // El reloj: "Retrasado" aparece solo sin recargar
+    const tick = setInterval(() => setNow(Date.now()), 30000);
+    const onVis = () => { if (document.visibilityState === "visible") { setNow(Date.now()); load(); } };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { clearTimeout(t); clearInterval(tick); sb.removeChannel(ch); document.removeEventListener("visibilitychange", onVis); };
+  }, [companyId, load]);
+
+  const groupOf = useCallback((j: OpsJob) => groupAt(j, now), [now]);
+
+  const shown = useMemo(() => {
+    const term = fold(q.trim()), digits = q.replace(/\D/g, "");
+    const today = dayStart(new Date(now)), tomorrow = addDays(today, 1);
+    const wk = startOfWeek(new Date(now), weekStartsOn), wkEnd = addDays(wk, 7);
+    const [from, to] = when === "today" ? [today, tomorrow] : when === "week" ? [wk, wkEnd] : [null, null];
+    return jobs.filter((j) => {
+      if (term && !(fold(`${j.number} ${j.customer_name} ${j.title ?? ""} ${j.type_name ?? ""} ${addressLine(j.site_address)} ${j.techs.map((t) => t.name).join(" ")}`).includes(term)
+        || (digits.length >= 3 && (j.customer_phone ?? "").replace(/\D/g, "").includes(digits)))) return false;
+      if (people.length && !(people.includes(UNASSIGNED) && !j.techs.length) && !j.techs.some((t) => people.includes(t.user_id))) return false;
+      if (from && to) {
+        const g = groupOf(j);
+        const s = j.visit?.starts_at ? new Date(j.visit.starts_at) : null;
+        const doneAt = j.completed_at ? new Date(j.completed_at) : null;
+        const inRange = (d: Date | null) => Boolean(d && d >= from && d < to);
+        // Lo que está pasando ahora siempre se ve; lo demás según su fecha
+        if (!(g === "in_progress" || (g === "delayed" && when === "today") || inRange(s) || (g === "done" && inRange(doneAt)))) return false;
+      }
+      return true;
+    });
+  }, [jobs, q, people, when, now, weekStartsOn, groupOf]);
+
+  const byGroup = useMemo(() => {
+    const m = Object.fromEntries(OPS_GROUPS.map((g) => [g.id, [] as OpsJob[]])) as Record<OpsGroup, OpsJob[]>;
+    shown.forEach((j) => m[groupOf(j)].push(j));
+    // Retrasados: el más tarde primero · Terminados: el más reciente primero
+    m.delayed.sort((a, b) => (delayOf(b, now)?.minutes ?? 0) - (delayOf(a, now)?.minutes ?? 0));
+    m.done.sort((a, b) => (b.completed_at ?? "").localeCompare(a.completed_at ?? ""));
+    return m;
+  }, [shown, groupOf, now]);
+
+  const connJobs = useMemo(() => shown.filter((j) => !focus || groupOf(j) === focus), [shown, focus, groupOf]);
+  const filtersOn = (when !== "all" ? 1 : 0) + (people.length ? 1 : 0);
+  const peopleList = useMemo(() => {
+    const ids = new Set(jobs.flatMap((j) => j.techs.map((t) => t.user_id)));
+    return team.filter((m) => receivesJobs(m) || ids.has(m.user_id));
+  }, [team, jobs]);
+
+  // Celular: deslizar a la izquierda/derecha cambia de grupo
+  const touch = useRef<{ x: number; y: number } | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => { touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const s = touch.current; touch.current = null; if (!s) return;
+    const dx = e.changedTouches[0].clientX - s.x, dy = e.changedTouches[0].clientY - s.y;
+    if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx) * 0.7) return;
+    const i = OPS_GROUPS.findIndex((g) => g.id === mobileGroup);
+    const next = OPS_GROUPS[Math.min(OPS_GROUPS.length - 1, Math.max(0, i + (dx < 0 ? 1 : -1)))];
+    setMobileGroup(next.id);
+  };
+  const tabStrip = useRef<HTMLDivElement>(null);
+  useEffect(() => { tabStrip.current?.querySelector(`[data-g="${mobileGroup}"]`)?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" }); }, [mobileGroup]);
+
+  const columns = focus ? OPS_GROUPS.filter((g) => g.id === focus) : OPS_GROUPS;
+
+  return (
+    <div className="min-h-[calc(100dvh-4rem)] bg-[#f4f6f8] px-3 pb-24 pt-4 lg:px-6 lg:pb-8 lg:pt-5">
+      {/* Encabezado */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="mr-auto min-w-0">
+          <h1 className="flex items-center gap-2.5 text-[22px] font-semibold tracking-tight text-[#0b1f3a]">
+            Operations
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#e7f6f1] px-2.5 py-0.5 text-[12px] font-semibold text-[#0f766e]">
+              <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#14a39a] opacity-60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-[#14a39a]" /></span>Live
+            </span>
+          </h1>
+          <p className="text-[13px] text-slate-500">Every job, who&apos;s on it and how far along it is{updatedAt ? ` · updated ${new Date(updatedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}.</p>
+        </div>
+        <div className="relative order-last w-full sm:order-none sm:w-72">
+          <svg viewBox="0 0 20 20" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search job, customer, phone, address" aria-label="Search jobs"
+            className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 text-[14px] focus:border-[#0f766e] focus:outline-none focus:ring-4 focus:ring-[#14a39a]/15" />
+          {q && <button type="button" onClick={() => setQ("")} aria-label="Clear search" className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
+            <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M5 5l10 10M15 5 5 15" /></svg></button>}
+        </div>
+        <ViewMenu view={view} setView={pickView} />
+        <FiltersMenu when={when} setWhen={setWhen} people={people} setPeople={setPeople} list={peopleList} active={filtersOn} />
+        <Link prefetch={false} href="/dashboard/jobs/new" className="group/n inline-flex h-10 items-center gap-1.5 rounded-lg bg-[#0f766e] px-4 text-[14.5px] font-semibold text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59]">
+          <svg viewBox="0 0 20 20" className="h-5 w-5 transition-transform duration-200 group-hover/n:rotate-90" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>
+          <span className="hidden sm:inline">New job</span>
+        </Link>
+      </div>
+
+      {error && <p role="alert" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[14px] text-amber-800">{error}</p>}
+
+      {/* Resumen de los 5 grupos (tocar = ver solo ese grupo) */}
+      <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-5">
+        {OPS_GROUPS.map((g) => {
+          const n = byGroup[g.id].length, on = focus === g.id;
+          return (
+            <button key={g.id} type="button" onClick={() => { setFocus(on ? null : g.id); setMobileGroup(g.id); }}
+              className={`group rounded-2xl border bg-white p-3 text-left transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(15,40,60,0.09)] lg:p-3.5 ${on ? "border-[#0f766e] ring-4 ring-[#14a39a]/10" : "border-slate-200 hover:border-slate-300"} ${g.id === "done" ? "col-span-2 sm:col-span-1" : ""}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-[12.5px] font-medium text-slate-500">{g.label}</p>
+                  <p className={`mt-0.5 text-[24px] font-semibold tabular-nums tracking-tight ${g.id === "delayed" && n ? "text-[#be123c]" : "text-[#0b1f3a]"}`}>{loading ? "–" : n}</p>
+                </div>
+                <GroupArt g={g.id} size={42} />
+              </div>
+              <p className="truncate text-[12px] text-slate-500">{on ? "Showing only this group · tap to show all" : g.hint}</p>
+            </button>
+          );
+        })}
+      </div>
+
+      {view === "connections" ? (
+        <div className="mt-4">
+          {focus && <FocusNote label={OPS_GROUPS.find((g) => g.id === focus)!.label} onClear={() => setFocus(null)} />}
+          {loading ? <div className="h-80 animate-pulse rounded-2xl bg-white" /> : <OpsConnections jobs={connJobs} groupOf={groupOf} team={team} now={now} />}
+        </div>
+      ) : (
+        <>
+          {/* Computadora: columnas */}
+          <div className={`mt-4 hidden gap-3 lg:grid ${focus ? "lg:grid-cols-1" : "lg:grid-cols-5"}`}>
+            {columns.map((g) => (
+              <section key={g.id} className="flex max-h-[calc(100dvh-17.5rem)] min-h-[16rem] flex-col rounded-2xl border border-slate-200 bg-[#f8fafb]">
+                <div className="flex items-center gap-2 border-b border-slate-200/70 px-3 py-2.5">
+                  <span className={`h-2.5 w-2.5 rounded-full ${g.dot}`} />
+                  <p className="text-[13.5px] font-semibold text-[#0b1f3a]">{g.label}</p>
+                  <span className="rounded-full bg-white px-2 py-0.5 text-[12px] font-semibold text-slate-500 ring-1 ring-slate-200">{byGroup[g.id].length}</span>
+                  {focus && <button type="button" onClick={() => setFocus(null)} className="ml-auto text-[12.5px] font-semibold text-[#0f766e] hover:underline">Show all groups</button>}
+                </div>
+                <div className={`flex-1 overflow-y-auto p-2 ${focus ? "grid content-start gap-2 sm:grid-cols-2 xl:grid-cols-4" : "space-y-2"}`}>
+                  {loading ? [0, 1, 2].map((i) => <div key={i} className="h-24 animate-pulse rounded-xl bg-white" />)
+                    : byGroup[g.id].length === 0 ? <EmptyGroup g={g.id} />
+                    : byGroup[g.id].map((j) => <OpsCard key={j.id} job={j} group={g.id} now={now} />)}
+                </div>
+              </section>
+            ))}
+          </div>
+
+          {/* Celular: pestañas que se deslizan */}
+          <div className="mt-4 lg:hidden">
+            <div ref={tabStrip} className="-mx-3 flex gap-1.5 overflow-x-auto px-3 pb-1 [scrollbar-width:none]">
+              {OPS_GROUPS.map((g) => (
+                <button key={g.id} data-g={g.id} type="button" onClick={() => setMobileGroup(g.id)}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-[14px] font-semibold transition-colors ${mobileGroup === g.id ? "bg-[#0b1f3a] text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>
+                  <span className={`h-2 w-2 rounded-full ${g.dot}`} />{g.label}<span className={mobileGroup === g.id ? "text-white/70" : "text-slate-400"}>{byGroup[g.id].length}</span>
+                </button>
+              ))}
+            </div>
+            <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} className="mt-2.5 min-h-[50vh] space-y-2">
+              <div key={mobileGroup} className="space-y-2 animate-[bp-fade_0.2s_ease-out]">
+                {loading ? [0, 1, 2].map((i) => <div key={i} className="h-24 animate-pulse rounded-xl bg-white" />)
+                  : byGroup[mobileGroup].length === 0 ? <EmptyGroup g={mobileGroup} />
+                  : byGroup[mobileGroup].map((j) => <OpsCard key={j.id} job={j} group={mobileGroup} now={now} />)}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function FocusNote({ label, onClear }: { label: string; onClear: () => void }) {
+  return (
+    <p className="mb-2 flex items-center gap-2 text-[13px] text-slate-600">Showing only <b className="text-[#0b1f3a]">{label}</b>
+      <button type="button" onClick={onClear} className="font-semibold text-[#0f766e] hover:underline">Show all</button></p>
+  );
+}
+
+function EmptyGroup({ g }: { g: OpsGroup }) {
+  const text: Record<OpsGroup, string> = {
+    unassigned: "Every job has someone on it.", assigned: "Nothing waiting to start.", in_progress: "Nobody is working right now.",
+    delayed: "Nothing is running late. 🎉", done: "No finished jobs in the last 7 days.",
+  };
+  return (
+    <div className="flex flex-col items-center px-3 py-8 text-center">
+      <span className="opacity-70"><GroupArt g={g} size={40} /></span>
+      <p className="mt-2 text-[12.5px] text-slate-500">{text[g]}</p>
+      {g === "unassigned" && <Link prefetch={false} href="/dashboard/jobs/assign" className="mt-1 text-[12.5px] font-semibold text-[#0f766e] hover:underline">Go to Assign jobs</Link>}
+    </div>
+  );
+}
+
+function ViewMenu({ view, setView }: { view: View; setView: (v: View) => void }) {
+  const opts: { v: View; label: string; hint: string; d: string }[] = [
+    { v: "board", label: "Board", hint: "Jobs in 5 groups", d: "M4 5h4v14H4zM10 5h4v9h-4zM16 5h4v11h-4z" },
+    { v: "connections", label: "Connections", hint: "Lines from jobs to people", d: "M6 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM6 21a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM8 5c5 0 4 7 8 7M8 19c5 0 4-7 8-7" },
+  ];
+  const cur = opts.find((o) => o.v === view)!;
+  return (
+    <Menu>
+      <MenuButton className={btn} aria-label="View">
+        <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={cur.d} /></svg>
+        <span className="hidden sm:inline">{cur.label}</span>
+        <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-400" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
+      </MenuButton>
+      <MenuItems anchor="bottom end" transition className="z-[100] mt-1 w-60 rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_12px_40px_rgba(15,40,60,0.16)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
+        {opts.map((o) => (
+          <MenuItem key={o.v}>
+            <button type="button" onClick={() => setView(o.v)} className={`group flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left data-[focus]:bg-[#eef4ff] ${view === o.v ? "bg-[#eef4ff]" : ""}`}>
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#eef8f5] text-[#0f766e] transition-transform duration-200 group-hover:-rotate-6 group-hover:scale-110">
+                <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={o.d} /></svg></span>
+              <span><span className="block text-[14px] font-semibold text-[#0b1f3a]">{o.label}</span><span className="block text-[12px] text-slate-500">{o.hint}</span></span>
+            </button>
+          </MenuItem>
+        ))}
+      </MenuItems>
+    </Menu>
+  );
+}
+
+function FiltersMenu({ when, setWhen, people, setPeople, list, active }: {
+  when: When; setWhen: (v: When) => void; people: string[]; setPeople: (v: string[]) => void; list: TeamMember[]; active: number;
+}) {
+  const chip = (on: boolean) => `rounded-full border px-3 py-1.5 text-[13px] font-semibold transition-colors ${on ? "border-[#0f766e] bg-[#e9f7f4] text-[#0f766e]" : "border-slate-200 text-slate-600 hover:border-slate-300"}`;
+  const toggle = (id: string) => setPeople(people.includes(id) ? people.filter((x) => x !== id) : [...people, id]);
+  return (
+    <Popover className="relative">
+      <PopoverButton className={btn} aria-label="Filters">
+        <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+        <span className="hidden sm:inline">Filters</span>
+        {active > 0 && <span className="rounded-full bg-[#0f766e] px-1.5 text-[11px] text-white">{active}</span>}
+      </PopoverButton>
+      <PopoverPanel anchor="bottom end" transition
+        className="z-[100] mt-2 max-h-[min(34rem,calc(100dvh-7rem))] w-[min(21rem,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_18px_48px_rgba(15,40,60,0.2)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0">
+        <div className="flex items-center justify-between">
+          <p className="text-[15px] font-semibold text-[#0b1f3a]">Filters</p>
+          {active > 0 && <button type="button" onClick={() => { setWhen("all"); setPeople([]); }} className="text-[13px] font-semibold text-[#0f766e] hover:underline">Clear all</button>}
+        </div>
+        <p className="mb-2 mt-4 text-[12.5px] font-semibold text-slate-500">When</p>
+        <div className="flex flex-wrap gap-1.5">
+          {([["all", "All open jobs"], ["today", "Today"], ["week", "This week"]] as [When, string][]).map(([v, l]) => (
+            <button key={v} type="button" onClick={() => setWhen(v)} className={chip(when === v)}>{l}</button>
+          ))}
+        </div>
+        <p className="mb-2 mt-4 text-[12.5px] font-semibold text-slate-500">Collaborators</p>
+        <div className="space-y-0.5">
+          {[...list.map((m) => ({ id: m.user_id, m })), { id: UNASSIGNED, m: null as TeamMember | null }].map(({ id, m }) => {
+            const on = people.includes(id);
+            return (
+              <button key={id} type="button" onClick={() => toggle(id)} className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-[14px] text-slate-700 hover:bg-slate-50">
+                <span className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded border ${on ? "border-[#0f766e] bg-[#0f766e] text-white" : "border-slate-300"}`}>
+                  {on && <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3"><path d="m5 10.5 3 3 7-7" /></svg>}
+                </span>
+                {m ? <TechDot t={m} size={22} ring={false} /> : <span className="h-[22px] w-[22px] rounded-full border border-dashed border-slate-400" />}
+                <span className="min-w-0 flex-1 truncate">{m ? m.full_name : "Unassigned"}</span>
+                {m?.role === "owner" && <span className="rounded-full bg-[#0b1f3a] px-1.5 py-px text-[10px] font-semibold text-white">Owner</span>}
+                {m?.worker_type === "subcontractor" && <span className="rounded-full bg-[#fff7ed] px-1.5 py-px text-[10px] font-semibold text-[#c2410c]">Sub</span>}
+              </button>
+            );
+          })}
+        </div>
+      </PopoverPanel>
+    </Popover>
+  );
+}

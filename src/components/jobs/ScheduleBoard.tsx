@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import {
   CalView, CalVisit, ColorBy, JobRow, JobSettings, JobStatus, JobType, PRIORITIES, STATUS_META, STATUS_ORDER, TeamMember, TechChip, UNASSIGNED_COLOR, leadOf, startOfMonth, startOfWeek,
   addDays, addMinutes, atMinute, barColor, dayStart, fmtDayShort, fmtTime, fromIsoDay, isoDay, jobError, minutesOf,
-  rangeLabel, sameDay, shiftAnchor, timeToMin, viewDays,
+  rangeLabel, receivesJobs, sameDay, shiftAnchor, timeToMin, viewDays,
 } from "@/lib/jobs";
 import { Col, GridApi, Handlers, Hit, Preview } from "@/components/jobs/cal-shared";
 import TimeGrid from "@/components/jobs/TimeGrid";
@@ -163,7 +163,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
 
   // ---------- Columnas ----------
   // Solo técnicos (oficina y dueño aparecen únicamente si tienen un trabajo asignado en estas fechas)
-  const techs = useMemo(() => team.filter((m) => m.role === "technician" || visits.some((v) => v.tech_ids.includes(m.user_id))), [team, visits]);
+  const techs = useMemo(() => team.filter((m) => receivesJobs(m) || visits.some((v) => v.tech_ids.includes(m.user_id))), [team, visits]);
   const cols: Col[] = useMemo(() => {
     if (view === "dispatch") {
       const list = techF.length ? techs.filter((m) => techF.includes(m.user_id)) : techs;

@@ -28,7 +28,7 @@ type Row = InvItem & { rows: InvStock[]; total: number; status: StockStatus; val
 
 const BASE = "/dashboard/inventory";
 // Pantallas propias (solo menú + esa pantalla): no son productos
-const RESERVED = new Set(["new", "scan", "settings", "locations", "transfers", "movements", "counts", "reports", "van", "usage", "labels"]);
+const RESERVED = new Set(["new", "team", "scan", "settings", "locations", "transfers", "movements", "counts", "reports", "van", "usage", "labels"]);
 const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "All" }, { value: "in", label: "In Stock" }, { value: "low", label: "Low Stock" }, { value: "out", label: "Out of Stock" },
 ];

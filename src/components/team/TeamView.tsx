@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTeamBase } from "@/components/team/useTeamBase";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import { createClient } from "@/lib/supabase/client";
 import { confirmDelete } from "@/lib/confirm";
@@ -14,14 +15,20 @@ import { Toast } from "@/components/sales/SalesBits";
 import { ActiveArt, InviteArt, MembersArt, TechArt } from "@/components/team/TeamArt";
 import { Invite, Member, PRESENCE_DOT, ROLE_INFO, fmtDate, inviteLink, presenceOf, teamError } from "@/lib/team";
 import RowActions from "@/components/ui/RowActions";
+import { WORKER_LABEL, WorkerType, defaultReceives } from "@/lib/operations";
+
+// Tipo de trabajador y si recibe trabajos (Paso 5.3)
+export type WorkInfo = { worker_type: WorkerType; can_receive_jobs: boolean | null };
 
 type Tab = "members" | "invites";
 
 // Team: quién trabaja en la compañía, con qué rol, y las invitaciones pendientes
-export default function TeamView({ companyId, members, invites, vanOf, me, myRole, needsSql, initialTab }: {
+export default function TeamView({ companyId, members, invites, vanOf, me, myRole, needsSql, initialTab, work = {} }: {
   companyId: string; members: Member[]; invites: Invite[]; vanOf: Record<string, string>; me: string; myRole: Role; needsSql: boolean; initialTab: Tab;
+  work?: Record<string, WorkInfo>;
 }) {
   const router = useRouter();
+  const base = useTeamBase();
   const [tab, setTab] = useState<Tab>(initialTab);
   const [q, setQ] = useState("");
   const [role, setRole] = useState("all");
@@ -85,7 +92,7 @@ export default function TeamView({ companyId, members, invites, vanOf, me, myRol
           <button type="button" onClick={exportCsv} className="hidden h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 text-[14px] font-medium text-slate-600 transition-colors hover:border-[#14a39a] hover:text-[#0f766e] sm:inline-flex">
             <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14" /></svg> Export CSV
           </button>
-          <Link prefetch={false} href="/dashboard/team/invite" className="group/n inline-flex h-10 items-center gap-1.5 rounded-lg bg-[#0f766e] px-4 text-[15px] font-semibold text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59]">
+          <Link prefetch={false} href={`${base}/invite`} className="group/n inline-flex h-10 items-center gap-1.5 rounded-lg bg-[#0f766e] px-4 text-[15px] font-semibold text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59]">
             <svg viewBox="0 0 20 20" className="h-5 w-5 transition-transform duration-200 group-hover/n:rotate-90" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>Add member
           </Link>
         </div>
@@ -133,7 +140,7 @@ export default function TeamView({ companyId, members, invites, vanOf, me, myRol
                           <div className="min-w-0"><p className="truncate font-semibold text-[#0b1f3a]">{m.full_name}{m.user_id === me && <span className="ml-1.5 text-[12px] font-normal text-slate-400">(you)</span>}</p><p className="truncate text-[12.5px] text-slate-500">{m.email}</p></div>
                         </div>
                       </td>
-                      <td className="px-3 py-3"><RolePill r={m.role} /></td>
+                      <td className="px-3 py-3"><div className="flex flex-col items-start gap-1"><RolePill r={m.role} /><WorkTag m={m} w={work[m.user_id]} /></div></td>
                       <td className="px-3 py-3 text-slate-600">{m.job_title || <span className="text-slate-300">—</span>}</td>
                       <td className="px-3 py-3 text-slate-600">{m.phone ? <a href={`tel:${m.phone}`} className="hover:text-[#0f766e]">{m.phone}</a> : <span className="text-slate-300">—</span>}</td>
                       <td className="px-3 py-3 text-slate-600">{vanOf[m.user_id] || <span className="text-slate-300">—</span>}</td>
@@ -141,7 +148,7 @@ export default function TeamView({ companyId, members, invites, vanOf, me, myRol
                       <td className="px-3 py-3"><StatusPill on={m.is_active} /></td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1.5">
-                          {canTouch(m) && <RowActions label={m.full_name} editHref={`/dashboard/team/${m.user_id}/edit`} onDelete={() => removeMember(m)} />}
+                          {canTouch(m) && <RowActions label={m.full_name} editHref={`${base}/${m.user_id}/edit`} onDelete={() => removeMember(m)} />}
                           <RowMenu m={m} canTouch={canTouch(m)} onToggle={() => toggle(m)} onRemove={() => removeMember(m)} />
                         </div>
                       </td>
@@ -158,7 +165,7 @@ export default function TeamView({ companyId, members, invites, vanOf, me, myRol
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[15.5px] font-semibold text-[#0b1f3a]">{m.full_name}</p>
                     <p className="truncate text-[12.5px] text-slate-500">{[m.job_title, vanOf[m.user_id], m.phone].filter(Boolean).join(" · ") || m.email}</p>
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5"><RolePill r={m.role} />{!m.is_active && <StatusPill on={false} />}<PresenceTag m={m} now={now} small /></div>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5"><RolePill r={m.role} /><WorkTag m={m} w={work[m.user_id]} />{!m.is_active && <StatusPill on={false} />}<PresenceTag m={m} now={now} small /></div>
                   </div>
                   <RowMenu m={m} canTouch={canTouch(m)} onToggle={() => toggle(m)} onRemove={() => removeMember(m)} />
                 </li>
@@ -196,7 +203,7 @@ export default function TeamView({ companyId, members, invites, vanOf, me, myRol
         )
       )}
 
-      <Link prefetch={false} href="/dashboard/team/invite" aria-label="Invite team member"
+      <Link prefetch={false} href={`${base}/invite`} aria-label="Invite team member"
         className="fixed bottom-6 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#0f766e] text-white shadow-lg shadow-[#0f766e]/30 active:scale-95 lg:hidden">
         <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
       </Link>
@@ -225,24 +232,26 @@ const StatusPill = ({ on }: { on: boolean }) => (
   <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[12px] font-semibold ring-1 ${on ? "bg-[#e7f6f1] text-[#0f766e] ring-[#bfe6da]" : "bg-[#fff1f2] text-[#be123c] ring-[#fecdd3]"}`}>{on ? "Active" : "Inactive"}</span>
 );
 function Empty({ text }: { text: string }) {
+  const base = useTeamBase();
   return (
     <div className="mt-4 flex flex-col items-center rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
       <MembersArt size={64} />
       <p className="mt-3 text-[15px] font-medium text-slate-600">{text}</p>
-      <Link prefetch={false} href="/dashboard/team/invite" className="mt-4 rounded-lg bg-[#0f766e] px-4 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f59]">+ Add member</Link>
+      <Link prefetch={false} href={`${base}/invite`} className="mt-4 rounded-lg bg-[#0f766e] px-4 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f59]">+ Add member</Link>
     </div>
   );
 }
 
 function RowMenu({ m, canTouch, onToggle, onRemove }: { m: Member; canTouch: boolean; onToggle: () => void; onRemove: () => void }) {
   const item = "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[14px] text-slate-700 data-[focus]:bg-slate-50";
+  const base = useTeamBase();
   return (
     <Menu>
       <MenuButton aria-label={`Actions for ${m.full_name}`} className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-colors hover:border-[#14a39a] hover:text-[#0f766e]">
         <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><circle cx="10" cy="4.5" r="1.6" /><circle cx="10" cy="10" r="1.6" /><circle cx="10" cy="15.5" r="1.6" /></svg>
       </MenuButton>
       <MenuItems anchor="bottom end" transition className="z-[100] mt-1 w-48 rounded-xl border border-slate-200 bg-white p-1 shadow-xl transition duration-100 data-[closed]:opacity-0">
-        <MenuItem><Link prefetch={false} href={`/dashboard/team/${m.user_id}/edit`} className={item}>Edit role & details</Link></MenuItem>
+        <MenuItem><Link prefetch={false} href={`${base}/${m.user_id}/edit`} className={item}>Edit role & details</Link></MenuItem>
         {m.phone && <MenuItem><a href={`tel:${m.phone}`} className={item}>Call</a></MenuItem>}
         <MenuItem><a href={`mailto:${m.email}`} className={item}>Email</a></MenuItem>
         {canTouch && <MenuItem><button type="button" onClick={onToggle} className={`${item} ${m.is_active ? "text-amber-700" : "text-[#0f766e]"}`}>{m.is_active ? "Deactivate" : "Activate"}</button></MenuItem>}
@@ -258,6 +267,22 @@ function PresenceTag({ m, now, small }: { m: Member; now: number; small?: boolea
   return (
     <span title={p.detail} className={`inline-flex items-center gap-1.5 whitespace-nowrap ${small ? "text-[12px]" : "text-[13px]"} font-medium ${tone}`}>
       <span className={`h-2 w-2 rounded-full ${PRESENCE_DOT[p.tone]} ${p.tone === "on" ? "shadow-[0_0_0_3px_rgba(34,197,94,0.2)]" : ""}`} />{p.label}
+    </span>
+  );
+}
+
+// "Employee · Gets jobs" / "Subcontractor" — chiquito debajo del rol
+function WorkTag({ m, w }: { m: Member; w?: WorkInfo }) {
+  const type = w?.worker_type ?? "employee";
+  const gets = w?.can_receive_jobs ?? defaultReceives(m.role);
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[11.5px] font-medium text-slate-500">
+      <span className={`rounded-full px-2 py-0.5 ring-1 ${type === "subcontractor" ? "bg-[#fff7ed] text-[#c2410c] ring-[#fed7aa]" : "bg-slate-50 text-slate-600 ring-slate-200"}`}>{WORKER_LABEL[type]}</span>
+      {gets && (
+        <span title="Can receive jobs" className="inline-flex items-center gap-1 text-[#0f766e]">
+          <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h12v10H4zM4 9h12M7.5 3.5v3M12.5 3.5v3" /></svg>Jobs
+        </span>
+      )}
     </span>
   );
 }

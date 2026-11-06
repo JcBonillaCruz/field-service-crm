@@ -6,9 +6,12 @@ import DatePicker from "@/components/ui/DatePicker";
 import { SiteAddress, addDays, addressLine, dayStart, fmtDayShort, fmtTime, fromIsoDay, isoDay, jobError, startOfWeek } from "@/lib/jobs";
 import { TechDot } from "@/components/jobs/EventBar";
 
-export type AssignTech = { user_id: string; full_name: string; initials: string; color: string; avatar_url: string | null; email: string | null; phone: string | null; job_title: string | null };
+export type AssignTech = {
+  user_id: string; full_name: string; initials: string; color: string; avatar_url: string | null; email: string | null; phone: string | null; job_title: string | null;
+  role?: string; worker_type?: "employee" | "subcontractor";
+};
 type Row = {
-  id: string; job_id: string; status: string; starts_at: string | null; ends_at: string | null; tech_ids: string[];
+  id: string; job_id: string; status: string; starts_at: string | null; ends_at: string | null; tech_ids: string[]; lead_id: string | null;
   number: string; customer_name: string; customer_phone: string | null; title: string | null; priority: string; site_address: SiteAddress;
   type_name: string | null; type_color: string | null;
 };
@@ -28,6 +31,7 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
   const [tq, setTq] = useState("");
   const [picked, setPicked] = useState<string | null>(null);   // tocar para asignar (celular)
   const [dragId, setDragId] = useState<string | null>(null);
+  const [dragFrom, setDragFrom] = useState<string | null>(null); // de qué persona viene (para mover)
   const [over, setOver] = useState<string | null>(null);
   const [pulse, setPulse] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; error?: boolean } | null>(null);
@@ -46,7 +50,7 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
   const load = useCallback(async () => {
     const id = ++reqId.current;
     const sb = createClient();
-    const sel = "id, job_id, status, starts_at, ends_at, job_visit_techs ( user_id ), jobs!inner ( number, customer_name, customer_phone, title, priority, site_address, cancelled_at, job_types ( name, color ) )";
+    const sel = "id, job_id, status, starts_at, ends_at, job_visit_techs ( user_id, is_lead ), jobs!inner ( number, customer_name, customer_phone, title, priority, site_address, cancelled_at, job_types ( name, color ) )";
     const [a, b] = await Promise.all([
       sb.from("job_visits").select(sel).eq("company_id", companyId).eq("status", "unscheduled").limit(500),
       sb.from("job_visits").select(sel).eq("company_id", companyId).in("status", ["scheduled", "on_my_way", "in_progress", "paused"])
@@ -54,10 +58,10 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
     ]);
     if (id !== reqId.current) return;
     if (a.error || b.error) { flash(jobError(a.error ?? b.error), true); setLoading(false); return; }
-    type Raw = { id: string; job_id: string; status: string; starts_at: string | null; ends_at: string | null; job_visit_techs: { user_id: string }[];
+    type Raw = { id: string; job_id: string; status: string; starts_at: string | null; ends_at: string | null; job_visit_techs: { user_id: string; is_lead: boolean }[];
       jobs: { number: string; customer_name: string; customer_phone: string | null; title: string | null; priority: string; site_address: SiteAddress; cancelled_at: string | null; job_types: { name: string; color: string } | null } };
     const map = (r: Raw): Row => ({
-      id: r.id, job_id: r.job_id, status: r.status, starts_at: r.starts_at, ends_at: r.ends_at, tech_ids: r.job_visit_techs.map((t) => t.user_id),
+      id: r.id, job_id: r.job_id, status: r.status, starts_at: r.starts_at, ends_at: r.ends_at, tech_ids: r.job_visit_techs.map((t) => t.user_id), lead_id: r.job_visit_techs.find((t) => t.is_lead)?.user_id ?? null,
       number: r.jobs.number, customer_name: r.jobs.customer_name, customer_phone: r.jobs.customer_phone, title: r.jobs.title, priority: r.jobs.priority,
       site_address: r.jobs.site_address, type_name: r.jobs.job_types?.name ?? null, type_color: r.jobs.job_types?.color ?? null,
     });
@@ -77,22 +81,44 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
     return () => { clearTimeout(t); sb.removeChannel(ch); };
   }, [companyId, load]);
 
-  // Asignar (reemplaza al técnico que tenía) · se avisa al técnico al momento
-  async function assign(rowId: string, techId: string | null) {
+  // Colaboradores múltiples (Paso 5.3):
+  //   · soltar un trabajo en una persona la AGREGA (los que ya estaban se quedan)
+  //   · arrastrarlo de una persona a otra lo MUEVE (sale de la primera, entra en la segunda)
+  //   · la X o soltarlo a la izquierda quita solo a esa persona
+  async function setCollaborators(rowId: string, next: string[], lead: string | null, message: string, pulseId: string | null) {
     const row = rows.find((r) => r.id === rowId); if (!row) return;
-    const before = row.tech_ids;
-    const next = techId ? [techId] : [];
+    const before = row.tech_ids, beforeLead = row.lead_id;
     if (before.length === next.length && before.every((t) => next.includes(t))) return;
-    setRows((rs) => rs.map((r) => (r.id === rowId ? { ...r, tech_ids: next } : r)));
+    const newLead = lead && next.includes(lead) ? lead : next[0] ?? null;
+    setRows((rs) => rs.map((r) => (r.id === rowId ? { ...r, tech_ids: next, lead_id: newLead } : r)));
     setPicked(null);
-    const { error } = await createClient().rpc("visit_set_techs", { p_visit: rowId, p_techs: next, p_lead: techId });
-    if (error) { setRows((rs) => rs.map((r) => (r.id === rowId ? { ...r, tech_ids: before } : r))); flash(error.hint || jobError(error), true); return; }
-    if (techId) { setPulse(techId); setTimeout(() => setPulse((p) => (p === techId ? null : p)), 700); }
-    const name = techId ? techs.find((t) => t.user_id === techId)?.full_name ?? "technician" : null;
-    flash(name ? `${row.customer_name || row.number} → ${name}` : `${row.customer_name || row.number} is unassigned`);
+    const { error } = await createClient().rpc("visit_set_collaborators", { p_visit: rowId, p_users: next, p_lead: newLead });
+    if (error) { setRows((rs) => rs.map((r) => (r.id === rowId ? { ...r, tech_ids: before, lead_id: beforeLead } : r))); flash(error.hint || jobError(error), true); return; }
+    if (pulseId) { setPulse(pulseId); setTimeout(() => setPulse((p) => (p === pulseId ? null : p)), 700); }
+    flash(message);
     fetch("/api/jobs/notify", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ visitId: rowId, assigned: next.filter((t) => !before.includes(t)), unassigned: before.filter((t) => !next.includes(t)) }) }).catch(() => null);
   }
+  const nameOf = (id: string) => techs.find((t) => t.user_id === id)?.full_name ?? "collaborator";
+  const label = (r: Row) => r.customer_name || r.number;
+  function addTo(rowId: string, techId: string) {
+    const r = rows.find((x) => x.id === rowId); if (!r) return;
+    if (r.tech_ids.includes(techId)) return flash(`${nameOf(techId)} is already on ${label(r)}`);
+    setCollaborators(rowId, [...r.tech_ids, techId], r.lead_id ?? techId, r.tech_ids.length ? `${nameOf(techId)} added to ${label(r)}` : `${label(r)} → ${nameOf(techId)}`, techId);
+  }
+  function moveTo(rowId: string, fromId: string, toId: string) {
+    const r = rows.find((x) => x.id === rowId); if (!r || fromId === toId) return;
+    if (r.tech_ids.includes(toId)) return removeFrom(rowId, fromId);
+    const next = r.tech_ids.map((t) => (t === fromId ? toId : t));
+    setCollaborators(rowId, next, r.lead_id === fromId ? toId : r.lead_id, `${label(r)} moved from ${nameOf(fromId)} to ${nameOf(toId)}`, toId);
+  }
+  function removeFrom(rowId: string, techId: string) {
+    const r = rows.find((x) => x.id === rowId); if (!r) return;
+    const next = r.tech_ids.filter((t) => t !== techId);
+    setCollaborators(rowId, next, r.lead_id === techId ? next[0] ?? null : r.lead_id, next.length ? `${nameOf(techId)} removed from ${label(r)}` : `${label(r)} is unassigned`, null);
+  }
+  // Tocar (celular): el trabajo elegido se agrega a la persona
+  const assign = (rowId: string, techId: string | null) => { if (techId) addTo(rowId, techId); };
 
   // Orden de los técnicos (se arrastran para acomodarlos; se guarda en este navegador)
   const ORDER_KEY = `bp-assign-order-${companyId}`;
@@ -130,12 +156,15 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
     e.preventDefault(); setOver(null); setDragId(null);
     const data = e.dataTransfer.getData("text/plain");
     if (data.startsWith("tech:")) moveTech(data.slice(5), techId);
-    else if (data.startsWith("job:")) assign(data.slice(4), techId);
+    else if (data.startsWith("job:")) {
+      const [, rowId, fromId] = data.split(":");
+      if (fromId) moveTo(rowId, fromId, techId); else addTo(rowId, techId);
+    }
   };
-  const jobDrag = (id: string) => ({
+  const jobDrag = (id: string, fromId?: string) => ({
     draggable: true,
-    onDragStart: (e: React.DragEvent) => { e.stopPropagation(); e.dataTransfer.setData("text/plain", `job:${id}`); e.dataTransfer.effectAllowed = "move"; setDragId(id); },
-    onDragEnd: () => { setDragId(null); setOver(null); },
+    onDragStart: (e: React.DragEvent) => { e.stopPropagation(); e.dataTransfer.setData("text/plain", fromId ? `job:${id}:${fromId}` : `job:${id}`); e.dataTransfer.effectAllowed = "move"; setDragId(id); setDragFrom(fromId ?? null); },
+    onDragEnd: () => { setDragId(null); setDragFrom(null); setOver(null); },
   });
 
   const rangeBtn = (k: Range, label: string) => (
@@ -155,7 +184,7 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
       <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 lg:px-6">
         <div className="mr-auto">
           <h1 className="text-[20px] font-semibold tracking-tight text-[#0b1f3a]">Assign jobs</h1>
-          <p className="text-[13px] text-slate-500">Drag a job onto a technician. On the phone: tap the job, then tap the technician.</p>
+          <p className="text-[13px] text-slate-500">Drop a job on a person to add them · drag it between people to move it. On the phone: tap the job, then the person.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-lg bg-slate-100 p-0.5">{rangeBtn("today", "Today")}{rangeBtn("tomorrow", "Tomorrow")}{rangeBtn("week", "This week")}</div>
@@ -166,23 +195,23 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
       {/* Mitad y mitad: trabajos sin técnico | técnicos */}
       <div className="grid min-h-0 flex-1 gap-4 p-3 lg:grid-cols-2 lg:p-5">
         <section
-          onDragOver={(e) => { if (dragId && rows.find((r) => r.id === dragId)?.tech_ids.length) { e.preventDefault(); setOver("__left"); } }}
+          onDragOver={(e) => { if (dragId && dragFrom) { e.preventDefault(); setOver("__left"); } }}
           onDragLeave={() => setOver((o) => (o === "__left" ? null : o))}
-          onDrop={(e) => { e.preventDefault(); setOver(null); setDragId(null); const d = e.dataTransfer.getData("text/plain"); if (d.startsWith("job:")) assign(d.slice(4), null); }}
+          onDrop={(e) => { e.preventDefault(); setOver(null); setDragId(null); setDragFrom(null); const [k, rowId, fromId] = e.dataTransfer.getData("text/plain").split(":"); if (k === "job" && fromId) removeFrom(rowId, fromId); }}
           className={`flex min-h-0 flex-col rounded-2xl border bg-white transition-colors ${over === "__left" ? "border-[#f59e0b] bg-[#fffaf0]" : "border-slate-200"}`}>
           <div className="flex items-center gap-2 border-b border-slate-100 p-3">
             <p className="shrink-0 text-[14px] font-semibold text-[#0b1f3a]">To assign <span className={`ml-1 rounded-full px-2 py-0.5 text-[12px] ${shownJobs.length ? "bg-[#fff4e0] text-[#b45309]" : "bg-slate-100 text-slate-400"}`}>{rows.filter((r) => !r.tech_ids.length).length}</span></p>
             {search(q, setQ, "Search: customer, phone, address, #")}
           </div>
           <div className="min-h-[12rem] flex-1 overflow-y-auto p-3">
-            {over === "__left" && <p className="mb-2 rounded-lg border-2 border-dashed border-[#f59e0b] py-2 text-center text-[13px] font-semibold text-[#b45309]">Drop here to unassign</p>}
+            {over === "__left" && <p className="mb-2 rounded-lg border-2 border-dashed border-[#f59e0b] py-2 text-center text-[13px] font-semibold text-[#b45309]">Drop here to take it off {dragFrom ? nameOf(dragFrom) : "this person"}</p>}
             {loading ? (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-[4.6rem] animate-pulse rounded-xl bg-slate-100" />)}</div>
             ) : shownJobs.length === 0 ? (
               <div className="px-4 py-12 text-center">
                 <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#e7f6f1] text-[#0f766e]"><svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5 9.5 17 19 7" /></svg></span>
-                <p className="mt-3 text-[15px] font-semibold text-[#0b1f3a]">{q ? "No jobs match" : "Every job has a technician"}</p>
-                <p className="mt-1 text-[13px] text-slate-500">To move a job to someone else, drag it from one technician to another.</p>
+                <p className="mt-3 text-[15px] font-semibold text-[#0b1f3a]">{q ? "No jobs match" : "Every job has a collaborator"}</p>
+                <p className="mt-1 text-[13px] text-slate-500">Drag a job from one person to another to move it. Drop it on a second person to add a helper.</p>
               </div>
             ) : (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-2">
@@ -209,11 +238,11 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
 
         <section className="flex min-h-0 flex-col rounded-2xl border border-slate-200 bg-white">
           <div className="flex items-center gap-2 border-b border-slate-100 p-3">
-            <p className="shrink-0 text-[14px] font-semibold text-[#0b1f3a]">Technicians <span className="font-normal text-slate-400">({techs.length})</span></p>
+            <p className="shrink-0 text-[14px] font-semibold text-[#0b1f3a]">Collaborators <span className="font-normal text-slate-400">({techs.length})</span></p>
             {search(tq, setTq, "Search by name, phone or email")}
           </div>
           <div className="min-h-[12rem] flex-1 overflow-y-auto p-3">
-            {techs.length === 0 && <p className="px-3 py-10 text-center text-[13.5px] text-slate-500">No technicians yet. Invite them in Team with the Technician role.</p>}
+            {techs.length === 0 && <p className="px-3 py-10 text-center text-[13.5px] text-slate-500">No collaborators yet. Invite technicians in Team, or turn on “Can receive jobs” for yourself (Team → Edit).</p>}
             <div className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] items-start gap-2.5">
               {shownTechs.map((t) => {
                 const mine = rows.filter((r) => r.tech_ids.includes(t.user_id)).sort((x, y) => (x.starts_at ?? "z").localeCompare(y.starts_at ?? "z"));
@@ -227,10 +256,12 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
                     style={{ borderTop: `3px solid ${t.color}` }}>
                     <div draggable onDragStart={(e) => { e.dataTransfer.setData("text/plain", `tech:${t.user_id}`); e.dataTransfer.effectAllowed = "move"; }}
                       onClick={() => picked && assign(picked, t.user_id)}
-                      className={`flex items-center gap-2.5 px-3 py-2.5 ${picked ? "cursor-pointer" : "cursor-grab"}`} title="Drag to reorder technicians">
+                      className={`flex items-center gap-2.5 px-3 py-2.5 ${picked ? "cursor-pointer" : "cursor-grab"}`} title="Drag to reorder">
                       <TechDot t={t} size={34} ring={false} />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[14px] font-semibold text-[#0b1f3a]">{t.full_name}</span>
+                        <span className="flex items-center gap-1.5"><span className="truncate text-[14px] font-semibold text-[#0b1f3a]">{t.full_name}</span>
+                          {t.role === "owner" && <span className="shrink-0 rounded-full bg-[#0b1f3a] px-1.5 py-px text-[10px] font-semibold text-white">Owner</span>}
+                          {t.worker_type === "subcontractor" && <span className="shrink-0 rounded-full bg-[#fff7ed] px-1.5 py-px text-[10px] font-semibold text-[#c2410c] ring-1 ring-[#fed7aa]">Sub</span>}</span>
                         <span className="block truncate text-[11.5px] text-slate-500">{[t.job_title, t.phone].filter(Boolean).join(" · ") || t.email}</span>
                       </span>
                       <span className="text-right">
@@ -242,12 +273,18 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
                     <div className="space-y-1 border-t border-slate-100 px-2 py-2">
                       {mine.length === 0 && <p className="px-1 py-1.5 text-center text-[12px] text-slate-400">{isOver ? "Drop to assign" : "No jobs · drop one here"}</p>}
                       {mine.map((r) => (
-                        <div key={r.id} {...jobDrag(r.id)} title="Drag to another technician"
+                        <div key={r.id} {...jobDrag(r.id, t.user_id)} title="Drag to another person to move it"
                           className={`flex cursor-grab items-center gap-2 rounded-lg px-2 py-1.5 text-[12.5px] transition-colors active:cursor-grabbing hover:bg-slate-50 ${dragId === r.id ? "opacity-40" : ""}`}
                           style={{ background: `${r.type_color ?? "#94a3b8"}12` }}>
                           <span className="w-14 shrink-0 font-semibold text-slate-500">{r.starts_at ? fmtTime(new Date(r.starts_at)) : "No date"}</span>
                           <span className="min-w-0 flex-1 truncate text-[#0b1f3a]">{r.customer_name || r.number}</span>
-                          <button type="button" onClick={() => assign(r.id, null)} title="Unassign" aria-label="Unassign"
+                          {r.tech_ids.length > 1 && (
+                            <span title={`With ${r.tech_ids.filter((x) => x !== t.user_id).map(nameOf).join(", ")}`} className="flex shrink-0 -space-x-1">
+                              {r.tech_ids.filter((x) => x !== t.user_id).slice(0, 2).map((x) => { const o = techs.find((y) => y.user_id === x); return o ? <TechDot key={x} t={o} size={16} /> : null; })}
+                            </span>
+                          )}
+                          {r.lead_id === t.user_id && r.tech_ids.length > 1 && <span title="Lead" className="shrink-0 text-[10px] font-bold uppercase text-[#0f766e]">Lead</span>}
+                          <button type="button" onClick={() => removeFrom(r.id, t.user_id)} title={`Take off ${t.full_name}`} aria-label={`Take off ${t.full_name}`}
                             className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
                             <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M5 5l10 10M15 5 5 15" /></svg>
                           </button>
@@ -264,7 +301,7 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
 
       {picked && pickedRow && (
         <div className="fixed inset-x-3 bottom-4 z-40 flex items-center gap-3 rounded-2xl bg-[#0b1f3a] px-4 py-3 text-white shadow-2xl lg:hidden">
-          <p className="min-w-0 flex-1 truncate text-[14px]">Now tap a technician for <b>{pickedRow.customer_name || pickedRow.number}</b></p>
+          <p className="min-w-0 flex-1 truncate text-[14px]">Now tap a person for <b>{pickedRow.customer_name || pickedRow.number}</b></p>
           <button type="button" onClick={() => setPicked(null)} className="text-[13px] font-semibold text-white/70">Cancel</button>
         </div>
       )}

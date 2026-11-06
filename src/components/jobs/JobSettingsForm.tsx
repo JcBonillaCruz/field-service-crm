@@ -9,7 +9,7 @@ import SelectMenu from "@/components/ui/SelectMenu";
 import ColorPicker from "@/components/ui/ColorPicker";
 import { confirmDelete } from "@/lib/confirm";
 import { TechDot } from "@/components/jobs/EventBar";
-import { ChecklistTemplate, JobSettings, JobTag, JobType, TECH_COLORS, TeamMember, arrivalLabel, ARRIVAL_WINDOWS, durationLabel, fmtHour, jobError } from "@/lib/jobs";
+import { ChecklistTemplate, JobSettings, JobTag, JobType, TECH_COLORS, TeamMember, arrivalLabel, ARRIVAL_WINDOWS, durationLabel, fmtHour, jobError, receivesJobs } from "@/lib/jobs";
 
 const card = "rounded-2xl border border-slate-200 bg-white";
 const HOURS = Array.from({ length: 25 }, (_, h) => ({ value: `${String(h % 24).padStart(2, "0")}:00`, label: h === 24 ? "Midnight" : fmtHour(h * 60) }));
@@ -184,8 +184,8 @@ export default function JobSettingsForm({ companyId, settings, types: t0, tags: 
           <h2 className="text-[16px] font-semibold text-[#0b1f3a]">Technician colors</h2>
           <p className="text-[13px] text-slate-500">With &quot;Color by: Technician&quot;, each job bar uses the color of its lead technician.</p>
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            {team.filter((m) => m.role === "technician").length === 0 && <p className="text-[13.5px] text-slate-500">No technicians yet. Invite them in Team with the Technician role.</p>}
-            {team.filter((m) => m.role === "technician").map((m) => (
+            {team.filter(receivesJobs).length === 0 && <p className="text-[13.5px] text-slate-500">No collaborators yet. Invite technicians in Team, or turn on “Can receive jobs” for someone.</p>}
+            {team.filter(receivesJobs).map((m) => (
               <div key={m.user_id} className="flex items-center gap-3 rounded-xl border border-slate-100 px-3 py-2">
                 <TechDot t={m} size={32} ring={false} />
                 <span className="min-w-0 flex-1"><span className="block truncate text-[14.5px] font-medium text-[#0b1f3a]">{m.full_name}</span><span className="text-[12px] capitalize text-slate-500">{m.role}</span></span>

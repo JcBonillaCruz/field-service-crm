@@ -6,6 +6,7 @@ import { confirmDelete } from "@/lib/confirm";
 import { ROLE_INFO } from "@/lib/team";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTeamBase } from "@/components/team/useTeamBase";
 import { Role, formatPhone } from "@/lib/types";
 import { inputClass } from "@/components/customers/ui";
 import { FormHeader, FormRow, SaveBar, SectionTitle } from "@/components/catalog/FormBits";
@@ -21,6 +22,7 @@ export default function InviteForm({ myRole, companyName, initialRole, members: 
   myRole: Role; companyName: string; initialRole: Exclude<Role, "owner">; members?: Existing[]; invites?: PendingInv[];
 }) {
   const router = useRouter();
+  const base = useTeamBase();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>(initialRole);
@@ -81,7 +83,7 @@ export default function InviteForm({ myRole, companyName, initialRole, members: 
     const btn = "flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-[14.5px] font-medium text-slate-700 transition-colors hover:border-[#14a39a] hover:text-[#0f766e]";
     return (
       <div className="flex min-h-[calc(100vh-4rem)] flex-col bg-white">
-        <FormHeader title="Login created" closeHref="/dashboard/team" />
+        <FormHeader title="Login created" closeHref={base} />
         <div className="mx-auto w-full max-w-lg px-5 py-10">
           <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#e7f6f1] text-[#0f766e]">
             <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M7 11V8a5 5 0 0 1 10 0v3M5 11h14v10H5zM12 15v2" /></svg>
@@ -99,7 +101,7 @@ export default function InviteForm({ myRole, companyName, initialRole, members: 
             <a href={`sms:${phone.replace(/\D/g, "")}?&body=${encodeURIComponent(msg)}`} className={btn}>Text</a>
           </div>
           <div className="mt-8 flex justify-center gap-3">
-            <Link prefetch={false} href="/dashboard/team" className="rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f59]">Done</Link>
+            <Link prefetch={false} href={base} className="rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f59]">Done</Link>
             <button type="button" onClick={() => { setCreds(null); setName(""); setEmail(""); setJob(""); setPhone(""); setPass(tempPassword()); }} className="rounded-lg border border-slate-200 px-5 py-2.5 text-[15px] font-medium text-slate-700 hover:bg-slate-50">Add another</button>
           </div>
         </div>
@@ -110,7 +112,7 @@ export default function InviteForm({ myRole, companyName, initialRole, members: 
   if (done) {
     return (
       <div className="flex min-h-[calc(100vh-4rem)] flex-col bg-white">
-        <FormHeader title="Invitation ready" closeHref="/dashboard/team?tab=invites" />
+        <FormHeader title="Invitation ready" closeHref={`${base}?tab=invites`} />
         <div className="mx-auto w-full max-w-lg px-5 py-10">
           <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#e7f6f1] text-[#0f766e]">
             <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16v12H4zM4 7l8 6 8-6" /></svg>
@@ -122,7 +124,7 @@ export default function InviteForm({ myRole, companyName, initialRole, members: 
           <div className="mt-6"><ShareInvite link={done.link} name={name} company={companyName} /></div>
           <p className="mt-4 text-center text-[13px] text-slate-500">They open the link, create their account (or sign in) and join as <b>{role}</b>. The link works for 14 days.</p>
           <div className="mt-8 flex justify-center gap-3">
-            <Link prefetch={false} href="/dashboard/team?tab=invites" className="rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f59]">Done</Link>
+            <Link prefetch={false} href={`${base}?tab=invites`} className="rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f59]">Done</Link>
             <button type="button" onClick={() => { setDone(null); setName(""); setEmail(""); setJob(""); setPhone(""); }} className="rounded-lg border border-slate-200 px-5 py-2.5 text-[15px] font-medium text-slate-700 hover:bg-slate-50">Invite another</button>
           </div>
         </div>
@@ -135,7 +137,7 @@ export default function InviteForm({ myRole, companyName, initialRole, members: 
       ["How", mode === "invite" ? (send ? "Invitation by email + link for WhatsApp/text" : "Invitation link (no email)") : "Login with temporary password"], ...(mode === "create" ? [["Temporary password", pass.trim()] as [string, string]] : [])];
     return (
       <form onSubmit={submit} className="flex min-h-[calc(100vh-4rem)] flex-col bg-white">
-        <FormHeader title="Check before sending" closeHref="/dashboard/team" />
+        <FormHeader title="Check before sending" closeHref={base} />
         <div className="mx-auto w-full max-w-lg px-5 py-10">
           <p className="text-[15px] text-slate-600">Make sure everything is right. {mode === "invite" ? `${name.split(" ")[0]} will get the invitation as soon as you send it.` : `${name.split(" ")[0]}'s login will be created right away.`}</p>
           <dl className="mt-5 divide-y divide-slate-100 rounded-xl border border-slate-200 text-[14.5px]">
@@ -158,7 +160,7 @@ export default function InviteForm({ myRole, companyName, initialRole, members: 
 
   return (
     <form onSubmit={submit} noValidate autoComplete="off" className="flex min-h-[calc(100vh-4rem)] flex-col bg-white">
-      <FormHeader title="Add Team Member" closeHref="/dashboard/team" />
+      <FormHeader title="Add Team Member" closeHref={base} />
       <div className="flex-1">
         <div className="space-y-5 border-b border-slate-200 bg-[#fafbfc] px-5 py-6 sm:px-8">
           <FormRow label="How to add" hint="Invitation: they get a link and create their own password (most secure). Create login: you give them a temporary password; they must change it the first time they sign in.">
@@ -180,7 +182,7 @@ export default function InviteForm({ myRole, companyName, initialRole, members: 
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[13.5px] text-amber-900">
                 <span><b>{dupMember.name}</b> is already on your team ({ROLE_INFO[dupMember.role as Role]?.label ?? dupMember.role}).</span>
                 <span className="flex gap-2">
-                  <Link prefetch={false} href={`/dashboard/team/${dupMember.id}/edit`} className="font-semibold text-[#0f766e] hover:underline">Edit</Link>
+                  <Link prefetch={false} href={`${base}/${dupMember.id}/edit`} className="font-semibold text-[#0f766e] hover:underline">Edit</Link>
                   {dupMember.role !== "owner" && <button type="button" onClick={() => removeExisting(dupMember)} className="font-semibold text-red-600 hover:underline">Remove</button>}
                 </span>
               </div>
@@ -225,7 +227,7 @@ export default function InviteForm({ myRole, companyName, initialRole, members: 
           )}
         </div>
       </div>
-      <SaveBar saving={saving} cancelHref="/dashboard/team" error={error} saveLabel="Review" />
+      <SaveBar saving={saving} cancelHref={base} error={error} saveLabel="Review" />
     </form>
   );
 }

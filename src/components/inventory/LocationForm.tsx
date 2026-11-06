@@ -75,7 +75,7 @@ export default function LocationForm({ companyId, members, location, taken, init
           <FormRow label="Technician" htmlFor="loc-tech" width="max-w-[420px]" hint="The person who drives this van. They will see only this van's stock and their scans are deducted from it.">
             <SearchSelect id="loc-tech" ariaLabel="Technician" value={tech} options={options} onChange={pickTech} placeholder="Choose a team member" />
             {members.filter((m) => m.role === "technician").length === 0 && (
-              <p className="mt-1.5 text-[13px] text-slate-500">No technicians yet. <a href="/dashboard/team/invite?role=technician" className="font-medium text-[#0f766e] hover:underline">Invite one in Team</a> — you can create the van now and assign it later.</p>
+              <p className="mt-1.5 text-[13px] text-slate-500">No technicians yet. <a href="/dashboard/inventory/team/invite?role=technician" className="font-medium text-[#0f766e] hover:underline">Invite one in Team</a> — you can create the van now and assign it later.</p>
             )}
           </FormRow>
         )}

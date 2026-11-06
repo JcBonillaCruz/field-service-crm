@@ -12,7 +12,7 @@ import type { PayerOption } from "@/components/expenses/ExpensesWorkspace";
 import { TechDot } from "@/components/jobs/EventBar";
 import {
   ARRIVAL_WINDOWS, ChecklistTemplate, JobSettings, JobTag, JobType, PRIORITIES, Priority, SiteAddress, TeamMember,
-  addressLine, arrivalLabel, atMinute, dayStart, durationLabel, fmtHour, fromIsoDay, isoDay, jobError, minutesOf, timeToMin,
+  addressLine, arrivalLabel, atMinute, dayStart, durationLabel, fmtHour, fromIsoDay, isoDay, jobError, minutesOf, receivesJobs, timeToMin,
 } from "@/lib/jobs";
 
 type Addr = { id: string; label: string | null; street: string | null; unit: string | null; city: string | null; state: string | null; zip: string | null; is_primary: boolean };
@@ -73,7 +73,7 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
 
   const customer = customers.find((c) => c.id === customerId) ?? null;
   // Solo técnicos (si ya estaba asignado alguien de la oficina, también se muestra para poder quitarlo)
-  const techFirst = useMemo(() => team.filter((m) => m.role === "technician" || (visit?.tech_ids ?? []).includes(m.user_id)), [team, visit]);
+  const techFirst = useMemo(() => team.filter((m) => receivesJobs(m) || (visit?.tech_ids ?? []).includes(m.user_id)), [team, visit]);
   const [notifyCust, setNotifyCust] = useState(settings.notify_customer === "always");
   // Con muchos técnicos: buscador y solo se muestran los elegidos + los que coinciden (máx. 12)
   const [techQ, setTechQ] = useState("");
@@ -370,7 +370,7 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
                 {scheduleNow && arrival > 0 && <p className="mt-1 text-[12px] text-slate-400">Customer sees: arriving between {timeLabel(startMin)} and {timeLabel(Math.min(24 * 60 - 15, startMin + arrival))}</p>}
               </FormRow>
               <FormRow label="Technicians" hint="The first one is the lead: their color paints the bar on the calendar." alignTop width="max-w-[640px]">
-                {techFirst.length === 0 ? <p className="pt-2 text-[13.5px] text-slate-500">No technicians yet. Invite them in Team with the Technician role.</p> : (
+                {techFirst.length === 0 ? <p className="pt-2 text-[13.5px] text-slate-500">No collaborators yet. Invite technicians in Team, or turn on “Can receive jobs” for yourself.</p> : (
                   <div className="flex flex-wrap gap-2">
                     {manyTechs && (
                       <input value={techQ} onChange={(e) => setTechQ(e.target.value)} placeholder={`Search ${techFirst.length} technicians`} className={`${inputClass} mb-1 w-full`} />

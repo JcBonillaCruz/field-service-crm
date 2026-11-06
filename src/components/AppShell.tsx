@@ -74,7 +74,7 @@ const QR_NAV: NavItem[] = [
 // Inventory: su propio menú. El técnico ve solo lo suyo (su van, escanear, su consumo).
 const MANAGE: Role[] = ["owner", "manager", "office"];
 const INVENTORY_NAV: NavItem[] = [
-  { label: "Items", href: "/dashboard/inventory", exclude: ["/dashboard/inventory/scan", "/dashboard/inventory/labels", "/dashboard/inventory/settings", "/dashboard/inventory/locations", "/dashboard/inventory/transfers", "/dashboard/inventory/movements", "/dashboard/inventory/counts", "/dashboard/inventory/reports"], addHref: "/dashboard/inventory/new", roles: MANAGE, icon: "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9" },
+  { label: "Items", href: "/dashboard/inventory", exclude: ["/dashboard/inventory/scan", "/dashboard/inventory/labels", "/dashboard/inventory/settings", "/dashboard/inventory/locations", "/dashboard/inventory/transfers", "/dashboard/inventory/movements", "/dashboard/inventory/counts", "/dashboard/inventory/reports", "/dashboard/inventory/team"], addHref: "/dashboard/inventory/new", roles: MANAGE, icon: "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9" },
   { label: "My Van", href: "/dashboard/inventory/van", roles: ["technician"], icon: "M3 7h11v9H3zM14 10h4l3 3v3h-7zM7 19a1.8 1.8 0 1 0 0-3.6A1.8 1.8 0 0 0 7 19zM17 19a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6z" },
   { label: "Scan", href: "/dashboard/inventory/scan", roles: MANAGE, icon: "M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 8v8M10 8v8M13 8v8M16.5 8v8" },
   { label: "Labels", href: "/dashboard/inventory/labels", roles: MANAGE, icon: "M7 8V3h10v5M6 17H4V9h16v8h-2M7 14h10v7H7z" },
@@ -85,16 +85,17 @@ const INVENTORY_NAV: NavItem[] = [
   { label: "Counts", href: "/dashboard/inventory/counts", addHref: "/dashboard/inventory/counts/new", roles: MANAGE, icon: "M9 5h6M9 3h6v4H9zM6 5H5v16h14V5h-1M9 13l2 2 4-4" },
   { label: "Reports", href: "/dashboard/inventory/reports", roles: MANAGE, icon: "M4 4v16h16M8.5 16v-4M12.5 16V8M16.5 16v-6" },
   { label: "My Usage", href: "/dashboard/inventory/usage", roles: ["technician"], icon: "M4 4v16h16M8.5 16v-4M12.5 16V8M16.5 16v-6" },
-  { label: "Team", href: "/dashboard/team", roles: ["owner", "manager"], icon: "M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6" },
+  { label: "Team", href: "/dashboard/inventory/team", addHref: "/dashboard/inventory/team/invite", addLabel: "Member", roles: ["owner", "manager"], icon: "M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6" },
   { label: "Settings", href: "/dashboard/inventory/settings", roles: MANAGE, icon: "M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1M15 5v4M9 10v4M17 15v4" },
 ];
 // Jobs: calendario (Schedule) para la oficina; el técnico ve solo sus trabajos
 const JOBS_NAV: NavItem[] = [
+  { label: "Operations", href: "/dashboard/jobs/operations", roles: MANAGE, icon: "M3 12h4l2.5-6 4 12 2.5-6H21" },
   { label: "Schedule", href: "/dashboard/jobs/schedule", addHref: "/dashboard/jobs/new", addLabel: "Job", roles: MANAGE, icon: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M8 14h3M13 14h3M8 17h3" },
   { label: "Assign jobs", href: "/dashboard/jobs/assign", roles: MANAGE, icon: "M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2.5 15a5.5 5.5 0 0 1 11 0M14 12h7M18 9l3 3-3 3" },
-  { label: "Jobs", roles: MANAGE, icon: "M9 4h6v3H9zM7 5.5H5.5v15h13v-15H17M8.5 11h7M8.5 14.5h7M8.5 18h4" },
-  { label: "My Jobs", href: "/dashboard/jobs/mine", roles: ["technician"], icon: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M8 14h3M8 17h6" },
-  { label: "Team", href: "/dashboard/team", roles: ["owner", "manager"], icon: "M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6" },
+  // My Jobs: el técnico y cualquiera que reciba trabajos (el dueño también puede ser colaborador)
+  { label: "My Jobs", href: "/dashboard/jobs/mine", icon: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M8 14h3M8 17h6" },
+  { label: "Team", href: "/dashboard/jobs/team", addHref: "/dashboard/jobs/team/invite", addLabel: "Member", roles: ["owner", "manager"], icon: "M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6" },
   { label: "Settings", href: "/dashboard/jobs/settings", roles: ["owner", "manager"], icon: "M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1M15 5v4M9 10v4M17 15v4" },
 ];
 const NAV_BY_APP: Record<AppId, NavItem[]> = { finance: FINANCE_NAV, qr: QR_NAV, inventory: INVENTORY_NAV, jobs: JOBS_NAV };

@@ -43,7 +43,12 @@ export type JobSettings = {
 };
 export type JobType = { id: string; name: string; color: string; default_duration_min: number; form_kind: "work" | "tune_up"; position: number; is_active: boolean };
 export type JobTag = { id: string; name: string; color: string };
-export type TeamMember = { user_id: string; full_name: string; initials: string; avatar_url: string | null; role: Role; color: string; has_van: boolean };
+export type TeamMember = {
+  user_id: string; full_name: string; initials: string; avatar_url: string | null; role: Role; color: string; has_van: boolean;
+  can_receive?: boolean; worker_type?: "employee" | "subcontractor"; job_title?: string | null; phone?: string | null;
+};
+// Colaboradores: quien puede recibir trabajos (Paso 5.3). Sin el SQL nuevo, solo los técnicos.
+export const receivesJobs = (m: Pick<TeamMember, "role" | "can_receive">) => m.can_receive ?? m.role === "technician";
 export type ChecklistTemplate = { id: string; name: string; job_type_id: string | null; items: { label: string; required: boolean }[] };
 
 export const DEFAULT_SETTINGS: Omit<JobSettings, "company_id"> = {
@@ -163,13 +168,14 @@ export type ColorBy = "tech" | "type" | "priority";
 export function jobError(e: { message?: string; code?: string; hint?: string } | null | undefined): string {
   if (!e) return "";
   const m = `${e.message ?? ""} ${e.hint ?? ""}`;
-  const hinted = ["VISIT_CLOSED", "BAD_TIME", "JOB_CANCELLED", "VISIT_STARTED", "BAD_TECH", "BAD_ADDRESS", "REASON_REQUIRED", "NOTE_REQUIRED", "QUOTE_NOT_ACCEPTED", "CHECKLIST_REQUIRED", "GPS_REQUIRED", "OTHER_JOB_OPEN", "NO_VAN", "BAD_STEP"];
+  const hinted = ["VISIT_CLOSED", "BAD_TIME", "JOB_CANCELLED", "VISIT_STARTED", "BAD_TECH", "BAD_ADDRESS", "REASON_REQUIRED", "NOTE_REQUIRED", "QUOTE_NOT_ACCEPTED", "CHECKLIST_REQUIRED", "GPS_REQUIRED", "OTHER_JOB_OPEN", "NO_VAN", "BAD_STEP", "BAD_TYPE", "BAD_RATE"];
   if (hinted.some((k) => m.includes(k)) && e.hint) return e.hint;
   if (m.includes("NO_ACCESS")) return e.hint || "You don't have permission to do this.";
   if (m.includes("NOT_FOUND")) return "This job no longer exists. Refresh the page.";
   if (m.includes("BAD_CUSTOMER")) return "Choose a customer from your list.";
   if (m.includes("BAD_COLOR")) return "Pick a valid color.";
   if (m.includes("job_types_name_uniq") || m.includes("job_tags_name_uniq") || e.code === "23505") return "That name is already in use.";
+  if (m.includes("visit_set_collaborators") || m.includes("ops_board") || m.includes("team_save_") || m.includes("member_work_profiles") || m.includes("member_pay_rates")) return "Run paso-5.3-operations.sql in Supabase first.";
   if (m.includes("does not exist") || m.includes("Could not find the function")) return "Run the SQL for Paso 5.1 (Jobs) in Supabase first.";
   return "Something went wrong. Try again.";
 }
