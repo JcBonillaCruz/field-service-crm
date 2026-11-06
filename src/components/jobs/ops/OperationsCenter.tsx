@@ -67,6 +67,14 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
   const [error, setError] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const [view, setView] = useState<View>("board");
+  // En el celular solo se usa Connections (es la vista más cómoda con el dedo)
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const on = () => setIsMobile(mq.matches); on();
+    mq.addEventListener("change", on); return () => mq.removeEventListener("change", on);
+  }, []);
+  const shownView: View = isMobile ? "connections" : view;
   const [when, setWhenState] = useState<When>("week");
   const [ask, setAsk] = useState<OpsAsk | null>(null);
   const [colF, setColF] = useState<Record<OpsGroup, ColFilter>>({ unassigned: NO_FILTER, assigned: NO_FILTER, in_progress: NO_FILTER, delayed: NO_FILTER, done: NO_FILTER });
@@ -300,10 +308,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
       </div>
       {/* Celular: arriba Vista y Filtros (con su nombre) · luego buscar · luego el periodo */}
       <div className="mt-3 space-y-2 lg:hidden">
-        <div className="grid grid-cols-2 gap-2">
-          <ViewMenu view={view} setView={pickView} mobile />
-          <FiltersMenu people={people} setPeople={setPeople} list={peopleList} active={filtersOn} mobile />
-        </div>
+        <FiltersMenu people={people} setPeople={setPeople} list={peopleList} active={filtersOn} mobile />
         <div className="relative">
           <svg viewBox="0 0 20 20" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search job, customer, phone, address" aria-label="Search jobs"
@@ -342,7 +347,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
         })}
       </div>
 
-      {view === "connections" ? (
+      {shownView === "connections" ? (
         <div className="mt-4">
           {focus && <FocusNote label={OPS_GROUPS.find((g) => g.id === focus)!.label} onClear={() => setFocus(null)} />}
           {loading ? <div className="h-80 animate-pulse rounded-2xl bg-white" /> : <OpsConnections companyId={companyId} jobs={connJobs} groupOf={groupOf} team={team} now={now} menuFor={menuFor} isAfter={isAfter} hrefFor={hrefFor}
@@ -605,7 +610,7 @@ function Tip({ children, tip, wide = false, right = false }: { children: React.R
   return (
     <div className="group/tip relative min-w-0">
       {children}
-      <div role="tooltip" className={`pointer-events-none absolute bottom-full ${right ? "right-0" : "left-0"} z-[60] mb-1.5 translate-y-1 rounded-xl border border-[#9fdccf] bg-white px-3 py-2 text-[12px] leading-snug text-slate-600 opacity-0 shadow-[0_8px_20px_rgba(15,118,110,0.12)] transition-all duration-150 group-hover/tip:translate-y-0 group-hover/tip:opacity-100 ${wide ? "w-64" : "w-52"} max-w-[calc(100vw-2rem)]`}>
+      <div role="tooltip" className={`pointer-events-none absolute bottom-full hidden lg:block ${right ? "right-0" : "left-0"} z-[60] mb-1.5 translate-y-1 rounded-xl border border-[#9fdccf] bg-white px-3 py-2 text-[12px] leading-snug text-slate-600 opacity-0 shadow-[0_8px_20px_rgba(15,118,110,0.12)] transition-all duration-150 group-hover/tip:translate-y-0 group-hover/tip:opacity-100 ${wide ? "w-64" : "w-52"} max-w-[calc(100vw-2rem)]`}>
         {tip}
       </div>
     </div>
@@ -631,7 +636,9 @@ function Overview({ totals, cash, money, period }: {
     </Tip>
   );
   return (
-    <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-3 lg:p-4">
+    <>
+    <MobileOverview totals={totals} cash={cash} money={money} period={period} />
+    <section className="mt-4 hidden rounded-2xl border border-slate-200 bg-white p-3 lg:block lg:p-4">
       <div className="flex flex-wrap items-center gap-3 lg:gap-5">
         <Tip wide tip={<>
           <p className="mb-1 font-semibold text-[#0f766e]">Average progress of {totals.total} jobs</p>
@@ -685,6 +692,7 @@ function Overview({ totals, cash, money, period }: {
         </p>
       )}
     </section>
+    </>
   );
 }
 
@@ -802,5 +810,67 @@ function GroupPicker({ groups, value, onChange, counts }: { groups: typeof OPS_G
         ))}
       </MenuItems>
     </Menu>
+  );
+}
+
+// Celular: el anillo con espacio para respirar. Al tocarlo se despliega el dinero,
+// un dato por línea con su barrita animada (Earned, Collected, Open jobs, y para el dueño Costs y Profit).
+function MobileOverview({ totals, cash, money, period }: {
+  totals: { pct: number; openPct: number; total: number; done: number; working: number; late: number };
+  cash: Money | null; money: "owner" | "manager" | null; period: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const canOpen = Boolean(money && cash);
+  const rows = cash ? [
+    { label: "Earned", value: cash.revenue, hint: `${cash.jobs_done} completed job${cash.jobs_done === 1 ? "" : "s"}`, color: "#0b1f3a", text: "text-[#0b1f3a]" },
+    { label: "Collected", value: cash.collected, hint: cash.revenue > cash.collected ? `${money$(cash.revenue - cash.collected)} still to collect` : "All collected", color: "#14b8a6", text: "text-[#0f766e]" },
+    { label: "Open jobs", value: cash.pipeline, hint: `${cash.open_jobs} not finished yet`, color: "#2563eb", text: "text-[#2563eb]" },
+    ...(money === "owner" && cash.profit != null ? [
+      { label: "Costs", value: (cash.labor ?? 0) + (cash.materials ?? 0), hint: `Labor ${money$(cash.labor)} · Materials ${money$(cash.materials)}`, color: "#f59e0b", text: "text-[#b45309]" },
+      { label: "Profit", value: cash.profit, hint: cash.revenue > 0 ? `${Math.round((cash.profit / cash.revenue) * 100)}% margin · only you see this` : "Only you see this", color: cash.profit >= 0 ? "#16a34a" : "#e11d48", text: cash.profit >= 0 ? "text-[#15803d]" : "text-[#be123c]" },
+    ] : []),
+  ] : [];
+  const max = Math.max(1, ...rows.map((r) => Math.abs(r.value)));
+  const [grow, setGrow] = useState(false);
+  useEffect(() => { if (!open) { setGrow(false); return; } const t = setTimeout(() => setGrow(true), 60); return () => clearTimeout(t); }, [open, cash]);
+  return (
+    <section className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-5 lg:hidden">
+      <button type="button" onClick={() => canOpen && setOpen((o) => !o)} aria-expanded={open} className="group/ring flex w-full items-center gap-4 text-left">
+        <BigRing pct={totals.pct} />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[11.5px] font-semibold uppercase tracking-wide text-slate-400">Total progress · {period}</span>
+          <span className="mt-0.5 block text-[16px] font-semibold text-[#0b1f3a]">{totals.done} of {totals.total} job{totals.total === 1 ? "" : "s"} completed</span>
+          <span className="mt-0.5 block text-[13px] text-slate-500">{totals.working} working · <span className={totals.late ? "font-semibold text-[#be123c]" : ""}>{totals.late} delayed</span></span>
+        </span>
+        {canOpen && (
+          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#eef8f5] text-[#0f766e] transition-transform duration-300 ${open ? "rotate-180" : ""}`}>
+            <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
+          </span>
+        )}
+      </button>
+      {canOpen && !open && <p className="mt-4 text-center text-[12.5px] font-medium text-[#0f766e]">Tap to see earnings</p>}
+      <div className={`grid transition-all duration-300 ease-out ${open ? "mt-7 grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+        <div className="space-y-5 overflow-hidden">
+          {rows.map((r, i) => (
+            <div key={r.label}>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="flex items-center gap-1.5 text-[13.5px] font-medium text-slate-500">
+                  {r.label === "Profit" && <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="4.5" y="9" width="11" height="7.5" rx="1.5" /><path d="M7 9V7a3 3 0 0 1 6 0v2" /></svg>}
+                  {r.label}
+                </span>
+                <span className={`text-[19px] font-semibold tabular-nums tracking-tight ${r.text}`}><Count value={r.value} money /></span>
+              </div>
+              <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-[#eef2f6]">
+                <div className="h-full rounded-full" style={{ width: grow ? `${Math.max(2, (Math.abs(r.value) / max) * 100)}%` : "0%", background: r.color, transition: `width 900ms cubic-bezier(.2,.8,.2,1) ${i * 90}ms` }} />
+              </div>
+              <p className="mt-1 text-[12px] text-slate-400">{r.hint}</p>
+            </div>
+          ))}
+          {money === "owner" && cash && (cash.missing_rates ?? 0) > 0 && (
+            <p className="rounded-lg bg-[#f6f9fc] px-3 py-2 text-[12px] text-slate-500">Some collaborators don&apos;t have a pay rate yet, so their labor counts as $0. Add it in Team → Edit.</p>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
