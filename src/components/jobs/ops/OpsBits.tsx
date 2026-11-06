@@ -111,7 +111,7 @@ export function OpsCard({ job, group, now, innerRef, onHover, dim = false, menu,
       </div>
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
-          <p className={`truncate ${tiny ? "text-[12px]" : "text-[13.5px]"} font-semibold leading-snug ${done ? "text-slate-600" : "text-[#0b1f3a]"}`}>{job.customer_name || job.title || `#${job.number}`}</p>
+          <p className={`truncate ${tiny ? "text-[12px]" : "text-[13.5px]"} font-semibold leading-snug ${done ? (tint ? "text-slate-500" : "text-slate-600") : "text-[#0b1f3a]"}`}>{job.customer_name || job.title || `#${job.number}`}</p>
           <p className={`truncate ${tiny ? "text-[10.5px]" : "text-[11.5px]"} text-slate-500`}>
             {[job.type_name ?? job.title, addr].filter(Boolean).join(" · ") || `#${job.number}`}
           </p>
@@ -121,10 +121,10 @@ export function OpsCard({ job, group, now, innerRef, onHover, dim = false, menu,
           : <ProgressRing pct={pct} size={tiny ? 22 : 28} stroke={3} color={GROUP_TONE[group]} />}
       </div>
       <div className={`${tiny ? "mt-0.5" : "mt-1"} flex items-center gap-1.5`}>
-        <TechDots techs={job.techs} size={tiny ? 15 : 18} max={3} />
+        <span className={`flex ${done && tint ? "opacity-60 grayscale" : ""}`}><TechDots techs={job.techs} size={tiny ? 15 : 18} max={3} /></span>
         {job.techs.length === 1 && !tiny && <span className="truncate text-[11px] font-medium text-slate-500">{job.techs[0].name.split(" ")[0]}</span>}
         <span className="ml-auto flex items-center gap-1.5">
-          {done ? <span className="text-[10px] font-semibold uppercase tracking-wide text-[#16a34a]">{STAGE_LABEL(job)}</span>
+          {done ? <span className={`text-[10px] font-semibold uppercase tracking-wide ${tint ? "text-slate-400" : "text-[#16a34a]"}`}>{STAGE_LABEL(job)}</span>
             : group === "unassigned" && !job.techs.length ? (
               <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-[#0f766e]">Assign
                 <svg viewBox="0 0 20 20" className="h-3 w-3 transition-transform group-hover/card:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M7.5 5 12.5 10l-5 5" /></svg></span>

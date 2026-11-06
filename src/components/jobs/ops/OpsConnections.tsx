@@ -16,6 +16,8 @@ const CARD_TINTS: { bg: string; border: string }[] = [
   { bg: "#fdeff4", border: "#f4cadb" }, { bg: "#fcf8e3", border: "#ece0a8" }, { bg: "#eef6e9", border: "#cfe3c2" }, { bg: "#e7f7fa", border: "#bce4ec" },
   { bg: "#f8eefb", border: "#e5cff0" }, { bg: "#f7f2eb", border: "#e3d6c3" }, { bg: "#eef0fe", border: "#cfd5f7" }, { bg: "#fff0ee", border: "#f6cdc6" },
 ];
+// Terminados: gris apagado (solo el ✓ queda verde) para que se note que ya no están en función
+const DONE_TINT = { bg: "#f1f3f6", border: "#e3e7ec" };
 // Fila + columna·7: la de arriba/abajo y la de al lado nunca tienen el mismo color
 const tintAt = (row: number, col: number) => CARD_TINTS[(row + col * 7) % CARD_TINTS.length];
 type Show = "in_progress" | "assigned" | "delayed" | "unassigned" | "done";
@@ -375,7 +377,7 @@ export default function OpsConnections({ companyId, jobs: rawJobs, groupOf, team
                     <div key={j.id} {...target(`j-${j.id}`, (e) => dropOnJob(j.id, e))}
                       className={`relative rounded-xl bg-white transition-shadow ${over === `j-${j.id}` && drag?.kind === "job" && drag.id !== j.id ? "shadow-[-4px_0_0_0_#14a39a]" : ""}`}>
                       <OpsCard job={j} group={g} now={now} tiny afterHours={isAfter?.(j)} href={hrefFor?.(j, g)} menu={menuFor?.(j, g)} dim={dim}
-                        tint={tintAt(ri, ci)}
+                        tint={g === "done" ? DONE_TINT : tintAt(ri, ci)}
                         ports={j.techs.map((t) => (g === "delayed" ? "#e11d48" : t.color))}
                         dragging={drag?.kind === "job" && drag.id === j.id}
                         innerRef={(el) => { if (el) jobEls.current.set(j.id, el); else jobEls.current.delete(j.id); }}
