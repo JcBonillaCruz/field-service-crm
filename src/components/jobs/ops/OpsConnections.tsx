@@ -13,8 +13,8 @@ type Line = { key: string; job: string; user: string | null; d: string; ex: numb
 // líneas animadas que los unen (como las relaciones de tablas en Supabase).
 // La línea "corre" más rápido cuando el trabajo está en curso; roja si va tarde.
 // =====================================================================
-export default function OpsConnections({ jobs, groupOf, team, now, menuFor, isAfter }: {
-  jobs: OpsJob[]; groupOf: (j: OpsJob) => OpsGroup; team: TeamMember[]; now: number; menuFor?: (j: OpsJob, g: OpsGroup) => CardMenu; isAfter?: (j: OpsJob) => boolean;
+export default function OpsConnections({ jobs, groupOf, team, now, menuFor, isAfter, hrefFor }: {
+  jobs: OpsJob[]; groupOf: (j: OpsJob) => OpsGroup; team: TeamMember[]; now: number; menuFor?: (j: OpsJob, g: OpsGroup) => CardMenu; isAfter?: (j: OpsJob) => boolean; hrefFor?: (j: OpsJob, g: OpsGroup) => string | undefined;
 }) {
   const wrap = useRef<HTMLDivElement>(null);
   const jobEls = useRef(new Map<string, HTMLElement>());
@@ -136,7 +136,7 @@ export default function OpsConnections({ jobs, groupOf, team, now, menuFor, isAf
           <div className="space-y-2">
             {ordered.map((j) => (
               <div key={j.id} className="animate-[bp-fade_0.25s_ease-out]">
-                <OpsCard job={j} group={groupOf(j)} now={now} compact dim={!jobLit(j.id)} menu={menuFor?.(j, groupOf(j))} afterHours={isAfter?.(j)}
+                <OpsCard job={j} group={groupOf(j)} now={now} compact dim={!jobLit(j.id)} menu={menuFor?.(j, groupOf(j))} afterHours={isAfter?.(j)} href={hrefFor?.(j, groupOf(j))}
                   innerRef={(el) => { if (el) jobEls.current.set(j.id, el); else jobEls.current.delete(j.id); }}
                   onHover={(on) => setHoverJob(on ? j.id : null)} />
               </div>

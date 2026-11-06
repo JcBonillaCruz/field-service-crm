@@ -45,6 +45,20 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
     const d = fromIsoDay(date); return [d, addDays(d, 1)];
   }, [range, date, weekStartsOn]);
 
+  // Viene de Operations (tocar un trabajo "Sin asignar"): abre ese día y deja el trabajo ya escogido
+  const [fromOps, setFromOps] = useState(false);
+  const wanted = useRef<string | null>(null);
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get("from") === "ops") setFromOps(true);
+    const d = p.get("date");
+    if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      const today = isoDay(new Date()), tomorrow = isoDay(addDays(dayStart(new Date()), 1));
+      if (d === today) setRange("today"); else if (d === tomorrow) setRange("tomorrow"); else { setDate(d); setRange("date"); }
+    }
+    wanted.current = p.get("visit");
+  }, []);
+
   const flash = (msg: string, error = false) => { setToast({ msg, error }); setTimeout(() => setToast((t) => (t?.msg === msg ? null : t)), error ? 5000 : 2500); };
 
   const load = useCallback(async () => {
@@ -70,6 +84,13 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
   }, [companyId, from, to]);
 
   useEffect(() => { setLoading(true); load(); }, [load]);
+  useEffect(() => {
+    const id = wanted.current;
+    if (!id || loading || !rows.some((r) => r.id === id)) return;
+    wanted.current = null;
+    setPicked(id);
+    setTimeout(() => document.querySelector(`[data-visit="${id}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
+  }, [rows, loading]);
   useEffect(() => {
     const sb = createClient();
     let t: ReturnType<typeof setTimeout>;
@@ -183,6 +204,8 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
     <div className="flex min-h-[calc(100dvh-4rem)] flex-col bg-[#f4f6f8] lg:h-[calc(100dvh-4rem)]">
       <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 lg:px-6">
         <div className="mr-auto">
+          {fromOps && <a href="/dashboard/jobs/operations" className="mb-0.5 inline-flex items-center gap-1 text-[13px] font-semibold text-[#0f766e] hover:underline">
+            <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 5 7.5 10l5 5" /></svg>Back to Operations</a>}
           <h1 className="text-[20px] font-semibold tracking-tight text-[#0b1f3a]">Assign jobs</h1>
           <p className="text-[13px] text-slate-500">Drop a job on a person to add them · drag it between people to move it. On the phone: tap the job, then the person.</p>
         </div>
@@ -219,7 +242,7 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
                   const s = r.starts_at ? new Date(r.starts_at) : null;
                   const sel = picked === r.id;
                   return (
-                    <div key={r.id} {...jobDrag(r.id)} onClick={() => setPicked(sel ? null : r.id)}
+                    <div key={r.id} data-visit={r.id} {...jobDrag(r.id)} onClick={() => setPicked(sel ? null : r.id)}
                       className={`group cursor-grab select-none rounded-xl border bg-white px-3 py-2 transition-all duration-100 active:cursor-grabbing ${sel ? "border-[#0f766e] ring-4 ring-[#14a39a]/15" : "border-slate-200 hover:-translate-y-0.5 hover:border-[#14a39a] hover:shadow-[0_8px_18px_rgba(15,40,60,0.09)]"} ${dragId === r.id ? "opacity-40" : ""}`}
                       style={{ borderTop: `3px solid ${r.type_color ?? "#94a3b8"}` }}>
                       <div className="flex items-center justify-between gap-2">
@@ -300,7 +323,7 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
       </div>
 
       {picked && pickedRow && (
-        <div className="fixed inset-x-3 bottom-4 z-40 flex items-center gap-3 rounded-2xl bg-[#0b1f3a] px-4 py-3 text-white shadow-2xl lg:hidden">
+        <div className="fixed inset-x-3 bottom-4 z-40 flex items-center gap-3 rounded-2xl bg-[#0b1f3a] px-4 py-3 text-white shadow-2xl animate-[bp-pop-in_0.2s_ease-out] lg:left-auto lg:right-8 lg:w-[26rem]">
           <p className="min-w-0 flex-1 truncate text-[14px]">Now tap a person for <b>{pickedRow.customer_name || pickedRow.number}</b></p>
           <button type="button" onClick={() => setPicked(null)} className="text-[13px] font-semibold text-white/70">Cancel</button>
         </div>

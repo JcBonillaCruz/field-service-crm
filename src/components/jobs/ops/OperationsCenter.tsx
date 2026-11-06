@@ -173,6 +173,15 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
   const ordered = colOrder.map((id) => OPS_GROUPS.find((g) => g.id === id)!);
   const columns = focus ? ordered.filter((g) => g.id === focus) : ordered;
 
+  // Sin asignar: tocar la tarjeta abre "Assign jobs" con ese trabajo ya escogido
+  const assignHref = (j: OpsJob) => {
+    const q = new URLSearchParams({ from: "ops" });
+    if (j.visit?.id) q.set("visit", j.visit.id);
+    if (j.visit?.starts_at) { const d = new Date(j.visit.starts_at); q.set("date", `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`); }
+    return `/dashboard/jobs/assign?${q.toString()}`;
+  };
+  const hrefFor = (j: OpsJob, g: OpsGroup) => (g === "unassigned" && !j.techs.length ? assignHref(j) : undefined);
+
   // ---------- Menú ⋯ de cada tarjeta (también sirve para mover en el celular) ----------
   const menuFor = (j: OpsJob, g: OpsGroup): CardMenu => {
     if (g === "done") return [{ label: "Open job", icon: ICON.open, onClick: () => router.push(`/dashboard/jobs/${j.id}`) }];
@@ -274,7 +283,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
       {view === "connections" ? (
         <div className="mt-4">
           {focus && <FocusNote label={OPS_GROUPS.find((g) => g.id === focus)!.label} onClear={() => setFocus(null)} />}
-          {loading ? <div className="h-80 animate-pulse rounded-2xl bg-white" /> : <OpsConnections jobs={connJobs} groupOf={groupOf} team={team} now={now} menuFor={menuFor} isAfter={isAfter} />}
+          {loading ? <div className="h-80 animate-pulse rounded-2xl bg-white" /> : <OpsConnections jobs={connJobs} groupOf={groupOf} team={team} now={now} menuFor={menuFor} isAfter={isAfter} hrefFor={hrefFor} />}
         </div>
       ) : (
         <>
@@ -314,7 +323,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
                         <div key={j.id} className="animate-[bp-fade_0.2s_ease-out]"
                           onDragOver={(e) => { if (drag?.kind === "card" && drag.from === g.id) { e.preventDefault(); e.stopPropagation(); } }}
                           onDrop={(e) => { if (drag?.kind === "card" && drag.from === g.id) { e.preventDefault(); e.stopPropagation(); dropOnColumn(g.id, j.id); } }}>
-                          <OpsCard job={j} group={g.id} now={now} afterHours={isAfter(j)} menu={menuFor(j, g.id)} drag={cardDrag(j, g.id)} dragging={drag?.kind === "card" && drag.id === j.id} />
+                          <OpsCard job={j} group={g.id} now={now} afterHours={isAfter(j)} href={hrefFor(j, g.id)} menu={menuFor(j, g.id)} drag={cardDrag(j, g.id)} dragging={drag?.kind === "card" && drag.id === j.id} />
                         </div>
                       ))}
                   </div>
@@ -337,7 +346,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
               <div key={mobileGroup} className="space-y-2 animate-[bp-fade_0.2s_ease-out]">
                 {loading ? [0, 1, 2].map((i) => <div key={i} className="h-24 animate-pulse rounded-xl bg-white" />)
                   : byGroup[mobileGroup].length === 0 ? <EmptyGroup g={mobileGroup} />
-                  : byGroup[mobileGroup].map((j) => <OpsCard key={j.id} job={j} group={mobileGroup} now={now} afterHours={isAfter(j)} menu={menuFor(j, mobileGroup)} />)}
+                  : byGroup[mobileGroup].map((j) => <OpsCard key={j.id} job={j} group={mobileGroup} now={now} afterHours={isAfter(j)} href={hrefFor(j, mobileGroup)} menu={menuFor(j, mobileGroup)} />)}
               </div>
             </div>
           </div>
@@ -358,7 +367,7 @@ function FocusNote({ label, onClear }: { label: string; onClear: () => void }) {
 
 function EmptyGroup({ g }: { g: OpsGroup }) {
   const text: Record<OpsGroup, string> = {
-    unassigned: "Every job has someone on it.", assigned: "Nothing waiting to start.", in_progress: "Nobody is working right now.",
+    unassigned: "Every job has someone on it. New jobs without a collaborator show up here.", assigned: "Nothing waiting to start.", in_progress: "Nobody is working right now.",
     delayed: "Nothing is running late. 🎉", done: "No finished jobs in this period.",
   };
   return (

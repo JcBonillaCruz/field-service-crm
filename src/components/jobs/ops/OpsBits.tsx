@@ -68,8 +68,8 @@ const LIVE_TEXT: Record<string, string> = { on_my_way: "On the way", in_progress
 export type CardMenu = { label: string; onClick: () => void; danger?: boolean; icon: string; divider?: boolean }[];
 
 // Tarjeta de un trabajo (Operations). Toque = ficha completa · ⋯ = acciones · se arrastra entre columnas
-export function OpsCard({ job, group, now, compact = false, innerRef, onHover, dim = false, menu, drag, dragging = false, afterHours = false }: {
-  job: OpsJob; group: OpsGroup; now: number; compact?: boolean; afterHours?: boolean;
+export function OpsCard({ job, group, now, compact = false, innerRef, onHover, dim = false, menu, drag, dragging = false, afterHours = false, href }: {
+  job: OpsJob; group: OpsGroup; now: number; compact?: boolean; afterHours?: boolean; href?: string;
   innerRef?: (el: HTMLDivElement | null) => void; onHover?: (on: boolean) => void; dim?: boolean;
   menu?: CardMenu; drag?: React.HTMLAttributes<HTMLDivElement> & { draggable?: boolean }; dragging?: boolean;
 }) {
@@ -80,7 +80,7 @@ export function OpsCard({ job, group, now, compact = false, innerRef, onHover, d
   const delay = delayOf(job, now);
   const addr = addressLine(job.site_address).split(",").slice(0, 2).join(",");
   const color = job.type_color ?? "#94a3b8";
-  const open = () => router.push(`/dashboard/jobs/${job.id}`);
+  const open = () => router.push(href ?? `/dashboard/jobs/${job.id}`);
   return (
     <div ref={innerRef} role="link" tabIndex={0} onClick={open} onKeyDown={(e) => { if (e.key === "Enter") open(); }}
       onMouseEnter={() => onHover?.(true)} onMouseLeave={() => onHover?.(false)} {...drag}
@@ -126,6 +126,11 @@ export function OpsCard({ job, group, now, compact = false, innerRef, onHover, d
       <div className={`mt-2.5 flex items-center gap-2 border-t pt-2 ${done ? "border-slate-200" : "border-slate-100"}`}>
         <TechDots techs={job.techs} size={compact ? 20 : 24} max={3} />
         {job.techs.length === 1 && !compact && <span className="truncate text-[12px] font-medium text-slate-600">{job.techs[0].name.split(" ")[0]}</span>}
+        {group === "unassigned" && !job.techs.length && (
+          <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#0f766e] opacity-80 transition-opacity group-hover/card:opacity-100">
+            Assign<svg viewBox="0 0 20 20" className="h-3.5 w-3.5 transition-transform group-hover/card:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M7.5 5 12.5 10l-5 5" /></svg>
+          </span>
+        )}
         <span className="ml-auto flex items-center gap-1.5">
           {done ? <span className="text-[10.5px] font-semibold uppercase tracking-wide text-[#16a34a]">{STAGE_LABEL(job)}</span> : (
             <>

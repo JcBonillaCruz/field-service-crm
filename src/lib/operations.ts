@@ -66,10 +66,13 @@ export function progressOf(j: OpsJob): number {
 
 export function groupOf(j: OpsJob, now = Date.now()): OpsGroup {
   if (j.status === "completed") return "done";
-  if (delayOf(j, now)) return "delayed";
   const s = j.visit?.status;
-  if (s === "on_my_way" || s === "in_progress" || s === "paused" || j.status === "on_hold") return "in_progress";
-  return j.techs.length ? "assigned" : "unassigned";
+  const working = s === "on_my_way" || s === "in_progress" || s === "paused";
+  // Sin nadie asignado SIEMPRE va a "Sin asignar" (aunque ya vaya tarde: ahí se ve la etiqueta roja)
+  if (!j.techs.length && !working) return "unassigned";
+  if (delayOf(j, now)) return "delayed";
+  if (working || j.status === "on_hold") return "in_progress";
+  return "assigned";
 }
 
 export const STAGE_LABEL = (j: OpsJob): string => {
