@@ -116,7 +116,7 @@ export function OpsDialog({ ask, team, onClose, onDone }: {
   const noteRequired = to === "unassigned" || (to === "assigned" && working);
   const needsPeople = to !== "unassigned";
   const tip = to === "unassigned"
-    ? { title: "Take everyone off this job", text: "It goes back to Unassigned and the collaborators get a notice. Your note stays in the job's history so the owner can see later why it wasn't done." }
+    ? { title: "Take everyone off this job", text: "It goes back to Unassigned. Your note stays in the job's history so the owner can see later why it wasn't done." }
     : to === "in_progress"
       ? { title: from === "delayed" ? "Best option: mark it as started" : "Mark it as started now", text: "Use this when the collaborator is already working but forgot to press Start. The time starts counting now and it shows in the job's history." }
       : from === "delayed"

@@ -288,12 +288,8 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
     if (!MOVABLE.includes(g)) return flash(g === "done" ? "Use Finish on the job to complete it." : "Delayed is automatic: a job shows here when it's running late.", true);
     setAsk({ kind: "move", job, from: d.from, to: g as MoveTarget });
   }
-  const afterAction = (msg: string, notify?: Record<string, unknown>) => {
-    setAsk(null); flash(msg); load();
-    if (notify && ((notify.assigned as string[] | undefined)?.length || (notify.unassigned as string[] | undefined)?.length || notify.moved)) {
-      fetch("/api/jobs/notify", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify(notify) }).catch(() => null);
-    }
-  };
+  // Mover, arrastrar o reasignar en Operations es solo acomodar: no se manda ningún aviso ni se pregunta nada
+  const afterAction = (msg: string) => { setAsk(null); flash(msg); load(); };
 
   return (
     <div className="min-h-[calc(100dvh-4rem)] bg-[#f4f6f8] px-3 pb-24 pt-4 lg:px-6 lg:pb-8 lg:pt-5">
@@ -366,7 +362,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
           {focus && <FocusNote label={OPS_GROUPS.find((g) => g.id === focus)!.label} onClear={() => setFocus(null)} />}
           {loading ? <div className="h-80 animate-pulse rounded-2xl bg-white" /> : <OpsConnections companyId={companyId}
             period={<PeriodNav when={when} span={span} label={periodLabel} setWhen={setWhen} setSpan={setSpan} weekStartsOn={weekStartsOn} compact />} jobs={connJobs} groupOf={groupOf} team={team} now={now} menuFor={menuFor} isAfter={isAfter} hrefFor={hrefFor}
-            onChanged={(m, n, err) => (err ? flash(m, true) : afterAction(m, n))}
+            onChanged={(m, _n, err) => (err ? flash(m, true) : afterAction(m))}
             onUnassign={(j) => setAsk({ kind: "move", job: j, from: groupOf(j), to: "unassigned" })} />}
         </div>
       ) : (

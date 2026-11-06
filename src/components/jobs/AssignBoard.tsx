@@ -118,9 +118,7 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
     const { error } = await createClient().rpc("visit_set_collaborators", { p_visit: rowId, p_users: next, p_lead: newLead });
     if (error) { setRows((rs) => rs.map((r) => (r.id === rowId ? { ...r, tech_ids: before, lead_id: beforeLead } : r))); setPicked(null); flash(error.hint || jobError(error), true); return; }
     if (pulseId) { setPulse(pulseId); setTimeout(() => setPulse((p) => (p === pulseId ? null : p)), 700); }
-    flash(message);
-    fetch("/api/jobs/notify", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ visitId: rowId, assigned: next.filter((t) => !before.includes(t)), unassigned: before.filter((t) => !next.includes(t)) }) }).catch(() => null);
+    flash(message); // arrastrar en Assign jobs no manda avisos
   }
   const nameOf = (id: string) => techs.find((t) => t.user_id === id)?.full_name ?? "collaborator";
   const label = (r: Row) => r.customer_name || r.number;

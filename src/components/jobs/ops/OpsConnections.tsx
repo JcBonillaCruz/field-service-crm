@@ -102,12 +102,22 @@ export default function OpsConnections({ companyId, jobs, groupOf, team, now, me
     const cols = Math.max(1, Math.floor((free + COL_GAP) / (CARD_W + COL_GAP)));
     setFit((f) => (f.rows === rows && f.cols === cols ? f : { rows, cols }));
   }, []);
-  const perPage = fit.rows * fit.cols;
-  const pages = Math.max(1, Math.ceil(ordered.length / perPage));
+  // Columnas: primero las de trabajo pendiente (pegadas a las personas) y los terminados
+  // siempre en sus propias columnas, hasta el fondo a la derecha.
+  const allCols = useMemo(() => {
+    const chunk = (list: OpsJob[], done: boolean) => {
+      const out: { jobs: OpsJob[]; done: boolean; first: boolean }[] = [];
+      for (let i = 0; i < list.length; i += fit.rows) out.push({ jobs: list.slice(i, i + fit.rows), done, first: i === 0 });
+      return out;
+    };
+    return [...chunk(ordered.filter((j) => groupOf(j) !== "done"), false), ...chunk(ordered.filter((j) => groupOf(j) === "done"), true)];
+  }, [ordered, groupOf, fit.rows]);
+  const doneCount = useMemo(() => ordered.filter((j) => groupOf(j) === "done").length, [ordered, groupOf]);
+  const pages = Math.max(1, Math.ceil(allCols.length / fit.cols));
   const pg = Math.min(page, pages - 1);
   useEffect(() => { if (page !== pg) setPage(pg); }, [page, pg]);
-  const pageJobs = useMemo(() => ordered.slice(pg * perPage, (pg + 1) * perPage), [ordered, pg, perPage]);
-  const rowsUsed = Math.min(fit.rows, Math.max(1, pageJobs.length));
+  const pageCols = useMemo(() => allCols.slice(pg * fit.cols, (pg + 1) * fit.cols), [allCols, pg, fit.cols]);
+  const pageJobs = useMemo(() => pageCols.flatMap((c) => c.jobs), [pageCols]);
 
   const stats = useMemo(() => {
     const m = new Map<string, { total: number; done: number; live: ReturnType<typeof liveStatus> }>();
@@ -227,7 +237,7 @@ export default function OpsConnections({ companyId, jobs, groupOf, team, now, me
             <button type="button" onClick={() => setPage(Math.max(0, pg - 1))} disabled={pg === 0} aria-label="Previous screen"
               className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition-colors hover:border-[#14a39a] hover:text-[#0f766e] disabled:opacity-40 disabled:hover:border-slate-200 disabled:hover:text-slate-500">
               <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 5 7.5 10l5 5" /></svg></button>
-            <span className="min-w-[4.5rem] text-center text-[12.5px] font-semibold tabular-nums text-slate-600">{pg + 1} / {pages}<span className="block text-[10.5px] font-normal text-slate-400">{pg * perPage + 1}–{Math.min(ordered.length, (pg + 1) * perPage)} of {ordered.length}</span></span>
+            <span className="min-w-[4.5rem] text-center text-[12.5px] font-semibold tabular-nums text-slate-600">{pg + 1} / {pages}<span className="block text-[10.5px] font-normal text-slate-400">{pageJobs.length} of {ordered.length} jobs</span></span>
             <button type="button" onClick={() => setPage(Math.min(pages - 1, pg + 1))} disabled={pg >= pages - 1} aria-label="Next screen"
               className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition-colors hover:border-[#14a39a] hover:text-[#0f766e] disabled:opacity-40 disabled:hover:border-slate-200 disabled:hover:text-slate-500">
               <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M7.5 5 12.5 10l-5 5" /></svg></button>
@@ -319,29 +329,39 @@ export default function OpsConnections({ companyId, jobs, groupOf, team, now, me
             )}
           </div>
           <div />
-          {/* Trabajos: columnas que se llenan de arriba abajo y siguen en la de al lado */}
-          <div className="relative z-10 grid content-start justify-start"
-            style={{ gridAutoFlow: "column", gridTemplateRows: `repeat(${rowsUsed}, auto)`, gridAutoColumns: `${CARD_W}px`, columnGap: COL_GAP, rowGap: ROW_GAP }}>
+          {/* Trabajos: columnas que se llenan de arriba abajo y siguen en la de al lado.
+              Los terminados van en sus propias columnas, empujados hasta el fondo a la derecha. */}
+          <div className="relative z-10 flex min-w-0 items-start" style={{ columnGap: COL_GAP }}>
             {ordered.length === 0 && <p className="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-[13px] text-slate-500">No jobs with these filters.</p>}
-            {pageJobs.map((j) => {
-              const g = groupOf(j);
-              const dim = hoverJob ? hoverJob !== j.id : hoverUser ? !j.techs.some((t) => t.user_id === hoverUser) : false;
-              return (
-                <div key={j.id} {...target(`j-${j.id}`, (e) => dropOnJob(j.id, e))}
-                  className={`relative rounded-xl bg-white transition-shadow ${over === `j-${j.id}` && drag?.kind === "job" && drag.id !== j.id ? "shadow-[-4px_0_0_0_#14a39a]" : ""}`}>
-                  <OpsCard job={j} group={g} now={now} tiny afterHours={isAfter?.(j)} href={hrefFor?.(j, g)} menu={menuFor?.(j, g)} dim={dim}
-                    ports={j.techs.map((t) => (g === "delayed" ? "#e11d48" : t.color))}
-                    dragging={drag?.kind === "job" && drag.id === j.id}
-                    innerRef={(el) => { if (el) jobEls.current.set(j.id, el); else jobEls.current.delete(j.id); }}
-                    onHover={(on) => setHoverJob(on ? j.id : null)}
-                    drag={{
-                      draggable: true,
-                      onDragStart: (e: React.DragEvent<HTMLDivElement>) => { e.stopPropagation(); e.dataTransfer.setData("text/plain", `job:${j.id}`); e.dataTransfer.effectAllowed = "move"; setDrag({ kind: "job", id: j.id }); },
-                      onDragEnd: () => { setDrag(null); setOver(null); },
-                    }} />
-                </div>
-              );
-            })}
+            {pageCols.map((col, ci) => (
+              <div key={`${pg}-${ci}`} className={`flex shrink-0 flex-col ${col.done && (ci === 0 || !pageCols[ci - 1].done) ? "ml-auto" : ""}`} style={{ width: CARD_W, rowGap: ROW_GAP }}>
+                {col.done && col.first && (
+                  <p className="flex items-center gap-1.5 px-1 text-[11.5px] font-semibold uppercase tracking-wide text-slate-400">
+                    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#16a34a]" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="m5 10.5 3 3 7-7" /></svg>
+                    Completed · {doneCount}
+                  </p>
+                )}
+                {col.jobs.map((j) => {
+                  const g = groupOf(j);
+                  const dim = hoverJob ? hoverJob !== j.id : hoverUser ? !j.techs.some((t) => t.user_id === hoverUser) : false;
+                  return (
+                    <div key={j.id} {...target(`j-${j.id}`, (e) => dropOnJob(j.id, e))}
+                      className={`relative rounded-xl bg-white transition-shadow ${over === `j-${j.id}` && drag?.kind === "job" && drag.id !== j.id ? "shadow-[-4px_0_0_0_#14a39a]" : ""}`}>
+                      <OpsCard job={j} group={g} now={now} tiny afterHours={isAfter?.(j)} href={hrefFor?.(j, g)} menu={menuFor?.(j, g)} dim={dim}
+                        ports={j.techs.map((t) => (g === "delayed" ? "#e11d48" : t.color))}
+                        dragging={drag?.kind === "job" && drag.id === j.id}
+                        innerRef={(el) => { if (el) jobEls.current.set(j.id, el); else jobEls.current.delete(j.id); }}
+                        onHover={(on) => setHoverJob(on ? j.id : null)}
+                        drag={{
+                          draggable: true,
+                          onDragStart: (e: React.DragEvent<HTMLDivElement>) => { e.stopPropagation(); e.dataTransfer.setData("text/plain", `job:${j.id}`); e.dataTransfer.effectAllowed = "move"; setDrag({ kind: "job", id: j.id }); },
+                          onDragEnd: () => { setDrag(null); setOver(null); },
+                        }} />
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
           </div>
         </div>
       </div>
