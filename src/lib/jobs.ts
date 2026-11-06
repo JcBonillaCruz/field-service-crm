@@ -20,6 +20,7 @@ export type CalVisit = {
   estimated_total: number; priority: Priority; job_type_id: string | null; type_name: string | null; type_color: string | null; form_kind: string | null;
   visit_count: number; hold_reason: string | null; techs: TechChip[]; tech_ids: string[]; tags: TagChip[];
   color?: string; // color de la barra según "Color by" (técnico, tipo o prioridad)
+  after_hours?: boolean; // fuera del horario de oficina (luna en la barra)
 };
 
 // Fila de la bandeja "Unscheduled / On hold" (y de la lista de Jobs)
@@ -40,6 +41,8 @@ export type JobSettings = {
   default_arrival_window_min: number; day_start: string; day_end: string; week_starts_on: number; slot_minutes: 15 | 30 | 60;
   auto_clock_in: boolean; require_gps_on_start: boolean;
   timezone: string; notify_tech_assign: boolean; notify_tech_agenda: boolean; notify_customer: "ask" | "always" | "never";
+  // Paso 5.3b: horario de oficina (day_start/day_end) vs. lo que muestra el calendario (cal_start/cal_end)
+  cal_start: string; cal_end: string; business_days: number[]; after_hours_fee_type: "percent" | "flat"; after_hours_fee: number;
 };
 export type JobType = { id: string; name: string; color: string; default_duration_min: number; form_kind: "work" | "tune_up"; position: number; is_active: boolean };
 export type JobTag = { id: string; name: string; color: string };
@@ -55,6 +58,35 @@ export const DEFAULT_SETTINGS: Omit<JobSettings, "company_id"> = {
   job_prefix: "JOB-", job_next: 1, tech_can_see_prices: true, default_duration_min: 120, default_arrival_window_min: 60,
   day_start: "07:00", day_end: "19:00", week_starts_on: 0, slot_minutes: 30, auto_clock_in: true, require_gps_on_start: true,
   timezone: "America/Chicago", notify_tech_assign: true, notify_tech_agenda: true, notify_customer: "ask",
+  cal_start: "05:00", cal_end: "23:00", business_days: [1, 2, 3, 4, 5], after_hours_fee_type: "percent", after_hours_fee: 0,
+};
+
+// ¿Cae fuera del horario de oficina? (de noche, de madrugada o en un día que no se trabaja)
+export function afterHoursOf(start: Date | null, end: Date | null, s: Pick<JobSettings, "day_start" | "day_end" | "business_days">): boolean {
+  if (!start) return false;
+  const a = start.getHours() * 60 + start.getMinutes();
+  const open = timeToMin(s.day_start), close = timeToMin(s.day_end);
+  if (!(s.business_days ?? [1, 2, 3, 4, 5]).includes(start.getDay())) return true;
+  if (a < open || a >= close) return true;
+  if (end) {
+    const b = end.getHours() * 60 + end.getMinutes();
+    if (!sameDay(start, end) && b > 0) return true;
+    if (sameDay(start, end) && b > close) return true;
+  }
+  return false;
+}
+// Cargo extra sugerido (el dueño decide si lo cobra)
+export function afterHoursFee(s: Pick<JobSettings, "after_hours_fee_type" | "after_hours_fee">, total: number): { label: string; amount: number } | null {
+  const fee = Number(s.after_hours_fee) || 0;
+  if (fee <= 0) return null;
+  if (s.after_hours_fee_type === "percent") return { label: `+${fee}%`, amount: Math.round(total * fee) / 100 };
+  return { label: `+$${fee.toFixed(2)}`, amount: fee };
+}
+export const businessHoursLabel = (s: Pick<JobSettings, "day_start" | "day_end" | "business_days">) => {
+  const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const d = [...(s.business_days ?? [])].sort();
+  const days = d.length === 5 && d.join() === "1,2,3,4,5" ? "Mon–Fri" : d.length === 6 && d.join() === "1,2,3,4,5,6" ? "Mon–Sat" : d.length === 7 ? "Every day" : d.map((x) => names[x]).join(", ");
+  return `${days} · ${fmtHour(timeToMin(s.day_start)).replace(" ", "")}–${fmtHour(timeToMin(s.day_end)).replace(" ", "")}`;
 };
 
 export const canManageJobs = (role: Role | null | undefined) => role === "owner" || role === "manager" || role === "office";
@@ -168,13 +200,14 @@ export type ColorBy = "tech" | "type" | "priority";
 export function jobError(e: { message?: string; code?: string; hint?: string } | null | undefined): string {
   if (!e) return "";
   const m = `${e.message ?? ""} ${e.hint ?? ""}`;
-  const hinted = ["VISIT_CLOSED", "BAD_TIME", "JOB_CANCELLED", "VISIT_STARTED", "BAD_TECH", "BAD_ADDRESS", "REASON_REQUIRED", "NOTE_REQUIRED", "QUOTE_NOT_ACCEPTED", "CHECKLIST_REQUIRED", "GPS_REQUIRED", "OTHER_JOB_OPEN", "NO_VAN", "BAD_STEP", "BAD_TYPE", "BAD_RATE"];
+  const hinted = ["VISIT_CLOSED", "BAD_TIME", "JOB_CANCELLED", "VISIT_STARTED", "BAD_TECH", "BAD_ADDRESS", "REASON_REQUIRED", "NOTE_REQUIRED", "QUOTE_NOT_ACCEPTED", "CHECKLIST_REQUIRED", "GPS_REQUIRED", "OTHER_JOB_OPEN", "NO_VAN", "BAD_STEP", "BAD_TYPE", "BAD_RATE", "JOB_PAID", "VISIT_CLOSED"];
   if (hinted.some((k) => m.includes(k)) && e.hint) return e.hint;
   if (m.includes("NO_ACCESS")) return e.hint || "You don't have permission to do this.";
   if (m.includes("NOT_FOUND")) return "This job no longer exists. Refresh the page.";
   if (m.includes("BAD_CUSTOMER")) return "Choose a customer from your list.";
   if (m.includes("BAD_COLOR")) return "Pick a valid color.";
   if (m.includes("job_types_name_uniq") || m.includes("job_tags_name_uniq") || e.code === "23505") return "That name is already in use.";
+  if ((m.includes("ops_move") || m.includes("ops_delete_job")) && (m.includes("Could not find") || m.includes("does not exist"))) return "Run paso-5.3b-ops-moves.sql in Supabase first.";
   if (m.includes("visit_set_collaborators") || m.includes("ops_board") || m.includes("team_save_") || m.includes("member_work_profiles") || m.includes("member_pay_rates")) return "Run paso-5.3-operations.sql in Supabase first.";
   if (m.includes("does not exist") || m.includes("Could not find the function")) return "Run the SQL for Paso 5.1 (Jobs) in Supabase first.";
   return "Something went wrong. Try again.";

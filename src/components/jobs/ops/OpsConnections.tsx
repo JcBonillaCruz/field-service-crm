@@ -3,8 +3,8 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { TeamMember } from "@/lib/jobs";
 import { OpsGroup, OpsJob } from "@/lib/operations";
-import { TechDot } from "@/components/jobs/EventBar";
-import { GROUP_TONE, OpsCard } from "@/components/jobs/ops/OpsBits";
+import { StatusArt, TechDot } from "@/components/jobs/EventBar";
+import { CardMenu, OpsCard, liveStatus } from "@/components/jobs/ops/OpsBits";
 
 type Line = { key: string; job: string; user: string | null; d: string; ex: number; ey: number; color: string; lead: boolean; flow: "fast" | "slow" | "none"; late: boolean };
 
@@ -13,8 +13,8 @@ type Line = { key: string; job: string; user: string | null; d: string; ex: numb
 // líneas animadas que los unen (como las relaciones de tablas en Supabase).
 // La línea "corre" más rápido cuando el trabajo está en curso; roja si va tarde.
 // =====================================================================
-export default function OpsConnections({ jobs, groupOf, team, now }: {
-  jobs: OpsJob[]; groupOf: (j: OpsJob) => OpsGroup; team: TeamMember[]; now: number;
+export default function OpsConnections({ jobs, groupOf, team, now, menuFor, isAfter }: {
+  jobs: OpsJob[]; groupOf: (j: OpsJob) => OpsGroup; team: TeamMember[]; now: number; menuFor?: (j: OpsJob, g: OpsGroup) => CardMenu; isAfter?: (j: OpsJob) => boolean;
 }) {
   const wrap = useRef<HTMLDivElement>(null);
   const jobEls = useRef(new Map<string, HTMLElement>());
@@ -45,10 +45,14 @@ export default function OpsConnections({ jobs, groupOf, team, now }: {
   }, [jobs, people]);
 
   const loadOf = useMemo(() => {
-    const m = new Map<string, { total: number; active: number }>();
+    // Por persona: cuántos tiene, cuántos terminó, y qué está haciendo AHORA (en camino / trabajando / pausa)
+    const m = new Map<string, { total: number; done: number; live: ReturnType<typeof liveStatus> }>();
+    const rank = { in_progress: 3, on_my_way: 2, paused: 1, on_hold: 0 } as Record<string, number>;
     jobs.forEach((j) => j.techs.forEach((t) => {
-      const x = m.get(t.user_id) ?? { total: 0, active: 0 };
-      x.total++; if (groupOf(j) === "in_progress" || groupOf(j) === "delayed") x.active++;
+      const x = m.get(t.user_id) ?? { total: 0, done: 0, live: null };
+      x.total++; if (groupOf(j) === "done") x.done++;
+      const l = liveStatus(j);
+      if (l && l !== "on_hold" && (!x.live || rank[l] > rank[x.live])) x.live = l;
       m.set(t.user_id, x);
     }));
     return m;
@@ -57,7 +61,7 @@ export default function OpsConnections({ jobs, groupOf, team, now }: {
   const measure = useCallback(() => {
     const root = wrap.current; if (!root) return;
     const box = root.getBoundingClientRect();
-    setSize({ w: root.scrollWidth, h: root.scrollHeight });
+    setSize({ w: root.clientWidth, h: root.scrollHeight });
     const out: Line[] = [];
     ordered.forEach((j) => {
       const a = jobEls.current.get(j.id); if (!a) return;
@@ -111,8 +115,8 @@ export default function OpsConnections({ jobs, groupOf, team, now }: {
         <span className="inline-flex items-center gap-1.5"><svg width="26" height="6"><path d="M1 3h24" stroke="#e11d48" strokeWidth="2.5" strokeDasharray="5 5" /></svg>Delayed</span>
         <span className="ml-auto hidden sm:inline">Point at a job or a person to light up its lines</span>
       </div>
-      <div ref={wrap} className="relative max-h-[calc(100dvh-19rem)] min-h-[20rem] overflow-auto p-3 sm:p-4">
-        <svg className="pointer-events-none absolute left-0 top-0" width={size.w} height={size.h} aria-hidden="true">
+      <div ref={wrap} className="relative max-h-[calc(100dvh-19rem)] min-h-[20rem] overflow-y-auto overflow-x-hidden p-3 sm:p-4">
+        <svg className="pointer-events-none absolute left-0 top-0 w-full overflow-visible" height={size.h} aria-hidden="true">
           {lines.map((l) => {
             const on = lit(l);
             return (
@@ -128,11 +132,11 @@ export default function OpsConnections({ jobs, groupOf, team, now }: {
             );
           })}
         </svg>
-        <div className="relative grid grid-cols-[minmax(0,1fr)_3.5rem_8.5rem] sm:grid-cols-[minmax(0,1fr)_9rem_15rem] xl:grid-cols-[minmax(0,1fr)_14rem_17rem]">
+        <div className="relative mx-auto grid max-w-[68rem] grid-cols-[minmax(0,1fr)_2.75rem_7.5rem] sm:grid-cols-[minmax(0,26rem)_minmax(4rem,1fr)_minmax(0,15rem)]">
           <div className="space-y-2">
             {ordered.map((j) => (
               <div key={j.id} className="animate-[bp-fade_0.25s_ease-out]">
-                <OpsCard job={j} group={groupOf(j)} now={now} compact dim={!jobLit(j.id)}
+                <OpsCard job={j} group={groupOf(j)} now={now} compact dim={!jobLit(j.id)} menu={menuFor?.(j, groupOf(j))} afterHours={isAfter?.(j)}
                   innerRef={(el) => { if (el) jobEls.current.set(j.id, el); else jobEls.current.delete(j.id); }}
                   onHover={(on) => setHoverJob(on ? j.id : null)} />
               </div>
@@ -142,7 +146,7 @@ export default function OpsConnections({ jobs, groupOf, team, now }: {
           <div className="space-y-2.5 self-start sm:sticky sm:top-0">
             {people.length === 0 && <p className="rounded-xl border border-dashed border-slate-300 px-3 py-6 text-center text-[12.5px] text-slate-400">Nobody assigned yet</p>}
             {people.map((p) => {
-              const ld = loadOf.get(p.id) ?? { total: 0, active: 0 };
+              const ld = loadOf.get(p.id) ?? { total: 0, done: 0, live: null };
               const dim = hoverJob ? !ordered.find((j) => j.id === hoverJob)?.techs.some((t) => t.user_id === p.id) : hoverUser ? hoverUser !== p.id : false;
               return (
                 <div key={p.id} ref={(el) => { if (el) userEls.current.set(p.id, el); else userEls.current.delete(p.id); }}
@@ -151,13 +155,13 @@ export default function OpsConnections({ jobs, groupOf, team, now }: {
                   style={{ borderColor: `${p.color}55`, borderLeft: `3px solid ${p.color}` }}>
                   <span className="relative">
                     <TechDot t={p} size={30} ring={false} />
-                    {ld.active > 0 && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-[#f59e0b] ring-2 ring-white animate-pulse" title="Working now" />}
+                    {ld.live === "in_progress" && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-[#f59e0b] ring-2 ring-white animate-pulse" title="Working now" />}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13px] font-semibold text-[#0b1f3a]">{p.name}</span>
-                    <span className="hidden truncate text-[11.5px] text-slate-500 sm:block">{ld.total} job{ld.total === 1 ? "" : "s"}{ld.active ? ` · ${ld.active} active` : ""}</span>
+                    <span className="hidden truncate text-[11.5px] text-slate-500 sm:block">{ld.total} job{ld.total === 1 ? "" : "s"}{ld.done ? ` · ${ld.done} done` : ""}{ld.live ? ` · ${ld.live === "on_my_way" ? "on the way" : ld.live === "in_progress" ? "working now" : "paused"}` : ""}</span>
                   </span>
-                  <span className="hidden rounded-full px-1.5 text-[11.5px] font-bold text-white sm:inline-block" style={{ background: GROUP_TONE.assigned }}>{ld.total}</span>
+                  {ld.live && <span className="hidden sm:inline-flex"><StatusArt s={ld.live} size={26} /></span>}
                 </div>
               );
             })}

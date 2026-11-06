@@ -9,10 +9,10 @@ import SelectMenu from "@/components/ui/SelectMenu";
 import DatePicker from "@/components/ui/DatePicker";
 import PayerPicker from "@/components/expenses/PayerPicker";
 import type { PayerOption } from "@/components/expenses/ExpensesWorkspace";
-import { TechDot } from "@/components/jobs/EventBar";
+import { AfterHoursMoon, TechDot } from "@/components/jobs/EventBar";
 import {
   ARRIVAL_WINDOWS, ChecklistTemplate, JobSettings, JobTag, JobType, PRIORITIES, Priority, SiteAddress, TeamMember,
-  addressLine, arrivalLabel, atMinute, dayStart, durationLabel, fmtHour, fromIsoDay, isoDay, jobError, minutesOf, receivesJobs, timeToMin,
+  addressLine, afterHoursFee, afterHoursOf, arrivalLabel, atMinute, businessHoursLabel, dayStart, durationLabel, fmtHour, fromIsoDay, isoDay, jobError, minutesOf, receivesJobs, timeToMin,
 } from "@/lib/jobs";
 
 type Addr = { id: string; label: string | null; street: string | null; unit: string | null; city: string | null; state: string | null; zip: string | null; is_primary: boolean };
@@ -347,6 +347,12 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
                       <div className="flex-1"><SelectMenu value={String(endMin)} ariaLabel="End time" options={timeOpts.filter((o) => Number(o.value) > startMin)} onChange={(v) => setEndMin(Number(v))} /></div>
                     </div>
                     <p className="mt-1 text-[12px] text-slate-400">{endMin > startMin ? `${durationLabel(endMin - startMin)} on site` : ""}</p>
+                    {afterHoursOf(atMinute(fromIsoDay(date), startMin), atMinute(fromIsoDay(date), endMin), settings) && (
+                      <div className="mt-2 flex items-start gap-2.5 rounded-xl border border-[#c7d2fe] bg-[#f5f6ff] px-3 py-2.5 text-[13px] text-[#3730a3] animate-[bp-fade_0.2s_ease-out]">
+                        <AfterHoursMoon size={22} />
+                        <span><b>After hours</b> — outside your business hours ({businessHoursLabel(settings)}). The owner gets a notice{afterHoursFee(settings, 100) ? ` and can charge the after-hours fee (${afterHoursFee(settings, 100)!.label})` : " and decides if an extra fee applies"}.</span>
+                      </div>
+                    )}
                   </FormRow>
                 </>
               ) : (

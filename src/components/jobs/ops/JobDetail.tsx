@@ -6,10 +6,11 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { askConfirm } from "@/lib/confirm";
 import {
-  JobStatus, Priority, STATUS_META, SiteAddress, TechChip, VISIT_LABEL, VisitStatus, addressLine, fmtDayShort, fmtTime, holdLabel, jobError, mapsLink, usd,
+  JobSettings, JobStatus, Priority, STATUS_META, SiteAddress, TechChip, VISIT_LABEL, VisitStatus, addressLine, afterHoursFee, afterHoursOf, businessHoursLabel,
+  fmtDayShort, fmtTime, holdLabel, jobError, mapsLink, usd,
 } from "@/lib/jobs";
 import { OpsJob, groupOf, progressOf } from "@/lib/operations";
-import { StatusArt, TechDot } from "@/components/jobs/EventBar";
+import { AfterHoursMoon, StatusArt, TechDot } from "@/components/jobs/EventBar";
 import { DelayTag, GROUP_TONE, ProgressRing } from "@/components/jobs/ops/OpsBits";
 import { Timeline } from "@/components/catalog/DetailBits";
 
@@ -52,8 +53,8 @@ function currentVisit(vs: Visit[]): Visit | null {
     ?? open.find((v) => v.status === "unscheduled") ?? open.find((v) => v.status === "on_hold") ?? open[open.length - 1] ?? null;
 }
 
-export default function JobDetail({ companyId, data, docs, photoUrls, isOwner }: {
-  companyId: string; data: JobDetailData; docs: JobDetailDoc[]; photoUrls: Record<string, string>; isOwner: boolean;
+export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, settings }: {
+  companyId: string; data: JobDetailData; docs: JobDetailDoc[]; photoUrls: Record<string, string>; isOwner: boolean; settings: JobSettings;
 }) {
   const router = useRouter();
   const j = data.job;
@@ -108,6 +109,23 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner }:
   const quote = docs.find((d) => d.kind === "quote"), invoice = docs.find((d) => d.kind === "invoice");
   const linesTotal = data.lines.reduce((a, l) => a + Number(l.amount ?? 0), 0);
   const map = mapsLink(j.site_address);
+  // Fuera de horario: alguna visita abierta (o la actual) cae fuera del horario de oficina
+  const afterHours = data.visits.some((v) => v.status !== "cancelled" && afterHoursOf(v.starts_at ? new Date(v.starts_at) : null, v.ends_at ? new Date(v.ends_at) : null, settings));
+  const feeBase = linesTotal || Number(j.estimated_total ?? 0);
+  const fee = afterHoursFee(settings, feeBase);
+  const feeAdded = data.lines.some((l) => /after-hours/i.test(l.name));
+  async function addFee() {
+    if (!fee) return;
+    if (!(await askConfirm({ title: `Add the after-hours fee (${fee.label})?`, message: `It adds ${usd(fee.amount)} to this job's services. You can still change it on the invoice.`, confirmLabel: "Add fee", tone: "green" }))) return;
+    setBusy("fee");
+    const { error } = await createClient().from("job_lines").insert({
+      company_id: companyId, job_id: j.id, position: data.lines.length, kind: "service", name: "After-hours service fee",
+      description: `Outside business hours (${businessHoursLabel(settings)})`, quantity: 1, rate: fee.amount, amount: fee.amount, source: "office",
+    });
+    setBusy("");
+    if (error) return flash(jobError(error), true);
+    flash("After-hours fee added"); router.refresh();
+  }
   const phone = j.customer_phone?.replace(/[^\d+]/g, "");
 
   async function createInvoice() {
@@ -137,7 +155,7 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner }:
             className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition-all hover:-translate-x-0.5 hover:border-[#14a39a] hover:text-[#0f766e]">
             <Icon d="M15 5 8 12l7 7" />
           </Link>
-          <ProgressRing pct={cancelled ? 0 : pct} size={58} stroke={5} color={cancelled ? "#94a3b8" : GROUP_TONE[group]} />
+          {group === "done" && !cancelled ? <StatusArt s="completed" size={58} /> : <ProgressRing pct={cancelled ? 0 : pct} size={58} stroke={5} color={cancelled ? "#94a3b8" : GROUP_TONE[group]} />}
           <div className="min-w-0 flex-1">
             <p className="flex flex-wrap items-center gap-2 text-[13px] font-semibold text-slate-400">
               <span>Job #{j.number}</span>
@@ -151,6 +169,7 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner }:
               <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[12.5px] font-semibold ring-1 ${STATUS_META[j.status].badge}`}>{STATUS_META[j.status].label}</span>
               <DelayTag job={ops} now={now} />
               {j.status === "on_hold" && j.hold_reason && <span className="rounded-full bg-[#fff1f2] px-2.5 py-0.5 text-[12px] font-semibold text-[#be123c]">{holdLabel(j.hold_reason)}</span>}
+              {afterHours && <AfterHoursMoon withText size={20} />}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -186,6 +205,17 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner }:
 
       <div className="grid gap-4 px-3 pt-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:px-8">
         <div className="min-w-0 space-y-4">
+          {afterHours && !cancelled && (
+            <section className="flex flex-wrap items-center gap-3 rounded-2xl border border-[#c7d2fe] bg-[#f5f6ff] px-4 py-3.5">
+              <AfterHoursMoon size={34} />
+              <div className="min-w-0 flex-1">
+                <p className="text-[14.5px] font-semibold text-[#312e81]">After-hours job</p>
+                <p className="text-[13px] text-[#4338ca]">Outside your business hours ({businessHoursLabel(settings)}). {fee ? `Your after-hours fee is ${fee.label}${settings.after_hours_fee_type === "percent" ? ` (${usd(fee.amount)})` : ""} — you decide if you charge it.` : "Set an after-hours fee in Jobs → Settings, or add the price you want on the invoice."}</p>
+              </div>
+              {fee && !feeAdded && <button type="button" disabled={busy === "fee"} onClick={addFee} className="rounded-lg bg-[#4f46e5] px-4 py-2 text-[14px] font-semibold text-white transition-colors hover:bg-[#4338ca] disabled:opacity-60">Add fee {usd(fee.amount)}</button>}
+              {feeAdded && <span className="rounded-full bg-white px-3 py-1 text-[12.5px] font-semibold text-[#4338ca] ring-1 ring-[#c7d2fe]">Fee added ✓</span>}
+            </section>
+          )}
           {/* Lo que hay que hacer */}
           {(j.description || j.tech_notes || j.office_notes || (j.status === "on_hold" && j.hold_note)) && (
             <section className={`${card} p-5`}>

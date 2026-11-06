@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import {
   CalView, CalVisit, ColorBy, JobRow, JobSettings, JobStatus, JobType, PRIORITIES, STATUS_META, STATUS_ORDER, TeamMember, TechChip, UNASSIGNED_COLOR, leadOf, startOfMonth, startOfWeek,
   addDays, addMinutes, atMinute, barColor, dayStart, fmtDayShort, fmtTime, fromIsoDay, isoDay, jobError, minutesOf,
-  rangeLabel, receivesJobs, sameDay, shiftAnchor, timeToMin, viewDays,
+  afterHoursOf, rangeLabel, receivesJobs, sameDay, shiftAnchor, timeToMin, viewDays,
 } from "@/lib/jobs";
 import { Col, GridApi, Handlers, Hit, Preview } from "@/components/jobs/cal-shared";
 import TimeGrid from "@/components/jobs/TimeGrid";
@@ -142,7 +142,8 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
     ...v, color: colorBy === "type" ? v.type_color ?? UNASSIGNED_COLOR
       : colorBy === "priority" ? PRIORITIES.find((p) => p.value === v.priority)?.color ?? UNASSIGNED_COLOR
       : leadOf(v.techs)?.color ?? UNASSIGNED_COLOR,
-  })), [visits, colorBy]);
+    after_hours: afterHoursOf(new Date(v.starts_at), new Date(v.ends_at), settings),
+  })), [visits, colorBy, settings]);
   const shown = useMemo(() => colored.filter((v) =>
     (statusF === "all" || asJobStatus(v) === statusF)
     && (!typeF || v.job_type_id === typeF)
@@ -150,7 +151,8 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
 
   // Horas visibles: el horario de trabajo, más lo necesario si hay trabajos antes o después
   const [visStart, visEnd] = useMemo(() => {
-    let a = workStart, b = workEnd;
+    // Lo que muestra el calendario (ej. 5 AM a 11 PM). Lo gris = fuera del horario de oficina.
+    let a = Math.min(workStart, timeToMin(settings.cal_start ?? "05:00")), b = Math.max(workEnd, timeToMin(settings.cal_end ?? "23:00") || 24 * 60);
     shown.forEach((v) => {
       const s = new Date(v.starts_at), e = new Date(v.ends_at);
       if (s >= rangeStart && s < rangeEnd) a = Math.min(a, Math.floor(minutesOf(s) / 60) * 60);
@@ -159,7 +161,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
     });
     return [Math.max(0, a), Math.min(24 * 60, b)];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shown, workStart, workEnd, rangeKey]);
+  }, [shown, workStart, workEnd, rangeKey, settings.cal_start, settings.cal_end]);
 
   // ---------- Columnas ----------
   // Solo técnicos (oficina y dueño aparecen únicamente si tienen un trabajo asignado en estas fechas)

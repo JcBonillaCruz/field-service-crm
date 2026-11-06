@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSession } from "@/lib/session";
 import { canManageJobs } from "@/lib/jobs";
-import { JobInfo, VisitInfo, admin, brandOf, notifyCustomer, notifyTechs } from "@/lib/jobs-notify";
+import { JobInfo, VisitInfo, admin, brandOf, notifyCustomer, notifyTechs, pushToUsers, whenText } from "@/lib/jobs-notify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,5 +40,18 @@ export async function POST(request: NextRequest) {
     if (b.unassigned?.length) result.techs += await notifyTechs(db, { job: job as JobInfo, visit: v, userIds: b.unassigned.filter((id) => !techsNow.includes(id)), kind: "unassigned", brand, origin, email: false });
   }
   if (b.notifyCustomer) result.customer = await notifyCustomer(db, { job: job as JobInfo, visit: v, brand });
+  // Fuera de horario (Paso 5.3b): push al dueño para que decida si cobra el extra (el aviso de la campana lo crea la base de datos)
+  if (b.moved || b.assignAll || assigned.length) {
+    const { data: ah } = await db.from("job_visits").select("after_hours").eq("id", v.id).maybeSingle();
+    if ((ah as { after_hours?: boolean } | null)?.after_hours) {
+      const { data: owners } = await db.from("company_members").select("user_id").eq("company_id", current.id).eq("role", "owner").eq("is_active", true);
+      const ids = (owners ?? []).map((o) => o.user_id as string);
+      if (ids.length) await pushToUsers(db, current.id, ids, {
+        title: `🌙 After-hours job: ${job.customer_name || job.number}`,
+        body: `${whenText(v, brand.timezone)} · outside business hours. You decide if you charge the after-hours fee.`,
+        url: `/dashboard/jobs/${job.id}`, tag: `after-hours-${v.id}`,
+      });
+    }
+  }
   return NextResponse.json({ ok: true, ...result });
 }

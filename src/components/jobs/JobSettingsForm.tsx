@@ -160,12 +160,55 @@ export default function JobSettingsForm({ companyId, settings, types: t0, tags: 
         </section>
 
         <section className={`${card} p-5`}>
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#eef0ff] text-[#4f46e5]">
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></svg>
+            </span>
+            <div>
+              <h2 className="text-[16px] font-semibold text-[#0b1f3a]">Business hours &amp; after hours</h2>
+              <p className="text-[13px] text-slate-500">Jobs outside your business hours are marked with a moon 🌙. You get a notice and decide if you charge the after-hours fee — it&apos;s never added on its own.</p>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <label className="block"><span className="mb-1.5 block text-[13px] font-medium text-slate-600">Business hours open</span>
+              <SelectMenu value={s.day_start} options={HOURS.slice(0, 24)} onChange={(v) => patch({ day_start: v })} /></label>
+            <label className="block"><span className="mb-1.5 block text-[13px] font-medium text-slate-600">Business hours close</span>
+              <SelectMenu value={s.day_end} options={HOURS.slice(1).map((h) => (h.label === "Midnight" ? { value: "23:59", label: "Midnight" } : h))} onChange={(v) => patch({ day_end: v })} /></label>
+          </div>
+          <p className="mb-1.5 mt-4 text-[13px] font-medium text-slate-600">Business days</p>
+          <div className="flex flex-wrap gap-1.5">
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => {
+              const on = (s.business_days ?? []).includes(i);
+              return (
+                <button key={d} type="button" onClick={() => { const next = on ? s.business_days.filter((x) => x !== i) : [...s.business_days, i].sort(); if (next.length) patch({ business_days: next }); }}
+                  className={`h-10 min-w-[3.25rem] rounded-xl border px-3 text-[14px] font-semibold transition-all ${on ? "border-[#0f766e] bg-[#e9f7f4] text-[#0f766e]" : "border-slate-200 text-slate-500 hover:border-slate-300"}`}>{d}</button>
+              );
+            })}
+          </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <label className="block"><span className="mb-1.5 block text-[13px] font-medium text-slate-600">Calendar shows from</span>
+              <SelectMenu value={s.cal_start} options={HOURS.slice(0, 13)} onChange={(v) => patch({ cal_start: v })} />
+              <span className="mt-1 block text-[12px] text-slate-400">Early hours for emergencies (e.g. 5 AM).</span></label>
+            <label className="block"><span className="mb-1.5 block text-[13px] font-medium text-slate-600">Calendar shows until</span>
+              <SelectMenu value={s.cal_end} options={HOURS.slice(12).map((h) => (h.label === "Midnight" ? { value: "23:59", label: "Midnight (24 hours)" } : h))} onChange={(v) => patch({ cal_end: v })} />
+              <span className="mt-1 block text-[12px] text-slate-400">Late hours for emergencies (e.g. 11 PM).</span></label>
+            <label className="block"><span className="mb-1.5 block text-[13px] font-medium text-slate-600">After-hours fee</span>
+              <SelectMenu value={s.after_hours_fee_type} options={[{ value: "percent", label: "Percent of the job" }, { value: "flat", label: "Flat amount" }]} onChange={(v) => patch({ after_hours_fee_type: v as JobSettings["after_hours_fee_type"] })} /></label>
+            <label className="block"><span className="mb-1.5 block text-[13px] font-medium text-slate-600">{s.after_hours_fee_type === "percent" ? "Extra %" : "Extra amount"}</span>
+              <div className="relative">
+                {s.after_hours_fee_type === "flat" && <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>}
+                <input key={`${s.after_hours_fee_type}-${s.after_hours_fee}`} inputMode="decimal" defaultValue={s.after_hours_fee ? String(s.after_hours_fee) : ""} placeholder={s.after_hours_fee_type === "percent" ? "e.g. 25" : "e.g. 75.00"}
+                  onBlur={(e) => { const v = Number(e.target.value.replace(/[^\d.]/g, "") || 0); if (Number.isFinite(v) && v !== Number(s.after_hours_fee)) patch({ after_hours_fee: v }); }}
+                  className={`${inputClass} ${s.after_hours_fee_type === "flat" ? "pl-7" : "pr-8"}`} />
+                {s.after_hours_fee_type === "percent" && <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">%</span>}
+              </div>
+              <span className="mt-1 block text-[12px] text-slate-400">Leave empty if you set the price each time.</span></label>
+          </div>
+        </section>
+
+        <section className={`${card} p-5`}>
           <h2 className="text-[16px] font-semibold text-[#0b1f3a]">Calendar</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <label className="block"><span className="mb-1.5 block text-[13px] font-medium text-slate-600">Workday starts</span>
-              <SelectMenu value={s.day_start} options={HOURS.slice(0, 24)} onChange={(v) => patch({ day_start: v })} /></label>
-            <label className="block"><span className="mb-1.5 block text-[13px] font-medium text-slate-600">Workday ends</span>
-              <SelectMenu value={s.day_end} options={HOURS.slice(1).map((h) => (h.label === "Midnight" ? { value: "23:59", label: "Midnight" } : h))} onChange={(v) => patch({ day_end: v })} /></label>
             <label className="block"><span className="mb-1.5 block text-[13px] font-medium text-slate-600">Snap when dragging</span>
               <SelectMenu value={String(s.slot_minutes)} options={[{ value: "15", label: "Every 15 minutes" }, { value: "30", label: "Every 30 minutes" }, { value: "60", label: "Every hour" }]} onChange={(v) => patch({ slot_minutes: Number(v) as 15 | 30 | 60 })} /></label>
             <label className="block"><span className="mb-1.5 block text-[13px] font-medium text-slate-600">Week starts on</span>

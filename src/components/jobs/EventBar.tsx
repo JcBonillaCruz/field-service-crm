@@ -109,6 +109,7 @@ export function EventBar({ v, start, end, compact, dragging, onDown, onResizeDow
           )}
         </div>
         <span className="flex shrink-0 items-center gap-1">
+          {v.after_hours && !done && <AfterHoursMoon size={compact ? 15 : 18} />}
           {art && <StatusArt s={v.visit_status} size={compact ? 20 : 30} />}
           {!completed && <TechDots techs={v.techs} size={compact ? 15 : 18} max={1} />}
         </span>
@@ -141,4 +142,15 @@ export function EventChip({ v, dragging, onDown, onHover }: { v: CalVisit; dragg
       <span className="min-w-0 truncate font-medium">{v.customer_name || v.number}</span>
     </div>
   );
+}
+
+// Luna: trabajo fuera del horario de oficina (se puede cobrar extra)
+export function AfterHoursMoon({ size = 18, withText = false }: { size?: number; withText?: boolean }) {
+  const icon = (
+    <span title="After hours — outside business hours" className="flex shrink-0 items-center justify-center rounded-full bg-[#eef0ff] ring-1 ring-[#c7d2fe]" style={{ width: size, height: size }}>
+      <svg viewBox="0 0 20 20" style={{ width: size * 0.62, height: size * 0.62 }} fill="#4f46e5"><path d="M15.5 12.6A6.5 6.5 0 0 1 7.4 4.5a6.5 6.5 0 1 0 8.1 8.1z" /></svg>
+    </span>
+  );
+  if (!withText) return icon;
+  return <span className="inline-flex items-center gap-1 rounded-full bg-[#eef0ff] py-0.5 pl-0.5 pr-2 text-[11px] font-semibold text-[#4338ca] ring-1 ring-[#c7d2fe]">{icon}After hours</span>;
 }
