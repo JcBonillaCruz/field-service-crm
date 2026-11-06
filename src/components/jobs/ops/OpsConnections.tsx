@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createClient } from "@/lib/supabase/client";
 import { TeamMember, jobError, receivesJobs } from "@/lib/jobs";
 import { OpsGroup, OpsJob } from "@/lib/operations";
+import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { StatusArt, TechDot } from "@/components/jobs/EventBar";
 import { CardMenu, OpsCard, liveStatus } from "@/components/jobs/ops/OpsBits";
 
@@ -180,20 +181,12 @@ export default function OpsConnections({ companyId, jobs, groupOf, team, now, me
     onDrop,
   });
 
-  const chip = (on: boolean) => `inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-semibold transition-colors ${on ? "border-[#0f766e] bg-[#e9f7f4] text-[#0f766e]" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`;
-  const allOn = show.length === SHOW.length;
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white">
       {/* Qué ver */}
-      <div className="flex items-center gap-1.5 overflow-x-auto border-b border-slate-100 px-3 py-2.5 [scrollbar-width:none] lg:flex-wrap lg:px-4">
-        <span className="mr-1 shrink-0 text-[13px] font-semibold text-[#0b1f3a]">Show</span>
-        <button type="button" onClick={showAll} className={chip(allOn)}>All</button>
-        {SHOW.map((x) => (
-          <button key={x.v} type="button" onClick={() => toggleShow(x.v)} className={chip(show.includes(x.v))}>
-            <span className={`h-2 w-2 rounded-full ${x.dot}`} />{x.label}<span className="font-normal opacity-60">{counts.get(x.v) ?? 0}</span>
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-3 py-2.5 lg:px-4">
+        <ShowPicker show={show} counts={counts} onToggle={toggleShow} onAll={showAll} />
         {onlyUser && (
           <button type="button" onClick={() => setOnlyUser(null)} className="ml-1 inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#0b1f3a] py-1 pl-1 pr-2.5 text-[12px] font-semibold text-white">
             {(() => { const p = people.find((x) => x.id === onlyUser); return p ? <TechDot t={p} size={18} ring={false} /> : null; })()}
@@ -316,5 +309,45 @@ export default function OpsConnections({ companyId, jobs, groupOf, team, now, me
         </div>
       </div>
     </div>
+  );
+}
+
+// "Show": un selector (se pueden marcar varios). El botón dice qué se está viendo.
+function ShowPicker({ show, counts, onToggle, onAll }: { show: Show[]; counts: Map<string, number>; onToggle: (v: Show) => void; onAll: () => void }) {
+  const all = show.length === SHOW.length;
+  const picked = SHOW.filter((x) => show.includes(x.v));
+  const label = all ? "All jobs" : picked.length <= 2 ? picked.map((x) => x.label).join(" · ") : `${picked[0].label} +${picked.length - 1}`;
+  const total = picked.reduce((a, x) => a + (counts.get(x.v) ?? 0), 0);
+  const box = (on: boolean) => (
+    <span className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-md border transition-colors ${on ? "border-[#0f766e] bg-[#0f766e] text-white" : "border-slate-300 bg-white"}`}>
+      {on && <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="m5 10.5 3 3 7-7" /></svg>}
+    </span>
+  );
+  return (
+    <Popover className="relative">
+      <PopoverButton className="flex h-9 min-w-[13rem] items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-left text-[13.5px] transition-colors hover:border-[#14a39a] focus:outline-none data-[open]:border-[#0f766e] data-[open]:ring-4 data-[open]:ring-[#14a39a]/15">
+        <span className="text-slate-400">Show</span>
+        <span className="flex shrink-0 -space-x-0.5">{picked.slice(0, 4).map((x) => <span key={x.v} className={`h-2.5 w-2.5 rounded-full ring-2 ring-white ${x.dot}`} />)}</span>
+        <span className="min-w-0 flex-1 truncate font-semibold text-[#0b1f3a]">{label}</span>
+        <span className="rounded-full bg-slate-100 px-1.5 text-[11.5px] font-semibold text-slate-500">{total}</span>
+        <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate-400" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
+      </PopoverButton>
+      <PopoverPanel anchor="bottom start" transition
+        className="z-[100] mt-1 w-[max(var(--button-width),15rem)] rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_12px_40px_rgba(15,40,60,0.16)] transition duration-100 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
+        <button type="button" onClick={onAll} className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] font-semibold text-[#0b1f3a] hover:bg-[#eef4ff] ${all ? "bg-[#eef4ff]" : ""}`}>
+          {box(all)}<span className="flex-1">All jobs</span><span className="text-[12px] font-normal text-slate-400">{SHOW.reduce((a, x) => a + (counts.get(x.v) ?? 0), 0)}</span>
+        </button>
+        <div className="my-1 border-t border-slate-100" />
+        {SHOW.map((x) => {
+          const on = show.includes(x.v);
+          return (
+            <button key={x.v} type="button" onClick={() => onToggle(x.v)} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] text-slate-700 hover:bg-[#eef4ff]">
+              {box(on)}<span className={`h-2 w-2 shrink-0 rounded-full ${x.dot}`} /><span className="flex-1">{x.label}</span>
+              <span className="text-[12px] tabular-nums text-slate-400">{counts.get(x.v) ?? 0}</span>
+            </button>
+          );
+        })}
+      </PopoverPanel>
+    </Popover>
   );
 }
