@@ -280,12 +280,15 @@ export default function OpsConnections({ companyId, jobs, groupOf, team, now, me
         {/* Líneas: UNA capa, siempre por detrás de las tarjetas. Las de quien señalas se ven más fuertes, pero siguen detrás. */}
         <svg className="pointer-events-none absolute left-0 top-0 z-0 w-full" height={h} aria-hidden="true">
           {lines.map((l) => {
-            const on = !focus || lit(l);
+            // Terminados (flow "none"): casi invisibles; solo se ven con todo su color al señalar la persona o el trabajo
+            const hot = Boolean(focus) && lit(l);
+            const done = l.flow === "none";
+            const op = hot ? 1 : focus ? 0.08 : done ? 0.1 : 1;
             return (
-              <g key={l.key} style={{ opacity: on ? 1 : 0.1, transition: "opacity 120ms" }}>
-                <path d={l.d} fill="none" stroke={l.color} strokeOpacity={focus && on ? 0.22 : 0.12} strokeWidth={l.lead ? 5 : 3.5} strokeLinecap="round" />
-                <path d={l.d} fill="none" stroke={l.color} strokeWidth={(l.lead ? 2 : 1.5) + (focus && on ? 0.4 : 0)} strokeLinecap="round"
-                  strokeDasharray={l.flow === "none" ? undefined : "6 9"} strokeOpacity={l.flow === "none" ? (focus && on ? 0.7 : 0.4) : focus && on ? 1 : 0.75}>
+              <g key={l.key} style={{ opacity: op, transition: "opacity 120ms" }}>
+                <path d={l.d} fill="none" stroke={l.color} strokeOpacity={hot ? 0.22 : 0.12} strokeWidth={l.lead ? 5 : 3.5} strokeLinecap="round" />
+                <path d={l.d} fill="none" stroke={l.color} strokeWidth={(l.lead ? 2 : 1.5) + (hot ? 0.4 : 0)} strokeLinecap="round"
+                  strokeDasharray={done ? undefined : "6 9"} strokeOpacity={hot ? 1 : done ? 0.6 : 0.75}>
                   {l.flow !== "none" && <animate attributeName="stroke-dashoffset" from="30" to="0" dur={l.flow === "fast" ? "0.7s" : "1.8s"} repeatCount="indefinite" />}
                 </path>
               </g>
