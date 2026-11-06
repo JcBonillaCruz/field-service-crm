@@ -29,7 +29,8 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [tq, setTq] = useState("");
-  const [picked, setPicked] = useState<string | null>(null);   // tocar para asignar (celular)
+  const [picked, setPicked] = useState<string | null>(null);   // trabajo escogido: tocar personas lo agrega a cada una
+  const [listAll, setListAll] = useState(false);                // izquierda: solo sin asignar · o todos (para agregar más personas)
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragFrom, setDragFrom] = useState<string | null>(null); // de qué persona viene (para mover)
   const [over, setOver] = useState<string | null>(null);
@@ -106,15 +107,16 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
   //   · soltar un trabajo en una persona la AGREGA (los que ya estaban se quedan)
   //   · arrastrarlo de una persona a otra lo MUEVE (sale de la primera, entra en la segunda)
   //   · la X o soltarlo a la izquierda quita solo a esa persona
-  async function setCollaborators(rowId: string, next: string[], lead: string | null, message: string, pulseId: string | null) {
+  async function setCollaborators(rowId: string, next: string[], lead: string | null, message: string, pulseId: string | null, keepPicked = false) {
     const row = rows.find((r) => r.id === rowId); if (!row) return;
     const before = row.tech_ids, beforeLead = row.lead_id;
     if (before.length === next.length && before.every((t) => next.includes(t))) return;
     const newLead = lead && next.includes(lead) ? lead : next[0] ?? null;
     setRows((rs) => rs.map((r) => (r.id === rowId ? { ...r, tech_ids: next, lead_id: newLead } : r)));
-    setPicked(null);
+    // Al agregar a alguien el trabajo queda escogido: así puedes agregar más personas con un toque
+    setPicked(keepPicked ? rowId : null);
     const { error } = await createClient().rpc("visit_set_collaborators", { p_visit: rowId, p_users: next, p_lead: newLead });
-    if (error) { setRows((rs) => rs.map((r) => (r.id === rowId ? { ...r, tech_ids: before, lead_id: beforeLead } : r))); flash(error.hint || jobError(error), true); return; }
+    if (error) { setRows((rs) => rs.map((r) => (r.id === rowId ? { ...r, tech_ids: before, lead_id: beforeLead } : r))); setPicked(null); flash(error.hint || jobError(error), true); return; }
     if (pulseId) { setPulse(pulseId); setTimeout(() => setPulse((p) => (p === pulseId ? null : p)), 700); }
     flash(message);
     fetch("/api/jobs/notify", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" },
@@ -124,8 +126,8 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
   const label = (r: Row) => r.customer_name || r.number;
   function addTo(rowId: string, techId: string) {
     const r = rows.find((x) => x.id === rowId); if (!r) return;
-    if (r.tech_ids.includes(techId)) return flash(`${nameOf(techId)} is already on ${label(r)}`);
-    setCollaborators(rowId, [...r.tech_ids, techId], r.lead_id ?? techId, r.tech_ids.length ? `${nameOf(techId)} added to ${label(r)}` : `${label(r)} → ${nameOf(techId)}`, techId);
+    if (r.tech_ids.includes(techId)) { setPicked(rowId); return flash(`${nameOf(techId)} is already on ${label(r)}`); }
+    setCollaborators(rowId, [...r.tech_ids, techId], r.lead_id ?? techId, r.tech_ids.length ? `${nameOf(techId)} added to ${label(r)}` : `${label(r)} → ${nameOf(techId)}`, techId, true);
   }
   function moveTo(rowId: string, fromId: string, toId: string) {
     const r = rows.find((x) => x.id === rowId); if (!r || fromId === toId) return;
@@ -157,9 +159,9 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
   // A la izquierda SOLO los que no tienen técnico: al asignarlo desaparece (así no se asigna dos veces)
   const shownJobs = useMemo(() => {
     const term = fold(q.trim());
-    return rows.filter((r) => r.tech_ids.length === 0
+    return rows.filter((r) => (listAll || r.tech_ids.length === 0)
       && (!term || fold(`${r.number} ${r.customer_name} ${r.customer_phone ?? ""} ${r.title ?? ""} ${addressLine(r.site_address)}`).includes(term)));
-  }, [rows, q]);
+  }, [rows, q, listAll]);
   const hours = (id: string) => rows.filter((r) => r.tech_ids.includes(id) && r.starts_at && r.ends_at)
     .reduce((a, r) => a + (new Date(r.ends_at!).getTime() - new Date(r.starts_at!).getTime()) / 3600000, 0);
   const sortedTechs = useMemo(() => {
@@ -179,7 +181,7 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
     if (data.startsWith("tech:")) moveTech(data.slice(5), techId);
     else if (data.startsWith("job:")) {
       const [, rowId, fromId] = data.split(":");
-      if (fromId) moveTo(rowId, fromId, techId); else addTo(rowId, techId);
+      if (fromId && !(e.ctrlKey || e.altKey || e.metaKey)) moveTo(rowId, fromId, techId); else addTo(rowId, techId);
     }
   };
   const jobDrag = (id: string, fromId?: string) => ({
@@ -207,7 +209,7 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
           {fromOps && <a href="/dashboard/jobs/operations" className="mb-0.5 inline-flex items-center gap-1 text-[13px] font-semibold text-[#0f766e] hover:underline">
             <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 5 7.5 10l5 5" /></svg>Back to Operations</a>}
           <h1 className="text-[20px] font-semibold tracking-tight text-[#0b1f3a]">Assign jobs</h1>
-          <p className="text-[13px] text-slate-500">Drop a job on a person to add them · drag it between people to move it. On the phone: tap the job, then the person.</p>
+          <p className="text-[13px] text-slate-500">Drop a job on a person to assign it — then tap or drop on more people to add helpers. Drag it between people to move it.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-lg bg-slate-100 p-0.5">{rangeBtn("today", "Today")}{rangeBtn("tomorrow", "Tomorrow")}{rangeBtn("week", "This week")}</div>
@@ -225,6 +227,15 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
           <div className="flex items-center gap-2 border-b border-slate-100 p-3">
             <p className="shrink-0 text-[14px] font-semibold text-[#0b1f3a]">To assign <span className={`ml-1 rounded-full px-2 py-0.5 text-[12px] ${shownJobs.length ? "bg-[#fff4e0] text-[#b45309]" : "bg-slate-100 text-slate-400"}`}>{rows.filter((r) => !r.tech_ids.length).length}</span></p>
             {search(q, setQ, "Search: customer, phone, address, #")}
+          </div>
+          <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2">
+            <div className="flex rounded-lg bg-slate-100 p-0.5">
+              {([[false, "Unassigned"], [true, "All jobs"]] as [boolean, string][]).map(([v, l]) => (
+                <button key={l} type="button" onClick={() => setListAll(v)}
+                  className={`rounded-md px-3 py-1 text-[12.5px] font-semibold transition-all ${listAll === v ? "bg-white text-[#0f766e] shadow-sm" : "text-slate-500 hover:text-[#0b1f3a]"}`}>{l}</button>
+              ))}
+            </div>
+            <p className="min-w-0 truncate text-[12px] text-slate-500">{listAll ? "Drop a job on more people to add helpers" : "Tap a job, then tap one or more people"}</p>
           </div>
           <div className="min-h-[12rem] flex-1 overflow-y-auto p-3">
             {over === "__left" && <p className="mb-2 rounded-lg border-2 border-dashed border-[#f59e0b] py-2 text-center text-[13px] font-semibold text-[#b45309]">Drop here to take it off {dragFrom ? nameOf(dragFrom) : "this person"}</p>}
@@ -249,7 +260,8 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
                         <span className="text-[12px] font-semibold text-slate-500">{s ? `${fmtDayShort(s).replace(/^\w+, /, "")} · ${fmtTime(s)}` : "No date"}</span>
                         {(r.priority === "urgent" || r.priority === "high") && <span className={`rounded-full px-1.5 text-[10px] font-bold uppercase ${r.priority === "urgent" ? "bg-[#ffe4e6] text-[#be123c]" : "bg-[#fff4e0] text-[#b45309]"}`}>{r.priority}</span>}
                       </div>
-                      <p className="mt-0.5 truncate text-[14px] font-semibold text-[#0b1f3a]">{r.customer_name || r.number}</p>
+                      <p className="mt-0.5 flex items-center gap-1.5 text-[14px] font-semibold text-[#0b1f3a]"><span className="min-w-0 flex-1 truncate">{r.customer_name || r.number}</span>
+                        {r.tech_ids.length > 0 && <span className="flex shrink-0 -space-x-1">{r.tech_ids.slice(0, 3).map((x) => { const o = techs.find((y) => y.user_id === x); return o ? <TechDot key={x} t={o} size={18} /> : null; })}</span>}</p>
                       <p className="truncate text-[12px] text-slate-500">{[r.type_name ?? r.title, addressLine(r.site_address).split(",")[0]].filter(Boolean).join(" · ") || `#${r.number}`}</p>
                     </div>
                   );
@@ -292,11 +304,16 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
                         {h > 0 && <span className="block text-[10.5px] text-slate-400">{h.toFixed(1)}h</span>}
                       </span>
                     </div>
-                    {picked && pickedRow && <button type="button" onClick={() => assign(picked, t.user_id)} className="w-full border-t border-dashed border-[#bfe7de] px-3 py-1.5 text-left text-[12px] font-semibold text-[#0f766e]">Tap to assign {pickedRow.customer_name || pickedRow.number}</button>}
+                    {picked && pickedRow && (pickedRow.tech_ids.includes(t.user_id)
+                      ? <p className="flex items-center gap-1.5 border-t border-dashed border-[#bfe7de] bg-[#f3fbf8] px-3 py-1.5 text-[12px] font-semibold text-[#0f766e]">
+                          <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="m5 10.5 3 3 7-7" /></svg>On {pickedRow.customer_name || pickedRow.number}</p>
+                      : <button type="button" onClick={() => assign(picked, t.user_id)} className="flex w-full items-center gap-1.5 border-t border-dashed border-[#bfe7de] px-3 py-1.5 text-left text-[12px] font-semibold text-[#0f766e] transition-colors hover:bg-[#f3fbf8]">
+                          <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>
+                          {pickedRow.tech_ids.length ? "Add as helper on" : "Assign"} {pickedRow.customer_name || pickedRow.number}</button>)}
                     <div className="space-y-1 border-t border-slate-100 px-2 py-2">
                       {mine.length === 0 && <p className="px-1 py-1.5 text-center text-[12px] text-slate-400">{isOver ? "Drop to assign" : "No jobs · drop one here"}</p>}
                       {mine.map((r) => (
-                        <div key={r.id} {...jobDrag(r.id, t.user_id)} title="Drag to another person to move it"
+                        <div key={r.id} {...jobDrag(r.id, t.user_id)} title="Drag to another person to move it · hold Ctrl (or ⌥) to add them instead · + to add more people"
                           className={`flex cursor-grab items-center gap-2 rounded-lg px-2 py-1.5 text-[12.5px] transition-colors active:cursor-grabbing hover:bg-slate-50 ${dragId === r.id ? "opacity-40" : ""}`}
                           style={{ background: `${r.type_color ?? "#94a3b8"}12` }}>
                           <span className="w-14 shrink-0 font-semibold text-slate-500">{r.starts_at ? fmtTime(new Date(r.starts_at)) : "No date"}</span>
@@ -307,6 +324,10 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
                             </span>
                           )}
                           {r.lead_id === t.user_id && r.tech_ids.length > 1 && <span title="Lead" className="shrink-0 text-[10px] font-bold uppercase text-[#0f766e]">Lead</span>}
+                          <button type="button" onClick={(e) => { e.stopPropagation(); setPicked(picked === r.id ? null : r.id); }} title="Add more people to this job" aria-label="Add more people to this job"
+                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-all hover:scale-110 ${picked === r.id ? "bg-[#0f766e] text-white" : "text-[#0f766e] hover:bg-[#d7f1eb]"}`}>
+                            <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>
+                          </button>
                           <button type="button" onClick={() => removeFrom(r.id, t.user_id)} title={`Take off ${t.full_name}`} aria-label={`Take off ${t.full_name}`}
                             className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
                             <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M5 5l10 10M15 5 5 15" /></svg>
@@ -324,11 +345,22 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
 
       {picked && pickedRow && (
         <div className="fixed inset-x-3 bottom-4 z-40 flex items-center gap-3 rounded-2xl bg-[#0b1f3a] px-4 py-3 text-white shadow-2xl animate-[bp-pop-in_0.2s_ease-out] lg:left-auto lg:right-8 lg:w-[26rem]">
-          <p className="min-w-0 flex-1 truncate text-[14px]">Now tap a person for <b>{pickedRow.customer_name || pickedRow.number}</b></p>
-          <button type="button" onClick={() => setPicked(null)} className="text-[13px] font-semibold text-white/70">Cancel</button>
+          {pickedRow.tech_ids.length ? (
+            <>
+              <span className="flex shrink-0 -space-x-1.5">{pickedRow.tech_ids.slice(0, 4).map((x) => { const o = techs.find((y) => y.user_id === x); return o ? <TechDot key={x} t={o} size={24} /> : null; })}</span>
+              <p className="min-w-0 flex-1 text-[13.5px] leading-snug"><b className="block truncate">{pickedRow.customer_name || pickedRow.number}</b>
+                <span className="text-white/75">Need more people? Tap or drop on them.</span></p>
+              <button type="button" onClick={() => setPicked(null)} className="rounded-lg bg-white px-3 py-1.5 text-[13px] font-semibold text-[#0b1f3a] hover:bg-[#e9f7f4]">Done</button>
+            </>
+          ) : (
+            <>
+              <p className="min-w-0 flex-1 truncate text-[14px]">Now tap one or more people for <b>{pickedRow.customer_name || pickedRow.number}</b></p>
+              <button type="button" onClick={() => setPicked(null)} className="text-[13px] font-semibold text-white/70">Cancel</button>
+            </>
+          )}
         </div>
       )}
-      {toast && <div role="status" className={`fixed bottom-5 left-1/2 z-[95] max-w-[92vw] -translate-x-1/2 rounded-xl px-4 py-2.5 text-[13.5px] font-medium text-white shadow-lg animate-[bp-pop-in_0.2s_ease-out] ${toast.error ? "bg-[#be123c]" : "bg-[#0b1f3a]"}`}>{toast.msg}</div>}
+      {toast && <div role="status" className={`fixed ${picked ? "bottom-24" : "bottom-5"} left-1/2 z-[95] max-w-[92vw] -translate-x-1/2 rounded-xl px-4 py-2.5 text-[13.5px] font-medium text-white shadow-lg animate-[bp-pop-in_0.2s_ease-out] ${toast.error ? "bg-[#be123c]" : "bg-[#0b1f3a]"}`}>{toast.msg}</div>}
     </div>
   );
 }
