@@ -11,6 +11,8 @@ import Accordion, { PencilLink } from "@/components/customers/Accordion";
 import RecentLogger from "@/components/RecentLogger";
 import { loadProfit } from "@/lib/job-costing";
 import { CustomerProfitPanel } from "@/components/expenses/ProfitPanels";
+import SiteEquipment from "@/components/jobs/forms/SiteEquipment";
+import { cityLine } from "@/lib/customers";
 
 const TABS = ["Overview", "Comments", "Transactions", "Mails", "Statement"];
 const MOBILE_TABS = ["Details", "Transactions", "Comments"];
@@ -169,6 +171,12 @@ export default async function CustomerPage({
 
             <Accordion flat title="Address" count={addresses.length}>
               <AddressManager customerId={c.id} companyId={current.id} addresses={addresses} />
+            </Accordion>
+
+            {/* Paso 5.5: equipos guardados en cada Job Site (marca, modelo, serie y garantía) */}
+            <Accordion flat title="Equipment">
+              <SiteEquipment variant="customer" companyId={current.id} customerId={c.id}
+                sites={addresses.map((a, i) => ({ id: a.id, label: a.label || [a.street, cityLine(a)].filter(Boolean).join(", ") || `Address ${i + 1}` }))} />
             </Accordion>
 
             <Accordion flat title="Other Details" action={<PencilLink href={editHref} />}>

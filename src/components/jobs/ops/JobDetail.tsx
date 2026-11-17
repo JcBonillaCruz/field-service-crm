@@ -16,6 +16,8 @@ import { Timeline } from "@/components/catalog/DetailBits";
 import JobChat from "@/components/jobs/JobChat";
 import JobPhases from "@/components/jobs/JobPhases";
 import JobFiles from "@/components/jobs/JobFiles";
+import JobForms from "@/components/jobs/forms/JobForms";
+import SiteEquipment from "@/components/jobs/forms/SiteEquipment";
 
 type Visit = {
   id: string; visit_no: number; status: VisitStatus; starts_at: string | null; ends_at: string | null; arrival_window_min: number; techs: TechChip[];
@@ -32,7 +34,7 @@ export type JobDetailDoc = { id: string; kind: string; number: string; status: s
 export type JobDetailData = {
   job: {
     id: string; company_id: string; number: string; status: JobStatus; title: string | null; description: string | null; tech_notes: string | null; office_notes: string | null;
-    customer_id: string | null; customer_name: string; customer_phone: string | null; site_address: SiteAddress; priority: Priority;
+    customer_id: string | null; customer_name: string; customer_phone: string | null; address_id?: string | null; site_address: SiteAddress; priority: Priority;
     hold_reason: string | null; hold_note: string | null; hold_by_name: string | null; needs_followup: boolean; estimated_total: number | null;
     quote_id: string | null; invoice_id: string | null; source: string; created_at: string; created_by_name: string | null;
     scheduled_at: string | null; on_my_way_at: string | null; started_at: string | null; finished_at: string | null; invoiced_at: string | null; paid_at: string | null; completed_at: string | null;
@@ -321,24 +323,10 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
           {/* Fotos, reportes y documentos por fase (Paso 5.4) */}
           <JobFiles jobId={j.id} readOnly={cancelled} />
 
-          {/* Formularios del campo */}
-          {data.forms.length > 0 && (
-          <section className={`${card} p-5`}>
-            <h2 className="text-[16px] font-semibold text-[#0b1f3a]">Field forms</h2>
-            {data.forms.map((f) => (
-              <div key={f.id} className="mt-3 rounded-xl border border-slate-100 px-3.5 py-3">
-                <p className="text-[14px] font-semibold text-[#0b1f3a]">{f.kind === "tune_up" ? "Tune-Up readings" : "Work report"}
-                  <span className="ml-2 text-[12px] font-normal text-slate-400">{f.submitted_at ? `Submitted by ${f.submitted_by_name ?? "—"} · ${when(f.submitted_at)}` : "Draft"}</span></p>
-                {f.alerts.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{f.alerts.map((a) => <span key={a} className="rounded-full bg-[#fff1f2] px-2 py-0.5 text-[12px] font-semibold text-[#be123c]">{a}</span>)}</div>}
-                <dl className="mt-2 grid gap-x-4 gap-y-1 text-[13px] sm:grid-cols-2">
-                  {Object.entries(f.data).filter(([, v]) => v !== null && v !== "" && typeof v !== "object").slice(0, 24).map(([k, v]) => (
-                    <div key={k} className="flex justify-between gap-3 border-b border-slate-50 py-1"><dt className="capitalize text-slate-500">{k.replace(/_/g, " ")}</dt><dd className="font-medium text-[#0b1f3a]">{String(v)}</dd></div>
-                  ))}
-                </dl>
-              </div>
-            ))}
-          </section>
-          )}
+          {/* Formularios del campo y equipos del Job Site (Paso 5.5) */}
+          <JobForms jobId={j.id} companyId={companyId} addressId={j.address_id ?? null} formKind={data.type?.form_kind ?? null} visitId={cv?.id ?? null}
+            readOnly={cancelled} jobLabel={`${j.customer_name || "Job"} · ${j.number}`} onToast={flash} />
+          <SiteEquipment companyId={companyId} jobId={j.id} addressId={j.address_id ?? null} readOnly={cancelled} onToast={flash} />
 
           {/* Historial */}
           <section className={`${card} p-5`}>

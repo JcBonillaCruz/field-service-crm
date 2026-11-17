@@ -6,6 +6,7 @@ import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { createClient } from "@/lib/supabase/client";
 import { inputClass } from "@/components/customers/ui";
 import PhaseTemplates from "@/components/jobs/PhaseTemplates";
+import TuneUpRanges from "@/components/jobs/forms/TuneUpRanges";
 import SelectMenu from "@/components/ui/SelectMenu";
 import ColorPicker from "@/components/ui/ColorPicker";
 import { confirmDelete } from "@/lib/confirm";
@@ -261,6 +262,9 @@ export default function JobSettingsForm({ companyId, settings, types: t0, tags: 
 
         {/* Paso 5.4: fases con peso por tipo de trabajo */}
         <PhaseTemplates types={types} onSaved={(m, err) => say(m, err)} />
+
+        {/* Paso 5.5: rangos del Tune-Up (lo que sale en rojo) */}
+        <TuneUpRanges value={s.tuneup_ranges} onSave={(r) => patch({ tuneup_ranges: r })} />
 
         <section className={`${card} p-5`}>
           <h2 className="text-[16px] font-semibold text-[#0b1f3a]">Tags</h2>

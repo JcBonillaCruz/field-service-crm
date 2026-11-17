@@ -3,6 +3,8 @@
 import JobChat from "@/components/jobs/JobChat";
 import JobPhases from "@/components/jobs/JobPhases";
 import JobFiles from "@/components/jobs/JobFiles";
+import JobForms, { FormsState } from "@/components/jobs/forms/JobForms";
+import SiteEquipment from "@/components/jobs/forms/SiteEquipment";
 import { askConfirm } from "@/lib/confirm";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -20,7 +22,7 @@ type Check = { id: string; label: string; is_required: boolean; done: boolean; d
 type Part = { movement_id: string; name: string; sku: string | null; qty: number; at: string; by: string | null };
 type Ev = { id: string; kind: string; message: string; detail: string | null; actor_name: string | null; created_at: string };
 type Data = {
-  job: { id: string; company_id: string; number: string; status: string; title: string | null; description: string | null; tech_notes: string | null; customer_name: string; customer_phone: string | null; site_address: SiteAddress; hold_reason: string | null; estimated_total: number | null };
+  job: { id: string; company_id: string; address_id?: string | null; number: string; status: string; title: string | null; description: string | null; tech_notes: string | null; customer_name: string; customer_phone: string | null; site_address: SiteAddress; hold_reason: string | null; estimated_total: number | null };
   prices_visible: boolean; type: { name: string; color: string; form_kind: string } | null;
   visits: Visit[]; lines: Line[]; checklist: Check[]; parts: Part[]; events: Ev[];
 };
@@ -46,6 +48,7 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
   const [partOpen, setPartOpen] = useState(false);
   const [note, setNote] = useState("");
   const [toast, setToast] = useState("");
+  const [formsState, setFormsState] = useState<FormsState | null>(null); // Paso 5.5
 
   const load = useCallback(async () => {
     const { data, error: e } = await createClient().rpc("tech_job", { p_job: jobId });
@@ -63,9 +66,12 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
       ?? mine.find((v) => v.status === "unscheduled") ?? mine[mine.length - 1] ?? null;
   }, [d, userId]);
 
+  // Tune-Up sin enviar: se avisa al terminar (no bloquea)
+  const tuneUpPending = d?.type?.form_kind === "tune_up" && formsState !== null && !formsState.tuneUpSubmitted;
+
   async function act(action: "on_my_way" | "start" | "resume" | "pause" | "hold" | "finish") {
     if (!visit) return;
-    if (action === "finish" && !(await askConfirm({ title: "Finish this job?", message: missing ? `There are still ${missing} required checklist task(s).` : "The office gets an alert right away so they can send the invoice.", confirmLabel: "Finish job", tone: "green" }))) return;
+    if (action === "finish" && !(await askConfirm({ title: "Finish this job?", message: missing ? `There are still ${missing} required checklist task(s).` : tuneUpPending ? "The Tune-Up form isn't submitted yet. You can still finish and send it after." : "The office gets an alert right away so they can send the invoice.", confirmLabel: "Finish job", tone: "green" }))) return;
     setBusy(action); setError("");
     const pos = action === "pause" ? null : await gps();
     const { error: e } = await createClient().rpc("tech_action", {
@@ -119,6 +125,7 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
   const doneAt = (visit as (Visit & { finished_at?: string | null }) | null)?.finished_at;
   const missing = d.checklist.filter((c) => c.is_required && !c.done).length;
   const notes = d.events.filter((x) => x.kind === "note").reverse();
+  const jobLabel = `${j.customer_name || "Job"} · ${j.number}`;
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 pb-24 pt-3 lg:pt-6">
@@ -210,6 +217,11 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
           </div>
         </div>
       )}
+
+      {/* Formularios del técnico y equipos del Job Site (Paso 5.5) */}
+      <JobForms jobId={jobId} companyId={j.company_id} addressId={j.address_id ?? null} formKind={d.type?.form_kind ?? null} visitId={visit?.id ?? null}
+        variant="tech" readOnly={st === "cancelled"} jobLabel={jobLabel} onToast={(m) => flash(m)} onState={setFormsState} />
+      <SiteEquipment companyId={j.company_id} jobId={jobId} addressId={j.address_id ?? null} variant="tech" readOnly={st === "cancelled"} onToast={(m) => flash(m)} />
 
       {/* Fotos (comprimidas en el teléfono), reportes y PDF, por fase (Paso 5.4) */}
       <JobFiles jobId={jobId} variant="tech" readOnly={st === "cancelled"} />

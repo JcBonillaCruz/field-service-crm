@@ -43,6 +43,8 @@ export type JobSettings = {
   timezone: string; notify_tech_assign: boolean; notify_tech_agenda: boolean; notify_customer: "ask" | "always" | "never";
   // Paso 5.3b: horario de oficina (day_start/day_end) vs. lo que muestra el calendario (cal_start/cal_end)
   cal_start: string; cal_end: string; business_days: number[]; after_hours_fee_type: "percent" | "flat"; after_hours_fee: number;
+  // Paso 5.5: rangos propios del Tune-Up (null = los de la app)
+  tuneup_ranges?: Record<string, { min?: number | null; max?: number | null }> | null;
 };
 export type JobType = { id: string; name: string; color: string; default_duration_min: number; form_kind: "work" | "tune_up"; position: number; is_active: boolean };
 export type JobTag = { id: string; name: string; color: string };
@@ -200,12 +202,13 @@ export type ColorBy = "tech" | "type" | "priority";
 export function jobError(e: { message?: string; code?: string; hint?: string } | null | undefined): string {
   if (!e) return "";
   const m = `${e.message ?? ""} ${e.hint ?? ""}`;
-  const hinted = ["VISIT_CLOSED", "BAD_TIME", "JOB_CANCELLED", "VISIT_STARTED", "BAD_TECH", "BAD_ADDRESS", "REASON_REQUIRED", "NOTE_REQUIRED", "QUOTE_NOT_ACCEPTED", "CHECKLIST_REQUIRED", "GPS_REQUIRED", "OTHER_JOB_OPEN", "NO_VAN", "BAD_STEP", "BAD_TYPE", "BAD_RATE", "JOB_PAID", "VISIT_CLOSED"];
+  const hinted = ["VISIT_CLOSED", "BAD_TIME", "JOB_CANCELLED", "VISIT_STARTED", "BAD_TECH", "BAD_ADDRESS", "REASON_REQUIRED", "NOTE_REQUIRED", "QUOTE_NOT_ACCEPTED", "CHECKLIST_REQUIRED", "GPS_REQUIRED", "OTHER_JOB_OPEN", "NO_VAN", "BAD_STEP", "BAD_TYPE", "BAD_RATE", "JOB_PAID", "VISIT_CLOSED", "NO_SITE"];
   if (hinted.some((k) => m.includes(k)) && e.hint) return e.hint;
   if (m.includes("NO_ACCESS")) return e.hint || "You don't have permission to do this.";
   if (m.includes("NOT_FOUND")) return "This job no longer exists. Refresh the page.";
   if (m.includes("BAD_CUSTOMER")) return "Choose a customer from your list.";
   if (m.includes("BAD_COLOR")) return "Pick a valid color.";
+  if (m.includes("BAD_KIND") || m.includes("customer_equipment_kind_check")) return "Choose a valid type.";
   if (m.includes("job_types_name_uniq") || m.includes("job_tags_name_uniq") || e.code === "23505") return "That name is already in use.";
   if (m.includes("job_phase") && (m.includes("does not exist") || m.includes("Could not find"))) return "Run paso-5.4-phases.sql in Supabase first.";
   if ((m.includes("ops_move") || m.includes("ops_delete_job")) && (m.includes("Could not find") || m.includes("does not exist"))) return "Run paso-5.3b-ops-moves.sql in Supabase first.";
