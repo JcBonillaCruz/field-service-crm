@@ -9,7 +9,10 @@ import { daysBetween, today } from "@/lib/sales";
 
 export type AlertApp = "jobs" | "inventory" | "finances";
 export type AlertLevel = "red" | "orange" | "blue" | "gray";
-export type HomeAlert = { id: string; app: AlertApp; level: AlertLevel; kind: string; title: string; sub: string; pill: string; href: string; at: string };
+export type HomeAlert = {
+  id: string; app: AlertApp; level: AlertLevel; kind: string; title: string; sub: string; pill: string; href: string; at: string;
+  item?: string; location?: string; qty?: number; min?: number; // inventario: para la barrita de stock
+};
 
 // ---------- Alertas guardadas en la base (las de trabajos "en vivo" se calculan en el navegador) ----------
 export async function loadHomeAlerts(supabase: SupabaseClient, companyId: string, opts: { finances: boolean; inventory: boolean }): Promise<HomeAlert[]> {
@@ -41,6 +44,7 @@ export async function loadHomeAlerts(supabase: SupabaseClient, companyId: string
       title: `${out0 ? "Out of stock" : "Low stock"}: ${r.items?.name ?? "item"}`,
       sub: `${r.inventory_locations?.name ?? "Location"} · ${Number(r.qty)} left (alert at ${Number(r.min_qty)})`,
       pill: out0 ? "Out" : "Low", href: `/dashboard/inventory/${r.item_id}`, at: r.created_at,
+      item: r.items?.name ?? "Item", location: r.inventory_locations?.name ?? "Location", qty: Number(r.qty), min: Number(r.min_qty),
     });
   }
 

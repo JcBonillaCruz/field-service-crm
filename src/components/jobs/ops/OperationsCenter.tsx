@@ -100,6 +100,11 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
   const [q, setQ] = useState("");
   const [people, setPeople] = useState<string[]>([]);
   const [focus, setFocus] = useState<OpsGroup | null>(null); // al tocar un resumen: solo ese grupo
+  // Desde el inicio: /dashboard/jobs/operations?focus=delayed abre solo ese grupo
+  useEffect(() => {
+    const f = new URLSearchParams(window.location.search).get("focus") as OpsGroup | null;
+    if (f && OPS_GROUPS.some((g) => g.id === f)) { setFocus(f); setMobileGroup(f); }
+  }, []);
   const [mobileGroup, setMobileGroup] = useState<OpsGroup>("assigned");
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   const reqId = useRef(0);

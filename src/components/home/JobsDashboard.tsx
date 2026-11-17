@@ -1,23 +1,26 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions, Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import { createClient } from "@/lib/supabase/client";
 import { Check, Chevron, optionClass, panelClass } from "@/components/ui/SearchSelect";
 import DatePicker from "@/components/ui/DatePicker";
 import { BarChart } from "@/components/dashboard/charts";
-import { JobsArt } from "@/components/AppIcons";
+import { InventoryArt, JobsArt } from "@/components/AppIcons";
 import { TechDot, TechDots } from "@/components/jobs/EventBar";
 import { DelayTag, GroupArt, ProgressRing } from "@/components/jobs/ops/OpsBits";
 import { AlertIcon, TeamArt } from "@/components/home/DashArt";
 import { OPS_GROUPS, OpsGroup, OpsJob, delayOf, fold, groupOf as groupAt, progressOf } from "@/lib/operations";
 import { TeamMember, addDays, dayStart, fmtTime, fromIsoDay, isoDay, jobError, receivesJobs, startOfMonth, startOfWeek } from "@/lib/jobs";
-import type { AlertApp, HomeAlert, RevenueData, RevenueRange } from "@/lib/home-dashboard";
+import { Member, presenceOf } from "@/lib/team";
+import type { HomeAlert, RevenueData, RevenueRange } from "@/lib/home-dashboard";
 
 // =====================================================================
 // Dashboard de trabajos y alertas (Paso 5.3f) — la primera pantalla al entrar.
 // Lee los mismos trabajos que Operations (función ops_board) y se actualiza en vivo.
+// La conexión de cada persona sale de la presencia que ya usa Team (team_members).
 // No cambia nada de Operations, Schedule, Assign jobs ni My Jobs.
 // =====================================================================
 
@@ -33,11 +36,9 @@ const LIST_WHEN: { v: ListWhen; label: string }[] = [
   { v: "month", label: "This month" }, { v: "open", label: "All open jobs" }, { v: "pick", label: "Pick a date…" },
 ];
 const STATUS_OPTS: { v: OpsGroup | "all"; label: string }[] = [{ v: "all", label: "Any status" }, ...OPS_GROUPS.map((g) => ({ v: g.id, label: g.label }))];
-const APP_OPTS: { v: AlertApp | "all"; label: string }[] = [{ v: "all", label: "All apps" }, { v: "jobs", label: "Jobs" }, { v: "inventory", label: "Inventory" }, { v: "finances", label: "Finances" }];
-const LEVEL_RANK = { red: 0, orange: 1, blue: 2, gray: 3 } as const;
 const PAGE = 12;
 
-// Etiqueta de estado (colores de la marca: azul = asignado, naranja = en proceso, rojo = retraso, verde suave = terminado)
+// Etiqueta de estado (azul = asignado/en camino, naranja = en proceso/pausa, rojo = retraso, verde = terminado/disponible)
 const PILL: Record<string, string> = {
   unassigned: "bg-slate-100 text-slate-600 ring-slate-200",
   assigned: "bg-[#eef4ff] text-[#2563eb] ring-[#d6e4ff]",
@@ -47,6 +48,8 @@ const PILL: Record<string, string> = {
   on_hold: "bg-[#fff1e6] text-[#c2410c] ring-[#fed7aa]",
   delayed: "bg-[#fff1f2] text-[#be123c] ring-[#fecdd3]",
   done: "bg-[#e7f6f1] text-[#0f766e] ring-[#bfe6d8]",
+  green: "bg-[#e8f8ee] text-[#15803d] ring-[#bbe8cb]",
+  teal: "bg-[#e7f6f1] text-[#0f766e] ring-[#bfe6d8]",
 };
 function statusOf(j: OpsJob, g: OpsGroup): { key: string; label: string } {
   if (g === "done") return { key: "done", label: "Completed" };
@@ -64,10 +67,21 @@ function Pill({ k, children }: { k: string; children: React.ReactNode }) {
     <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />{children}</span>;
 }
 
-type Person = { id: string; name: string; initials: string; color: string; avatar_url: string | null; state: "on_site" | "on_my_way" | "paused" | "available"; today: number; done: number; next: Date | null };
-const PERSON_STATE: Record<Person["state"], { label: string; k: string }> = {
-  on_site: { label: "On site", k: "done" }, on_my_way: { label: "On the way", k: "on_my_way" }, paused: { label: "Paused", k: "paused" }, available: { label: "Available", k: "unassigned" },
+// ---------- Personas: lo que está haciendo + si tiene la app abierta ----------
+type PState = "on_site" | "on_my_way" | "paused" | "available" | "idle" | "offline";
+type Person = {
+  id: string; name: string; initials: string; color: string; avatar_url: string | null; phone: string | null;
+  state: PState; seen: string; today: number; done: number; next: Date | null;
 };
+const PERSON_STATE: Record<PState, { label: string; k: string; dot: string }> = {
+  on_site: { label: "On site", k: "teal", dot: "bg-[#14a39a]" },
+  on_my_way: { label: "On the way", k: "on_my_way", dot: "bg-[#3b82f6]" },
+  paused: { label: "Paused", k: "paused", dot: "bg-[#f59e0b]" },
+  available: { label: "Available", k: "green", dot: "bg-[#22c55e]" },
+  idle: { label: "Idle", k: "in_progress", dot: "bg-[#f59e0b]" },
+  offline: { label: "Offline", k: "unassigned", dot: "bg-slate-300" },
+};
+const STATE_ORDER: Record<PState, number> = { on_site: 0, on_my_way: 1, paused: 2, available: 3, idle: 4, offline: 5 };
 
 const usd0 = (v: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(v) || 0);
 const usd2 = (v: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(v) || 0);
@@ -77,20 +91,48 @@ const whenText = (j: OpsJob) => {
   if (!s) return "Not scheduled";
   return `${s.toLocaleDateString("en-US", { month: "short", day: "numeric" })}, ${fmtTime(s)}`;
 };
+// "hace 20 min", "hace 5 h", "hace 3 días"
+const agoText = (iso: string | null | undefined, now: number) => {
+  if (!iso) return "";
+  const m = Math.max(0, Math.round((now - new Date(iso).getTime()) / 60000));
+  if (m < 60) return `${m} min ago`;
+  if (m < 24 * 60) return `${Math.floor(m / 60)}h ago`;
+  const d = Math.floor(m / 1440); return `${d} day${d === 1 ? "" : "s"} ago`;
+};
+const firstNames = (j: OpsJob) => j.techs.map((t) => t.name.split(" ")[0]).join(", ");
+const assignLink = (j: OpsJob) => {
+  const q = new URLSearchParams({ from: "home" }); if (j.visit?.id) q.set("visit", j.visit.id); if (j.visit?.starts_at) q.set("date", isoDay(new Date(j.visit.starts_at)));
+  return `/dashboard/jobs/assign?${q.toString()}`;
+};
 
-export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePrice, revenue, alerts, header, sample }: {
+// ---------- Avisos de trabajos: 6 grupos ----------
+type JobCat = "delayed" | "unassigned" | "paused" | "followup" | "on_my_way" | "working";
+const JOB_CATS: { id: JobCat; label: string; hint: string; level: "red" | "orange" | "gray" | "blue" | "teal"; icon: string }[] = [
+  { id: "delayed", label: "Running late", hint: "Past the arrival or end time", level: "red", icon: "delayed" },
+  { id: "unassigned", label: "No collaborator", hint: "Today, tomorrow or overdue", level: "gray", icon: "unassigned" },
+  { id: "paused", label: "Paused", hint: "Work stopped for now", level: "orange", icon: "paused" },
+  { id: "followup", label: "Follow-ups", hint: "Left to finish later or check", level: "orange", icon: "needs_followup" },
+  { id: "on_my_way", label: "On the way", hint: "Driving to the job", level: "blue", icon: "on_my_way" },
+  { id: "working", label: "Working now", hint: "On site right now", level: "teal", icon: "working" },
+];
+type JobAlert = { id: string; cat: JobCat; title: string; number: string; sub: string; tag: React.ReactNode; href: string; sort: number };
+
+export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePrice, revenue, alerts, header, sample, samplePresence }: {
   companyId: string; team: TeamMember[]; weekStartsOn: number;
   canSeePrice: boolean;          // dueño y manager
   revenue: RevenueData | null;   // solo el dueño
-  alerts: HomeAlert[];           // avisos guardados (Jobs, Inventory y —dueño/manager— Finances)
+  alerts: HomeAlert[];           // avisos guardados: seguimiento de trabajos + inventario
   header?: React.ReactNode;
   sample?: OpsJob[];             // datos de ejemplo (vista previa): no consulta la base
+  samplePresence?: Member[];
 }) {
   const [jobs, setJobs] = useState<OpsJob[]>([]);
+  const [members, setMembers] = useState<Member[] | null>(samplePresence ?? null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const [period, setPeriod] = useState<Period>("today");
+  const [openPerson, setOpenPerson] = useState<string | null>(null);
   const reqId = useRef(0);
 
   // ---------- Datos: los mismos trabajos que Operations ----------
@@ -103,7 +145,13 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
     if (err) { setError(jobError(err)); setLoading(false); return; }
     setError(""); setJobs((data ?? []) as OpsJob[]); setLoading(false);
   }, [companyId, sample]);
-  useEffect(() => { load(); }, [load]);
+  // Conexión de cada persona (la misma de Team: verde = usando la app, naranja = abierta sin moverse, gris = fuera)
+  const loadPresence = useCallback(async () => {
+    if (samplePresence) return;
+    const { data, error: err } = await createClient().rpc("team_members", { p_company: companyId });
+    if (!err) setMembers((data ?? []) as Member[]);
+  }, [companyId, samplePresence]);
+  useEffect(() => { load(); loadPresence(); }, [load, loadPresence]);
   useEffect(() => {
     if (sample) return;
     const sb = createClient();
@@ -114,11 +162,11 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
       .on("postgres_changes", { event: "*", schema: "public", table: "job_visits", filter: `company_id=eq.${companyId}` }, again)
       .on("postgres_changes", { event: "*", schema: "public", table: "job_visit_techs", filter: `company_id=eq.${companyId}` }, again)
       .subscribe();
-    const tick = setInterval(() => setNow(Date.now()), 30000); // "Retrasado" aparece solo
-    const onVis = () => { if (document.visibilityState === "visible") { setNow(Date.now()); load(); } };
+    const tick = setInterval(() => { setNow(Date.now()); loadPresence(); }, 60000); // "Retrasado" y la conexión se actualizan solos
+    const onVis = () => { if (document.visibilityState === "visible") { setNow(Date.now()); load(); loadPresence(); } };
     document.addEventListener("visibilitychange", onVis);
     return () => { clearTimeout(t); clearInterval(tick); sb.removeChannel(ch); document.removeEventListener("visibilitychange", onVis); };
-  }, [companyId, load, sample]);
+  }, [companyId, load, loadPresence, sample]);
 
   const withGroup = useMemo(() => jobs.map((j) => ({ j, g: groupAt(j, now) })), [jobs, now]);
 
@@ -129,10 +177,9 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
     if (p === "week") { const a = addDays(startOfWeek(d0, weekStartsOn), 7 * shift); return [a, addDays(a, 7)]; }
     const a = startOfMonth(d0); const s = new Date(a.getFullYear(), a.getMonth() + shift, 1); return [s, new Date(s.getFullYear(), s.getMonth() + 1, 1)];
   }, [now, weekStartsOn]);
-  const dateOf = (j: OpsJob, g: OpsGroup) => (g === "done" ? (j.completed_at ? new Date(j.completed_at) : j.visit?.starts_at ? new Date(j.visit.starts_at) : null) : j.visit?.starts_at ? new Date(j.visit.starts_at) : null);
   // En el periodo: lo agendado en esas fechas + lo que está pasando ahora o va tarde + lo que no tiene fecha ni persona
   const inRange = useCallback((j: OpsJob, g: OpsGroup, [a, b]: [Date, Date], live = true) => {
-    const d = dateOf(j, g);
+    const d = g === "done" ? (j.completed_at ? new Date(j.completed_at) : j.visit?.starts_at ? new Date(j.visit.starts_at) : null) : j.visit?.starts_at ? new Date(j.visit.starts_at) : null;
     if (live && (g === "in_progress" || g === "delayed")) return true;
     if (!d) return g === "unassigned" && live;
     return d >= a && d < b;
@@ -149,11 +196,13 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
     return { total: cur.length, unassigned: count("unassigned"), working: count("in_progress"), late: count("delayed"), done: count("done"), prevTotal, prevDone, pct };
   }, [withGroup, period, rangeOf, inRange]);
 
-  // ---------- Equipo: quién está en sitio, en camino, en pausa o libre ----------
+  // ---------- Equipo ----------
   const people = useMemo(() => {
     const [a, b] = rangeOf("today");
+    const active = (members ?? []).filter((m) => m.is_active);
     const ids = new Set(team.filter((m) => receivesJobs(m)).map((m) => m.user_id));
     withGroup.forEach(({ j }) => j.techs.forEach((t) => ids.add(t.user_id)));
+    if (members) Array.from(ids).forEach((id) => { if (!active.some((m) => m.user_id === id)) ids.delete(id); }); // quitados del equipo
     const list: Person[] = [];
     ids.forEach((id) => {
       const m = team.find((x) => x.user_id === id);
@@ -161,41 +210,67 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
       const mine = withGroup.filter(({ j }) => j.techs.some((t) => t.user_id === id));
       const todays = mine.filter(({ j, g }) => inRange(j, g, [a, b], false) || g === "in_progress");
       const live = mine.map(({ j }) => j.visit?.status);
-      const state: Person["state"] = live.includes("in_progress") ? "on_site" : live.includes("on_my_way") ? "on_my_way" : live.includes("paused") ? "paused" : "available";
+      const mem = members?.find((x) => x.user_id === id);
+      const pres = mem ? presenceOf(mem, now) : null;
+      const state: PState = live.includes("in_progress") ? "on_site" : live.includes("on_my_way") ? "on_my_way" : live.includes("paused") ? "paused"
+        : !pres ? "available" : pres.tone === "on" ? "available" : pres.tone === "idle" ? "idle" : "offline";
       const upcoming = todays.filter(({ j, g }) => g !== "done" && j.visit?.starts_at && new Date(j.visit.starts_at).getTime() > now)
         .map(({ j }) => new Date(j.visit!.starts_at!)).sort((x, y) => x.getTime() - y.getTime());
       list.push({
-        id, name: m?.full_name || chip?.name || "Team member", initials: m?.initials || chip?.initials || "?", color: m?.color || chip?.color || "#94a3b8",
-        avatar_url: m?.avatar_url ?? chip?.avatar_url ?? null, state, today: todays.length, done: todays.filter((x) => x.g === "done").length, next: upcoming[0] ?? null,
+        id, name: m?.full_name || mem?.full_name || chip?.name || "Team member", initials: m?.initials || chip?.initials || "?", color: m?.color || chip?.color || "#94a3b8",
+        avatar_url: m?.avatar_url ?? chip?.avatar_url ?? null, phone: m?.phone ?? mem?.phone ?? null,
+        state, seen: pres ? pres.label : "", today: todays.length, done: todays.filter((x) => x.g === "done").length, next: upcoming[0] ?? null,
       });
     });
-    const order = { on_site: 0, on_my_way: 1, paused: 2, available: 3 };
-    return list.sort((x, y) => order[x.state] - order[y.state] || y.today - x.today || x.name.localeCompare(y.name));
-  }, [team, jobs, withGroup, rangeOf, inRange, now]);
+    return list.sort((x, y) => STATE_ORDER[x.state] - STATE_ORDER[y.state] || y.today - x.today || x.name.localeCompare(y.name));
+  }, [team, members, jobs, withGroup, rangeOf, inRange, now]);
   const freeNow = people.filter((p) => p.state === "available").length;
 
-  // ---------- Avisos: los de trabajos se calculan aquí (en vivo) + los guardados de cada app ----------
-  const liveAlerts = useMemo(() => {
-    const out: HomeAlert[] = [];
+  // ---------- Avisos de trabajos (en vivo) + los guardados de seguimiento ----------
+  const jobAlerts = useMemo(() => {
+    const out: JobAlert[] = [];
     const soon = addDays(dayStart(new Date(now)), 2).getTime();
     withGroup.forEach(({ j, g }) => {
-      const who = j.techs.map((t) => t.name.split(" ")[0]).join(", ");
+      const who = firstNames(j);
       const name = j.customer_name || j.title || j.number;
+      const v = j.visit;
+      const what = j.type_name || j.title || "Job";
+      if (g === "done") return;
       if (g === "delayed") {
         const d = delayOf(j, now);
-        out.push({ id: `late-${j.id}`, app: "jobs", level: "red", kind: "delayed", title: `${d?.label ?? "Late"} · ${name}`, sub: [d?.detail, who].filter(Boolean).join(" · "), pill: "Delayed", href: `/dashboard/jobs/${j.id}`, at: j.visit?.starts_at ?? j.created_at });
-      } else if (g === "unassigned") {
-        const s = j.visit?.starts_at ? new Date(j.visit.starts_at).getTime() : null;
+        out.push({ id: `late-${j.id}`, cat: "delayed", title: name, number: j.number, sub: [what, who || "No collaborator", d?.detail].filter(Boolean).join(" · "),
+          tag: <Pill k="delayed">{d?.label ?? "Late"}</Pill>, href: `/dashboard/jobs/${j.id}`, sort: -(d?.minutes ?? 0) });
+        return;
+      }
+      if (g === "unassigned") {
+        const s = v?.starts_at ? new Date(v.starts_at).getTime() : null;
         if (s !== null && s > soon) return; // sin persona pero falta mucho: aún no es urgente
-        const q = new URLSearchParams({ from: "home" }); if (j.visit?.id) q.set("visit", j.visit.id); if (s) q.set("date", isoDay(new Date(s)));
-        out.push({ id: `un-${j.id}`, app: "jobs", level: s && s < now ? "red" : "gray", kind: "unassigned", title: `No collaborator · ${name}`, sub: `${j.number} · ${s ? whenText(j) : "Not scheduled yet"}`, pill: "Assign", href: `/dashboard/jobs/assign?${q.toString()}`, at: j.visit?.starts_at ?? j.created_at });
-      } else if (j.visit?.status === "paused") {
-        out.push({ id: `pa-${j.id}`, app: "jobs", level: "orange", kind: "paused", title: `Paused · ${name}`, sub: [j.number, who].filter(Boolean).join(" · "), pill: "Paused", href: `/dashboard/jobs/${j.id}`, at: j.visit.starts_at ?? j.created_at });
+        out.push({ id: `un-${j.id}`, cat: "unassigned", title: name, number: j.number, sub: `${what} · ${s ? whenText(j) : "Not scheduled yet"}`,
+          tag: <Pill k="assigned">Assign →</Pill>, href: assignLink(j), sort: s ?? 0 });
+        return;
+      }
+      if (v?.status === "paused") {
+        out.push({ id: `pa-${j.id}`, cat: "paused", title: name, number: j.number, sub: [what, who].filter(Boolean).join(" · "),
+          tag: <Pill k="paused">Paused</Pill>, href: `/dashboard/jobs/${j.id}`, sort: 0 });
+      } else if (j.status === "on_hold") {
+        out.push({ id: `oh-${j.id}`, cat: "followup", title: name, number: j.number, sub: [what, who, "Left to finish later"].filter(Boolean).join(" · "),
+          tag: <Pill k="on_hold">On hold</Pill>, href: `/dashboard/jobs/${j.id}`, sort: 0 });
+      } else if (v?.status === "on_my_way") {
+        out.push({ id: `om-${j.id}`, cat: "on_my_way", title: name, number: j.number, sub: [who, v.on_my_way_at ? `left ${agoText(v.on_my_way_at, now)}` : "", v.starts_at ? `due ${fmtTime(new Date(v.starts_at))}` : ""].filter(Boolean).join(" · "),
+          tag: <Pill k="on_my_way">On the way</Pill>, href: `/dashboard/jobs/${j.id}`, sort: 0 });
+      } else if (v?.status === "in_progress") {
+        out.push({ id: `wk-${j.id}`, cat: "working", title: name, number: j.number, sub: [what, who, v.started_at ? `started ${fmtTime(new Date(v.started_at))}` : ""].filter(Boolean).join(" · "),
+          tag: <span className="flex items-center gap-2"><ProgressRing pct={progressOf(j)} size={30} stroke={3} color="#e8713a" /></span>, href: `/dashboard/jobs/${j.id}`, sort: 0 });
       }
     });
+    // Guardados: quedó a medias (re-agendar) · Tune-Up con lecturas fuera de rango
+    alerts.filter((a) => a.app === "jobs").forEach((a) => out.push({
+      id: a.id, cat: "followup", title: a.title, number: "", sub: `${a.sub} · ${agoText(a.at, now)}`,
+      tag: <Pill k={a.level === "red" ? "delayed" : "paused"}>{a.pill}</Pill>, href: a.href, sort: 0,
+    }));
     return out;
-  }, [withGroup, now]);
-  const allAlerts = useMemo(() => [...liveAlerts, ...alerts].sort((a, b) => LEVEL_RANK[a.level] - LEVEL_RANK[b.level] || a.at.localeCompare(b.at)), [liveAlerts, alerts]);
+  }, [withGroup, alerts, now]);
+  const stock = useMemo(() => alerts.filter((a) => a.app === "inventory"), [alerts]);
 
   // ---------- Lista de trabajos ----------
   const [q, setQ] = useState("");
@@ -204,7 +279,6 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
   const [when, setWhen] = useState<ListWhen>("today");
   const [pick, setPick] = useState(() => isoDay(new Date()));
   const [shown, setShown] = useState(PAGE);
-  const listRef = useRef<HTMLDivElement>(null);
   useEffect(() => setShown(PAGE), [q, status, person, when, pick]);
   const rows = useMemo(() => {
     const d0 = dayStart(new Date(now));
@@ -223,48 +297,54 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
       return da.localeCompare(db) || a.j.number.localeCompare(b.j.number);
     });
   }, [withGroup, q, status, person, when, pick, now, rangeOf, inRange]);
-  const showStatus = (g: OpsGroup | "all") => { setStatus(g); setWhen(g === "unassigned" || g === "delayed" ? "open" : period === "today" ? "today" : period); listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); };
-  const showPerson = (id: string) => { setPerson(id); setStatus("all"); setWhen("today"); listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); };
   const peopleOpts = useMemo(() => [{ v: "all", label: "Everyone" }, ...people.map((p) => ({ v: p.id, label: p.name }))], [people]);
   const periodInfo = PERIODS.find((p) => p.v === period)!;
+  const opsHref = (g?: OpsGroup) => `/dashboard/jobs/operations${g ? `?focus=${g}` : ""}`;
+  const selected = people.find((p) => p.id === openPerson) ?? null;
 
   return (
     <div className="pb-24 lg:pb-10">
       {header}
-      <div className="mx-auto max-w-[1600px] px-3 pt-4 lg:px-8 lg:pt-6">
+      <div className="w-full px-3 pt-4 lg:px-8 lg:pt-6">
         {error && <p role="alert" className="mb-4 rounded-xl border border-[#fecdd3] bg-[#fff1f2] px-4 py-3 text-[14px] text-[#be123c]">{error}</p>}
 
-        {/* ======= 1. Resumen (KPIs) + Ingresos del dueño ======= */}
+        {/* ======= 1. Resumen (KPIs): cada tarjeta lleva a sus trabajos ======= */}
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-[17px] font-semibold text-[#0b1f3a] lg:text-[18px]">Jobs overview</h2>
+          <div>
+            <h2 className="text-[18px] font-semibold text-[#0b1f3a] lg:text-[20px]">Jobs overview</h2>
+            <p className="hidden text-[13px] text-slate-500 sm:block">Tap a card to open those jobs</p>
+          </div>
           <Pick value={period} options={PERIODS} onChange={(v) => setPeriod(v as Period)} ariaLabel="Period for the summary cards" />
         </div>
-        <div className={`grid gap-3 lg:gap-4 ${revenue ? "xl:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]" : ""}`}>
-          <div className={`grid grid-cols-2 gap-3 lg:gap-4 ${revenue ? "md:grid-cols-3" : "md:grid-cols-3 2xl:grid-cols-6"}`}>
-            <Kpi label="Total jobs" value={kpi.total} art={<JobsArt size={44} />} loading={loading}
-              delta={kpi.total - kpi.prevTotal} deltaText={periodInfo.prev} hint={`${kpi.pct}% overall progress`} action="See jobs" onClick={() => showStatus("all")} />
-            <Kpi label="Pending" value={kpi.unassigned} art={<GroupArt g="unassigned" size={44} />} loading={loading}
-              hint={kpi.unassigned ? "Need a collaborator" : "Everyone has a job"} tone={kpi.unassigned ? "slate" : undefined} action="Assign" onClick={() => showStatus("unassigned")} />
-            <Kpi label="Ongoing" value={kpi.working} art={<GroupArt g="in_progress" size={44} />} loading={loading}
-              hint="On the way or working" action="See jobs" onClick={() => showStatus("in_progress")} />
-            <Kpi label="Delayed" value={kpi.late} art={<GroupArt g="delayed" size={44} />} loading={loading}
-              hint={kpi.late ? "Need attention" : "Nothing running late"} tone={kpi.late ? "red" : undefined} action="See jobs" onClick={() => showStatus("delayed")} />
-            <Kpi label="Completed" value={kpi.done} art={<GroupArt g="done" size={44} />} loading={loading}
-              delta={kpi.done - kpi.prevDone} deltaText={periodInfo.prev} hint={periodInfo.label} action="See jobs" onClick={() => showStatus("done")} />
-            <Kpi label="Technician availability" value={freeNow} suffix={people.length ? ` / ${people.length}` : ""} art={<TeamArt size={44} />} loading={loading}
-              hint={people.length ? "Free right now" : "No collaborators yet"} action="See team" onClick={() => document.getElementById("bp-team")?.scrollIntoView({ behavior: "smooth", block: "center" })} />
-          </div>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:gap-4 2xl:grid-cols-6">
+          <Kpi label="Total jobs" value={kpi.total} art={<JobsArt size={46} />} loading={loading} href={opsHref()}
+            delta={kpi.total - kpi.prevTotal} deltaText={periodInfo.prev} hint={`${kpi.pct}% overall progress`} action="Open Operations" bar={kpi.pct} barColor="#14a39a" />
+          <Kpi label="Pending" value={kpi.unassigned} art={<GroupArt g="unassigned" size={46} />} loading={loading} href="/dashboard/jobs/assign"
+            hint={kpi.unassigned ? "Need a collaborator" : "Everyone has a job"} action="Assign them" />
+          <Kpi label="Ongoing" value={kpi.working} art={<GroupArt g="in_progress" size={46} />} loading={loading} href={opsHref("in_progress")}
+            hint="On the way or working" action="See who's working" />
+          <Kpi label="Delayed" value={kpi.late} art={<GroupArt g="delayed" size={46} />} loading={loading} href={opsHref("delayed")}
+            hint={kpi.late ? "Need attention" : "Nothing running late"} tone={kpi.late ? "red" : undefined} action="See late jobs" />
+          <Kpi label="Completed" value={kpi.done} art={<GroupArt g="done" size={46} />} loading={loading} href={opsHref("done")}
+            delta={kpi.done - kpi.prevDone} deltaText={periodInfo.prev} hint={periodInfo.label} action="See finished jobs" tone={kpi.done ? "green" : undefined} />
+          <Kpi label="Technician availability" value={freeNow} suffix={people.length ? ` / ${people.length}` : ""} art={<TeamArt size={46} />} loading={loading || !members} href="/dashboard/jobs/assign"
+            hint={people.length ? (freeNow ? "Online and free to take a job" : "Nobody free right now") : "No collaborators yet"} tone={freeNow ? "green" : undefined} action="Assign jobs" />
+        </div>
+
+        {/* ======= 2. Trabajos (lo principal) + Equipo ======= */}
+        <div className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-4 lg:mt-6 xl:grid-cols-[minmax(0,1.75fr)_minmax(20rem,1fr)]">
+          <JobsAlertsSection items={jobAlerts} loading={loading} />
+          <TeamCard people={people} loading={loading || !members} onPick={setOpenPerson} />
+        </div>
+
+        {/* ======= 3. Inventario + Ingresos del dueño ======= */}
+        <div className={`mt-5 grid grid-cols-[minmax(0,1fr)] gap-4 lg:mt-6 ${revenue ? "xl:grid-cols-2" : ""}`}>
+          <InventorySection items={stock} wide={!revenue} />
           {revenue && <RevenueCard data={revenue} />}
         </div>
 
-        {/* ======= 2. Avisos + Equipo ======= */}
-        <div className="mt-4 grid gap-3 lg:mt-5 lg:gap-4 xl:grid-cols-2">
-          <AttentionCard alerts={allAlerts} loading={loading} />
-          <TeamCard people={people} loading={loading} onPick={showPerson} />
-        </div>
-
-        {/* ======= 3. Lista de trabajos ======= */}
-        <div ref={listRef} className="mt-4 scroll-mt-24 rounded-2xl border border-slate-200 bg-white lg:mt-5">
+        {/* ======= 4. Lista de trabajos ======= */}
+        <div id="bp-task-list" className="mt-5 scroll-mt-24 rounded-2xl border border-slate-200 bg-white lg:mt-6">
           <div className="flex flex-wrap items-center gap-2.5 border-b border-slate-100 px-3 py-3 lg:gap-3 lg:px-5 lg:py-4">
             <div className="mr-auto flex min-w-0 flex-1 items-center gap-2.5 sm:flex-none">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-[#0f766e]">
@@ -315,7 +395,374 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
           )}
         </div>
       </div>
+
+      {selected && <PersonDrawer p={selected} rows={withGroup.filter(({ j }) => j.techs.some((t) => t.user_id === selected.id))} now={now} onClose={() => setOpenPerson(null)} />}
     </div>
+  );
+}
+
+// ---------- Tarjeta KPI: blanca, se eleva al pasar el mouse, ícono animado y lleva a sus trabajos ----------
+function Kpi({ label, value, suffix = "", art, hint, delta, deltaText, tone, action, href, loading, bar, barColor }: {
+  label: string; value: number; suffix?: string; art: React.ReactNode; hint: string; delta?: number; deltaText?: string;
+  tone?: "red" | "green"; action: string; href: string; loading: boolean; bar?: number; barColor?: string;
+}) {
+  return (
+    <Link prefetch={false} href={href}
+      className="group relative flex min-h-[9rem] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-3.5 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_14px_30px_rgba(15,40,60,0.10)] lg:p-4">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[12.5px] font-medium text-slate-500 lg:text-[13.5px]">{label}</p>
+        <span className="-mr-1 -mt-1 shrink-0 scale-90 lg:scale-100">{art}</span>
+      </div>
+      {loading ? <span className="mt-1 block h-8 w-14 animate-pulse rounded-md bg-slate-100" /> : (
+        <p className={`mt-0.5 text-[30px] font-semibold leading-none tracking-tight tabular-nums lg:text-[36px] ${tone === "red" ? "text-[#be123c]" : tone === "green" ? "text-[#15803d]" : "text-[#0b1f3a]"}`}>
+          {value}<span className="text-[16px] font-medium text-slate-400 lg:text-[18px]">{suffix}</span>
+        </p>
+      )}
+      <div className="mt-auto pt-2 text-[12px] lg:text-[12.5px]">
+        {delta !== undefined && !loading && (
+          <p className="flex items-center gap-1">
+            <span className={`inline-flex items-center gap-0.5 font-semibold ${delta > 0 ? "text-[#0f766e]" : delta < 0 ? "text-[#be123c]" : "text-slate-500"}`}>
+              {delta !== 0 && <svg viewBox="0 0 20 20" className={`h-3.5 w-3.5 ${delta < 0 ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 15V5M5.5 9.5 10 5l4.5 4.5" /></svg>}
+              {delta > 0 ? `+${delta}` : delta}
+            </span>
+            <span className="truncate text-slate-500">{deltaText}</span>
+          </p>
+        )}
+        <p className="relative h-[1.25em] overflow-hidden">
+          <span className="absolute inset-0 truncate text-slate-500 transition-all duration-200 group-hover:-translate-y-full group-hover:opacity-0">{hint}</span>
+          <span className="absolute inset-0 translate-y-full truncate font-semibold text-[#0f766e] opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100">{action} →</span>
+        </p>
+      </div>
+      {bar !== undefined && !loading && (
+        <span className="absolute inset-x-0 bottom-0 h-1 bg-slate-100"><span className="block h-full transition-all duration-700" style={{ width: `${bar}%`, backgroundColor: barColor }} /></span>
+      )}
+    </Link>
+  );
+}
+
+// ---------- Sección Jobs: todo lo que pasa con los trabajos (lo principal) ----------
+const CAT_TONE: Record<string, { bg: string; ring: string; text: string }> = {
+  red: { bg: "bg-[#fff1f2]", ring: "ring-[#fecdd3]", text: "text-[#be123c]" },
+  orange: { bg: "bg-[#fff6e6]", ring: "ring-[#fde3b4]", text: "text-[#b45309]" },
+  gray: { bg: "bg-slate-50", ring: "ring-slate-200", text: "text-slate-700" },
+  blue: { bg: "bg-[#eef4ff]", ring: "ring-[#d6e4ff]", text: "text-[#1d4ed8]" },
+  teal: { bg: "bg-[#e7f6f1]", ring: "ring-[#bfe6d8]", text: "text-[#0f766e]" },
+};
+function JobsAlertsSection({ items, loading }: { items: JobAlert[]; loading: boolean }) {
+  const [cat, setCat] = useState<JobCat | null>(null);
+  const [all, setAll] = useState(false);
+  const count = (c: JobCat) => items.filter((i) => i.cat === c).length;
+  const order: Record<JobCat, number> = { delayed: 0, unassigned: 1, paused: 2, followup: 3, on_my_way: 4, working: 5 };
+  const list = items.filter((i) => !cat || i.cat === cat).sort((a, b) => order[a.cat] - order[b.cat] || a.sort - b.sort);
+  const shown = all ? list : list.slice(0, 7);
+  const urgent = count("delayed") + count("unassigned");
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white" aria-label="Jobs">
+      <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-4 lg:px-5">
+        <div className="group flex items-center gap-3">
+          <JobsArt size={42} />
+          <div>
+            <h2 className="text-[18px] font-semibold leading-tight text-[#0b1f3a] lg:text-[19px]">Jobs right now</h2>
+            <p className="text-[12.5px] text-slate-500">{loading ? "Checking…" : urgent ? `${urgent} need${urgent === 1 ? "s" : ""} you now · tap a box to filter` : "Nothing urgent · tap a box to filter"}</p>
+          </div>
+        </div>
+        <Link prefetch={false} href="/dashboard/jobs/operations" className="shrink-0 rounded-lg px-2.5 py-1.5 text-[13.5px] font-semibold text-[#2563eb] hover:bg-[#eef4ff]">Operations →</Link>
+      </div>
+      {/* 6 cajitas: tocar una filtra la lista */}
+      <div className="grid grid-cols-3 gap-2 px-4 pt-3 sm:grid-cols-6 lg:gap-2.5 lg:px-5">
+        {JOB_CATS.map((c) => {
+          const n = count(c.id), on = cat === c.id, t = CAT_TONE[c.level];
+          return (
+            <button key={c.id} type="button" onClick={() => { setCat(on ? null : c.id); setAll(false); }} aria-pressed={on}
+              className={`group relative flex flex-col items-start rounded-xl p-2.5 text-left ring-1 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(15,40,60,0.08)] lg:p-3 ${n ? `${t.bg} ${t.ring}` : "bg-white ring-slate-200"} ${on ? "ring-2 ring-[#0f766e]" : ""}`}>
+              <span className="flex w-full items-center justify-between">
+                <AlertIcon kind={c.icon} level={n ? c.level : "gray"} size={30} />
+                <span className={`text-[22px] font-semibold leading-none tabular-nums lg:text-[24px] ${n ? t.text : "text-slate-300"}`}>{loading ? "–" : n}</span>
+              </span>
+              <span className={`mt-2 block text-[12.5px] font-semibold leading-tight lg:text-[13px] ${n ? "text-[#0b1f3a]" : "text-slate-400"}`}>{c.label}</span>
+              <span className="mt-0.5 hidden text-[11px] leading-tight text-slate-400 lg:block">{c.hint}</span>
+            </button>
+          );
+        })}
+      </div>
+      {loading && !items.length ? (
+        <ul className="space-y-2 p-4 lg:px-5">{[0, 1, 2].map((i) => <li key={i} className="h-14 animate-pulse rounded-xl bg-slate-50" />)}</ul>
+      ) : !list.length ? (
+        <div className="flex flex-col items-center px-6 pb-8 pt-6 text-center">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#e7f6f1] text-[#0f766e]">
+            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
+          </span>
+          <p className="mt-2 text-[14.5px] font-semibold text-[#0b1f3a]">{cat ? `Nothing in “${JOB_CATS.find((c) => c.id === cat)!.label}”` : "All jobs are on track"}</p>
+          <p className="mt-1 max-w-sm text-[13px] text-slate-500">Late jobs, jobs without a collaborator, paused work and who is on the way or working show up here.</p>
+        </div>
+      ) : (
+        <ul className="mt-2 divide-y divide-slate-100 px-2 pb-2 lg:px-3">
+          {shown.map((a) => {
+            const c = JOB_CATS.find((x) => x.id === a.cat)!;
+            return (
+              <li key={a.id}>
+                <Link prefetch={false} href={a.href} className="group flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-slate-50 lg:px-3">
+                  <AlertIcon kind={c.icon} level={c.level} />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-baseline gap-2">
+                      <span className="truncate text-[14.5px] font-semibold text-[#0b1f3a]">{a.title}</span>
+                      {a.number && <span className="shrink-0 text-[12px] tabular-nums text-slate-400">{a.number}</span>}
+                    </span>
+                    <span className="block truncate text-[12.5px] text-slate-500">{a.sub}</span>
+                  </span>
+                  <span className="shrink-0">{a.tag}</span>
+                  <svg viewBox="0 0 20 20" className="hidden h-4 w-4 shrink-0 text-slate-300 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-slate-500 sm:block" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m8 5 5 5-5 5" /></svg>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {list.length > 7 && (
+        <div className="border-t border-slate-100 px-4 py-2.5 text-center">
+          <button type="button" onClick={() => setAll((v) => !v)} className="rounded-lg px-3 py-1.5 text-[13.5px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4]">
+            {all ? "Show less" : `See all ${list.length}`}
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ---------- Sección Inventory: lo que se está acabando ----------
+function InventorySection({ items, wide }: { items: HomeAlert[]; wide: boolean }) {
+  const [all, setAll] = useState(false);
+  const out = items.filter((i) => (i.qty ?? 0) <= 0), low = items.filter((i) => (i.qty ?? 0) > 0);
+  const list = [...out, ...low];
+  const shown = all ? list : list.slice(0, wide ? 8 : 5);
+  return (
+    <section className="flex flex-col rounded-2xl border border-slate-200 bg-white" aria-label="Inventory">
+      <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-4 lg:px-5">
+        <div className="group flex items-center gap-3">
+          <InventoryArt size={42} />
+          <div>
+            <h2 className="text-[18px] font-semibold leading-tight text-[#0b1f3a] lg:text-[19px]">Inventory</h2>
+            <p className="text-[12.5px] text-slate-500">{list.length ? "Stock that needs restocking" : "Everything is stocked"}</p>
+          </div>
+        </div>
+        <Link prefetch={false} href="/dashboard/inventory" className="shrink-0 rounded-lg px-2.5 py-1.5 text-[13.5px] font-semibold text-[#b45309] hover:bg-[#fff6e6]">Open Inventory →</Link>
+      </div>
+      <div className="grid grid-cols-2 gap-2 px-4 pt-3 lg:gap-2.5 lg:px-5">
+        {[{ n: out.length, label: "Out of stock", hint: "None left", level: "red" as const, kind: "out_of_stock" }, { n: low.length, label: "Low stock", hint: "Below the alert level", level: "orange" as const, kind: "low_stock" }].map((t) => (
+          <div key={t.label} className={`group flex items-center gap-3 rounded-xl p-3 ring-1 ${t.n ? `${CAT_TONE[t.level].bg} ${CAT_TONE[t.level].ring}` : "bg-white ring-slate-200"}`}>
+            <AlertIcon kind={t.kind} level={t.n ? t.level : "gray"} size={34} />
+            <span className="min-w-0">
+              <span className={`block text-[22px] font-semibold leading-none tabular-nums ${t.n ? CAT_TONE[t.level].text : "text-slate-300"}`}>{t.n}</span>
+              <span className={`mt-1 block truncate text-[12.5px] font-semibold ${t.n ? "text-[#0b1f3a]" : "text-slate-400"}`}>{t.label}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+      {!list.length ? (
+        <div className="flex flex-1 flex-col items-center justify-center px-6 pb-8 pt-6 text-center">
+          <span className="group"><InventoryArt size={56} /></span>
+          <p className="mt-2 text-[14.5px] font-semibold text-[#0b1f3a]">No stock alerts</p>
+          <p className="mt-1 max-w-sm text-[13px] text-slate-500">When an item in a van or the warehouse drops below its alert level, it shows up here.</p>
+        </div>
+      ) : (
+        <ul className={`mt-2 grid px-2 pb-2 lg:px-3 ${wide ? "lg:grid-cols-2 lg:gap-x-4" : ""}`}>
+          {shown.map((a) => {
+            const qty = a.qty ?? 0, min = Math.max(1, a.min ?? 1), pct = Math.min(100, Math.round((qty / (min * 2)) * 100));
+            return (
+              <li key={a.id} className="border-b border-slate-100 last:border-0">
+                <Link prefetch={false} href={a.href} className="group flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-slate-50 lg:px-3">
+                  <AlertIcon kind={a.kind} level={a.level} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14.5px] font-semibold text-[#0b1f3a]">{a.item ?? a.title}</span>
+                    <span className="block truncate text-[12.5px] text-slate-500">{a.location}</span>
+                    <span className="mt-1.5 flex items-center gap-2">
+                      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+                        <span className={`block h-full rounded-full transition-all duration-700 ${qty <= 0 ? "bg-[#f43f5e]" : "bg-[#f59e0b]"}`} style={{ width: `${Math.max(qty <= 0 ? 0 : 6, pct)}%` }} />
+                      </span>
+                      <span className={`shrink-0 text-[11.5px] font-semibold tabular-nums ${qty <= 0 ? "text-[#be123c]" : "text-[#b45309]"}`}>{qty} left · alert at {a.min}</span>
+                    </span>
+                  </span>
+                  <span className="hidden shrink-0 text-[13px] font-semibold text-[#0f766e] opacity-0 transition-opacity group-hover:opacity-100 sm:inline">Restock →</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {list.length > shown.length && !all && (
+        <div className="border-t border-slate-100 px-4 py-2.5 text-center">
+          <button type="button" onClick={() => setAll(true)} className="rounded-lg px-3 py-1.5 text-[13.5px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4]">See all {list.length}</button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ---------- Equipo: quién está trabajando, en camino, disponible (app abierta) o fuera ----------
+function TeamCard({ people, loading, onPick }: { people: Person[]; loading: boolean; onPick: (id: string) => void }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? people : people.slice(0, 7);
+  const n = (s: PState) => people.filter((p) => p.state === s).length;
+  const chips: { s: PState; label: string }[] = [{ s: "on_site", label: "On site" }, { s: "on_my_way", label: "On the way" }, { s: "available", label: "Available" }, { s: "offline", label: "Offline" }];
+  return (
+    <section className="flex flex-col rounded-2xl border border-slate-200 bg-white" aria-label="Team activity">
+      <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-4 lg:px-5">
+        <div className="group flex items-center gap-3">
+          <TeamArt size={42} />
+          <div>
+            <h2 className="text-[18px] font-semibold leading-tight text-[#0b1f3a] lg:text-[19px]">Team activity</h2>
+            <p className="text-[12.5px] text-slate-500">Tap a person to see their jobs</p>
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-1.5 px-4 pt-3 lg:px-5">
+        {chips.map((c) => (
+          <span key={c.s} className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-2.5 py-1 text-[12px] font-medium text-slate-600 ring-1 ring-slate-200">
+            <span className={`h-2 w-2 rounded-full ${PERSON_STATE[c.s].dot}`} />{n(c.s)} {c.label.toLowerCase()}
+          </span>
+        ))}
+      </div>
+      {loading && !people.length ? (
+        <ul className="space-y-2 p-4 lg:px-5">{[0, 1, 2].map((i) => <li key={i} className="h-14 animate-pulse rounded-xl bg-slate-50" />)}</ul>
+      ) : !people.length ? (
+        <div className="flex flex-1 flex-col items-center justify-center px-6 pb-8 pt-4 text-center">
+          <p className="text-[14.5px] font-semibold text-[#0b1f3a]">No collaborators yet</p>
+          <p className="mt-1 text-[13px] text-slate-500">Add people in Team and they will show up here with what they are doing.</p>
+          <Link prefetch={false} href="/dashboard/jobs/team" className="mt-3 inline-block rounded-lg px-3 py-1.5 text-[13.5px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4]">Go to Team →</Link>
+        </div>
+      ) : (
+        <ul className="mt-2 divide-y divide-slate-100 px-2 pb-2 lg:px-3">
+          {shown.map((p) => {
+            const st = PERSON_STATE[p.state];
+            return (
+              <li key={p.id}>
+                <button type="button" onClick={() => onPick(p.id)} className="group flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-slate-50 lg:px-3">
+                  <span className={`relative shrink-0 transition-transform duration-200 group-hover:scale-105 ${p.state === "offline" ? "opacity-60 grayscale" : ""}`}>
+                    <TechDot t={{ initials: p.initials, color: p.color, avatar_url: p.avatar_url, name: p.name }} size={40} />
+                    <span className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full ring-2 ring-white ${st.dot} ${p.state === "available" ? "animate-pulse" : ""}`} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14.5px] font-semibold text-[#0b1f3a]">{p.name}</span>
+                    <span className="block truncate text-[12.5px] text-slate-500">
+                      {p.today ? `${p.today} job${p.today === 1 ? "" : "s"} today · ${p.done} done` : "No jobs today"}
+                      {p.state === "offline" && p.seen ? ` · ${p.seen.replace("Offline · ", "seen ")}` : p.state === "available" && p.next ? ` · next ${fmtTime(p.next)}` : ""}
+                    </span>
+                  </span>
+                  <Pill k={st.k}>{st.label}</Pill>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {people.length > 7 && (
+        <div className="mt-auto border-t border-slate-100 px-4 py-2.5 text-center">
+          <button type="button" onClick={() => setAll((v) => !v)} className="rounded-lg px-3 py-1.5 text-[13.5px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4]">
+            {all ? "Show less" : `See all ${people.length}`}
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ---------- Panel de una persona: sus trabajos de hoy, los próximos y los terminados ----------
+function PersonDrawer({ p, rows, now, onClose }: { p: Person; rows: { j: OpsJob; g: OpsGroup }[]; now: number; onClose: () => void }) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const r = requestAnimationFrame(() => setShown(true));
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => { cancelAnimationFrame(r); document.removeEventListener("keydown", onKey); };
+  }, [onClose]);
+  const d0 = dayStart(new Date(now)), d1 = addDays(d0, 1), week = addDays(d0, 8), ago7 = addDays(d0, -7);
+  const at = (j: OpsJob) => (j.visit?.starts_at ? new Date(j.visit.starts_at) : null);
+  const byTime = (a: { j: OpsJob }, b: { j: OpsJob }) => (a.j.visit?.starts_at ?? "9").localeCompare(b.j.visit?.starts_at ?? "9");
+  const nowRows = rows.filter(({ j }) => ["on_my_way", "in_progress", "paused"].includes(j.visit?.status ?? ""));
+  const todayRows = rows.filter((r) => !nowRows.includes(r) && r.g !== "done" && at(r.j) && at(r.j)! >= d0 && at(r.j)! < d1).sort(byTime);
+  const lateRows = rows.filter((r) => !nowRows.includes(r) && r.g === "delayed" && !todayRows.includes(r));
+  const nextRows = rows.filter((r) => r.g !== "done" && at(r.j) && at(r.j)! >= d1 && at(r.j)! < week).sort(byTime);
+  const doneRows = rows.filter((r) => r.g === "done" && r.j.completed_at && new Date(r.j.completed_at) >= ago7).sort((a, b) => (b.j.completed_at ?? "").localeCompare(a.j.completed_at ?? ""));
+  const st = PERSON_STATE[p.state];
+  const Group = ({ title, list, empty }: { title: string; list: { j: OpsJob; g: OpsGroup }[]; empty?: string }) => (!list.length && !empty ? null : (
+    <div className="mt-5">
+      <h3 className="mb-1.5 flex items-center justify-between px-1 text-[12px] font-semibold uppercase tracking-wide text-slate-400">{title}<span className="tabular-nums">{list.length}</span></h3>
+      {!list.length ? <p className="rounded-xl bg-slate-50 px-3 py-3 text-[13px] text-slate-500">{empty}</p> : (
+        <ul className="space-y-1.5">
+          {list.map(({ j, g }) => {
+            const s = statusOf(j, g);
+            return (
+              <li key={j.id}>
+                <Link prefetch={false} href={`/dashboard/jobs/${j.id}`} className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 transition-all hover:-translate-y-px hover:border-slate-300 hover:shadow-sm">
+                  <span className="h-9 w-1 shrink-0 rounded-full" style={{ backgroundColor: j.type_color || "#cbd5e1" }} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14px] font-semibold text-[#0b1f3a]">{j.customer_name || j.number}</span>
+                    <span className="block truncate text-[12.5px] text-slate-500">{j.type_name || j.title || "Job"} · {g === "done" && j.completed_at ? `done ${new Date(j.completed_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : whenText(j)}</span>
+                  </span>
+                  {g === "delayed" ? <DelayTag job={j} now={now} small /> : <Pill k={s.key}>{s.label}</Pill>}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  ));
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[90]" role="dialog" aria-modal="true" aria-label={p.name}>
+      <button type="button" aria-label="Close" onClick={onClose} className={`absolute inset-0 bg-[#0b1f3a]/40 transition-opacity duration-200 ${shown ? "opacity-100" : "opacity-0"}`} />
+      <div className={`absolute inset-y-0 right-0 flex w-full max-w-md flex-col bg-[#f7f9fb] shadow-[0_0_60px_rgba(15,40,60,0.25)] transition-transform duration-300 ease-out ${shown ? "translate-x-0" : "translate-x-full"}`}>
+        <div className="flex items-start gap-3 border-b border-slate-200 bg-white px-5 py-5">
+          <span className="relative shrink-0">
+            <TechDot t={{ initials: p.initials, color: p.color, avatar_url: p.avatar_url, name: p.name }} size={52} />
+            <span className={`absolute bottom-0 right-0 h-4 w-4 rounded-full ring-2 ring-white ${st.dot}`} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[19px] font-semibold text-[#0b1f3a]">{p.name}</p>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <Pill k={st.k}>{st.label}</Pill>
+              {p.seen && <span className="text-[12.5px] text-slate-500">{p.seen.replace(/^Offline · /, "Last seen ")}</span>}
+            </div>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close"
+            className="group flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-400 transition-all hover:bg-[#fff1f2] hover:text-[#e11d48]">
+            <svg viewBox="0 0 20 20" className="h-5 w-5 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="m5 5 10 10M15 5 5 15" /></svg>
+          </button>
+        </div>
+        <div className="grid grid-cols-3 gap-2 border-b border-slate-200 bg-white px-5 py-3 text-center">
+          {[{ n: p.today, l: "Today" }, { n: p.done, l: "Done today" }, { n: nextRows.length, l: "Next 7 days" }].map((x) => (
+            <div key={x.l}><p className="text-[20px] font-semibold tabular-nums text-[#0b1f3a]">{x.n}</p><p className="text-[12px] text-slate-500">{x.l}</p></div>
+          ))}
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 pb-6">
+          <Group title="Right now" list={nowRows} />
+          <Group title="Running late" list={lateRows} />
+          <Group title="Rest of today" list={todayRows} empty="Nothing else scheduled today." />
+          <Group title="Next 7 days" list={nextRows} empty="No jobs in the next 7 days." />
+          <Group title="Finished · last 7 days" list={doneRows} />
+        </div>
+        <div className="grid grid-cols-2 gap-2 border-t border-slate-200 bg-white px-5 py-4">
+          <Link prefetch={false} href={`/dashboard/jobs/schedule?tech=${p.id}&view=week`}
+            className="flex h-11 items-center justify-center gap-2 rounded-lg border border-[#0f766e] text-[14.5px] font-semibold text-[#0f766e] transition-colors hover:bg-[#e9f7f4]">
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4" /></svg>
+            Their calendar
+          </Link>
+          <Link prefetch={false} href="/dashboard/jobs/assign"
+            className="flex h-11 items-center justify-center gap-2 rounded-lg bg-[#0f766e] text-[14.5px] font-semibold text-white shadow-sm transition-colors hover:bg-[#0c5f59]">
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2.5 15a5.5 5.5 0 0 1 11 0M14 12h7M18 9l3 3-3 3" /></svg>
+            Assign jobs
+          </Link>
+          {p.phone && (
+            <a href={`tel:${p.phone.replace(/[^\d+]/g, "")}`} className="col-span-2 flex h-10 items-center justify-center gap-2 rounded-lg text-[14px] font-semibold text-slate-600 hover:bg-slate-100">
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2" /></svg>
+              Call {p.name.split(" ")[0]}
+            </a>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -340,41 +787,6 @@ function Pick<T extends string>({ value, options, onChange, ariaLabel, full = fa
   );
 }
 
-// ---------- Tarjeta KPI: blanca, se eleva al pasar el mouse, ícono animado y acción útil ----------
-function Kpi({ label, value, suffix = "", art, hint, delta, deltaText, tone, action, onClick, loading }: {
-  label: string; value: number; suffix?: string; art: React.ReactNode; hint: string; delta?: number; deltaText?: string;
-  tone?: "red" | "slate"; action: string; onClick: () => void; loading: boolean;
-}) {
-  return (
-    <button type="button" onClick={onClick}
-      className="group relative flex min-h-[8.5rem] flex-col rounded-2xl border border-slate-200 bg-white p-3.5 text-left transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_12px_28px_rgba(15,40,60,0.09)] lg:p-4">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-[12.5px] font-medium text-slate-500 lg:text-[13.5px]">{label}</p>
-        <span className="-mr-1 -mt-1 shrink-0 scale-90 lg:scale-100">{art}</span>
-      </div>
-      {loading ? <span className="mt-1 block h-8 w-14 animate-pulse rounded-md bg-slate-100" /> : (
-        <p className={`mt-0.5 text-[28px] font-semibold leading-none tracking-tight tabular-nums lg:text-[34px] ${tone === "red" ? "text-[#be123c]" : "text-[#0b1f3a]"}`}>
-          {value}<span className="text-[16px] font-medium text-slate-400 lg:text-[18px]">{suffix}</span>
-        </p>
-      )}
-      <div className="mt-auto pt-2 text-[12px] lg:text-[12.5px]">
-        {delta !== undefined && !loading && (
-          <p className="flex items-center gap-1">
-            <span className={`inline-flex items-center gap-0.5 font-semibold ${delta > 0 ? "text-[#0f766e]" : delta < 0 ? "text-[#be123c]" : "text-slate-500"}`}>
-              {delta !== 0 && <svg viewBox="0 0 20 20" className={`h-3.5 w-3.5 ${delta < 0 ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 15V5M5.5 9.5 10 5l4.5 4.5" /></svg>}
-              {delta > 0 ? `+${delta}` : delta}
-            </span>
-            <span className="truncate text-slate-500">{deltaText}</span>
-          </p>
-        )}
-        <p className="relative h-[1.2em] overflow-hidden">
-          <span className="absolute inset-0 truncate text-slate-500 transition-all duration-200 group-hover:-translate-y-full group-hover:opacity-0">{hint}</span>
-          <span className="absolute inset-0 translate-y-full truncate font-semibold text-[#0f766e] opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100">{action} →</span>
-        </p>
-      </div>
-    </button>
-  );
-}
 
 // ---------- Ingresos (solo dueño) ----------
 const REV_OPTS: { v: RevenueRange; label: string }[] = [{ v: "week", label: "Weekly" }, { v: "month", label: "Monthly" }, { v: "year", label: "Yearly" }];
@@ -422,132 +834,6 @@ function RevenueCard({ data }: { data: RevenueData }) {
   );
 }
 
-// ---------- Necesita atención (todas las apps) ----------
-function AttentionCard({ alerts, loading }: { alerts: HomeAlert[]; loading: boolean }) {
-  const [app, setApp] = useState<AlertApp | "all">("all");
-  const [all, setAll] = useState(false);
-  const apps = useMemo(() => new Set(alerts.map((a) => a.app)), [alerts]);
-  const list = alerts.filter((a) => app === "all" || a.app === app);
-  const shown = all ? list : list.slice(0, 6);
-  const reds = alerts.filter((a) => a.level === "red").length;
-  const opts = APP_OPTS.filter((o) => o.v === "all" || apps.has(o.v as AlertApp)).map((o) => ({ ...o, label: o.v === "all" ? o.label : `${o.label} (${alerts.filter((a) => a.app === o.v).length})` }));
-  return (
-    <section className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white" aria-label="Needs attention">
-      {alerts.length > 0 && <span className={`absolute inset-x-0 top-0 h-1 ${reds ? "bg-[#f43f5e]" : "bg-[#f59e0b]"}`} />}
-      <div className="flex items-center justify-between gap-3 px-4 pb-2 pt-4 lg:px-5">
-        <div className="flex items-center gap-2.5">
-          <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${alerts.length ? (reds ? "bg-[#fff1f2] text-[#e11d48]" : "bg-[#fff6e6] text-[#d97706]") : "bg-[#e7f6f1] text-[#0f766e]"}`}>
-            <svg viewBox="0 0 24 24" className={`h-[19px] w-[19px] ${alerts.length ? "animate-[bp-ring_2.4s_ease-in-out_infinite] motion-reduce:animate-none" : ""}`} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-              {alerts.length ? <path d="M12 3.5 2.5 20h19zM12 10v4.5M12 17.5h.01" /> : <path d="m5 12.5 4.5 4.5L19 7.5" />}
-            </svg>
-          </span>
-          <div>
-            <h2 className="text-[17px] font-semibold leading-tight text-[#0b1f3a] lg:text-[18px]">Needs attention</h2>
-            <p className="text-[12.5px] text-slate-500">{loading ? "Checking…" : alerts.length ? `${alerts.length} alert${alerts.length === 1 ? "" : "s"}${reds ? ` · ${reds} urgent` : ""}` : "You're all caught up"}</p>
-          </div>
-        </div>
-        {apps.size > 1 && <Pick value={app} options={opts} onChange={(v) => { setApp(v as AlertApp | "all"); setAll(false); }} ariaLabel="Alerts from which app" />}
-      </div>
-      {loading && !alerts.length ? (
-        <ul className="space-y-2 px-4 pb-4 lg:px-5">{[0, 1, 2].map((i) => <li key={i} className="h-14 animate-pulse rounded-xl bg-slate-50" />)}</ul>
-      ) : !list.length ? (
-        <div className="flex flex-col items-center px-6 pb-8 pt-4 text-center">
-          <p className="text-[14.5px] font-semibold text-[#0b1f3a]">Nothing needs you right now</p>
-          <p className="mt-1 max-w-sm text-[13px] text-slate-500">Late jobs, jobs without a collaborator, low stock and invoices that are due will show up here.</p>
-        </div>
-      ) : (
-        <ul className="divide-y divide-slate-100 px-2 pb-2 lg:px-3">
-          {shown.map((a) => (
-            <li key={a.id}>
-              <Link prefetch={false} href={a.href} className="group flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-slate-50 lg:px-3">
-                <AlertIcon kind={a.kind} level={a.level} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[14px] font-semibold text-[#0b1f3a]">{a.title}</span>
-                  <span className="block truncate text-[12.5px] text-slate-500">
-                    <span className="font-medium text-slate-400">{a.app === "jobs" ? "Jobs" : a.app === "inventory" ? "Inventory" : "Finances"} · </span>{a.sub}
-                  </span>
-                </span>
-                <Pill k={a.level === "red" ? "delayed" : a.level === "orange" ? "paused" : a.level === "blue" ? "assigned" : "unassigned"}>{a.pill}</Pill>
-                <svg viewBox="0 0 20 20" className="hidden h-4 w-4 shrink-0 text-slate-300 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-slate-500 sm:block" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m8 5 5 5-5 5" /></svg>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-      {list.length > 6 && (
-        <div className="border-t border-slate-100 px-4 py-2.5 text-center">
-          <button type="button" onClick={() => setAll((v) => !v)} className="rounded-lg px-3 py-1.5 text-[13.5px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4]">
-            {all ? "Show less" : `See all ${list.length} alerts`}
-          </button>
-        </div>
-      )}
-    </section>
-  );
-}
-
-// ---------- Actividad del equipo ----------
-function TeamCard({ people, loading, onPick }: { people: Person[]; loading: boolean; onPick: (id: string) => void }) {
-  const [all, setAll] = useState(false);
-  const shown = all ? people : people.slice(0, 6);
-  const counts = { on_site: 0, on_my_way: 0, paused: 0, available: 0 };
-  people.forEach((p) => { counts[p.state] += 1; });
-  return (
-    <section id="bp-team" className="scroll-mt-24 rounded-2xl border border-slate-200 bg-white" aria-label="Team activity">
-      <div className="flex items-center justify-between gap-3 px-4 pb-2 pt-4 lg:px-5">
-        <div className="flex items-center gap-2.5">
-          <span className="group flex"><TeamArt size={36} /></span>
-          <div>
-            <h2 className="text-[17px] font-semibold leading-tight text-[#0b1f3a] lg:text-[18px]">Team activity</h2>
-            <p className="text-[12.5px] text-slate-500">
-              {counts.on_site} on site · {counts.on_my_way} on the way · {counts.available} available{counts.paused ? ` · ${counts.paused} paused` : ""}
-            </p>
-          </div>
-        </div>
-        <Link prefetch={false} href="/dashboard/jobs/operations" className="shrink-0 rounded-lg px-2.5 py-1.5 text-[13.5px] font-semibold text-[#2563eb] hover:bg-[#eef4ff]">Operations →</Link>
-      </div>
-      {loading && !people.length ? (
-        <ul className="space-y-2 px-4 pb-4 lg:px-5">{[0, 1, 2].map((i) => <li key={i} className="h-14 animate-pulse rounded-xl bg-slate-50" />)}</ul>
-      ) : !people.length ? (
-        <div className="px-6 pb-8 pt-4 text-center">
-          <p className="text-[14.5px] font-semibold text-[#0b1f3a]">No collaborators yet</p>
-          <p className="mt-1 text-[13px] text-slate-500">Add people in Team and they will show up here with what they are doing.</p>
-          <Link prefetch={false} href="/dashboard/jobs/team" className="mt-3 inline-block rounded-lg px-3 py-1.5 text-[13.5px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4]">Go to Team →</Link>
-        </div>
-      ) : (
-        <ul className="divide-y divide-slate-100 px-2 pb-2 lg:px-3">
-          {shown.map((p) => {
-            const st = PERSON_STATE[p.state];
-            return (
-              <li key={p.id}>
-                <button type="button" onClick={() => onPick(p.id)} className="group flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-slate-50 lg:px-3">
-                  <span className="relative shrink-0 transition-transform duration-200 group-hover:scale-105">
-                    <TechDot t={{ initials: p.initials, color: p.color, avatar_url: p.avatar_url, name: p.name }} size={38} />
-                    <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-white ${p.state === "on_site" ? "bg-[#14a39a]" : p.state === "on_my_way" ? "bg-[#3b82f6]" : p.state === "paused" ? "bg-[#f59e0b]" : "bg-slate-300"}`} />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[14px] font-semibold text-[#0b1f3a]">{p.name}</span>
-                    <span className="block truncate text-[12.5px] text-slate-500">
-                      {p.today ? `${p.today} job${p.today === 1 ? "" : "s"} today · ${p.done} done` : "No jobs today"}
-                      {p.state === "available" && p.next ? ` · next ${fmtTime(p.next)}` : ""}
-                    </span>
-                  </span>
-                  <Pill k={st.k}>{st.label}</Pill>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      {people.length > 6 && (
-        <div className="border-t border-slate-100 px-4 py-2.5 text-center">
-          <button type="button" onClick={() => setAll((v) => !v)} className="rounded-lg px-3 py-1.5 text-[13.5px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4]">
-            {all ? "Show less" : `See all ${people.length} collaborators`}
-          </button>
-        </div>
-      )}
-    </section>
-  );
-}
 
 // ---------- Tabla (computadora) ----------
 type Row = { j: OpsJob; g: OpsGroup };

@@ -54,7 +54,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
   const [loading, setLoading] = useState(true);
   const [trayOpen, setTrayOpen] = useState(false);
   const [statusF, setStatusF] = useState<"all" | JobStatus>("all");
-  const [techF, setTechF] = useState<string[]>([]);
+  const [techF, setTechF] = useState<string[]>(() => (sp.get("tech") ? [sp.get("tech") as string] : []));
   const [typeF, setTypeF] = useState("");
   const [now, setNow] = useState(() => new Date());
   const [toast, setToast] = useState<{ msg: string; tone: "ok" | "error" } | null>(null);

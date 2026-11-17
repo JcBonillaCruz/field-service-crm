@@ -5,17 +5,16 @@ import Link from "next/link";
 import CompanyBadge from "@/components/CompanyBadge";
 import { HeaderPattern } from "@/components/dashboard/DesktopDashboard";
 import { useSwipe } from "@/components/ui/useSwipe";
+import { FinanceArt } from "@/components/AppIcons";
+import { DashboardArt, HelpArt } from "@/components/home/DashArt";
 
 // =====================================================================
 // Inicio de BrightPro (Paso 5.3f): Dashboard (trabajos y alertas) · Finances (dueño y manager) · Help.
 // "Announcements" se quitó: estaba vacía y no se necesitaba.
 // =====================================================================
 type Tab = "dashboard" | "finances" | "help";
-const ICON: Record<Tab, string> = {
-  dashboard: "M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z",
-  finances: "M12 2.5v19M16.6 6.6c-.6-1.6-2.4-2.6-4.6-2.6-2.6 0-4.6 1.3-4.6 3.4 0 4.8 9.4 2.5 9.4 7.4 0 2.1-2.1 3.5-4.8 3.5-2.4 0-4.4-1.1-5-2.9",
-  help: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01",
-};
+// Íconos a color, iguales a los de All apps (Finances usa el mismo de la app)
+const Art = ({ t, size }: { t: Tab; size: number }) => (t === "dashboard" ? <DashboardArt size={size} /> : t === "finances" ? <FinanceArt size={size} /> : <HelpArt size={size} />);
 const LABEL: Record<Tab, string> = { dashboard: "Dashboard", finances: "Finances", help: "Help" };
 
 function greeting(h: number) { return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"; }
@@ -77,11 +76,11 @@ export default function HomeTabs({ firstName, companyId, companyName, companyInd
           </div>
           {buttons}
         </div>
-        <div role="tablist" aria-label="Home sections" className="relative flex h-12 items-end gap-8 px-8">
+        <div role="tablist" aria-label="Home sections" className="relative flex h-[3.25rem] items-end gap-9 px-8">
           {tabs.map((t) => (
             <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => setTab(t)}
-              className={`group relative flex items-center gap-2 pb-3 text-[16px] font-medium transition-colors ${tab === t ? "text-[#0b1f3a]" : "text-slate-500 hover:text-[#0b1f3a]"}`}>
-              <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] transition-transform duration-200 group-hover:scale-110" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={ICON[t]} /></svg>
+              className={`group relative flex items-center gap-2 pb-2.5 text-[16px] transition-colors ${tab === t ? "font-semibold text-[#0b1f3a]" : "font-medium text-slate-500 hover:text-[#0b1f3a]"}`}>
+              <span className={`transition-transform duration-200 group-hover:-translate-y-0.5 ${tab === t ? "" : "opacity-80 group-hover:opacity-100"}`}><Art t={t} size={28} /></span>
               {LABEL[t]}
               {tab === t && <span className="absolute inset-x-0 -bottom-px h-[3px] rounded-full bg-[#0f766e]" />}
             </button>
@@ -98,8 +97,8 @@ export default function HomeTabs({ firstName, companyId, companyName, companyInd
       <div role="tablist" aria-label="Home sections" className="sticky top-16 z-20 flex border-b border-slate-200 bg-white lg:hidden">
         {tabs.map((t) => (
           <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => setTab(t)}
-            className={`flex flex-1 items-center justify-center gap-1.5 border-b-2 py-3 text-[14px] transition-colors ${tab === t ? "border-[#0f766e] font-semibold text-[#0f766e]" : "border-transparent text-slate-500"}`}>
-            <svg viewBox="0 0 24 24" className="h-[17px] w-[17px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={ICON[t]} /></svg>
+            className={`group flex flex-1 items-center justify-center gap-1.5 border-b-2 py-2 text-[14px] transition-colors ${tab === t ? "border-[#0f766e] font-semibold text-[#0b1f3a]" : "border-transparent text-slate-500"}`}>
+            <Art t={t} size={26} />
             {LABEL[t]}
           </button>
         ))}
@@ -126,11 +125,12 @@ function HelpTab() {
     { label: "Notifications", text: "Turn phone alerts on from the bell", href: "/dashboard" },
   ];
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 lg:px-8 lg:py-12">
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center lg:p-8">
-        <p className="text-[18px] font-semibold text-[#0b1f3a]">Need help?</p>
+    <div className="w-full px-4 py-6 lg:px-8 lg:py-8">
+      <div className="group rounded-2xl border border-slate-200 bg-white p-6 text-center lg:p-10">
+        <span className="inline-flex"><HelpArt size={72} /></span>
+        <p className="mt-2 text-[20px] font-semibold text-[#0b1f3a]">Need help?</p>
         <p className="mt-1 text-[14.5px] text-slate-500">Guides and support channels are coming soon. Meanwhile, these are the places people look for most.</p>
-        <ul className="mt-5 grid gap-2 text-left sm:grid-cols-3">
+        <ul className="mx-auto mt-6 grid max-w-4xl gap-3 text-left sm:grid-cols-3">
           {links.map((l) => (
             <li key={l.label}>
               <Link prefetch={false} href={l.href} className="group block rounded-xl border border-slate-200 p-3.5 transition-all duration-150 hover:-translate-y-0.5 hover:border-[#14a39a] hover:shadow-sm">

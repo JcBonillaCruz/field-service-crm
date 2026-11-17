@@ -29,7 +29,12 @@ export const OPS_GROUPS: { id: OpsGroup; label: string; hint: string; tone: stri
 
 const MIN = 60000;
 const GRACE_MIN = 10; // minutos de gracia antes de marcar "retrasado"
-const fmtLate = (min: number) => (min < 60 ? `${min} min` : `${Math.floor(min / 60)}h${min % 60 ? ` ${min % 60}m` : ""}`);
+// Menos de 1 hora: minutos · menos de 24 horas: horas · después: días (Paso 5.3f)
+const fmtLate = (min: number) => {
+  if (min < 60) return `${min} min`;
+  if (min < 24 * 60) { const h = Math.floor(min / 60), m = min % 60; return `${h}h${m ? ` ${m}m` : ""}`; }
+  const d = Math.floor(min / (24 * 60)); return `${d} day${d === 1 ? "" : "s"}`;
+};
 
 // ¿Va tarde? · no llegó a tiempo (ya pasó la ventana de llegada) · se pasó de la hora de terminar
 export function delayOf(j: OpsJob, now = Date.now()): { label: string; detail: string; minutes: number } | null {
