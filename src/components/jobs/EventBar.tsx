@@ -82,7 +82,16 @@ export function StatusGlyph({ s, className = "" }: { s: CalVisit["visit_status"]
   return <span className={className}><StatusArt s={s} size={18} /></span>;
 }
 
-// Barra del trabajo en Day/Week (color suave del técnico; terminado = gris con palomita verde grande)
+// Tono oscuro del mismo color (para el número y la hora sobre el fondo pastel)
+export function ink(hex: string, k = 0.52) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || "");
+  if (!m) return "#0b1f3a";
+  const n = parseInt(m[1], 16);
+  const c = (v: number) => Math.round(v * k + 11 * (1 - k) * 0.6);
+  return `rgb(${c((n >> 16) & 255)}, ${c((n >> 8) & 255)}, ${c(n & 255)})`;
+}
+
+// Tarjeta del trabajo en Day/Week (pastel suave del color; terminado = gris con palomita verde grande)
 export function EventBar({ v, start, end, compact, dragging, onDown, onResizeDown, onHover }: {
   v: CalVisit; start: Date; end: Date; compact: boolean; dragging: boolean;
   onDown: (e: React.PointerEvent) => void; onResizeDown: (e: React.PointerEvent) => void; onHover: (el: HTMLElement | null) => void;
@@ -95,15 +104,20 @@ export function EventBar({ v, start, end, compact, dragging, onDown, onResizeDow
     <div role="button" tabIndex={0} aria-label={`${v.customer_name}, ${fmtTime(start)}${completed ? ", completed" : ""}`}
       onPointerDown={onDown}
       onMouseEnter={(e) => onHover(e.currentTarget)} onMouseLeave={() => onHover(null)}
-      className={`group/bar absolute inset-0 flex cursor-grab select-none flex-col overflow-hidden rounded-lg border-l-[3px] pl-1.5 pr-1 text-left transition-[box-shadow,opacity] duration-100 touch-manipulation hover:z-10 hover:shadow-[0_6px_18px_rgba(15,40,60,0.14)] active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] ${dragging ? "opacity-40" : ""} ${done ? "text-slate-500" : "text-[#0b1f3a]"}`}
-      style={done ? { background: "#f1f5f9", borderLeftColor: completed ? "#16a34a" : "#cbd5e1" } : { background: tint(color, 0.13), borderLeftColor: color }}>
+      className={`group/bar absolute inset-0 flex cursor-grab select-none flex-col overflow-hidden rounded-[10px] border pl-2 pr-1.5 text-left transition-[box-shadow,transform,opacity] duration-150 ease-out touch-manipulation hover:z-10 hover:-translate-y-px hover:shadow-[0_8px_20px_rgba(15,40,60,0.12)] active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] ${dragging ? "opacity-40" : ""} ${done ? "text-slate-500" : "text-[#0b1f3a]"}`}
+      style={done ? { background: "#f5f7f9", borderColor: "#e6eaef" } : { background: tint(color, 0.14), borderColor: tint(color, 0.26) }}>
       <div className={`flex min-w-0 items-start gap-1 ${compact ? "pt-0.5" : "pt-1"}`}>
         <div className="min-w-0 flex-1">
-          <p className={`truncate font-semibold leading-tight ${compact ? "text-[11.5px]" : "text-[12.5px]"} ${v.visit_status === "cancelled" ? "line-through" : ""}`}>
+          {!compact && (
+            <p className="truncate text-[10.5px] font-bold leading-tight tracking-wide" style={{ color: done ? "#94a3b8" : ink(color) }}>
+              {v.number}
+            </p>
+          )}
+          <p className={`truncate font-semibold leading-tight ${compact ? "text-[11.5px]" : "mt-px text-[12.5px]"} ${v.visit_status === "cancelled" ? "line-through" : ""}`}>
             {v.customer_name || v.title || v.number}
           </p>
           {!compact && (
-            <p className="truncate text-[11px] leading-tight text-slate-500">
+            <p className="mt-px truncate text-[11px] font-medium leading-tight" style={{ color: done ? "#94a3b8" : ink(color, 0.62) }}>
               {fmtTime(start)} – {fmtTime(end)}{v.visit_count > 1 ? ` · Visit ${v.visit_no}` : ""}
             </p>
           )}
@@ -116,7 +130,7 @@ export function EventBar({ v, start, end, compact, dragging, onDown, onResizeDow
       </div>
       {!compact && (completed
         ? <p className="mt-0.5 flex items-center gap-1 text-[10.5px] font-semibold uppercase tracking-wide text-[#16a34a]">Completed</p>
-        : v.type_name && <p className="mt-0.5 truncate text-[10.5px] text-slate-500">{v.type_name}</p>)}
+        : v.type_name && end.getTime() - start.getTime() >= 80 * 60000 && <p className="mt-0.5 truncate text-[10.5px] text-slate-500">{v.type_name}</p>)}
       {/* Borde de abajo: estirar para cambiar la duración */}
       {!done && (
         <span onPointerDown={(e) => { e.stopPropagation(); onResizeDown(e); }} aria-hidden="true"
@@ -133,12 +147,12 @@ export function EventChip({ v, dragging, onDown, onHover }: { v: CalVisit; dragg
   const color = barColor(v);
   return (
     <div role="button" tabIndex={0} onPointerDown={onDown} onMouseEnter={(e) => onHover(e.currentTarget)} onMouseLeave={() => onHover(null)}
-      className={`flex w-full cursor-grab select-none items-center gap-1 truncate rounded-md px-1.5 py-0.5 text-left text-[11.5px] leading-snug text-[#0b1f3a] transition-shadow touch-manipulation hover:shadow-[0_3px_10px_rgba(15,40,60,0.12)] ${dragging ? "opacity-40" : ""} ${v.visit_status === "completed" ? "text-slate-500" : ""}`}
-      style={{ background: v.visit_status === "completed" ? "#f1f5f9" : tint(color, 0.13) }}>
+      className={`flex w-full cursor-grab select-none items-center gap-1 truncate rounded-lg px-1.5 py-[3px] text-left text-[11.5px] leading-snug text-[#0b1f3a] transition-[box-shadow,transform] duration-150 touch-manipulation hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(15,40,60,0.12)] ${dragging ? "opacity-40" : ""} ${v.visit_status === "completed" ? "text-slate-500" : ""}`}
+      style={{ background: v.visit_status === "completed" ? "#f5f7f9" : tint(color, 0.14) }}>
       {v.visit_status === "completed" || v.visit_status === "on_my_way" || v.visit_status === "in_progress"
         ? <StatusArt s={v.visit_status} size={14} />
         : <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: color }} />}
-      <span className="shrink-0 text-slate-500">{fmtTime(new Date(v.starts_at)).replace(":00", "").replace(" ", "").toLowerCase()}</span>
+      <span className="shrink-0 font-medium" style={{ color: v.visit_status === "completed" ? "#94a3b8" : ink(color, 0.62) }}>{fmtTime(new Date(v.starts_at)).replace(":00", "").replace(" ", "").toLowerCase()}</span>
       <span className="min-w-0 truncate font-medium">{v.customer_name || v.number}</span>
     </div>
   );

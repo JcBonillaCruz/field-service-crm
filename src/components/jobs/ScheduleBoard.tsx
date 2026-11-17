@@ -457,50 +457,94 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
     return () => { window.removeEventListener("pointerdown", close); window.removeEventListener("keydown", esc); window.removeEventListener("resize", close); };
   }, [pop?.pinned]);
 
+  // Panel derecho: resumen del día (hoy si está a la vista; si no, el día elegido)
+  const focusDay = days.some((d) => sameDay(d, now)) ? dayStart(now) : dayStart(anchor);
+  const summary = useMemo(() => {
+    const list = colored.filter((v) => sameDay(new Date(v.starts_at), focusDay) && v.visit_status !== "cancelled" && v.job_status !== "cancelled");
+    const t = now.getTime();
+    const late = (v: CalVisit) => {
+      if (v.visit_status === "scheduled" || v.visit_status === "on_my_way") return t - (new Date(v.starts_at).getTime() + (v.arrival_window_min || 0) * 60000) >= 10 * 60000;
+      if (v.visit_status === "in_progress" || v.visit_status === "paused") return t - new Date(v.ends_at).getTime() >= 10 * 60000;
+      return false;
+    };
+    const per = new Map<string, number>();
+    list.forEach((v) => v.tech_ids.forEach((id) => per.set(id, (per.get(id) ?? 0) + 1)));
+    return {
+      total: list.length,
+      working: list.filter((v) => ["on_my_way", "in_progress", "paused"].includes(v.visit_status)).length,
+      assigned: list.filter((v) => v.visit_status === "scheduled" && v.tech_ids.length > 0).length,
+      unassigned: list.filter((v) => v.visit_status === "scheduled" && v.tech_ids.length === 0).length,
+      late: list.filter(late).length,
+      done: list.filter((v) => v.visit_status === "completed").length,
+      people: team.filter((m) => per.has(m.user_id)).map((m) => ({ m, n: per.get(m.user_id) ?? 0 })).sort((a, b) => b.n - a.n),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colored, focusDay.getTime(), now, team]);
+
   const toggleTray = () => setTrayOpen((o) => { try { localStorage.setItem(TRAY_KEY, o ? "0" : "1"); } catch { /* */ } return !o; });
   const trayCount = tray.length;
   const holdCount = tray.filter((j) => j.status === "on_hold").length;
   const scrollTo = days.some((d) => sameDay(d, now)) ? Math.max(visStart, minutesOf(now) - 90) : Math.max(visStart, workStart - 30);
 
   return (
-    <div className="flex h-[calc(100dvh-4rem)] flex-col bg-white">
-      {/* Barra de herramientas: fecha a la izquierda; Vista, Filtros, bandeja y Nuevo a la derecha */}
-      <div className="flex items-center gap-1.5 border-b border-slate-200 px-2.5 py-2 sm:gap-2 sm:px-3 lg:px-5 lg:py-2.5">
-        <div className="flex min-w-0 flex-1 items-center gap-1">
+    <div className="flex h-[calc(100dvh-4rem)] flex-col bg-white lg:bg-[#f4f6f8]">
+      {/* Encabezado (solo computadora): título a la izquierda y "New job" a la derecha */}
+      <div className="hidden items-center justify-between gap-4 px-6 pb-4 pt-5 lg:flex xl:px-8">
+        <div className="group flex min-w-0 items-center gap-3">
+          <ScheduleArt />
+          <div className="min-w-0">
+            <h1 className="text-[24px] font-semibold leading-tight tracking-tight text-[#0b1f3a]">Schedule</h1>
+            <p className="mt-0.5 truncate text-[14px] text-slate-500">Plan and see every job at a glance</p>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+        <ViewSwitch value={view} onChange={setView} />
+        <Link prefetch={false} href="/dashboard/jobs/new"
+          className="group/n inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl bg-[#0f766e] px-4 text-[15px] font-semibold text-white shadow-sm shadow-[#0f766e]/25 transition-all duration-150 hover:-translate-y-px hover:bg-[#0c5f59] hover:shadow-md">
+          <svg viewBox="0 0 20 20" className="h-4 w-4 transition-transform duration-200 group-hover/n:rotate-90" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>
+          New job
+        </Link>
+        </div>
+      </div>
+
+      <div className="relative flex min-h-0 flex-1 lg:gap-4 lg:px-6 lg:pb-5 xl:gap-5 xl:px-8">
+      <div className="relative flex min-w-0 flex-1 flex-col bg-white lg:overflow-hidden lg:rounded-2xl lg:border lg:border-slate-200 lg:shadow-[0_1px_2px_rgba(15,40,60,0.04),0_8px_24px_rgba(15,40,60,0.04)]">
+      {/* Barra del calendario: fecha a la izquierda; Vista, Filtros y bandeja a la derecha */}
+      <div className="flex items-center gap-1.5 border-b border-slate-200 px-2.5 py-2 sm:gap-2 sm:px-3 lg:border-slate-100 lg:px-4 lg:py-3">
+        <div className="flex min-w-0 flex-1 items-center gap-1 lg:gap-1.5">
           <button type="button" onClick={() => setAnchor(dayStart(new Date()))}
-            className="h-10 shrink-0 rounded-xl border border-slate-200 px-3 text-[14px] sm:h-9 sm:rounded-lg sm:px-2.5 sm:text-[13.5px] font-semibold text-slate-700 transition-colors hover:border-[#14a39a] hover:bg-[#f3fbf8]">Today</button>
+            className="h-10 shrink-0 rounded-xl border border-slate-200 px-3 text-[14px] sm:h-9 sm:rounded-lg sm:px-2.5 sm:text-[13.5px] lg:order-3 lg:h-10 lg:rounded-xl lg:px-3.5 font-semibold text-slate-700 transition-all duration-150 hover:-translate-y-px hover:border-[#14a39a] hover:bg-[#f3fbf8] hover:text-[#0f766e]">Today</button>
           {([-1, 1] as const).map((d) => (
             <button key={d} type="button" aria-label={d < 0 ? "Previous" : "Next"} onClick={() => setAnchor((a) => shiftAnchor(view, a, d))}
-              className="hidden h-9 w-8 shrink-0 sm:flex items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800">
+              className="hidden h-9 w-8 shrink-0 sm:flex lg:order-1 lg:h-10 lg:w-10 lg:rounded-xl lg:border lg:border-slate-200 lg:hover:border-[#14a39a] lg:hover:bg-[#f3fbf8] lg:hover:text-[#0f766e] items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800">
               <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d < 0 ? "m12 5-5 5 5 5" : "m8 5 5 5-5 5"} /></svg>
             </button>
           ))}
-          <DateJump label={rangeLabel(view, anchor, settings.week_starts_on)} anchor={anchor} days={days} weekStartsOn={settings.week_starts_on}
-            onPick={(d) => setAnchor(d)} />
-          {loading && <span className="ml-1 h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-[#14a39a] border-t-transparent" aria-label="Loading" />}
+          <span className="flex min-w-0 lg:order-4"><DateJump label={rangeLabel(view, anchor, settings.week_starts_on)} anchor={anchor} days={days} weekStartsOn={settings.week_starts_on}
+            onPick={(d) => setAnchor(d)} /></span>
+          {loading && <span className="ml-1 h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-[#14a39a] border-t-transparent lg:order-5" aria-label="Loading" />}
         </div>
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
-          <ViewMenu value={view} onChange={setView} />
+          <span className="lg:hidden"><ViewMenu value={view} onChange={setView} /></span>
           <FiltersMenu statusF={statusF} setStatusF={setStatusF} counts={counts} team={techs} techF={techF} setTechF={setTechF}
             types={types.filter((t) => t.is_active)} typeF={typeF} setTypeF={setTypeF}
             colorBy={colorBy} setColorBy={(v) => { setColorBy(v); try { localStorage.setItem(COLOR_KEY, v); } catch { /* */ } }} />
           <button type="button" onClick={toggleTray} aria-pressed={trayOpen} aria-label="To schedule" title="To schedule"
-            className={`relative h-10 min-w-[2.5rem] items-center justify-center gap-1.5 rounded-xl border px-2.5 text-[13px] font-semibold transition-colors sm:flex sm:h-9 sm:min-w-0 sm:rounded-lg ${trayCount > 0 ? "flex" : "hidden"} ${trayOpen ? "border-[#0f766e] bg-[#e9f7f4] text-[#0f766e]" : "border-slate-200 text-slate-700 hover:border-[#14a39a]"}`}>
+            className={`relative h-10 min-w-[2.5rem] items-center justify-center gap-1.5 rounded-xl border px-2.5 text-[13px] font-semibold transition-colors sm:flex sm:h-9 sm:min-w-0 sm:rounded-lg lg:h-10 lg:rounded-xl lg:px-3 ${trayCount > 0 ? "flex" : "hidden"} ${trayOpen ? "border-[#0f766e] bg-[#e9f7f4] text-[#0f766e]" : "border-slate-200 text-slate-700 hover:border-[#14a39a]"}`}>
             <svg viewBox="0 0 24 24" className="h-5 w-5 sm:h-4 sm:w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5h16v14H4zM15 5v14" /></svg>
             <span className="hidden xl:inline">To schedule</span>
             {trayCount > 0 && <span className={`rounded-full px-1.5 text-[11px] text-white ${holdCount ? "bg-[#e11d48]" : "bg-[#0f766e]"}`}>{trayCount}</span>}
           </button>
           <Link prefetch={false} href="/dashboard/jobs/new" aria-label="New job"
-            className="group/n hidden h-11 min-w-[2.75rem] sm:inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#0f766e] px-2.5 text-[14px] sm:h-9 sm:min-w-0 sm:rounded-lg font-semibold text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59] sm:px-3.5">
+            className="group/n hidden h-11 min-w-[2.75rem] sm:inline-flex lg:hidden items-center justify-center gap-1.5 rounded-xl bg-[#0f766e] px-2.5 text-[14px] sm:h-9 sm:min-w-0 sm:rounded-lg font-semibold text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59] sm:px-3.5">
             <svg viewBox="0 0 20 20" className="h-6 w-6 transition-transform duration-200 group-hover/n:rotate-90 sm:h-4 sm:w-4" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>
             <span className="hidden sm:inline">New job</span>
           </Link>
         </div>
       </div>
 
-      <div className="relative flex min-h-0 flex-1">
-        <div className="min-w-0 flex-1">
+        <div className="relative min-h-0 min-w-0 flex-1">
           {view === "dispatch" ? (
             <DispatchGrid days={days} rows={cols} visits={shown} dStart={visStart} dEnd={visEnd} preview={preview} handlers={handlers} apiRef={apiRef} now={now} />
           ) : view === "month" ? (
@@ -516,16 +560,22 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
             </div>
           )}
         </div>
+      </div>
 
-        {/* Bandeja: panel a la derecha en computadora; pantalla encima en celular */}
-        {trayOpen && (
-          <>
-            <button type="button" aria-label="Close panel" onClick={toggleTray} className="fixed inset-0 z-30 bg-slate-900/25 lg:hidden" />
-            <aside className="fixed inset-y-0 right-0 z-40 w-[86%] max-w-[22rem] shadow-2xl animate-[bp-in-left_0.2s_ease-out] lg:static lg:z-auto lg:w-72 lg:max-w-none lg:border-l lg:border-slate-200 lg:shadow-none lg:animate-none">
-              <JobTray jobs={tray} trayRef={trayRef} draggingId={draggingId} dropActive={trayDrop} onDown={onTrayDown} onClose={toggleTray} />
-            </aside>
-          </>
-        )}
+        {/* Columna derecha (computadora): resumen del día y, si está abierta, la bandeja. En celular la bandeja sale encima. */}
+        <div className={`${trayOpen ? "contents lg:flex" : "hidden xl:flex"} lg:w-72 lg:shrink-0 lg:flex-col lg:gap-4 xl:w-[17.5rem] 2xl:w-[19rem]`}>
+          <DaySummary day={focusDay} isToday={sameDay(focusDay, now)} data={summary} loading={loading} compact={trayOpen} techF={techF}
+            onTech={(id) => setTechF(techF.length === 1 && techF[0] === id ? [] : [id])}
+            onDetail={view === "day" && sameDay(anchor, focusDay) ? null : () => { setAnchor(focusDay); setView("day"); }} />
+          {trayOpen && (
+            <>
+              <button type="button" aria-label="Close panel" onClick={toggleTray} className="fixed inset-0 z-30 bg-slate-900/25 lg:hidden" />
+              <aside className="fixed inset-y-0 right-0 z-40 w-[86%] max-w-[22rem] shadow-2xl animate-[bp-in-left_0.2s_ease-out] lg:static lg:z-auto lg:min-h-0 lg:w-auto lg:max-w-none lg:flex-1 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-slate-200 lg:shadow-[0_1px_2px_rgba(15,40,60,0.04),0_8px_24px_rgba(15,40,60,0.04)] lg:animate-none">
+                <JobTray jobs={tray} trayRef={trayRef} draggingId={draggingId} dropActive={trayDrop} onDown={onTrayDown} onClose={toggleTray} />
+              </aside>
+            </>
+          )}
+        </div>
       </div>
 
       {pop && (
@@ -566,7 +616,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
 }
 
 // ---------- Vista y Filtros (Headless UI) ----------
-const btn = "flex h-10 min-w-[2.5rem] items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 sm:h-9 sm:min-w-0 sm:rounded-lg text-[13px] font-semibold text-slate-700 transition-colors hover:border-[#14a39a] focus:outline-none data-[open]:border-[#0f766e] data-[open]:ring-4 data-[open]:ring-[#14a39a]/15";
+const btn = "flex h-10 min-w-[2.5rem] items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 sm:h-9 sm:min-w-0 sm:rounded-lg lg:h-10 lg:rounded-xl lg:px-3 text-[13px] font-semibold text-slate-700 transition-colors hover:border-[#14a39a] focus:outline-none data-[open]:border-[#0f766e] data-[open]:ring-4 data-[open]:ring-[#14a39a]/15";
 const VIEW_ICON: Record<CalView, string> = {
   day: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 15h6", week: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 10v10M14 10v10",
   workweek: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M10 10v10M15 10v10", month: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M4 15h16M9 10v10M14 10v10",
@@ -592,6 +642,117 @@ function ViewMenu({ value, onChange }: { value: CalView; onChange: (v: CalView) 
         ))}
       </ListboxOptions>
     </Listbox>
+  );
+}
+
+// Selector de vista en computadora: Day · Week · Month a la vista; Mon–Fri y Dispatch en "More"
+function ViewSwitch({ value, onChange }: { value: CalView; onChange: (v: CalView) => void }) {
+  const extra = value === "workweek" || value === "dispatch";
+  const seg = (on: boolean) => `flex h-9 items-center gap-1 rounded-[9px] px-4 text-[14px] font-semibold transition-all duration-150 focus:outline-none ${on ? "bg-[#0f766e] text-white shadow-sm shadow-[#0f766e]/30" : "text-slate-600 hover:bg-[#e9f7f4] hover:text-[#0f766e]"}`;
+  return (
+    <div className="hidden items-center gap-0.5 rounded-xl border border-[#cfe9e3] bg-white p-[3px] lg:flex" role="group" aria-label="Calendar view">
+      {(["day", "week", "month"] as const).map((id) => (
+        <button key={id} type="button" aria-pressed={value === id} onClick={() => onChange(id)} className={seg(value === id)}>{VIEWS.find((v) => v.id === id)?.label}</button>
+      ))}
+      <Listbox value={value} onChange={onChange}>
+        <ListboxButton className={seg(extra)} aria-label="More views">
+          {extra ? VIEWS.find((v) => v.id === value)?.label : "More"}
+          <span className={extra ? "text-white/80" : "text-slate-400"}><Chevron /></span>
+        </ListboxButton>
+        <ListboxOptions anchor="bottom end" transition className={`${panelClass} w-44`}>
+          {VIEWS.filter((v) => v.id === "workweek" || v.id === "dispatch").map((v) => (
+            <ListboxOption key={v.id} value={v.id} className={optionClass}>
+              <span className="flex items-center gap-2.5">
+                <svg viewBox="0 0 24 24" className="h-4 w-4 text-slate-400 group-data-[selected]:text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={VIEW_ICON[v.id]} /></svg>
+                {v.label}
+              </span>
+              <Check />
+            </ListboxOption>
+          ))}
+        </ListboxOptions>
+      </Listbox>
+    </div>
+  );
+}
+
+// Ícono ilustrado del calendario (mismo estilo que los íconos a color de las apps)
+function ScheduleArt() {
+  return (
+    <svg viewBox="0 0 48 48" width={48} height={48} aria-hidden="true" className="shrink-0 transition-transform duration-300 ease-out group-hover:-rotate-6 group-hover:scale-105">
+      <rect x="5" y="9" width="38" height="34" rx="9" fill="#e9f7f4" stroke="#bfe6de" strokeWidth="1.5" />
+      <path d="M5 18a9 9 0 0 1 9-9h20a9 9 0 0 1 9 9v2H5z" fill="#14a39a" />
+      <rect x="14" y="4" width="4" height="10" rx="2" fill="#0f766e" /><rect x="30" y="4" width="4" height="10" rx="2" fill="#0f766e" />
+      <rect x="11" y="25" width="8" height="6" rx="2" fill="#93c5fd" /><rect x="21" y="25" width="8" height="6" rx="2" fill="#fdba74" /><rect x="31" y="25" width="6" height="6" rx="2" fill="#c4b5fd" />
+      <rect x="11" y="33" width="6" height="5" rx="2" fill="#86efac" /><rect x="19" y="33" width="10" height="5" rx="2" fill="#e8713a" />
+    </svg>
+  );
+}
+
+// Panel derecho: resumen del día con sus colores y quién trabaja ese día
+type Summary = { total: number; working: number; assigned: number; unassigned: number; late: number; done: number; people: { m: TeamMember; n: number }[] };
+function DaySummary({ day, isToday, data, loading, compact, techF, onTech, onDetail }: {
+  day: Date; isToday: boolean; data: Summary; loading: boolean; compact: boolean; techF: string[]; onTech: (id: string) => void; onDetail: (() => void) | null;
+}) {
+  const rows: { label: string; n: number; color: string; bg: string; d: string; fill?: boolean }[] = [
+    { label: "Total", n: data.total, color: "#0f766e", bg: "#e9f7f4", d: "M5 6h14v13H5zM5 10h14M9 4v4M15 4v4" },
+    { label: "In progress", n: data.working, color: "#2563eb", bg: "#e8f0ff", d: "M12 7v5l3 2M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17z" },
+    { label: "Assigned", n: data.assigned, color: "#0284c7", bg: "#e3f4fd", d: "M12 12a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM5.5 19.5a6.5 6.5 0 0 1 13 0" },
+    ...(data.unassigned ? [{ label: "No collaborator", n: data.unassigned, color: "#64748b", bg: "#f1f5f9", d: "M12 12a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM5.5 19.5a6.5 6.5 0 0 1 9-6M16 16l4 4M20 16l-4 4" }] : []),
+    { label: "Delayed", n: data.late, color: "#e11d48", bg: "#ffe9ec", d: "M12 8v4.5M12 16h.01M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17z" },
+    { label: "Completed", n: data.done, color: "#16a34a", bg: "#e6f8ec", d: "M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17zM8 12.3l2.7 2.7L16 9.5" },
+  ];
+  return (
+    <section aria-label="Day summary"
+      className={`hidden min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,40,60,0.04),0_8px_24px_rgba(15,40,60,0.04)] xl:flex ${compact ? "shrink-0" : "flex-1"}`}>
+      <div className="px-5 pb-1 pt-5">
+        <h2 className="text-[17px] font-semibold leading-tight tracking-tight text-[#0b1f3a]">Day summary</h2>
+        <p className="mt-1 text-[14px] font-semibold text-[#0b1f3a]">{isToday ? "Today, " : ""}{day.toLocaleDateString("en-US", isToday ? { month: "short", day: "numeric" } : { weekday: "short", month: "short", day: "numeric" })}</p>
+      </div>
+      <ul className="px-3 py-2">
+        {rows.map((r) => (
+          <li key={r.label} className="group/r flex items-center gap-3 rounded-xl px-2 py-[7px] transition-colors duration-150 hover:bg-slate-50">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] transition-transform duration-200 ease-out group-hover/r:scale-110" style={{ background: r.bg, color: r.color }}>
+              <svg viewBox="0 0 24 24" className="h-[17px] w-[17px]" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d={r.d} /></svg>
+            </span>
+            <span className="min-w-0 flex-1 truncate text-[14px] text-slate-600">{r.label}</span>
+            {loading ? <span className="h-5 w-5 animate-pulse rounded bg-slate-100" />
+              : <span className="text-[18px] font-bold leading-none tracking-tight tabular-nums" style={{ color: r.n ? r.color : "#cbd5e1" }}>{r.n}</span>}
+          </li>
+        ))}
+      </ul>
+
+      {!compact && (
+        <>
+          <div className="mx-5 border-t border-slate-100" />
+          <h3 className="px-5 pb-1 pt-4 text-[15px] font-semibold tracking-tight text-[#0b1f3a]">Team on this day</h3>
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-2">
+            {!loading && data.people.length === 0 && <p className="px-2 py-3 text-[13px] text-slate-400">Nobody has jobs on this day yet.</p>}
+            {data.people.map(({ m, n }) => {
+              const on = techF.length === 1 && techF[0] === m.user_id;
+              return (
+                <button key={m.user_id} type="button" onClick={() => onTech(m.user_id)} aria-pressed={on} title={on ? "Show everyone" : `Show only ${m.full_name}'s jobs`}
+                  className={`group/t flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors duration-150 ${on ? "bg-[#e9f7f4]" : "hover:bg-slate-50"}`}>
+                  <span className="transition-transform duration-200 ease-out group-hover/t:scale-105"><TechDot t={m} size={38} ring={false} /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14px] font-semibold text-[#0b1f3a]">{m.full_name}</span>
+                    <span className="block text-[12.5px] text-slate-500">{n} job{n === 1 ? "" : "s"}</span>
+                  </span>
+                  {on && <span className="shrink-0 rounded-full bg-[#0f766e] px-2 py-0.5 text-[10.5px] font-semibold text-white">Filtered</span>}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+      {onDetail && (
+        <div className="p-3 pt-1">
+          <button type="button" onClick={onDetail}
+            className="group/d flex h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-[#eef4ff] text-[14px] font-semibold text-[#2563eb] transition-all duration-150 hover:-translate-y-px hover:bg-[#e0ebff] hover:shadow-sm">
+            View day <span className="transition-transform duration-200 group-hover/d:translate-x-1">→</span>
+          </button>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -710,7 +871,7 @@ function DateJump({ label, anchor, days, weekStartsOn, onPick }: { label: string
   const today = new Date();
   return (
     <Popover className="relative min-w-0">
-      <PopoverButton aria-label={label} title={label} className="group ml-0.5 flex h-10 min-w-0 items-center gap-1 rounded-xl px-2 py-1 sm:h-9 sm:rounded-lg text-left transition-colors hover:bg-slate-100 focus:outline-none data-[open]:bg-[#e9f7f4]">
+      <PopoverButton aria-label={label} title={label} className="group ml-0.5 flex h-10 min-w-0 max-w-full items-center gap-1 rounded-xl px-2 py-1 sm:h-9 sm:rounded-lg text-left transition-colors hover:bg-slate-100 focus:outline-none data-[open]:bg-[#e9f7f4]">
         <span className="truncate whitespace-nowrap text-[15px] font-semibold tracking-tight text-[#0b1f3a] sm:text-[17px] lg:text-[19px]">{label.replace(/, \d{4}$/, "")}<span className="hidden sm:inline">{/, \d{4}$/.exec(label)?.[0] ?? ""}</span></span>
         <svg viewBox="0 0 20 20" className="hidden h-4 w-4 text-slate-500 transition-transform duration-200 group-data-[open]:rotate-180 sm:block" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
       </PopoverButton>

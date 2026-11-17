@@ -39,8 +39,8 @@ export default function MonthGrid({ days, month, visits, preview, handlers, apiR
 
   return (
     <div className="flex h-full flex-col">
-      <div className="grid grid-cols-7 border-b border-slate-200 bg-white">
-        {days.slice(0, 7).map((d) => <div key={d.getDay()} className="px-2 py-2 text-center text-[12px] font-medium uppercase text-slate-500">{DOW[d.getDay()]}</div>)}
+      <div className="grid grid-cols-7 border-b border-slate-100 bg-white">
+        {days.slice(0, 7).map((d) => <div key={d.getDay()} className="px-2 py-2.5 text-center text-[12.5px] font-medium text-slate-400">{DOW[d.getDay()]}</div>)}
       </div>
       <div ref={grid} className="grid flex-1 grid-cols-7 grid-rows-6 overflow-hidden">
         {cols.map((c) => {
@@ -51,10 +51,10 @@ export default function MonthGrid({ days, month, visits, preview, handlers, apiR
           return (
             <div key={c.key}
               onPointerDown={(e) => { if (e.target === e.currentTarget || (e.target as HTMLElement).dataset.cell) handlers.onEmptyDown(e, c, null); }}
-              className={`relative flex min-h-0 flex-col gap-0.5 overflow-hidden border-b border-l border-slate-100 p-1 transition-colors ${out ? "bg-slate-50/70" : "bg-white"}`}
+              className={`relative flex min-h-0 flex-col gap-[3px] overflow-hidden border-b border-l border-slate-100 p-1 transition-colors lg:p-1.5 ${out ? "bg-[#fafbfc]" : today ? "bg-[#f6fcfa]" : "bg-white"}`}
               style={target ? { background: tint(preview!.color, 0.12), boxShadow: `inset 0 0 0 2px ${preview!.color}` } : undefined}>
               <button type="button" data-cell="1" onPointerDown={(e) => e.stopPropagation()} onClick={() => onOpenDay(c.day)}
-                className={`mb-0.5 flex h-6 min-w-[1.5rem] items-center justify-center self-start rounded-full px-1 text-[12.5px] font-semibold transition-colors hover:bg-[#e9f7f4] ${today ? "bg-[#0f766e] text-white hover:bg-[#0c5f59]" : out ? "text-slate-400" : "text-[#0b1f3a]"}`}>
+                className={`mb-0.5 flex h-7 min-w-[1.75rem] items-center justify-center self-start rounded-lg px-1.5 text-[13px] font-bold tracking-tight transition-colors hover:bg-[#e9f7f4] ${today ? "bg-[#0f766e] text-white hover:bg-[#0c5f59]" : out ? "text-slate-300" : "text-[#0b1f3a]"}`}>
                 {c.day.getDate()}
               </button>
               {list.slice(0, 3).map((v) => (

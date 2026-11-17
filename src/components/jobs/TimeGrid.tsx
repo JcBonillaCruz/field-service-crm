@@ -75,19 +75,19 @@ export default function TimeGrid({ cols, visits, visStart, visEnd, workStart, wo
 
   const hours: number[] = [];
   for (let m = Math.ceil(visStart / 60) * 60; m < visEnd; m += 60) hours.push(m);
-  const minCol = dispatch ? "min-w-[10rem]" : cols.length > 1 ? "min-w-[7.5rem]" : "min-w-0";
+  const minCol = dispatch ? "min-w-[10rem]" : cols.length > 1 ? "min-w-[7.5rem] lg:min-w-[5rem]" : "min-w-0";
   const nowMin = minutesOf(now);
 
   return (
-    <div ref={scroller} className="relative h-full touch-manipulation overflow-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
+    <div ref={scroller} className="relative h-full touch-manipulation overflow-auto overscroll-contain bg-white [-webkit-overflow-scrolling:touch]">
       {/* Encabezado de columnas (fijo arriba) */}
-      <div className="sticky top-0 z-20 flex w-max min-w-full border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="sticky left-0 z-10 w-14 shrink-0 bg-white/95" />
+      <div className="sticky top-0 z-20 flex w-max min-w-full border-b border-slate-100 bg-white/95 backdrop-blur">
+        <div className="sticky left-0 z-10 w-14 shrink-0 bg-white/95 lg:w-16" />
         {cols.map((c) => {
           const n = byCol.get(c.key)?.length ?? 0;
           const mins = (byCol.get(c.key) ?? []).reduce((a, p) => a + (p.e - p.s), 0);
           return (
-            <div key={c.key} className={`flex flex-1 ${minCol} items-center gap-2 border-l border-slate-100 px-2 py-2 ${dispatch ? "" : "justify-center"}`}>
+            <div key={c.key} className={`flex flex-1 ${minCol} items-center gap-2 border-l border-slate-100 px-2 ${dispatch ? "py-2" : "justify-center py-1.5 lg:py-2"}`}>
               {dispatch ? (
                 <>
                   {c.initials ? <TechDot t={{ initials: c.initials, color: c.color ?? "#94a3b8", avatar_url: c.avatar ?? null }} size={30} ring={false} />
@@ -98,9 +98,9 @@ export default function TimeGrid({ cols, visits, visStart, visEnd, workStart, wo
                   </span>
                 </>
               ) : (
-                <span className="flex items-baseline gap-1.5">
-                  <span className="text-[12px] font-medium uppercase text-slate-500">{c.label}</span>
-                  <span className={`flex h-7 min-w-[1.75rem] items-center justify-center rounded-full px-1 text-[15px] font-semibold ${c.today ? "bg-[#0f766e] text-white" : "text-[#0b1f3a]"}`}>{c.sub}</span>
+                <span className={`flex min-w-[3.25rem] flex-col items-center rounded-xl px-3 py-1 transition-colors lg:min-w-[4rem] lg:py-1.5 ${c.today ? "bg-[#e9f7f4]" : ""}`}>
+                  <span className={`text-[11.5px] font-medium leading-tight lg:text-[12.5px] ${c.today ? "text-[#0f766e]" : "text-slate-400"}`}>{c.label}</span>
+                  <span className={`text-[18px] font-bold leading-tight tracking-tight lg:text-[22px] ${c.today ? "text-[#0f766e]" : "text-[#0b1f3a]"}`}>{c.sub}</span>
                 </span>
               )}
             </div>
@@ -110,9 +110,9 @@ export default function TimeGrid({ cols, visits, visStart, visEnd, workStart, wo
 
       <div className="flex w-max min-w-full" style={{ height }}>
         {/* Horas a la izquierda */}
-        <div className="sticky left-0 z-20 w-14 shrink-0 border-r border-slate-100 bg-white">
+        <div className="sticky left-0 z-20 w-14 shrink-0 bg-white lg:w-16">
           {hours.map((m) => (
-            <span key={m} className="absolute right-2 -translate-y-1/2 text-[11px] text-slate-400" style={{ top: (m - visStart) * PX }}>{m === visStart ? "" : fmtHour(m)}</span>
+            <span key={m} className="absolute right-2 -translate-y-1/2 whitespace-nowrap text-[11px] font-medium text-slate-400 lg:right-3 lg:text-[11.5px]" style={{ top: (m - visStart) * PX }}>{m === visStart ? "" : fmtHour(m)}</span>
           ))}
         </div>
 
@@ -128,13 +128,13 @@ export default function TimeGrid({ cols, visits, visStart, visEnd, workStart, wo
                   handlers.onEmptyDown(e, c, visStart + (e.clientY - r.top) / PX);
                 }}
                 style={{
-                  // Líneas de cada hora y media hora; fuera del horario de trabajo, fondo gris clarito
-                  backgroundImage: `linear-gradient(to bottom, rgba(241,245,249,.75) 0, rgba(241,245,249,.75) ${(workStart - visStart) * PX}px, transparent ${(workStart - visStart) * PX}px, transparent ${(workEnd - visStart) * PX}px, rgba(241,245,249,.75) ${(workEnd - visStart) * PX}px), repeating-linear-gradient(to bottom, #e9eef3 0, #e9eef3 1px, transparent 1px, transparent ${30 * PX}px)`,
-                  backgroundPositionY: `0, ${(Math.ceil(visStart / 30) * 30 - visStart) * PX}px`,
+                  // Minimalista: solo una línea fina por hora; fuera del horario de oficina, un gris apenas visible; hoy, un velo menta
+                  backgroundImage: `linear-gradient(${isToday && cols.length > 1 ? "rgba(20,163,154,.035), rgba(20,163,154,.035)" : "transparent, transparent"}), linear-gradient(to bottom, rgba(246,248,250,.9) 0, rgba(246,248,250,.9) ${(workStart - visStart) * PX}px, transparent ${(workStart - visStart) * PX}px, transparent ${(workEnd - visStart) * PX}px, rgba(246,248,250,.9) ${(workEnd - visStart) * PX}px), repeating-linear-gradient(to bottom, #edf1f5 0, #edf1f5 1px, transparent 1px, transparent ${60 * PX}px)`,
+                  backgroundPositionY: `0, 0, ${(Math.ceil(visStart / 60) * 60 - visStart) * PX}px`,
                 }}>
                 {placed.map((p) => (
-                  <div key={`${p.v.visit_id}-${c.key}`} className="absolute px-[2px]"
-                    style={{ top: (p.s - visStart) * PX + 1, height: Math.max(22, (p.e - p.s) * PX - 2),
+                  <div key={`${p.v.visit_id}-${c.key}`} className="absolute px-[3px]"
+                    style={{ top: (p.s - visStart) * PX + 2, height: Math.max(22, (p.e - p.s) * PX - 4),
                       // En Día la barra no se estira por toda la pantalla (máx. 22rem por carril)
                       left: cols.length === 1 ? `min(${(p.lane / p.lanes) * 100}%, ${p.lane * 22}rem)` : `${(p.lane / p.lanes) * 100}%`,
                       width: cols.length === 1 ? `min(${100 / p.lanes}%, 22rem)` : `${100 / p.lanes}%` }}>
@@ -147,7 +147,7 @@ export default function TimeGrid({ cols, visits, visStart, visEnd, workStart, wo
 
                 {/* Fantasma mientras arrastras */}
                 {preview && preview.colKey === c.key && (
-                  <div className="pointer-events-none absolute inset-x-1 z-30 rounded-lg border-2 border-dashed px-2 py-1 shadow-[0_10px_24px_rgba(15,40,60,0.18)]"
+                  <div className="pointer-events-none absolute inset-x-1 z-30 rounded-[10px] border-2 border-dashed px-2 py-1 shadow-[0_10px_24px_rgba(15,40,60,0.18)]"
                     style={{ top: (preview.startMin - visStart) * PX, height: Math.max(20, (preview.endMin - preview.startMin) * PX), borderColor: preview.color, background: tint(preview.color, 0.22) }}>
                     <p className="truncate text-[12px] font-semibold text-[#0b1f3a]">{preview.label}</p>
                     <p className="text-[11px] text-slate-600">
@@ -159,7 +159,7 @@ export default function TimeGrid({ cols, visits, visStart, visEnd, workStart, wo
                 {/* Línea de la hora actual */}
                 {isToday && nowMin >= visStart && nowMin <= visEnd && (
                   <div className="pointer-events-none absolute inset-x-0 z-20" style={{ top: (nowMin - visStart) * PX }}>
-                    <div className="relative h-[2px] bg-[#e11d48]"><span className="absolute -left-1 -top-[3px] h-2 w-2 rounded-full bg-[#e11d48]" /></div>
+                    <div className="relative h-[1.5px] bg-[#e8713a]"><span className="absolute -left-1 -top-[3.5px] h-2 w-2 rounded-full bg-[#e8713a] ring-2 ring-white" /></div>
                   </div>
                 )}
               </div>
