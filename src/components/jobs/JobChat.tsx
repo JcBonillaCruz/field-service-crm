@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 import { TECH_COLORS } from "@/lib/jobs";
 import { compressPhoto, fileId } from "@/lib/photo-compress";
+import { CameraArt } from "@/components/jobs/FileArt";
 
 // =====================================================================
 // Chat del trabajo (Paso 5.3k). Un chat por trabajo: oficina, manager, dueño y los
@@ -278,10 +279,11 @@ export default function JobChat({ jobId, title, companyId, placement = "float", 
                 {companyId && (
                   <>
                     <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => sendPhoto(e.target.files)} />
+                    {/* Ícono ilustrado (el mismo de la cámara en Photos, reports & files), no un botón */}
                     <button type="button" onClick={() => fileRef.current?.click()} disabled={photoBusy || !ready} aria-label="Send a photo"
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 text-[#0f766e] transition-all duration-150 hover:-translate-y-0.5 hover:border-[#14a39a] hover:bg-[#e9f7f4] active:scale-95 disabled:translate-y-0 disabled:opacity-50">
-                      {photoBusy ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#0f766e] border-t-transparent" />
-                        : <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" /><circle cx="12" cy="13.5" r="3.5" /></svg>}
+                      className="group relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-all duration-150 hover:-translate-y-0.5 hover:shadow-[0_6px_14px_rgba(15,40,60,0.16)] active:scale-95 disabled:translate-y-0 disabled:opacity-60 disabled:shadow-none">
+                      <CameraArt size={44} />
+                      {photoBusy && <span className="absolute inset-0 flex items-center justify-center rounded-full bg-white/75"><span className="h-4 w-4 animate-spin rounded-full border-2 border-[#0f766e] border-t-transparent" /></span>}
                     </button>
                   </>
                 )}
