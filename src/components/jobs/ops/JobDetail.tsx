@@ -13,6 +13,7 @@ import { OpsJob, groupOf, progressOf } from "@/lib/operations";
 import { AfterHoursMoon, StatusArt, TechDot } from "@/components/jobs/EventBar";
 import { DelayTag, GROUP_TONE, ProgressRing } from "@/components/jobs/ops/OpsBits";
 import { Timeline } from "@/components/catalog/DetailBits";
+import JobChat from "@/components/jobs/JobChat";
 
 type Visit = {
   id: string; visit_no: number; status: VisitStatus; starts_at: string | null; ends_at: string | null; arrival_window_min: number; techs: TechChip[];
@@ -400,6 +401,7 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
           <p className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-4 py-1.5 text-[13px] text-white">{photo.caption || photo.kind}{photo.uploaded_by_name ? ` · ${photo.uploaded_by_name}` : ""} · {when(photo.created_at)}</p>
         </div>
       )}
+      <JobChat jobId={j.id} title={`${j.customer_name || "Job"} · ${j.number}`} />
       {toast && <div role="status" className={`fixed bottom-5 left-1/2 z-[95] max-w-[92vw] -translate-x-1/2 rounded-xl px-4 py-2.5 text-[13.5px] font-medium text-white shadow-lg animate-[bp-pop-in_0.2s_ease-out] ${toast.err ? "bg-[#be123c]" : "bg-[#0b1f3a]"}`}>{toast.m}</div>}
     </div>
   );

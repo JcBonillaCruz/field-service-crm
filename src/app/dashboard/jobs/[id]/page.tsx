@@ -8,10 +8,10 @@ import { loadJobBasics } from "@/lib/jobs-server";
 export const dynamic = "force-dynamic";
 
 // Ficha completa del trabajo (oficina y dueño). El técnico usa su propia pantalla (My Jobs).
-export default async function JobDetailPage({ params }: { params: { id: string } }) {
+export default async function JobDetailPage({ params, searchParams }: { params: { id: string }; searchParams?: { chat?: string } }) {
   const { supabase, current } = await getSession();
   if (!current) redirect("/dashboard");
-  if (!canManageJobs(current.role)) redirect(`/dashboard/jobs/mine/${params.id}`);
+  if (!canManageJobs(current.role)) redirect(`/dashboard/jobs/mine/${params.id}${searchParams?.chat === "1" ? "?chat=1" : ""}`);
   const { data, error } = await supabase.rpc("tech_job", { p_job: params.id });
   if (error?.message?.includes("NOT_FOUND")) notFound();
   if (error || !data) return <NoAccess />;
