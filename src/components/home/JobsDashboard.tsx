@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Check, Chevron, optionClass, panelClass } from "@/components/ui/SearchSelect";
 import DatePicker from "@/components/ui/DatePicker";
 import { BarChart } from "@/components/dashboard/charts";
-import { InventoryArt, JobsArt } from "@/components/AppIcons";
+import { FinanceArt, InventoryArt, JobsArt } from "@/components/AppIcons";
 import { TechDot, TechDots } from "@/components/jobs/EventBar";
 import { DelayTag, GroupArt, ProgressRing } from "@/components/jobs/ops/OpsBits";
 import { AlertIcon, TeamArt } from "@/components/home/DashArt";
@@ -115,9 +115,9 @@ const JOB_CATS: { id: JobCat; label: string; hint: string; level: "red" | "orang
   { id: "on_my_way", label: "On the way", hint: "Driving to the job", level: "blue", icon: "on_my_way" },
   { id: "working", label: "Working now", hint: "On site right now", level: "teal", icon: "working" },
 ];
-type JobAlert = { id: string; cat: JobCat; title: string; number: string; sub: string; tag: React.ReactNode; href: string; sort: number };
+type JobAlert = { id: string; cat: JobCat; title: string; number: string; sub: string; tag: React.ReactNode; href: string; sort: number; job?: OpsJob };
 
-export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePrice, revenue, alerts, header, sample, samplePresence }: {
+export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePrice, revenue, alerts, header, sample, samplePresence, variant = "home" }: {
   companyId: string; team: TeamMember[]; weekStartsOn: number;
   canSeePrice: boolean;          // dueño y manager
   revenue: RevenueData | null;   // solo el dueño
@@ -125,6 +125,7 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
   header?: React.ReactNode;
   sample?: OpsJob[];             // datos de ejemplo (vista previa): no consulta la base
   samplePresence?: Member[];
+  variant?: "home" | "jobs";      // "jobs" = el Dashboard propio de la app Jobs (sin inventario ni finanzas)
 }) {
   const [jobs, setJobs] = useState<OpsJob[]>([]);
   const [members, setMembers] = useState<Member[] | null>(samplePresence ?? null);
@@ -196,6 +197,13 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
     return { total: cur.length, unassigned: count("unassigned"), working: count("in_progress"), late: count("delayed"), done: count("done"), prevTotal, prevDone, pct };
   }, [withGroup, period, rangeOf, inRange]);
 
+  const kpiGroups = useMemo(() => {
+    const r = rangeOf("today");
+    const m = Object.fromEntries(OPS_GROUPS.map((g) => [g.id, 0])) as Record<OpsGroup, number>;
+    withGroup.forEach(({ j, g }) => { if (inRange(j, g, r) || (g === "assigned" && !j.visit?.starts_at)) m[g] += 1; });
+    return m;
+  }, [withGroup, rangeOf, inRange]);
+
   // ---------- Equipo ----------
   const people = useMemo(() => {
     const [a, b] = rangeOf("today");
@@ -239,22 +247,22 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
       if (g === "delayed") {
         const d = delayOf(j, now);
         out.push({ id: `late-${j.id}`, cat: "delayed", title: name, number: j.number, sub: [what, who || "No collaborator", d?.detail].filter(Boolean).join(" · "),
-          tag: <Pill k="delayed">{d?.label ?? "Late"}</Pill>, href: `/dashboard/jobs/${j.id}`, sort: -(d?.minutes ?? 0) });
+          tag: <Pill k="delayed">{d?.label ?? "Late"}</Pill>, href: `/dashboard/jobs/${j.id}`, sort: -(d?.minutes ?? 0), job: j });
         return;
       }
       if (g === "unassigned") {
         const s = v?.starts_at ? new Date(v.starts_at).getTime() : null;
         if (s !== null && s > soon) return; // sin persona pero falta mucho: aún no es urgente
         out.push({ id: `un-${j.id}`, cat: "unassigned", title: name, number: j.number, sub: `${what} · ${s ? whenText(j) : "Not scheduled yet"}`,
-          tag: <Pill k="assigned">Assign →</Pill>, href: assignLink(j), sort: s ?? 0 });
+          tag: <Pill k="assigned">Assign →</Pill>, href: assignLink(j), sort: s ?? 0, job: j });
         return;
       }
       if (v?.status === "paused") {
         out.push({ id: `pa-${j.id}`, cat: "paused", title: name, number: j.number, sub: [what, who].filter(Boolean).join(" · "),
-          tag: <Pill k="paused">Paused</Pill>, href: `/dashboard/jobs/${j.id}`, sort: 0 });
+          tag: <Pill k="paused">Paused</Pill>, href: `/dashboard/jobs/${j.id}`, sort: 0, job: j });
       } else if (j.status === "on_hold") {
         out.push({ id: `oh-${j.id}`, cat: "followup", title: name, number: j.number, sub: [what, who, "Left to finish later"].filter(Boolean).join(" · "),
-          tag: <Pill k="on_hold">On hold</Pill>, href: `/dashboard/jobs/${j.id}`, sort: 0 });
+          tag: <Pill k="on_hold">On hold</Pill>, href: `/dashboard/jobs/${j.id}`, sort: 0, job: j });
       } else if (v?.status === "on_my_way") {
         out.push({ id: `om-${j.id}`, cat: "on_my_way", title: name, number: j.number, sub: [who, v.on_my_way_at ? `left ${agoText(v.on_my_way_at, now)}` : "", v.starts_at ? `due ${fmtTime(new Date(v.starts_at))}` : ""].filter(Boolean).join(" · "),
           tag: <Pill k="on_my_way">On the way</Pill>, href: `/dashboard/jobs/${j.id}`, sort: 0 });
@@ -271,6 +279,7 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
     return out;
   }, [withGroup, alerts, now]);
   const stock = useMemo(() => alerts.filter((a) => a.app === "inventory"), [alerts]);
+  const invoices = useMemo(() => alerts.filter((a) => a.app === "finances"), [alerts]);
 
   // ---------- Lista de trabajos ----------
   const [q, setQ] = useState("");
@@ -301,6 +310,12 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
   const periodInfo = PERIODS.find((p) => p.v === period)!;
   const opsHref = (g?: OpsGroup) => `/dashboard/jobs/operations${g ? `?focus=${g}` : ""}`;
   const selected = people.find((p) => p.id === openPerson) ?? null;
+
+  if (variant === "jobs") return (
+    <JobsHub header={header} error={error} loading={loading} membersLoading={!members} now={now} withGroup={withGroup} people={people}
+      jobAlerts={jobAlerts} kpiGroups={kpiGroups} canSeePrice={canSeePrice} onPerson={setOpenPerson}
+      drawer={selected && <PersonDrawer p={selected} rows={withGroup.filter(({ j }) => j.techs.some((t) => t.user_id === selected.id))} now={now} onClose={() => setOpenPerson(null)} />} />
+  );
 
   return (
     <div className="pb-24 lg:pb-10">
@@ -337,13 +352,16 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
           <TeamCard people={people} loading={loading || !members} onPick={setOpenPerson} />
         </div>
 
-        {/* ======= 3. Inventario + Ingresos del dueño ======= */}
-        <div className={`mt-5 grid grid-cols-[minmax(0,1fr)] gap-4 lg:mt-6 ${revenue ? "xl:grid-cols-2" : ""}`}>
-          <InventorySection items={stock} wide={!revenue} />
-          {revenue && <RevenueCard data={revenue} />}
+        {/* ======= 3. Inventario + Cobros (facturas por vencer o vencidas) ======= */}
+        <div className={`mt-5 grid grid-cols-[minmax(0,1fr)] gap-4 lg:mt-6 ${canSeePrice ? "xl:grid-cols-2" : ""}`}>
+          <InventorySection items={stock} wide={!canSeePrice} />
+          {canSeePrice && <InvoicesSection items={invoices} />}
         </div>
 
-        {/* ======= 4. Lista de trabajos ======= */}
+        {/* ======= 4. Ingresos (solo el dueño) ======= */}
+        {revenue && <div className="mt-5 lg:mt-6"><RevenueCard data={revenue} /></div>}
+
+        {/* ======= 5. Lista de trabajos ======= */}
         <div id="bp-task-list" className="mt-5 scroll-mt-24 rounded-2xl border border-slate-200 bg-white lg:mt-6">
           <div className="flex flex-wrap items-center gap-2.5 border-b border-slate-100 px-3 py-3 lg:gap-3 lg:px-5 lg:py-4">
             <div className="mr-auto flex min-w-0 flex-1 items-center gap-2.5 sm:flex-none">
@@ -699,7 +717,7 @@ function PersonDrawer({ p, rows, now, onClose }: { p: Person; rows: { j: OpsJob;
                     <span className="block truncate text-[14px] font-semibold text-[#0b1f3a]">{j.customer_name || j.number}</span>
                     <span className="block truncate text-[12.5px] text-slate-500">{j.type_name || j.title || "Job"} · {g === "done" && j.completed_at ? `done ${new Date(j.completed_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : whenText(j)}</span>
                   </span>
-                  {g === "delayed" ? <DelayTag job={j} now={now} small /> : <Pill k={s.key}>{s.label}</Pill>}
+                  {g === "delayed" ? <LateHint j={j} now={now}><Pill k={s.key}>{s.label}</Pill></LateHint> : <Pill k={s.key}>{s.label}</Pill>}
                 </Link>
               </li>
             );
@@ -868,7 +886,7 @@ function TaskTable({ rows, loading, now, canSeePrice }: { rows: Row[]; loading: 
             const st = statusOf(j, g);
             return (
               <tr key={j.id} className={`group transition-colors hover:bg-[#f6fbfa] ${g === "done" ? "text-slate-500" : ""}`}>
-                <td className={TD}><Link prefetch={false} href={`/dashboard/jobs/${j.id}`} className="whitespace-nowrap font-semibold tabular-nums text-[#0b1f3a] hover:text-[#0f766e] hover:underline">{j.number}</Link></td>
+                <td className={TD}><Link prefetch={false} href={`/dashboard/jobs/${j.id}`} className="whitespace-nowrap text-[13.5px] font-semibold tabular-nums text-[#0b1f3a] hover:text-[#0f766e] hover:underline">{j.number}</Link></td>
                 <td className={TD}>
                   <span className="flex min-w-0 items-center gap-2.5">
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#e9f7f4] text-[12px] font-semibold text-[#0f766e]">{(j.customer_name || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase()}</span>
@@ -890,8 +908,8 @@ function TaskTable({ rows, loading, now, canSeePrice }: { rows: Row[]; loading: 
                 <td className={`${TD} whitespace-nowrap text-[14px] tabular-nums text-slate-700`}>{whenText(j)}</td>
                 <td className={TD}>
                   <span className="flex flex-col items-start gap-1">
-                    <Pill k={st.key}>{st.label}</Pill>
-                    {g === "delayed" ? <DelayTag job={j} now={now} small /> : g !== "done" && g !== "unassigned" && (
+                    {g === "delayed" ? <LateHint j={j} now={now}><Pill k={st.key}>{st.label}</Pill></LateHint> : <Pill k={st.key}>{st.label}</Pill>}
+                    {g !== "delayed" && g !== "done" && g !== "unassigned" && (
                       <span className="flex w-24 items-center gap-1.5"><span className="h-1 flex-1 overflow-hidden rounded-full bg-slate-100"><span className="block h-full rounded-full bg-[#14a39a] transition-all duration-700" style={{ width: `${progressOf(j)}%` }} /></span><span className="text-[10.5px] tabular-nums text-slate-400">{progressOf(j)}%</span></span>
                     )}
                   </span>
@@ -961,8 +979,7 @@ function TaskCards({ rows, loading, now, canSeePrice }: { rows: Row[]; loading: 
                 </span>
                 <span className="block truncate text-[12.5px] text-slate-500">{j.type_name || j.title || "General"} · {whenText(j)}{cityOf(j) ? ` · ${cityOf(j)}` : ""}</span>
                 <span className="mt-1 flex items-center gap-2">
-                  <Pill k={st.key}>{st.label}</Pill>
-                  {g === "delayed" && <DelayTag job={j} now={now} small />}
+                  {g === "delayed" ? <LateHint j={j} now={now}><Pill k={st.key}>{st.label}</Pill></LateHint> : <Pill k={st.key}>{st.label}</Pill>}
                   {canSeePrice && Number(j.estimated_total) > 0 && <span className="text-[12.5px] font-semibold tabular-nums text-[#0b1f3a]">{usd0(j.estimated_total)}</span>}
                 </span>
               </span>
@@ -975,5 +992,368 @@ function TaskCards({ rows, loading, now, canSeePrice }: { rows: Row[]; loading: 
         );
       })}
     </ul>
+  );
+}
+
+// ---------- "Delayed" con su detalle al pasar el mouse (cuántos días, por qué y qué hacer) ----------
+function lateAdvice(j: OpsJob) {
+  const s = j.visit?.status;
+  if (!j.techs.length) return "Assign someone and call the customer to confirm a new time.";
+  if (s === "on_my_way") return "Running behind — let the customer know the new arrival time.";
+  if (s === "in_progress" || s === "paused") return `Still working past the end — check with ${j.techs[0].name.split(" ")[0]}.`;
+  return "Call the customer to reschedule or confirm the visit.";
+}
+function LateHint({ j, now, children }: { j: OpsJob; now: number; children: React.ReactNode }) {
+  const d = delayOf(j, now);
+  const ref = useRef<HTMLSpanElement>(null);
+  const [at, setAt] = useState<{ x: number; y: number; below: boolean } | null>(null);
+  if (!d) return <>{children}</>;
+  // La leyenda flota por encima de todo (no la corta la tabla): arriba del estado, o abajo si no cabe
+  const show = () => { const r = ref.current?.getBoundingClientRect(); if (r) setAt({ x: r.left + r.width / 2, y: r.top < 150 ? r.bottom : r.top, below: r.top < 150 }); };
+  return (
+    <span ref={ref} className="inline-flex cursor-help" tabIndex={0} aria-label={`${d.label}. ${d.detail}`}
+      onMouseEnter={show} onMouseLeave={() => setAt(null)} onFocus={show} onBlur={() => setAt(null)}>
+      {children}
+      {at && typeof document !== "undefined" && createPortal(
+        <span role="tooltip" style={{ left: Math.min(Math.max(at.x, 132), window.innerWidth - 132), top: at.y }}
+          className={`pointer-events-none fixed z-[120] w-60 -translate-x-1/2 rounded-xl border border-[#bfe6d8] bg-white px-3 py-2.5 text-left shadow-[0_10px_28px_rgba(15,40,60,0.14)] animate-[bp-fade_0.15s_ease-out] ${at.below ? "mt-2" : "-translate-y-full -mt-2"}`}>
+          <span className="flex items-center gap-1.5 text-[13px] font-semibold text-[#be123c]">
+            <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="10" cy="11" r="6.5" /><path d="M10 7.5V11l2.2 1.6M8 2.5h4" /></svg>
+            {d.label}
+          </span>
+          <span className="mt-0.5 block text-[12px] leading-snug text-slate-600">{d.detail}</span>
+          <span className="mt-1.5 block border-t border-slate-100 pt-1.5 text-[12px] font-medium leading-snug text-[#0f766e]">{lateAdvice(j)}</span>
+        </span>,
+        document.body,
+      )}
+    </span>
+  );
+}
+
+// ---------- Inicio: cobros (facturas vencidas o por vencer, para llamar al cliente) ----------
+function InvoicesSection({ items }: { items: HomeAlert[] }) {
+  const [all, setAll] = useState(false);
+  const overdue = items.filter((i) => (i.days ?? 0) < 0).sort((a, b) => (a.days ?? 0) - (b.days ?? 0));
+  const soon = items.filter((i) => (i.days ?? 0) >= 0).sort((a, b) => (a.days ?? 0) - (b.days ?? 0));
+  const list = [...overdue, ...soon];
+  const shown = all ? list : list.slice(0, 5);
+  const sum = (l: HomeAlert[]) => l.reduce((a, i) => a + (i.amount ?? 0), 0);
+  const dueText = (d: number) => (d < 0 ? `Overdue ${-d} day${d === -1 ? "" : "s"}` : d === 0 ? "Due today" : d === 1 ? "Due tomorrow" : `Due in ${d} days`);
+  return (
+    <section className="flex flex-col rounded-2xl border border-slate-200 bg-white" aria-label="Payments to collect">
+      <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-4 lg:px-5">
+        <div className="group flex items-center gap-3">
+          <FinanceArt size={42} />
+          <div>
+            <h2 className="text-[18px] font-semibold leading-tight text-[#0b1f3a] lg:text-[19px]">Payments to collect</h2>
+            <p className="text-[12.5px] text-slate-500">{list.length ? "Call these customers to collect" : "No invoices overdue or due this week"}</p>
+          </div>
+        </div>
+        <Link prefetch={false} href="/dashboard/invoices" className="shrink-0 rounded-lg px-2.5 py-1.5 text-[13.5px] font-semibold text-[#2563eb] hover:bg-[#eef4ff]">Invoices →</Link>
+      </div>
+      <div className="grid grid-cols-2 gap-2 px-4 pt-3 lg:gap-2.5 lg:px-5">
+        {[{ l: overdue, label: "Overdue", level: "red" as const, kind: "overdue" }, { l: soon, label: "Due in 7 days", level: "orange" as const, kind: "due_soon" }].map((t) => (
+          <div key={t.label} className={`group flex items-center gap-3 rounded-xl p-3 ring-1 ${t.l.length ? `${CAT_TONE[t.level].bg} ${CAT_TONE[t.level].ring}` : "bg-white ring-slate-200"}`}>
+            <AlertIcon kind={t.kind} level={t.l.length ? t.level : "gray"} size={34} />
+            <span className="min-w-0">
+              <span className={`block text-[20px] font-semibold leading-none tabular-nums ${t.l.length ? CAT_TONE[t.level].text : "text-slate-300"}`}>{usd0(sum(t.l))}</span>
+              <span className={`mt-1 block truncate text-[12.5px] font-semibold ${t.l.length ? "text-[#0b1f3a]" : "text-slate-400"}`}>{t.l.length} {t.label.toLowerCase()}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+      {!list.length ? (
+        <div className="flex flex-1 flex-col items-center justify-center px-6 pb-8 pt-6 text-center">
+          <span className="group"><FinanceArt size={56} /></span>
+          <p className="mt-2 text-[14.5px] font-semibold text-[#0b1f3a]">Nothing to collect right now</p>
+          <p className="mt-1 max-w-sm text-[13px] text-slate-500">Invoices that are overdue or due in the next 7 days show up here so you can call the customer.</p>
+        </div>
+      ) : (
+        <ul className="mt-2 px-2 pb-2 lg:px-3">
+          {shown.map((a) => {
+            const d = a.days ?? 0;
+            return (
+              <li key={a.id} className="border-b border-slate-100 last:border-0">
+                <Link prefetch={false} href={a.href} className="group flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-slate-50 lg:px-3">
+                  <AlertIcon kind={a.kind} level={d < 0 ? "red" : d <= 1 ? "orange" : "blue"} />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-baseline gap-2">
+                      <span className="truncate text-[14.5px] font-semibold text-[#0b1f3a]">{a.customer}</span>
+                      <span className="shrink-0 text-[12px] tabular-nums text-slate-400">{a.number}</span>
+                    </span>
+                    <span className={`block truncate text-[12.5px] font-medium ${d < 0 ? "text-[#be123c]" : "text-[#b45309]"}`}>{dueText(d)} · {d < 0 ? "call to collect" : "remind the customer"}</span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className="block text-[14.5px] font-semibold tabular-nums text-[#0b1f3a]">{usd2(a.amount ?? 0)}</span>
+                    <span className="block text-[11.5px] font-semibold text-[#0f766e] opacity-0 transition-opacity group-hover:opacity-100">Follow up →</span>
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {list.length > shown.length && (
+        <div className="mt-auto border-t border-slate-100 px-4 py-2.5 text-center">
+          <button type="button" onClick={() => setAll(true)} className="rounded-lg px-3 py-1.5 text-[13.5px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4]">See all {list.length}</button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// =====================================================================
+// Dashboard de la app Jobs: distinto al inicio. Solo trabajos y equipo:
+// resumen por estado · atención · equipo · próximos · trabajos de hoy · avance de cada técnico.
+// =====================================================================
+const progColor = (g: OpsGroup) => (g === "done" ? "bg-[#14a39a]" : g === "delayed" ? "bg-[#f43f5e]" : g === "in_progress" ? "bg-[#f59e0b]" : "bg-[#3b82f6]");
+function Progress({ j, g, w = "w-28" }: { j: OpsJob; g: OpsGroup; w?: string }) {
+  const pct = progressOf(j);
+  return (
+    <span className={`flex items-center gap-2 ${w}`}>
+      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+        <span className={`block h-full rounded-full transition-all duration-700 ${progColor(g)}`} style={{ width: `${Math.max(pct, 3)}%` }} />
+      </span>
+      <span className="w-8 shrink-0 text-right text-[11.5px] font-semibold tabular-nums text-slate-500">{pct}%</span>
+    </span>
+  );
+}
+function StatusCell({ j, g, now }: { j: OpsJob; g: OpsGroup; now: number }) {
+  const st = statusOf(j, g);
+  return g === "delayed" ? <LateHint j={j} now={now}><Pill k={st.key}>{st.label}</Pill></LateHint> : <Pill k={st.key}>{st.label}</Pill>;
+}
+function CardHead({ icon, title, sub, link }: { icon: React.ReactNode; title: string; sub?: string; link?: { href: string; label: string } }) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 pb-2 pt-4 lg:px-5">
+      <div className="group flex min-w-0 items-center gap-2.5">
+        {icon}
+        <div className="min-w-0">
+          <h2 className="truncate text-[17px] font-semibold leading-tight text-[#0b1f3a]">{title}</h2>
+          {sub && <p className="truncate text-[12.5px] text-slate-500">{sub}</p>}
+        </div>
+      </div>
+      {link && <Link prefetch={false} href={link.href} className="shrink-0 rounded-lg px-2.5 py-1.5 text-[13px] font-semibold text-[#2563eb] hover:bg-[#eef4ff]">{link.label} →</Link>}
+    </div>
+  );
+}
+
+function JobsHub({ header, error, loading, membersLoading, now, withGroup, people, jobAlerts, kpiGroups, canSeePrice, onPerson, drawer }: {
+  header?: React.ReactNode; error: string; loading: boolean; membersLoading: boolean; now: number; withGroup: { j: OpsJob; g: OpsGroup }[];
+  people: Person[]; jobAlerts: JobAlert[]; kpiGroups: Record<OpsGroup, number>; canSeePrice: boolean; onPerson: (id: string) => void; drawer: React.ReactNode;
+}) {
+  const d0 = dayStart(new Date(now)), d1 = addDays(d0, 1), d2 = addDays(d0, 2);
+  const start = (j: OpsJob) => (j.visit?.starts_at ? new Date(j.visit.starts_at) : null);
+  const live = (j: OpsJob) => ["on_my_way", "in_progress", "paused"].includes(j.visit?.status ?? "");
+  const timeOf = (j: OpsJob) => { const s = start(j); return !s ? "—" : s >= d0 && s < d1 ? fmtTime(s) : whenText(j); };
+  // Trabajos de hoy: los agendados hoy + lo que está pasando + lo que va tarde
+  const today = withGroup.filter(({ j, g }) => live(j) || g === "delayed" || (start(j) && start(j)! >= d0 && start(j)! < d1) || (g === "done" && j.completed_at && new Date(j.completed_at) >= d0))
+    .sort((a, b) => (a.j.visit?.starts_at ?? "9").localeCompare(b.j.visit?.starts_at ?? "9"));
+  const upcoming = withGroup.filter(({ j, g }) => g !== "done" && start(j) && start(j)!.getTime() >= now - 30 * 60000 && start(j)! < d2)
+    .sort((a, b) => (a.j.visit?.starts_at ?? "").localeCompare(b.j.visit?.starts_at ?? "")).slice(0, 6);
+  const attention = jobAlerts.filter((a) => ["delayed", "unassigned", "paused", "followup"].includes(a.cat));
+  const order: Record<string, number> = { delayed: 0, paused: 1, followup: 2, unassigned: 3 };
+  attention.sort((a, b) => order[a.cat] - order[b.cat] || a.sort - b.sort);
+  const [shownToday, setShownToday] = useState(10);
+  // Lo que hace cada persona ahora (o lo próximo que tiene)
+  const doing = (id: string) => {
+    const mine = withGroup.filter(({ j }) => j.techs.some((t) => t.user_id === id));
+    return mine.find(({ j }) => live(j)) ?? mine.filter(({ g, j }) => g !== "done" && start(j) && start(j)! >= d0 && start(j)! < d1).sort((a, b) => (a.j.visit?.starts_at ?? "").localeCompare(b.j.visit?.starts_at ?? ""))[0] ?? null;
+  };
+  const techs = people.map((p) => ({ p, rows: today.filter(({ j }) => j.techs.some((t) => t.user_id === p.id)) })).filter((x) => x.rows.length);
+  const ops = (g?: OpsGroup) => `/dashboard/jobs/operations${g ? `?focus=${g}` : ""}`;
+  const TITLE: Record<string, string> = { delayed: "Late job", unassigned: "No collaborator", paused: "Paused job", followup: "Needs follow-up" };
+
+  return (
+    <div className="pb-24 lg:pb-10">
+      {header}
+      <div className="w-full px-3 pt-4 lg:px-8 lg:pt-6">
+        {error && <p role="alert" className="mb-4 rounded-xl border border-[#fecdd3] bg-[#fff1f2] px-4 py-3 text-[14px] text-[#be123c]">{error}</p>}
+
+        {/* 1. Resumen de hoy por estado */}
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:gap-4 xl:grid-cols-5">
+          <Kpi label="Unassigned" value={kpiGroups.unassigned} art={<GroupArt g="unassigned" size={46} />} loading={loading} href="/dashboard/jobs/assign" hint="Need a collaborator" action="Assign them" />
+          <Kpi label="Assigned" value={kpiGroups.assigned} art={<GroupArt g="assigned" size={46} />} loading={loading} href={ops("assigned")} hint="Ready to start" action="See jobs" />
+          <Kpi label="In progress" value={kpiGroups.in_progress} art={<GroupArt g="in_progress" size={46} />} loading={loading} href={ops("in_progress")} hint="Active jobs" action="See who's working" />
+          <Kpi label="Delayed" value={kpiGroups.delayed} art={<GroupArt g="delayed" size={46} />} loading={loading} href={ops("delayed")} hint={kpiGroups.delayed ? "Need attention" : "Nothing late"} tone={kpiGroups.delayed ? "red" : undefined} action="See late jobs" />
+          <Kpi label="Completed" value={kpiGroups.done} art={<GroupArt g="done" size={46} />} loading={loading} href={ops("done")} hint="Finished today" tone={kpiGroups.done ? "green" : undefined} action="See finished jobs" />
+        </div>
+
+        {/* 2. Atención · Equipo · Próximos */}
+        <div className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-4 lg:mt-6 lg:grid-cols-2 2xl:grid-cols-3">
+          <section className="flex flex-col rounded-2xl border border-slate-200 bg-white" aria-label="Needs attention">
+            <CardHead icon={<AlertIcon kind="check" level={attention.length ? "red" : "teal"} size={36} />} title="Needs attention"
+              sub={loading ? "Checking…" : attention.length ? `${attention.length} job${attention.length === 1 ? "" : "s"} need you` : "Nothing needs you"} link={{ href: ops(), label: "See all" }} />
+            {!attention.length ? <p className="px-5 pb-6 pt-2 text-[13.5px] text-slate-500">{loading ? "" : "Late, paused and unassigned jobs will show up here."}</p> : (
+              <ul className="divide-y divide-slate-100 px-2 pb-2 lg:px-3">
+                {attention.slice(0, 6).map((a) => {
+                  const c = JOB_CATS.find((x) => x.id === a.cat)!;
+                  return (
+                    <li key={a.id}>
+                      <Link prefetch={false} href={a.href} className="group flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-slate-50">
+                        <AlertIcon kind={c.icon} level={c.level} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[14px] font-semibold text-[#0b1f3a]">{TITLE[a.cat] ?? a.title}</span>
+                          <span className="block truncate text-[12.5px] text-slate-500">{a.job ? `${a.job.customer_name || a.job.number} · ${a.job.type_name || a.job.title || "Job"}` : a.title}</span>
+                        </span>
+                        {a.cat === "delayed" && a.job ? <LateHint j={a.job} now={now}><Pill k="delayed">Delayed</Pill></LateHint>
+                          : a.cat === "unassigned" ? <Pill k="unassigned">Pending</Pill> : a.cat === "paused" ? <Pill k="paused">Paused</Pill> : <Pill k="on_hold">Follow-up</Pill>}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          <section className="flex flex-col rounded-2xl border border-slate-200 bg-white" aria-label="Team activity">
+            <CardHead icon={<TeamArt size={36} />} title="Team activity" sub={membersLoading ? "Checking who is online…" : `${people.filter((p) => p.state === "available").length} available · ${people.filter((p) => ["on_site", "on_my_way", "paused"].includes(p.state)).length} working`}
+              link={{ href: "/dashboard/jobs/team", label: "Team" }} />
+            {!people.length ? <p className="px-5 pb-6 pt-2 text-[13.5px] text-slate-500">{loading ? "" : "Add people in Team to see what they are doing."}</p> : (
+              <ul className="divide-y divide-slate-100 px-2 pb-2 lg:px-3">
+                {people.slice(0, 6).map((p) => {
+                  const st = PERSON_STATE[p.state], cur = doing(p.id);
+                  return (
+                    <li key={p.id}>
+                      <button type="button" onClick={() => onPerson(p.id)} className="group flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-slate-50">
+                        <span className={`relative shrink-0 transition-transform duration-200 group-hover:scale-105 ${p.state === "offline" ? "opacity-60 grayscale" : ""}`}>
+                          <TechDot t={{ initials: p.initials, color: p.color, avatar_url: p.avatar_url, name: p.name }} size={38} />
+                          <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-white ${st.dot}`} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[14px] font-semibold text-[#0b1f3a]">{p.name}</span>
+                          <span className="block truncate text-[12.5px] text-slate-500">
+                            {cur ? <>{cur.j.type_name || cur.j.title || "Job"} · <span className="font-medium text-[#2563eb]">{statusOf(cur.j, cur.g).label}</span></> : p.state === "offline" ? (p.seen.replace("Offline · ", "Seen ") || "Offline") : "No jobs left today"}
+                          </span>
+                        </span>
+                        <span className={`flex shrink-0 items-center gap-1.5 text-[12.5px] font-semibold ${p.state === "available" ? "text-[#15803d]" : p.state === "on_site" ? "text-[#0f766e]" : p.state === "on_my_way" ? "text-[#2563eb]" : p.state === "offline" ? "text-slate-400" : "text-[#b45309]"}`}>
+                          <span className={`h-2 w-2 rounded-full ${st.dot}`} />{st.label}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          <section className="flex flex-col rounded-2xl border border-slate-200 bg-white lg:col-span-2 2xl:col-span-1" aria-label="Upcoming jobs">
+            <CardHead icon={<AlertIcon kind="calendar" level="blue" size={36} />} title="Upcoming jobs" sub="Today and tomorrow" link={{ href: "/dashboard/jobs/schedule?view=day", label: "Calendar" }} />
+            {!upcoming.length ? <p className="px-5 pb-6 pt-2 text-[13.5px] text-slate-500">{loading ? "" : "No more jobs scheduled for today or tomorrow."}</p> : (
+              <ul className="divide-y divide-slate-100 px-2 pb-2 lg:px-3">
+                {upcoming.map(({ j, g }) => {
+                  const s = start(j)!;
+                  return (
+                    <li key={j.id}>
+                      <Link prefetch={false} href={`/dashboard/jobs/${j.id}`} className="group flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-slate-50">
+                        <span className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-xl border border-slate-200 bg-white leading-none transition-transform duration-200 group-hover:scale-105">
+                          <span className="text-[9.5px] font-semibold uppercase text-[#e8713a]">{s.toLocaleDateString("en-US", { weekday: "short" })}</span>
+                          <span className="mt-0.5 text-[15px] font-semibold tabular-nums text-[#0b1f3a]">{s.getDate()}</span>
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[14px] font-semibold tabular-nums text-[#2563eb]">{fmtTime(s)}</span>
+                          <span className="block truncate text-[13px] font-medium text-[#0b1f3a]">{j.customer_name || j.number}</span>
+                          <span className="block truncate text-[12px] text-slate-500">{j.type_name || j.title || "Job"}{j.techs.length ? ` · ${firstNames(j)}` : ""}</span>
+                        </span>
+                        <StatusCell j={j} g={g} now={now} />
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        </div>
+
+        {/* 3. Trabajos de hoy con su avance */}
+        <section className="mt-5 rounded-2xl border border-slate-200 bg-white lg:mt-6" aria-label="Today's jobs">
+          <CardHead icon={<span className="group"><JobsArt size={36} /></span>} title="Today's jobs" sub={loading ? "Loading…" : `${today.length} job${today.length === 1 ? "" : "s"} · progress updates live`} link={{ href: ops(), label: "Operations" }} />
+          {!today.length && !loading ? <p className="px-5 pb-6 pt-1 text-[13.5px] text-slate-500">No jobs today.</p> : (
+            <>
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full min-w-[860px] border-collapse">
+                  <thead className="border-y border-slate-100 bg-[#fafbfc]">
+                    <tr>{["Job", "Customer", "Service", "Time", "Collaborators", "Status", "Progress"].map((h) => <th key={h} className={TH}>{h}</th>)}</tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {today.slice(0, shownToday).map(({ j, g }) => (
+                      <tr key={j.id} className={`transition-colors hover:bg-[#f6fbfa] ${g === "done" ? "text-slate-500" : ""}`}>
+                        <td className={TD}><Link prefetch={false} href={`/dashboard/jobs/${j.id}`} className="whitespace-nowrap text-[13.5px] font-semibold tabular-nums text-[#2563eb] hover:underline">{j.number}</Link></td>
+                        <td className={`${TD} text-[14px] font-medium text-[#0b1f3a]`}><span className="block max-w-[13rem] truncate">{j.customer_name || "—"}</span></td>
+                        <td className={`${TD} text-[14px] text-slate-700`}><span className="inline-flex max-w-[11rem] items-center gap-2"><span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: j.type_color || "#94a3b8" }} /><span className="truncate">{j.type_name || j.title || "General"}</span></span></td>
+                        <td className={`${TD} whitespace-nowrap text-[14px] tabular-nums text-slate-700`}>{timeOf(j)}</td>
+                        <td className={TD}><span className="flex items-center gap-2"><TechDots techs={j.techs} size={24} max={2} /><span className="max-w-[9rem] truncate text-[13.5px] text-slate-700">{j.techs.length ? j.techs[0].name : <span className="text-slate-400">Nobody yet</span>}{j.techs.length > 1 && <span className="font-semibold text-[#e8713a]"> +{j.techs.length - 1}</span>}</span></span></td>
+                        <td className={TD}><StatusCell j={j} g={g} now={now} /></td>
+                        <td className={TD}><Progress j={j} g={g} w="w-36" /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <TaskCards rows={today.slice(0, shownToday)} loading={loading} now={now} canSeePrice={canSeePrice} />
+              {today.length > shownToday && (
+                <div className="border-t border-slate-100 p-3 text-center">
+                  <button type="button" onClick={() => setShownToday((n) => n + 10)} className="rounded-lg px-4 py-2 text-[14px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4]">Show more ({today.length - shownToday} left)</button>
+                </div>
+              )}
+            </>
+          )}
+        </section>
+
+        {/* 4. Avance de cada técnico */}
+        <div className="mt-5 lg:mt-6">
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <div>
+              <h2 className="text-[18px] font-semibold text-[#0b1f3a]">Progress by collaborator</h2>
+              <p className="text-[13px] text-slate-500">How far along each person is today · tap a name for their full schedule</p>
+            </div>
+          </div>
+          {!techs.length ? (
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-8 text-center text-[13.5px] text-slate-500">{loading ? "Loading…" : "Nobody has jobs today yet."}</div>
+          ) : (
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2 2xl:grid-cols-3">
+              {techs.map(({ p, rows }) => {
+                const st = PERSON_STATE[p.state];
+                const avg = Math.round(rows.reduce((a, r) => a + progressOf(r.j), 0) / rows.length);
+                return (
+                  <section key={p.id} className="rounded-2xl border border-slate-200 bg-white transition-shadow hover:shadow-[0_12px_28px_rgba(15,40,60,0.08)]">
+                    <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3">
+                      <span className="relative shrink-0">
+                        <TechDot t={{ initials: p.initials, color: p.color, avatar_url: p.avatar_url, name: p.name }} size={40} />
+                        <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-white ${st.dot}`} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[15px] font-semibold text-[#0b1f3a]">{p.name}</span>
+                        <span className="block text-[12.5px] text-slate-500">{rows.length} job{rows.length === 1 ? "" : "s"} today · {st.label.toLowerCase()}</span>
+                      </span>
+                      <ProgressRing pct={avg} size={40} stroke={4} color="#e8713a" />
+                      <button type="button" onClick={() => onPerson(p.id)} className="shrink-0 rounded-lg px-2 py-1.5 text-[13px] font-semibold text-[#2563eb] hover:bg-[#eef4ff]">Details</button>
+                    </div>
+                    <ul className="divide-y divide-slate-100">
+                      {rows.slice(0, 4).map(({ j, g }) => (
+                        <li key={j.id}>
+                          <Link prefetch={false} href={`/dashboard/jobs/${j.id}`} className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50">
+                            <span className="min-w-0 flex-1">
+                              <span className="flex items-baseline gap-2">
+                                <span className="shrink-0 text-[12.5px] font-semibold tabular-nums text-slate-400">{j.number}</span>
+                                <span className="truncate text-[14px] font-semibold text-[#0b1f3a]">{j.type_name || j.title || "Job"}</span>
+                              </span>
+                              <span className="block truncate text-[12.5px] text-slate-500">{j.customer_name}{start(j) ? ` · ${timeOf(j)}` : ""}</span>
+                              <span className="mt-1.5 block"><Progress j={j} g={g} w="w-full max-w-[14rem]" /></span>
+                            </span>
+                            <StatusCell j={j} g={g} now={now} />
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                    {rows.length > 4 && <button type="button" onClick={() => onPerson(p.id)} className="w-full border-t border-slate-100 py-2 text-[13px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4]">+{rows.length - 4} more</button>}
+                  </section>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+      {drawer}
+    </div>
   );
 }

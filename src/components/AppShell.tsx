@@ -14,6 +14,7 @@ import NotificationsProvider from "@/components/NotificationsProvider";
 import { AppsGrid } from "@/components/AppsMenu";
 import { useInstallApp } from "@/components/InstallPrompt";
 import { FinanceArt, InventoryArt, JobsArt, QrArt } from "@/components/AppIcons";
+import { DashboardArt } from "@/components/home/DashArt";
 import { canManageSales } from "@/lib/sales";
 import { CompanySummary, CurrentUser, Role } from "@/lib/types";
 
@@ -26,6 +27,7 @@ type NavItem = {
   roles?: Role[];
   exclude?: string[]; // rutas hijas que NO marcan este enlace como activo
   children?: NavItem[]; // grupo plegable (ej. Product Catalog → Items, Coupons)
+  art?: "dashboard"; // ícono a color (el mismo de la pestaña Dashboard del inicio)
 };
 
 // Íconos de línea (24 px). "roles": quién ve cada opción. Sin "roles", la ven todos.
@@ -90,7 +92,7 @@ const INVENTORY_NAV: NavItem[] = [
 ];
 // Jobs: calendario (Schedule) para la oficina; el técnico ve solo sus trabajos
 const JOBS_NAV: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard/jobs/dashboard", roles: MANAGE, icon: "M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z" },
+  { label: "Dashboard", href: "/dashboard/jobs/dashboard", roles: MANAGE, icon: "M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z", art: "dashboard" },
   { label: "Operations", href: "/dashboard/jobs/operations", roles: MANAGE, icon: "M3 12h4l2.5-6 4 12 2.5-6H21" },
   { label: "Schedule", href: "/dashboard/jobs/schedule", addHref: "/dashboard/jobs/new", addLabel: "Job", roles: MANAGE, icon: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M8 14h3M13 14h3M8 17h3" },
   { label: "Assign jobs", href: "/dashboard/jobs/assign", roles: MANAGE, icon: "M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2.5 15a5.5 5.5 0 0 1 11 0M14 12h7M18 9l3 3-3 3" },
@@ -106,6 +108,60 @@ const APP_TITLE: Record<AppId, { label: string; icon: string; color: string }> =
   inventory: { label: "Inventory", icon: "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9", color: "#d97706" },
   jobs: { label: "Jobs", icon: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4", color: "#2563eb" },
 };
+
+// Computadora: el ícono de la app de arriba del menú abre "Apps" a la derecha (como en el celular),
+// sin tener que ir hasta los 9 puntos de la barra de arriba.
+function DesktopAppSwitch({ app, role }: { app: AppId; role: Role | null }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const btn = useRef<HTMLButtonElement>(null);
+  const pathname = usePathname();
+  useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+  const toggle = () => {
+    const r = btn.current?.getBoundingClientRect();
+    const aside = btn.current?.closest("aside")?.getBoundingClientRect();
+    if (r) setPos({ top: Math.max(8, r.top - 6), left: (aside?.right ?? r.right) + 10 });
+    setOpen((o) => !o);
+  };
+  const art = app === "finance" ? <FinanceArt size={34} /> : app === "inventory" ? <InventoryArt size={34} /> : app === "jobs" ? <JobsArt size={34} /> : <QrArt size={34} />;
+  return (
+    <>
+      <button ref={btn} type="button" onClick={toggle} aria-expanded={open} aria-label={`${APP_TITLE[app].label} · switch app`}
+        className={`group/app -ml-1 flex items-center gap-2 rounded-xl py-1 pl-1 pr-2 transition-colors ${open ? "bg-[#d7f1eb]" : "hover:bg-[#d7f1eb]"}`}>
+        <span className="flex transition-transform duration-300 group-hover/app:-rotate-3 group-hover/app:scale-105">{art}</span>
+        <span className="text-[14px] font-semibold text-[#0b1f3a]">{APP_TITLE[app].label}</span>
+        <svg viewBox="0 0 24 24" className={`h-4 w-4 text-[#0f766e] transition-transform duration-300 ${open ? "rotate-90" : "group-hover/app:rotate-45"}`} fill="currentColor" aria-hidden="true">
+          {[5, 12, 19].map((cy) => [5, 12, 19].map((cx) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="2" />))}
+        </svg>
+      </button>
+      {open && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[95]" onClick={() => setOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ top: pos.top, left: pos.left }}
+            className="fixed w-[34rem] max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_24px_60px_rgba(15,40,60,0.18)] animate-[bp-pop-in_0.18s_ease-out]">
+            <div className="mb-3 flex items-center justify-between px-1">
+              <div>
+                <p className="text-[16px] font-semibold text-[#0b1f3a]">Apps</p>
+                <p className="text-[12.5px] text-slate-500">Choose where you want to work</p>
+              </div>
+              <button type="button" onClick={() => setOpen(false)} aria-label="Close"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
+              </button>
+            </div>
+            <AppsGrid role={role} layout="wide" onPick={() => setOpen(false)} />
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
 
 function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => void }) {
   const pathname = usePathname();
@@ -155,7 +211,7 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
     const content = (
       <>
         {!child && caret()}
-        {!child && icon(item.icon)}
+        {!child && (item.art ? <span className="-my-1 flex shrink-0 transition-transform duration-200 group-hover:scale-110"><DashboardArt size={mobile ? 26 : 24} /></span> : icon(item.icon))}
         <span className="min-w-0 flex-1 truncate">{item.label}</span>
         {!item.href && <span className="shrink-0 rounded-full bg-slate-200/70 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">Soon</span>}
       </>
@@ -195,9 +251,13 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
           Celular: al lado, "Apps" abre la pantalla completa para cambiar de app.
           Computadora: solo el ícono (allá se cambia con los 9 puntos de arriba). */}
       <div className="mb-2 flex items-center gap-2 px-2">
-        <span title={APP_TITLE[app].label} aria-label={APP_TITLE[app].label} className="flex">
-          {app === "finance" ? <FinanceArt size={mobile ? 40 : 34} /> : app === "inventory" ? <InventoryArt size={mobile ? 40 : 34} /> : app === "jobs" ? <JobsArt size={mobile ? 40 : 34} /> : <QrArt size={mobile ? 40 : 34} />}
-        </span>
+        {mobile ? (
+          <span title={APP_TITLE[app].label} aria-label={APP_TITLE[app].label} className="flex">
+            {app === "finance" ? <FinanceArt size={40} /> : app === "inventory" ? <InventoryArt size={40} /> : app === "jobs" ? <JobsArt size={40} /> : <QrArt size={40} />}
+          </span>
+        ) : (
+          <DesktopAppSwitch app={app} role={role} />
+        )}
         {mobile && (
           <button type="button" onClick={() => setAppsOpen(true)}
             className="group ml-1 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[15px] font-semibold text-[#0f766e] transition-colors active:bg-[#d7f1eb]">

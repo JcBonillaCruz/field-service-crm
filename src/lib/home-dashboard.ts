@@ -12,6 +12,7 @@ export type AlertLevel = "red" | "orange" | "blue" | "gray";
 export type HomeAlert = {
   id: string; app: AlertApp; level: AlertLevel; kind: string; title: string; sub: string; pill: string; href: string; at: string;
   item?: string; location?: string; qty?: number; min?: number; // inventario: para la barrita de stock
+  days?: number; amount?: number; customer?: string; number?: string; // facturas: días para vencer (negativo = vencida) y saldo
 };
 
 // ---------- Alertas guardadas en la base (las de trabajos "en vivo" se calculan en el navegador) ----------
@@ -48,7 +49,7 @@ export async function loadHomeAlerts(supabase: SupabaseClient, companyId: string
     });
   }
 
-  // Finanzas (solo dueño y manager): facturas vencidas, que vencen hoy o en 1–2 días
+  // Finanzas (solo dueño y manager): facturas vencidas o que vencen en los próximos 7 días (para llamar al cliente)
   type Inv = { id: string; number: string; customer_name: string; total: number; amount_paid: number; written_off: number; due_date: string; status: string };
   const invoices = ((digest.error ? null : (digest.data as { invoices?: Inv[] } | null))?.invoices ?? []) as Inv[];
   const t = today();
@@ -57,13 +58,14 @@ export async function loadHomeAlerts(supabase: SupabaseClient, companyId: string
     const bal = Math.round((Number(inv.total) - Number(inv.amount_paid) - Number(inv.written_off)) * 100) / 100;
     if (bal <= 0 || !inv.due_date) continue;
     const days = daysBetween(t, inv.due_date);
-    if (days > 2) continue;
+    if (days > 7) continue;
     const late = days < 0;
     out.push({
       id: `inv-${inv.id}`, app: "finances", level: late ? "red" : days === 0 ? "orange" : "blue", kind: late ? "overdue" : "due_soon",
       title: late ? `Invoice overdue ${-days} ${days === -1 ? "day" : "days"}` : days === 0 ? "Invoice due today" : `Invoice due in ${days} ${days === 1 ? "day" : "days"}`,
       sub: `${inv.number} · ${inv.customer_name} · ${money(bal)}`, pill: late ? "Overdue" : "Due soon",
       href: `/dashboard/invoices/${inv.id}`, at: inv.due_date,
+      days, amount: bal, customer: inv.customer_name, number: inv.number,
     });
   }
   return out;

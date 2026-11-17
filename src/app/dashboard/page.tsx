@@ -34,7 +34,7 @@ export default async function DashboardPage({ searchParams }: { searchParams?: {
 
   const [basics, alerts, dash, typeRows] = await Promise.all([
     loadJobBasics(supabase, current.id),
-    loadHomeAlerts(supabase, current.id, { finances: false, inventory: true }).catch(() => []),
+    loadHomeAlerts(supabase, current.id, { finances: canFinance, inventory: true }).catch(() => []),
     canFinance ? loadDashboard(supabase, current.id).catch(() => null) : Promise.resolve(null),
     canFinance ? supabase.from("customers").select("customer_type").eq("company_id", current.id).eq("is_archived", false) : Promise.resolve({ data: [] }),
   ]);
