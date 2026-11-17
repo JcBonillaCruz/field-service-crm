@@ -19,8 +19,9 @@ const TABS: {label:string;icon:string}[] = [
   {label:"Help",icon:"M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"},
 ];
 
-export default function Dashboard({ firstName, companyName, industry, role, counts, daysLeft, stats }: {
+export default function Dashboard({ firstName, companyName, industry, role, counts, daysLeft, stats, embedded = false }: {
   firstName: string; companyName: string; industry: string; role: Role; counts: Counts; daysLeft: number; stats?: MobileStats | null;
+  embedded?: boolean; // Paso 5.3f: dentro de la pestaña "Finances" del inicio (sin sus propias pestañas)
 }) {
   const $ = (v: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(v || 0);
   const st = stats;
@@ -40,9 +41,9 @@ export default function Dashboard({ firstName, companyName, industry, role, coun
   const d = (i:number):React.CSSProperties => ({transitionDelay:`${i*60}ms`});
 
   return (
-    <div className="min-h-full bg-[#f4f6f8]" {...swipe}>
+    <div className="min-h-full bg-[#f4f6f8]" {...(embedded ? {} : swipe)}>
       {/* Pestañas */}
-      <div className="sticky top-16 z-10 flex gap-1 border-b border-slate-200 bg-white px-4">
+      {!embedded && <div className="sticky top-16 z-10 flex gap-1 border-b border-slate-200 bg-white px-4">
         {TABS.map(t=>(
           <button key={t.label} type="button" onClick={()=>setTab(t.label)}
             className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-3 text-sm transition-colors ${tab===t.label?"border-[#0f766e] font-semibold text-[#0f766e]":"border-transparent text-slate-500"}`}>
@@ -50,7 +51,7 @@ export default function Dashboard({ firstName, companyName, industry, role, coun
             {t.label==="Dashboard" ? <span className="sr-only">Home</span> : t.label}
           </button>
         ))}
-      </div>
+      </div>}
 
       {tab === "Dashboard" && (
         <div>

@@ -38,8 +38,9 @@ const TABS = ["Dashboard", "Announcements", "Help"] as const;
 type Tab = (typeof TABS)[number];
 type CardKey = "rev" | "mrr" | "active" | "arpu" | "churn" | "ltv" | "subsum" | "inc" | "exp";
 
-export default function DesktopDashboard({ firstName, companyId, companyName, companyIndex, demo = false, real = null, stats = null }: {
+export default function DesktopDashboard({ firstName, companyId, companyName, companyIndex, demo = false, real = null, stats = null, embedded = false }: {
   firstName: string; companyId: string; companyName: string; companyIndex: number; demo?: boolean; real?: DashboardData | null; stats?: MobileStats | null;
+  embedded?: boolean; // Paso 5.3f: dentro de la pestaña "Finances" del inicio (sin su propio saludo, pestañas ni pie)
 }) {
   const [tab, setTab] = useState<Tab>("Dashboard");
   const [now, setNow] = useState<Date | null>(null);
@@ -60,7 +61,7 @@ export default function DesktopDashboard({ firstName, companyId, companyName, co
   return (
     <div className="min-h-full bg-white">
       {/* Saludo + pestañas. Al bajar, el saludo se esconde y las pestañas se quedan arriba */}
-      <div className="sticky -top-8 z-10 border-b border-slate-200 bg-[#fcfdfd]">
+      {!embedded && <div className="sticky -top-8 z-10 border-b border-slate-200 bg-[#fcfdfd]">
         <HeaderPattern />
         <div className="relative flex h-24 items-center justify-between gap-6 px-8">
           <div className="flex min-w-0 items-center gap-4">
@@ -83,9 +84,9 @@ export default function DesktopDashboard({ firstName, companyId, companyName, co
             </button>
           ))}
         </div>
-      </div>
+      </div>}
 
-      {tab === "Dashboard" ? (
+      {embedded || tab === "Dashboard" ? (
         <div className="px-8 pb-4 pt-6">
           {demo && (
             <div className="mb-5 flex max-w-[1600px] items-center justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
@@ -114,7 +115,7 @@ export default function DesktopDashboard({ firstName, companyId, companyName, co
         <EmptyTab title="Need help?" text="Documentation and support channels are coming soon." />
       )}
 
-      <Footer onTab={go} />
+      {!embedded && <Footer onTab={go} />}
     </div>
   );
 }
@@ -353,7 +354,7 @@ const PATTERN: [string, number, number, number][] = [
   ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM8.5 12l2.5 2.5 4.5-5", 500, 54, -10],
 ];
 
-function HeaderPattern() {
+export function HeaderPattern() {
   return (
     <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
       <defs>
