@@ -32,13 +32,14 @@ export async function POST(request: NextRequest) {
   const assigned = b.assignAll ? techsNow : (b.assigned ?? []).filter((id) => techsNow.includes(id));
   const stayed = techsNow.filter((id) => !assigned.includes(id));
   const email = s?.notify_tech_assign !== false;
-  const result = { techs: 0, customer: null as null | { ok: boolean; reason: string | null } };
+  const result = { techs: 0, bell: 0, emails: 0, skipped: null as null | string, error: undefined as undefined | string, customer: null as null | { ok: boolean; reason: string | null } };
+  const add = (r: { push: number; bell: number; emails: number; error: string | null }) => { result.techs += r.push; result.bell += r.bell; result.emails += r.emails; if (r.error) result.error = r.error; };
 
   if (s?.notify_tech_assign !== false) {
-    if (assigned.length) result.techs += await notifyTechs(db, { job: job as JobInfo, visit: v, userIds: assigned, kind: "assigned", brand, origin, email });
-    if (b.moved && stayed.length) result.techs += await notifyTechs(db, { job: job as JobInfo, visit: v, userIds: stayed, kind: "rescheduled", brand, origin, email: false });
-    if (b.unassigned?.length) result.techs += await notifyTechs(db, { job: job as JobInfo, visit: v, userIds: b.unassigned.filter((id) => !techsNow.includes(id)), kind: "unassigned", brand, origin, email: false });
-  }
+    if (assigned.length) add(await notifyTechs(db, { job: job as JobInfo, visit: v, userIds: assigned, kind: "assigned", brand, origin, email }));
+    if (b.moved && stayed.length) add(await notifyTechs(db, { job: job as JobInfo, visit: v, userIds: stayed, kind: "rescheduled", brand, origin, email: false }));
+    if (b.unassigned?.length) add(await notifyTechs(db, { job: job as JobInfo, visit: v, userIds: b.unassigned.filter((id) => !techsNow.includes(id)), kind: "unassigned", brand, origin, email: false }));
+  } else result.skipped = "setting_off";
   if (b.notifyCustomer) result.customer = await notifyCustomer(db, { job: job as JobInfo, visit: v, brand });
   // Fuera de horario (Paso 5.3b): push al dueño para que decida si cobra el extra (el aviso de la campana lo crea la base de datos)
   if (b.moved || b.assignAll || assigned.length) {

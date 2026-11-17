@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { releasePushDevice } from "@/lib/push-client";
 import Avatar from "@/components/Avatar";
 import Link from "next/link";
 import OrganizationList from "@/components/OrganizationList";
@@ -32,6 +33,7 @@ export default function ProfilePanel({
   }
 
   async function signOut() {
+    await releasePushDevice();
     await createClient().auth.signOut();
     router.push("/");
     router.refresh();

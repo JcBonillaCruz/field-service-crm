@@ -9,6 +9,7 @@ import { JobSettings, TeamMember, addDays, addressLine, afterHoursOf, dayStart, 
 import { Modal, btnGhost, btnPrimary } from "@/components/sales/SalesBits";
 import { OPS_GROUPS, OpsGroup, OpsJob, delayOf, fold, groupOf as groupAt, progressOf } from "@/lib/operations";
 import { TechDot } from "@/components/jobs/EventBar";
+import { notifyAssigned } from "@/lib/jobs-assign-notify";
 import { CardMenu, GroupArt, OpsCard, ProgressRing } from "@/components/jobs/ops/OpsBits";
 import OpsConnections from "@/components/jobs/ops/OpsConnections";
 import { MoveTarget, OpsAsk, OpsDialog } from "@/components/jobs/ops/OpsDialogs";
@@ -288,8 +289,16 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
     if (!MOVABLE.includes(g)) return flash(g === "done" ? "Use Finish on the job to complete it." : "Delayed is automatic: a job shows here when it's running late.", true);
     setAsk({ kind: "move", job, from: d.from, to: g as MoveTarget });
   }
-  // Mover, arrastrar o reasignar en Operations es solo acomodar: no se manda ningún aviso ni se pregunta nada
-  const afterAction = (msg: string) => { setAsk(null); flash(msg); load(); };
+  // Mover o arrastrar en Operations es solo acomodar: no se pregunta nada ni se avisa al cliente.
+  // La única excepción: a quien se AGREGA a un trabajo sí le llega su aviso (campana + push + correo).
+  const afterAction = (msg: string, notify?: Record<string, unknown>) => {
+    setAsk(null); flash(msg); load();
+    const added = (notify?.assigned as string[] | undefined) ?? [];
+    if (notify && added.length) {
+      const target = notify.visitId ? { visitId: notify.visitId as string } : { jobId: notify.jobId as string };
+      notifyAssigned(target, added).then((why) => { if (why) flash(`${msg} · not notified: ${why}`, true); });
+    }
+  };
 
   return (
     <div className="min-h-[calc(100dvh-4rem)] bg-[#f4f6f8] px-3 pb-24 pt-4 lg:px-6 lg:pb-8 lg:pt-5">
@@ -362,7 +371,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
           {focus && <FocusNote label={OPS_GROUPS.find((g) => g.id === focus)!.label} onClear={() => setFocus(null)} />}
           {loading ? <div className="h-80 animate-pulse rounded-2xl bg-white" /> : <OpsConnections companyId={companyId}
             period={<PeriodNav when={when} span={span} label={periodLabel} setWhen={setWhen} setSpan={setSpan} weekStartsOn={weekStartsOn} compact />} jobs={connJobs} groupOf={groupOf} team={team} now={now} menuFor={menuFor} isAfter={isAfter} hrefFor={hrefFor}
-            onChanged={(m, _n, err) => (err ? flash(m, true) : afterAction(m))}
+            onChanged={(m, n, err) => (err ? flash(m, true) : afterAction(m, n))}
             onUnassign={(j) => setAsk({ kind: "move", job: j, from: groupOf(j), to: "unassigned" })} />}
         </div>
       ) : (

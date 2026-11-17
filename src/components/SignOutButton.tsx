@@ -2,10 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { releasePushDevice } from "@/lib/push-client";
 
 export default function SignOutButton() {
   const router = useRouter();
   async function signOut() {
+    await releasePushDevice();
     await createClient().auth.signOut();
     router.push("/");
     router.refresh();

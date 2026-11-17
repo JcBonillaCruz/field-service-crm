@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import DatePicker from "@/components/ui/DatePicker";
 import { SiteAddress, addDays, addressLine, dayStart, fmtDayShort, fmtTime, fromIsoDay, isoDay, jobError, startOfWeek } from "@/lib/jobs";
 import { TechDot } from "@/components/jobs/EventBar";
+import { notifyAssigned } from "@/lib/jobs-assign-notify";
 
 export type AssignTech = {
   user_id: string; full_name: string; initials: string; color: string; avatar_url: string | null; email: string | null; phone: string | null; job_title: string | null;
@@ -118,7 +119,10 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
     const { error } = await createClient().rpc("visit_set_collaborators", { p_visit: rowId, p_users: next, p_lead: newLead });
     if (error) { setRows((rs) => rs.map((r) => (r.id === rowId ? { ...r, tech_ids: before, lead_id: beforeLead } : r))); setPicked(null); flash(error.hint || jobError(error), true); return; }
     if (pulseId) { setPulse(pulseId); setTimeout(() => setPulse((p) => (p === pulseId ? null : p)), 700); }
-    flash(message); // arrastrar en Assign jobs no manda avisos
+    flash(message);
+    // Solo a quien se AGREGA al trabajo le llega su aviso (campana + push + correo). Mover o quitar no avisa a nadie.
+    const added = next.filter((t) => !before.includes(t));
+    if (added.length) notifyAssigned({ visitId: rowId }, added).then((why) => { if (why) flash(`${message} · not notified: ${why}`, true); });
   }
   const nameOf = (id: string) => techs.find((t) => t.user_id === id)?.full_name ?? "collaborator";
   const label = (r: Row) => r.customer_name || r.number;

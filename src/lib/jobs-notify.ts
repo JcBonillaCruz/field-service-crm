@@ -108,20 +108,23 @@ export async function customerEmail(db: SupabaseClient, customerId: string) {
   return (primary as string | null) ?? null;
 }
 
-// Aviso al técnico: campana + push + (opcional) correo
+// Aviso al técnico: campana + push + (opcional) correo. Devuelve cuántos salieron por cada vía.
+export type NotifyResult = { push: number; bell: number; emails: number; error: string | null };
 export async function notifyTechs(db: SupabaseClient, o: {
   job: JobInfo; visit: VisitInfo; userIds: string[]; kind: "assigned" | "rescheduled" | "unassigned"; brand: Brand; origin: string; email: boolean;
 }) {
-  if (!o.userIds.length) return 0;
+  const out: NotifyResult = { push: 0, bell: 0, emails: 0, error: null };
+  if (!o.userIds.length) return out;
   const tz = o.brand.timezone;
   const what = o.job.title || o.job.customer_name || o.job.number;
   const title = o.kind === "assigned" ? `New job: ${o.job.customer_name || o.job.number}` : o.kind === "rescheduled" ? `Job moved: ${o.job.customer_name || o.job.number}` : `Removed from job ${o.job.number}`;
   const body = o.kind === "unassigned" ? `${what} is no longer assigned to you.` : `${whenText(o.visit, tz)}${addressText(o.job.site_address) ? ` · ${addressText(o.job.site_address)}` : ""}`;
-  await db.from("job_notices").insert(o.userIds.map((user_id) => ({ company_id: o.job.company_id, user_id, job_id: o.job.id, kind: o.kind, title, body })));
-  const sent = await pushToUsers(db, o.job.company_id, o.userIds, { title, body, url: "/dashboard/jobs/mine", tag: `job-${o.job.id}` });
+  const { error: bellErr } = await db.from("job_notices").insert(o.userIds.map((user_id) => ({ company_id: o.job.company_id, user_id, job_id: o.job.id, kind: o.kind, title, body })));
+  if (bellErr) out.error = bellErr.message; else out.bell = o.userIds.length;
+  out.push = await pushToUsers(db, o.job.company_id, o.userIds, { title, body, url: "/dashboard/jobs/mine", tag: `job-${o.job.id}` });
   if (o.email && o.kind !== "unassigned") {
     const people = await userEmails(db, o.userIds);
-    await Promise.all(Array.from(people.values()).map((p) => sendEmail({
+    const oks = await Promise.all(Array.from(people.values()).map((p) => sendEmail({
       brand: o.brand, to: [p.email], subject: `${title} · ${o.job.number}`,
       html: emailShell({
         brand: o.brand, heading: o.kind === "assigned" ? "You have a new job" : "A job on your schedule changed",
@@ -131,8 +134,9 @@ export async function notifyTechs(db: SupabaseClient, o: {
       }),
       text: `${title}\n${whenText(o.visit, tz)}\n${addressText(o.job.site_address)}`,
     })));
+    out.emails = oks.filter(Boolean).length;
   }
-  return sent;
+  return out;
 }
 
 // Aviso al cliente: su cita cambió
