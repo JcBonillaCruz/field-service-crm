@@ -22,7 +22,7 @@ export default async function JobsDashboardPage() {
   return (
     <div className="min-h-full bg-[#f4f6f8]">
       <JobsDashboard variant="jobs" companyId={current.id} team={basics.team} weekStartsOn={basics.settings.week_starts_on}
-        canSeePrice={current.role === "owner" || current.role === "manager"} revenue={null} alerts={alerts} header={<JobsDashHeader />} />
+        canSeePrice={current.role === "owner" || current.role === "manager"} canDelete={current.role === "owner" || current.role === "manager"} revenue={null} alerts={alerts} header={<JobsDashHeader />} />
     </div>
   );
 }

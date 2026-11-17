@@ -12,6 +12,7 @@ import { FinanceArt, InventoryArt, JobsArt } from "@/components/AppIcons";
 import { TechDot, TechDots } from "@/components/jobs/EventBar";
 import { DelayTag, GroupArt, ProgressRing } from "@/components/jobs/ops/OpsBits";
 import { AlertIcon, TeamArt } from "@/components/home/DashArt";
+import { OpsDialog } from "@/components/jobs/ops/OpsDialogs";
 import { OPS_GROUPS, OpsGroup, OpsJob, delayOf, fold, groupOf as groupAt, progressOf } from "@/lib/operations";
 import { TeamMember, addDays, dayStart, fmtTime, fromIsoDay, isoDay, jobError, receivesJobs, startOfMonth, startOfWeek } from "@/lib/jobs";
 import { Member, presenceOf } from "@/lib/team";
@@ -117,7 +118,7 @@ const JOB_CATS: { id: JobCat; label: string; hint: string; level: "red" | "orang
 ];
 type JobAlert = { id: string; cat: JobCat; title: string; number: string; sub: string; tag: React.ReactNode; href: string; sort: number; job?: OpsJob };
 
-export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePrice, revenue, alerts, header, sample, samplePresence, variant = "home" }: {
+export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePrice, revenue, alerts, header, sample, samplePresence, variant = "home", canDelete = false }: {
   companyId: string; team: TeamMember[]; weekStartsOn: number;
   canSeePrice: boolean;          // dueño y manager
   revenue: RevenueData | null;   // solo el dueño
@@ -126,6 +127,7 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
   sample?: OpsJob[];             // datos de ejemplo (vista previa): no consulta la base
   samplePresence?: Member[];
   variant?: "home" | "jobs";      // "jobs" = el Dashboard propio de la app Jobs (sin inventario ni finanzas)
+  canDelete?: boolean;           // dueño y manager: papelera en la lista de trabajos
 }) {
   const [jobs, setJobs] = useState<OpsJob[]>([]);
   const [members, setMembers] = useState<Member[] | null>(samplePresence ?? null);
@@ -140,7 +142,7 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
   const load = useCallback(async () => {
     if (sample) { setJobs(sample); setLoading(false); return; }
     const id = ++reqId.current;
-    const since = new Date(); since.setMonth(since.getMonth() - 1, 1); since.setHours(0, 0, 0, 0); // terminados desde el mes pasado (para comparar)
+    const since = new Date(); since.setMonth(Math.min(since.getMonth() - 1, 0), 1); since.setHours(0, 0, 0, 0); // terminados desde enero (o el mes pasado si es enero)
     const { data, error: err } = await createClient().rpc("ops_board", { p_company: companyId, p_done_since: since.toISOString() });
     if (id !== reqId.current) return;
     if (err) { setError(jobError(err)); setLoading(false); return; }
@@ -314,6 +316,7 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
   if (variant === "jobs") return (
     <JobsHub header={header} error={error} loading={loading} membersLoading={!members} now={now} withGroup={withGroup} people={people}
       jobAlerts={jobAlerts} kpiGroups={kpiGroups} canSeePrice={canSeePrice} onPerson={setOpenPerson}
+      team={team} canDelete={canDelete} onReload={load} rangeOf={rangeOf} inRange={inRange}
       drawer={selected && <PersonDrawer p={selected} rows={withGroup.filter(({ j }) => j.techs.some((t) => t.user_id === selected.id))} now={now} onClose={() => setOpenPerson(null)} />} />
   );
 
@@ -1137,10 +1140,17 @@ function CardHead({ icon, title, sub, link }: { icon: React.ReactNode; title: st
   );
 }
 
-function JobsHub({ header, error, loading, membersLoading, now, withGroup, people, jobAlerts, kpiGroups, canSeePrice, onPerson, drawer }: {
+type HubPeriod = "today" | "week" | "month" | "year";
+const HUB_PERIODS: { v: HubPeriod; label: string }[] = [{ v: "today", label: "Today" }, { v: "week", label: "This week" }, { v: "month", label: "This month" }, { v: "year", label: "This year" }];
+function JobsHub({ header, error, loading, membersLoading, now, withGroup, people, jobAlerts, kpiGroups, canSeePrice, onPerson, drawer, team, canDelete, onReload, rangeOf, inRange }: {
   header?: React.ReactNode; error: string; loading: boolean; membersLoading: boolean; now: number; withGroup: { j: OpsJob; g: OpsGroup }[];
   people: Person[]; jobAlerts: JobAlert[]; kpiGroups: Record<OpsGroup, number>; canSeePrice: boolean; onPerson: (id: string) => void; drawer: React.ReactNode;
+  team: TeamMember[]; canDelete: boolean; onReload: () => void;
+  rangeOf: (p: Period, shift?: number) => [Date, Date]; inRange: (j: OpsJob, g: OpsGroup, r: [Date, Date], live?: boolean) => boolean;
 }) {
+  const [listPeriod, setListPeriod] = useState<HubPeriod>("today");
+  const [del, setDel] = useState<OpsJob | null>(null);
+  const [toast, setToast] = useState("");
   const d0 = dayStart(new Date(now)), d1 = addDays(d0, 1), d2 = addDays(d0, 2);
   const start = (j: OpsJob) => (j.visit?.starts_at ? new Date(j.visit.starts_at) : null);
   const live = (j: OpsJob) => ["on_my_way", "in_progress", "paused"].includes(j.visit?.status ?? "");
@@ -1154,6 +1164,13 @@ function JobsHub({ header, error, loading, membersLoading, now, withGroup, peopl
   const order: Record<string, number> = { delayed: 0, paused: 1, followup: 2, unassigned: 3 };
   attention.sort((a, b) => order[a.cat] - order[b.cat] || a.sort - b.sort);
   const [shownToday, setShownToday] = useState(10);
+  useEffect(() => setShownToday(10), [listPeriod]);
+  const listRows = listPeriod === "today" ? today : (() => {
+    const y = new Date(now).getFullYear();
+    const r: [Date, Date] = listPeriod === "year" ? [new Date(y, 0, 1), new Date(y + 1, 0, 1)] : rangeOf(listPeriod);
+    return withGroup.filter(({ j, g }) => inRange(j, g, r)).sort((a, b) => (a.j.visit?.starts_at ?? "9").localeCompare(b.j.visit?.starts_at ?? "9"));
+  })();
+  const listLabel = HUB_PERIODS.find((p) => p.v === listPeriod)!.label;
   // Lo que hace cada persona ahora (o lo próximo que tiene)
   const doing = (id: string) => {
     const mine = withGroup.filter(({ j }) => j.techs.some((t) => t.user_id === id));
@@ -1264,19 +1281,31 @@ function JobsHub({ header, error, loading, membersLoading, now, withGroup, peopl
           </section>
         </div>
 
-        {/* 3. Trabajos de hoy con su avance */}
-        <section className="mt-5 rounded-2xl border border-slate-200 bg-white lg:mt-6" aria-label="Today's jobs">
-          <CardHead icon={<span className="group"><JobsArt size={36} /></span>} title="Today's jobs" sub={loading ? "Loading…" : `${today.length} job${today.length === 1 ? "" : "s"} · progress updates live`} link={{ href: ops(), label: "Operations" }} />
-          {!today.length && !loading ? <p className="px-5 pb-6 pt-1 text-[13.5px] text-slate-500">No jobs today.</p> : (
+        {/* 3. Trabajos (hoy, semana, mes o año) con su avance */}
+        <section className="mt-5 rounded-2xl border border-slate-200 bg-white lg:mt-6" aria-label="Jobs">
+          <div className="flex items-center justify-between gap-3 px-4 pb-2 pt-4 lg:px-5">
+            <div className="group flex min-w-0 items-center gap-2.5">
+              <JobsArt size={36} />
+              <div className="min-w-0">
+                <h2 className="truncate text-[17px] font-semibold leading-tight text-[#0b1f3a]">{listPeriod === "today" ? "Today's jobs" : `Jobs · ${listLabel.toLowerCase()}`}</h2>
+                <p className="truncate text-[12.5px] text-slate-500">{loading ? "Loading…" : `${listRows.length} job${listRows.length === 1 ? "" : "s"} · progress updates live`}</p>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Pick value={listPeriod} options={HUB_PERIODS} onChange={(v) => setListPeriod(v as HubPeriod)} ariaLabel="Show jobs for" />
+              <Link prefetch={false} href={ops()} className="hidden shrink-0 rounded-lg px-2.5 py-1.5 text-[13px] font-semibold text-[#2563eb] hover:bg-[#eef4ff] sm:inline">Operations →</Link>
+            </div>
+          </div>
+          {!listRows.length && !loading ? <p className="px-5 pb-6 pt-1 text-[13.5px] text-slate-500">No jobs {listPeriod === "today" ? "today" : listLabel.toLowerCase()}.</p> : (
             <>
               <div className="hidden overflow-x-auto md:block">
                 <table className="w-full min-w-[860px] border-collapse">
                   <thead className="border-y border-slate-100 bg-[#fafbfc]">
-                    <tr>{["Job", "Customer", "Service", "Time", "Collaborators", "Status", "Progress"].map((h) => <th key={h} className={TH}>{h}</th>)}</tr>
+                    <tr>{["Job", "Customer", "Service", listPeriod === "today" ? "Time" : "Scheduled", "Collaborators", "Status", "Progress"].map((h) => <th key={h} className={TH}>{h}</th>)}<th className={`${TH} text-right`}>Actions</th></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {today.slice(0, shownToday).map(({ j, g }) => (
-                      <tr key={j.id} className={`transition-colors hover:bg-[#f6fbfa] ${g === "done" ? "text-slate-500" : ""}`}>
+                    {listRows.slice(0, shownToday).map(({ j, g }) => (
+                      <tr key={j.id} className={`group transition-colors hover:bg-[#f6fbfa] ${g === "done" ? "text-slate-500" : ""}`}>
                         <td className={TD}><Link prefetch={false} href={`/dashboard/jobs/${j.id}`} className="whitespace-nowrap text-[13.5px] font-semibold tabular-nums text-[#2563eb] hover:underline">{j.number}</Link></td>
                         <td className={`${TD} text-[14px] font-medium text-[#0b1f3a]`}><span className="block max-w-[13rem] truncate">{j.customer_name || "—"}</span></td>
                         <td className={`${TD} text-[14px] text-slate-700`}><span className="inline-flex max-w-[11rem] items-center gap-2"><span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: j.type_color || "#94a3b8" }} /><span className="truncate">{j.type_name || j.title || "General"}</span></span></td>
@@ -1284,15 +1313,29 @@ function JobsHub({ header, error, loading, membersLoading, now, withGroup, peopl
                         <td className={TD}><span className="flex items-center gap-2"><TechDots techs={j.techs} size={24} max={2} /><span className="max-w-[9rem] truncate text-[13.5px] text-slate-700">{j.techs.length ? j.techs[0].name : <span className="text-slate-400">Nobody yet</span>}{j.techs.length > 1 && <span className="font-semibold text-[#e8713a]"> +{j.techs.length - 1}</span>}</span></span></td>
                         <td className={TD}><StatusCell j={j} g={g} now={now} /></td>
                         <td className={TD}><Progress j={j} g={g} w="w-36" /></td>
+                        <td className={`${TD} text-right`}>
+                          <span className="inline-flex items-center gap-1">
+                            <RowMenu j={j} g={g} />
+                            {canDelete && (
+                              <button type="button" onClick={() => setDel(j)} aria-label={`Delete job ${j.number}`} title="Delete"
+                                className="group/del flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-all duration-150 hover:scale-110 hover:bg-[#fff1f2] hover:text-[#e11d48]">
+                                <svg viewBox="0 0 24 24" className="h-[17px] w-[17px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                  <path className="origin-[12px_6px] transition-transform duration-200 group-hover/del:-rotate-12" d="M4 6.5h16M9.5 6.5V4.5h5v2" />
+                                  <path d="M6 6.5 7 20h10l1-13.5M10 10.5v6M14 10.5v6" />
+                                </svg>
+                              </button>
+                            )}
+                          </span>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <TaskCards rows={today.slice(0, shownToday)} loading={loading} now={now} canSeePrice={canSeePrice} />
-              {today.length > shownToday && (
+              <TaskCards rows={listRows.slice(0, shownToday)} loading={loading} now={now} canSeePrice={canSeePrice} />
+              {listRows.length > shownToday && (
                 <div className="border-t border-slate-100 p-3 text-center">
-                  <button type="button" onClick={() => setShownToday((n) => n + 10)} className="rounded-lg px-4 py-2 text-[14px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4]">Show more ({today.length - shownToday} left)</button>
+                  <button type="button" onClick={() => setShownToday((n) => n + 10)} className="rounded-lg px-4 py-2 text-[14px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4]">Show more ({listRows.length - shownToday} left)</button>
                 </div>
               )}
             </>
@@ -1354,6 +1397,9 @@ function JobsHub({ header, error, loading, membersLoading, now, withGroup, peopl
         </div>
       </div>
       {drawer}
+      <OpsDialog ask={del ? { kind: "delete", job: del } : null} team={team} onClose={() => setDel(null)}
+        onDone={(msg) => { setDel(null); setToast(msg); onReload(); setTimeout(() => setToast(""), 2600); }} />
+      {toast && <div role="status" className="fixed bottom-5 left-1/2 z-[95] max-w-[92vw] -translate-x-1/2 rounded-xl bg-[#0b1f3a] px-4 py-2.5 text-[13.5px] font-medium text-white shadow-lg animate-[bp-pop-in_0.2s_ease-out]">{toast}</div>}
     </div>
   );
 }
