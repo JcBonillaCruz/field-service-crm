@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 import { TECH_COLORS } from "@/lib/jobs";
 import { compressPhoto, fileId } from "@/lib/photo-compress";
@@ -201,7 +202,8 @@ export default function JobChat({ jobId, title, companyId, placement = "float", 
         );
       })()}
 
-      {open && (
+      {/* El panel se dibuja directo en la página (portal): así ocupa TODA la pantalla del celular aunque el botón viva dentro de la barra de abajo */}
+      {open && createPortal(
         <div role="dialog" aria-label="Job chat"
           className="fixed inset-0 z-[97] flex flex-col bg-white animate-[bp-sheet-up_0.22s_ease-out] lg:inset-auto lg:bottom-6 lg:right-8 lg:h-[min(36rem,calc(100dvh-7rem))] lg:w-[24rem] lg:overflow-hidden lg:rounded-2xl lg:border lg:border-slate-200 lg:shadow-[0_24px_60px_rgba(15,40,60,0.28)]">
           {/* Encabezado */}
@@ -294,7 +296,8 @@ export default function JobChat({ jobId, title, companyId, placement = "float", 
               </div>
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

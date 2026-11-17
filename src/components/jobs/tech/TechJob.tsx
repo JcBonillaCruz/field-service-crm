@@ -258,8 +258,10 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
             <p className="mx-auto mb-2 max-w-2xl text-center text-[12.5px] font-medium text-[#b45309]">{missing} required checklist task{missing === 1 ? "" : "s"} left</p>
           )}
           <div className={`mx-auto flex max-w-2xl items-stretch gap-1.5 ${hasActions ? "" : "justify-end"}`}>
+            {/* Chat a la izquierda · botones del trabajo a la derecha, del ancho de su texto */}
             {/* Chat del trabajo: dentro de la barra, ya no flota encima del contenido */}
             <JobChat jobId={jobId} companyId={j.company_id} title={`${j.customer_name || "Job"} · ${j.number}`} placement="bar" showLabel={!hasActions} />
+            {hasActions && <span className="flex-1" />}
             {hasActions && st === "scheduled" && <>
               <Big onClick={() => act("on_my_way")} busy={busy === "on_my_way"} tone="violet" icon="M3 12h11V6H3zM14 9h3l3 3v3h-6M7 18a1.6 1.6 0 1 0 0-3.2A1.6 1.6 0 0 0 7 18zM17 18a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2z">On my way</Big>
               <Big onClick={() => act("start")} busy={busy === "start"} tone="light" icon="M8 5v14l11-7z">Start</Big>
@@ -307,7 +309,7 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
 function Big({ children, onClick, busy, tone, icon }: { children: React.ReactNode; onClick: () => void; busy: boolean; tone: "teal" | "violet" | "light"; icon: string }) {
   const cls = tone === "teal" ? "bg-[#0f766e] text-white" : tone === "violet" ? "bg-[#6d28d9] text-white" : "border border-slate-200 bg-white text-[#0b1f3a]";
   return (
-    <button type="button" onClick={onClick} disabled={busy} className={`flex h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl px-2.5 text-[14px] font-semibold transition-transform active:scale-[0.98] disabled:opacity-60 ${cls}`}>
+    <button type="button" onClick={onClick} disabled={busy} className={`flex h-10 min-w-0 shrink items-center justify-center gap-1.5 rounded-xl px-4 text-[14px] font-semibold transition-transform active:scale-[0.98] disabled:opacity-60 ${cls}`}>
       {busy ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Icon d={icon} className="h-4 w-4 shrink-0" />}<span className="truncate">{children}</span>
     </button>
   );
