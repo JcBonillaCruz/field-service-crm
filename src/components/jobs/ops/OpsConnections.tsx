@@ -128,22 +128,17 @@ export default function OpsConnections({ companyId, jobs: rawJobs, groupOf, team
     const cols = Math.max(1, Math.floor((free + COL_GAP) / (CARD_W + COL_GAP)));
     setFit((f) => (f.rows === rows && f.cols === cols ? f : { rows, cols }));
   }, []);
-  // Columnas: primero las de trabajo pendiente (pegadas a las personas) y los terminados
-  // siempre en sus propias columnas, hasta el fondo a la derecha.
-  const allCols = useMemo(() => {
-    const chunk = (list: OpsJob[], done: boolean) => {
-      const out: { jobs: OpsJob[]; done: boolean; first: boolean }[] = [];
-      for (let i = 0; i < list.length; i += fit.rows) out.push({ jobs: list.slice(i, i + fit.rows), done, first: i === 0 });
-      return out;
-    };
-    return [...chunk(ordered.filter((j) => groupOf(j) !== "done"), false), ...chunk(ordered.filter((j) => groupOf(j) === "done"), true)];
-  }, [ordered, groupOf, fit.rows]);
-  const doneCount = useMemo(() => ordered.filter((j) => groupOf(j) === "done").length, [ordered, groupOf]);
-  const pages = Math.max(1, Math.ceil(allCols.length / fit.cols));
+  // Paso 5.4f: las tarjetas se llenan de IZQUIERDA A DERECHA, fila por fila, usando todo el ancho
+  // (cuadrito por cuadrito). Primero el trabajo pendiente y al final los terminados (en gris).
+  // Si no caben en una pantalla (filas × columnas), se sigue en la siguiente con ‹ ›.
+  const sequence = useMemo(() => [...ordered.filter((j) => groupOf(j) !== "done"), ...ordered.filter((j) => groupOf(j) === "done")], [ordered, groupOf]);
+  const perPage = Math.max(1, fit.rows * fit.cols);
+  const pages = Math.max(1, Math.ceil(sequence.length / perPage));
   const pg = Math.min(page, pages - 1);
   useEffect(() => { if (page !== pg) setPage(pg); }, [page, pg]);
-  const pageCols = useMemo(() => allCols.slice(pg * fit.cols, (pg + 1) * fit.cols), [allCols, pg, fit.cols]);
-  const pageJobs = useMemo(() => pageCols.flatMap((c) => c.jobs), [pageCols]);
+  const pageJobs = useMemo(() => sequence.slice(pg * perPage, (pg + 1) * perPage), [sequence, pg, perPage]);
+  // Columna c = las tarjetas 0+c, cols+c, 2·cols+c… (así al leer de izquierda a derecha van en orden)
+  const pageCols = useMemo(() => Array.from({ length: fit.cols }, (_, c) => ({ jobs: pageJobs.filter((_j, i) => i % fit.cols === c) })), [pageJobs, fit.cols]);
 
   const stats = useMemo(() => {
     const m = new Map<string, { total: number; done: number; live: ReturnType<typeof liveStatus> }>();
@@ -358,18 +353,11 @@ export default function OpsConnections({ companyId, jobs: rawJobs, groupOf, team
             )}
           </div>
           <div />
-          {/* Trabajos: columnas que se llenan de arriba abajo y siguen en la de al lado.
-              Los terminados van en sus propias columnas, empujados hasta el fondo a la derecha. */}
+          {/* Trabajos: se llenan de izquierda a derecha, fila por fila, a todo el ancho (terminados al final, en gris). */}
           <div className="relative z-10 flex min-w-0 items-start" style={{ columnGap: COL_GAP }}>
             {ordered.length === 0 && <p className="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-[13px] text-slate-500">No jobs with these filters.</p>}
-            {pageCols.map((col, ci) => (
-              <div key={`${pg}-${ci}`} className={`flex shrink-0 flex-col ${col.done && (ci === 0 || !pageCols[ci - 1].done) ? "ml-auto" : ""}`} style={{ width: CARD_W, rowGap: ROW_GAP }}>
-                {col.done && col.first && (
-                  <p className="flex items-center gap-1.5 px-1 text-[11.5px] font-semibold uppercase tracking-wide text-slate-400">
-                    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#16a34a]" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="m5 10.5 3 3 7-7" /></svg>
-                    Completed · {doneCount}
-                  </p>
-                )}
+            {ordered.length > 0 && pageCols.map((col, ci) => (
+              <div key={`${pg}-${ci}`} className="flex min-w-0 flex-1 flex-col" style={{ rowGap: ROW_GAP }}>
                 {col.jobs.map((j, ri) => {
                   const g = groupOf(j);
                   const dim = hoverJob ? hoverJob !== j.id : hoverUser ? !j.techs.some((t) => t.user_id === hoverUser) : false;
