@@ -19,6 +19,10 @@ import {
 } from "@/components/sales/DocModals";
 import { ActivityList, Divider, I, Ico, StatusPill, ToolButton, ToolItem, ToolMenu, Toast } from "@/components/sales/SalesBits";
 import { CustomizeMenu } from "@/components/sales/TemplateModals";
+import { jobError } from "@/lib/jobs";
+
+// Ícono de "trabajo" (calendario con palomita) para Convert to Job — Paso 5.6
+const JOB_ICON = "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 15l2 2 4-4";
 
 export type DocData = {
   doc: SalesDoc; lines: SalesLine[]; activity: Activity[]; comments: Comment[]; files: SalesFile[]; payments: Payment[];
@@ -88,6 +92,31 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
     router.push(`/dashboard/invoices/${id}/edit`);
     router.refresh();
   }
+  // ---------- Paso 5.6: cotización aceptada → trabajo (Jobs) con un clic ----------
+  const [job, setJob] = useState<{ id: string; number: string } | null>(null);
+  useEffect(() => {
+    if (!isQuote) return;
+    let alive = true;
+    db().from("jobs").select("id, number").eq("quote_id", doc.id).is("cancelled_at", null).limit(1)
+      .then(({ data: rows }) => { if (alive) setJob(((rows ?? [])[0] as { id: string; number: string } | undefined) ?? null); }, () => undefined);
+    return () => { alive = false; };
+  }, [isQuote, doc.id]);
+  const jobReady = isQuote && ["accepted", "invoiced"].includes(doc.status);
+  async function toJob() {
+    if (job) { router.push(`/dashboard/jobs/${job.id}`); return; }
+    if (!jobReady) return flash("Mark the quote as accepted first. Only accepted quotes become jobs.");
+    setBusy(true);
+    const { data: id, error } = await db().rpc("job_from_quote", { p_quote: doc.id });
+    if (error || !id) { setBusy(false); return flash(error?.hint || jobError(error) || "The job couldn't be created."); }
+    const { data: made } = await db().from("jobs").select("number").eq("id", id as string).maybeSingle();
+    await logActivity(doc.company_id, "quote", doc.id, `Job ${(made?.number as string) ?? ""} created from this quote`.replace("  ", " "), actor);
+    setBusy(false);
+    // Abre el trabajo para elegir tipo, fecha y colaboradores
+    router.push(`/dashboard/jobs/${id}/edit`);
+    router.refresh();
+  }
+  const jobLabel = job ? `Open Job ${job.number}` : "Convert to Job";
+
   async function remove() {
     if (!(await confirmDelete({ title: `Delete ${noun.toLowerCase()} ${doc.number}?`,
       download: { filename: doc.number, data: async () => ({ ...doc, lines: (await db().from("sales_lines").select("*").eq("doc_id", doc.id)).data, payments: (await db().from("sales_payments").select("*").eq("invoice_id", doc.id)).data }) } }))) return;
@@ -247,8 +276,11 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
   ) : isQuote && doc.status === "accepted" ? (
     <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-[#cde8e0] bg-[#f3fbf8] px-4 py-3 text-[14px]">
       <span className="text-[13px] font-semibold uppercase tracking-wide text-[#0f766e]">What&apos;s next?</span>
-      <span className="text-slate-600">{doc.signed_name ? `${doc.signed_name} accepted and signed this quote.` : "The customer accepted this quote."} Create the invoice to bill them.</span>
-      <button type="button" onClick={convert} disabled={busy} className="ml-auto rounded-lg bg-[#0f766e] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#0c5f59]">Convert to Invoice</button>
+      <span className="text-slate-600">{doc.signed_name ? `${doc.signed_name} accepted and signed this quote.` : "The customer accepted this quote."} {job ? `Job ${job.number} is already created for it.` : "Schedule the work as a job, or create the invoice to bill them."}</span>
+      <span className="ml-auto flex flex-wrap gap-2">
+        <button type="button" onClick={toJob} disabled={busy} className="rounded-lg border border-[#0f766e] bg-white px-3 py-1.5 text-sm font-semibold text-[#0f766e] hover:bg-[#f3fbf8] disabled:opacity-60">{jobLabel}</button>
+        <button type="button" onClick={convert} disabled={busy} className="rounded-lg bg-[#0f766e] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#0c5f59] disabled:opacity-60">Convert to Invoice</button>
+      </span>
     </div>
   ) : canPay && doc.status !== "draft" ? (
     <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-[#cde8e0] bg-[#f3fbf8] px-4 py-3 text-[14px]">
@@ -264,7 +296,7 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
     { label: "Share (text, WhatsApp, link)", icon: I.share, onClick: () => setModal("share") },
     { label: "Download PDF", icon: I.download, onClick: () => downloadPdf() },
     { label: "Open PDF", icon: I.pdf, onClick: () => viewPdf() },
-    ...(isQuote ? [{ label: "Convert to Invoice", icon: I.convert, onClick: convert, hidden: !canConvert }] : [
+    ...(isQuote ? [{ label: "Convert to Invoice", icon: I.convert, onClick: convert, hidden: !canConvert }, { label: jobLabel, icon: JOB_ICON, onClick: toJob, hidden: !job && !jobReady }] : [
       { label: "Record Payment", icon: I.money, onClick: () => setModal("payment"), hidden: !canPay },
       { label: "Send Reminder", icon: I.bell, onClick: () => setModal("reminder"), hidden: !canPay },
     ]),
@@ -325,7 +357,11 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
         <ToolMenu icon={I.pdf} label="PDF/Print" items={pdfItems} />
         <Divider />
         {isQuote ? (
-          <ToolButton icon={I.convert} label="Convert to Invoice" onClick={convert} disabled={!canConvert || busy} />
+          <>
+            <ToolButton icon={I.convert} label="Convert to Invoice" onClick={convert} disabled={!canConvert || busy} />
+            <Divider />
+            <span title={job || jobReady ? undefined : "Mark the quote as accepted first"}><ToolButton icon={JOB_ICON} label={jobLabel} onClick={toJob} disabled={busy || (!job && !jobReady)} /></span>
+          </>
         ) : (
           <ToolMenu icon={I.money} label="Record Payment" items={paymentItems.map((p) => ({ ...p, soon: false, onClick: canPay ? p.onClick : () => flash(doc.status === "void" ? "This invoice is void." : "This invoice is already paid.") }))} />
         )}

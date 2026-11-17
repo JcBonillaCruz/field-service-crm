@@ -202,7 +202,7 @@ export type ColorBy = "tech" | "type" | "priority";
 export function jobError(e: { message?: string; code?: string; hint?: string } | null | undefined): string {
   if (!e) return "";
   const m = `${e.message ?? ""} ${e.hint ?? ""}`;
-  const hinted = ["VISIT_CLOSED", "BAD_TIME", "JOB_CANCELLED", "VISIT_STARTED", "BAD_TECH", "BAD_ADDRESS", "REASON_REQUIRED", "NOTE_REQUIRED", "QUOTE_NOT_ACCEPTED", "CHECKLIST_REQUIRED", "GPS_REQUIRED", "OTHER_JOB_OPEN", "NO_VAN", "BAD_STEP", "BAD_TYPE", "BAD_RATE", "JOB_PAID", "VISIT_CLOSED", "NO_SITE"];
+  const hinted = ["VISIT_CLOSED", "BAD_TIME", "JOB_CANCELLED", "VISIT_STARTED", "BAD_TECH", "BAD_ADDRESS", "REASON_REQUIRED", "NOTE_REQUIRED", "QUOTE_NOT_ACCEPTED", "CHECKLIST_REQUIRED", "GPS_REQUIRED", "OTHER_JOB_OPEN", "NO_VAN", "BAD_STEP", "BAD_TYPE", "BAD_RATE", "JOB_PAID", "VISIT_CLOSED", "NO_SITE", "NO_LINES", "INVOICE_SENT", "SCAN_LINE", "SCAN_PART", "JOB_CLOSED", "NO_CUSTOMER"];
   if (hinted.some((k) => m.includes(k)) && e.hint) return e.hint;
   if (m.includes("NO_ACCESS")) return e.hint || "You don't have permission to do this.";
   if (m.includes("NOT_FOUND")) return "This job no longer exists. Refresh the page.";
@@ -210,6 +210,7 @@ export function jobError(e: { message?: string; code?: string; hint?: string } |
   if (m.includes("BAD_COLOR")) return "Pick a valid color.";
   if (m.includes("BAD_KIND") || m.includes("customer_equipment_kind_check")) return "Choose a valid type.";
   if (m.includes("job_types_name_uniq") || m.includes("job_tags_name_uniq") || e.code === "23505") return "That name is already in use.";
+  if ((m.includes("job_invoice_") || m.includes("tech_services") || m.includes("job_line_remove")) && (m.includes("does not exist") || m.includes("Could not find"))) return "Run paso-5.6-convert-invoice.sql in Supabase first.";
   if (m.includes("job_phase") && (m.includes("does not exist") || m.includes("Could not find"))) return "Run paso-5.4-phases.sql in Supabase first.";
   if ((m.includes("ops_move") || m.includes("ops_delete_job")) && (m.includes("Could not find") || m.includes("does not exist"))) return "Run paso-5.3b-ops-moves.sql in Supabase first.";
   if (m.includes("visit_set_collaborators") || m.includes("ops_board") || m.includes("team_save_") || m.includes("member_work_profiles") || m.includes("member_pay_rates")) return "Run paso-5.3-operations.sql in Supabase first.";

@@ -18,6 +18,7 @@ import JobPhases from "@/components/jobs/JobPhases";
 import JobFiles from "@/components/jobs/JobFiles";
 import JobForms from "@/components/jobs/forms/JobForms";
 import SiteEquipment from "@/components/jobs/forms/SiteEquipment";
+import JobInvoice, { AddServiceSheet } from "@/components/jobs/JobInvoice";
 
 type Visit = {
   id: string; visit_no: number; status: VisitStatus; starts_at: string | null; ends_at: string | null; arrival_window_min: number; techs: TechChip[];
@@ -68,6 +69,8 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
   const [toast, setToast] = useState<{ m: string; err?: boolean } | null>(null);
   const [photo, setPhoto] = useState<Photo | null>(null);
   const [phasePct, setPhasePct] = useState<number | null>(null); // Paso 5.4: avance por fases
+  const [serviceOpen, setServiceOpen] = useState(false); // Paso 5.6: servicios editables
+  const [invKey, setInvKey] = useState(0);
   const flash = (m: string, err = false) => { setToast({ m, err }); setTimeout(() => setToast((t) => (t?.m === m ? null : t)), err ? 5000 : 2600); };
 
   // En vivo: si el colaborador cambia el estado o la oficina lo mueve, la ficha se actualiza sola
@@ -135,6 +138,15 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
   }
   const phone = j.customer_phone?.replace(/[^\d+]/g, "");
 
+  // Paso 5.6: quitar un servicio del trabajo (las piezas escaneadas son inventario y no se quitan aquí)
+  async function removeLine(l: Line) {
+    if (!(await askConfirm({ title: `Remove ${l.name}?`, message: "It comes off this job. If it's on a draft invoice, it comes off there too.", confirmLabel: "Remove", tone: "danger" }))) return;
+    setBusy(`line-${l.id}`);
+    const { error } = await createClient().rpc("job_line_remove", { p_line: l.id });
+    setBusy("");
+    if (error) return flash(error.hint || jobError(error), true);
+    flash("Removed from the job"); setInvKey((k) => k + 1); router.refresh();
+  }
   async function createInvoice() {
     if (!(await askConfirm({ title: "Create a draft invoice?", message: "It copies the services and materials of this job. You can edit it before sending.", confirmLabel: "Create draft", tone: "green" }))) return;
     setBusy("invoice");
@@ -293,11 +305,15 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
 
           {/* Servicios y materiales */}
           <section className={`${card} p-5`}>
-            <h2 className="text-[16px] font-semibold text-[#0b1f3a]">Services &amp; materials</h2>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-[16px] font-semibold text-[#0b1f3a]">Services &amp; materials</h2>
+              {!cancelled && <button type="button" onClick={() => setServiceOpen(true)} className="group inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[13.5px] font-semibold text-[#0f766e] transition-colors hover:border-[#14a39a]">
+                <span className="transition-transform duration-200 group-hover:rotate-90"><Icon d="M12 5v14M5 12h14" className="h-4 w-4" /></span>Add service</button>}
+            </div>
             {data.lines.length === 0 ? <p className="mt-2 text-[14px] text-slate-500">No services or materials yet.</p> : (
               <div className="mt-3 overflow-x-auto">
                 <table className="w-full min-w-[480px] text-left text-[14px]">
-                  <thead><tr className="border-b border-slate-200 text-[12px] font-semibold uppercase tracking-wide text-slate-400"><th className="py-2 pr-3">Item</th><th className="w-16 py-2 text-right">Qty</th>{data.prices_visible && <><th className="w-24 py-2 text-right">Rate</th><th className="w-28 py-2 text-right">Amount</th></>}</tr></thead>
+                  <thead><tr className="border-b border-slate-200 text-[12px] font-semibold uppercase tracking-wide text-slate-400"><th className="py-2 pr-3">Item</th><th className="w-16 py-2 text-right">Qty</th>{data.prices_visible && <><th className="w-24 py-2 text-right">Rate</th><th className="w-28 py-2 text-right">Amount</th></>}<th className="w-9" /></tr></thead>
                   <tbody>
                     {data.lines.map((l) => (
                       <tr key={l.id} className="border-b border-slate-100 last:border-0">
@@ -305,10 +321,17 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
                           <p className="text-[12px] text-slate-400">{l.kind === "material" ? "Material" : "Service"}{l.source === "scan" ? " · scanned on site" : l.source === "tech" ? ` · added by ${l.created_by_name ?? "a collaborator"}` : l.source === "quote" ? " · from the quote" : ""}</p></td>
                         <td className="py-2.5 text-right tabular-nums text-slate-600">{Number(l.quantity)}{l.unit ? ` ${l.unit}` : ""}</td>
                         {data.prices_visible && <><td className="py-2.5 text-right tabular-nums text-slate-600">{usd(Number(l.rate ?? 0))}</td><td className="py-2.5 text-right font-semibold tabular-nums text-[#0b1f3a]">{usd(Number(l.amount ?? 0))}</td></>}
+                        <td className="py-2.5 text-right">
+                          {!cancelled && l.source !== "scan" && (
+                            <button type="button" onClick={() => removeLine(l)} disabled={busy === `line-${l.id}`} aria-label={`Remove ${l.name}`} title="Remove"
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-300 transition-all hover:bg-red-50 hover:text-red-600 disabled:opacity-50">
+                              <Icon d="M6 7h12M10 7V5h4v2M8 7l.7 12h6.6L16 7M10.5 10.5v5M13.5 10.5v5" className="h-4 w-4" /></button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
-                  {data.prices_visible && <tfoot><tr><td colSpan={3} className="pt-3 text-right text-[13px] font-semibold text-slate-500">Total</td><td className="pt-3 text-right text-[16px] font-semibold tabular-nums text-[#0b1f3a]">{usd(linesTotal)}</td></tr></tfoot>}
+                  {data.prices_visible && <tfoot><tr><td colSpan={3} className="pt-3 text-right text-[13px] font-semibold text-slate-500">Total</td><td className="pt-3 text-right text-[16px] font-semibold tabular-nums text-[#0b1f3a]">{usd(linesTotal)}</td><td /></tr></tfoot>}
                 </table>
               </div>
             )}
@@ -374,6 +397,8 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
               {quote ? <DocLink href={`/dashboard/quotes/${quote.id}`} label={`Quote ${quote.number}`} status={quote.status} total={quote.total} /> : <p className="text-[13.5px] text-slate-400">No quote</p>}
               {invoice ? <DocLink href={`/dashboard/invoices/${invoice.id}`} label={`Invoice ${invoice.number}`} status={invoice.status} total={invoice.total} paid={invoice.amount_paid} /> : <p className="text-[13.5px] text-slate-400">No invoice yet</p>}
             </div>
+            {/* Paso 5.6: lo que se agregó al trabajo después de crear la factura */}
+            <JobInvoice jobId={j.id} variant="office" refreshKey={invKey + data.lines.length} readOnly={cancelled} onToast={flash} onChanged={() => router.refresh()} />
           </section>
 
           <section className={`${card} p-5 text-[13px] text-slate-500`}>
@@ -390,6 +415,7 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
           <p className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-4 py-1.5 text-[13px] text-white">{photo.caption || photo.kind}{photo.uploaded_by_name ? ` · ${photo.uploaded_by_name}` : ""} · {when(photo.created_at)}</p>
         </div>
       )}
+      {serviceOpen && <AddServiceSheet companyId={companyId} jobId={j.id} onClose={() => setServiceOpen(false)} onDone={(m) => { setServiceOpen(false); flash(m); setInvKey((k) => k + 1); router.refresh(); }} />}
       <JobChat jobId={j.id} companyId={companyId} title={`${j.customer_name || "Job"} · ${j.number}`} />
       {toast && <div role="status" className={`fixed bottom-5 left-1/2 z-[95] max-w-[92vw] -translate-x-1/2 rounded-xl px-4 py-2.5 text-[13.5px] font-medium text-white shadow-lg animate-[bp-pop-in_0.2s_ease-out] ${toast.err ? "bg-[#be123c]" : "bg-[#0b1f3a]"}`}>{toast.m}</div>}
     </div>

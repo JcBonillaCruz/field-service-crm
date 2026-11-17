@@ -5,6 +5,7 @@ import JobPhases from "@/components/jobs/JobPhases";
 import JobFiles from "@/components/jobs/JobFiles";
 import JobForms, { FormsState } from "@/components/jobs/forms/JobForms";
 import SiteEquipment from "@/components/jobs/forms/SiteEquipment";
+import JobInvoice, { AddServiceSheet } from "@/components/jobs/JobInvoice";
 import { askConfirm } from "@/lib/confirm";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -46,6 +47,8 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
   const [reason, setReason] = useState("");
   const [holdNote, setHoldNote] = useState("");
   const [partOpen, setPartOpen] = useState(false);
+  const [serviceOpen, setServiceOpen] = useState(false); // Paso 5.6: agregar un servicio del catálogo
+  const [invKey, setInvKey] = useState(0);               // refresca la tarjeta de la factura
   const [note, setNote] = useState("");
   const [toast, setToast] = useState("");
   const [formsState, setFormsState] = useState<FormsState | null>(null); // Paso 5.5
@@ -102,6 +105,15 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
     setD((x) => x && ({ ...x, checklist: x.checklist.map((k) => (k.id === c.id ? { ...k, done: !k.done } : k)) }));
     const { error: e } = await createClient().rpc("tech_check", { p_item: c.id, p_done: !c.done, p_visit: visit?.id ?? null });
     if (e) { setError(jobError(e)); load(); }
+  }
+  // Quitar un servicio que el colaborador agregó en el sitio (Paso 5.6)
+  async function removeLine(l: Line) {
+    if (!(await askConfirm({ title: `Remove ${l.name}?`, message: "It comes off this job and off the draft invoice.", confirmLabel: "Remove", tone: "danger" }))) return;
+    setBusy(`line-${l.id}`);
+    const { error: e } = await createClient().rpc("job_line_remove", { p_line: l.id });
+    setBusy("");
+    if (e) return setError(e.hint || jobError(e));
+    flash("Service removed"); setInvKey((k) => k + 1); load();
   }
   async function addNote() {
     if (!note.trim()) return;
@@ -230,10 +242,14 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
       <div className={`${card} mt-3 px-4 py-3`}>
         <div className="flex items-center justify-between">
           <p className="text-[15px] font-semibold text-[#0b1f3a]">Services &amp; parts</p>
-          {canWork && <button type="button" onClick={() => setPartOpen(true)} className="flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-3 py-1.5 text-[13.5px] font-semibold text-white active:scale-95">
-            <Icon d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 8v8M11 8v8M14 8v8M17 8v8" className="h-4 w-4" />Use a part</button>}
+          {canWork && <span className="flex shrink-0 items-center gap-1.5">
+            <button type="button" onClick={() => setServiceOpen(true)} className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[13px] font-semibold text-[#0f766e] active:scale-95">
+              <Icon d="M12 5v14M5 12h14" className="h-4 w-4" />Service</button>
+            <button type="button" onClick={() => setPartOpen(true)} className="flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-2.5 py-1.5 text-[13px] font-semibold text-white active:scale-95">
+              <Icon d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 8v8M11 8v8M14 8v8M17 8v8" className="h-4 w-4" />Use a part</button>
+          </span>}
         </div>
-        {d.lines.length === 0 ? <p className="mt-2 text-[13.5px] text-slate-500">Nothing yet. Parts you use from your van are added here.</p> : (
+        {d.lines.length === 0 ? <p className="mt-2 text-[13.5px] text-slate-500">Nothing yet. Services you add and parts you use from your van show here.</p> : (
           <div className="mt-2 divide-y divide-slate-100">
             {d.lines.map((l) => (
               <div key={l.id} className="flex items-center gap-3 py-2">
@@ -243,11 +259,19 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
                 <span className="min-w-0 flex-1"><span className="block truncate text-[14.5px] text-[#0b1f3a]">{l.name}</span>
                   <span className="text-[12px] text-slate-500">Qty {Number(l.quantity)}{l.unit ? ` ${l.unit}` : ""}{l.source === "scan" ? " · from your van" : ""}</span></span>
                 {d.prices_visible && l.amount != null && <span className="text-[14px] font-semibold text-[#0b1f3a]">{usd(l.amount)}</span>}
+                {canWork && l.source === "tech" && (
+                  <button type="button" onClick={() => removeLine(l)} disabled={busy === `line-${l.id}`} aria-label={`Remove ${l.name}`}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors active:bg-red-50 active:text-red-600 disabled:opacity-50">
+                    <Icon d="M6 7h12M10 7V5h4v2M8 7l.7 12h6.6L16 7M10.5 10.5v5M13.5 10.5v5" className="h-4 w-4" /></button>
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Factura en borrador desde el teléfono (Paso 5.6): respeta "Technicians can see prices" */}
+      <JobInvoice jobId={jobId} visitId={visit?.id ?? null} refreshKey={invKey} onToast={(m) => flash(m)} onChanged={load} />
 
       {/* Notas */}
       <div className={`${card} mt-3 px-4 py-3`}>
@@ -311,7 +335,8 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
         </Sheet>
       )}
 
-      {partOpen && visit && <PartPicker companyId={companyId} visitId={visit.id} onClose={() => setPartOpen(false)} onDone={(m) => { setPartOpen(false); flash(m); load(); }} />}
+      {partOpen && visit && <PartPicker companyId={companyId} visitId={visit.id} onClose={() => setPartOpen(false)} onDone={(m) => { setPartOpen(false); flash(m); setInvKey((k) => k + 1); load(); }} />}
+      {serviceOpen && <AddServiceSheet companyId={companyId} jobId={jobId} onClose={() => setServiceOpen(false)} onDone={(m) => { setServiceOpen(false); flash(m); setInvKey((k) => k + 1); load(); }} />}
 
       {toast && <div role="status" className="fixed bottom-28 left-1/2 z-[95] max-w-[90vw] -translate-x-1/2 rounded-xl bg-[#0b1f3a] px-4 py-2.5 text-[14px] font-medium text-white shadow-lg animate-[bp-pop-in_0.2s_ease-out]">{toast}</div>}
     </div>

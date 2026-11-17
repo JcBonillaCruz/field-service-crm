@@ -13,8 +13,11 @@ const WHAT: Record<string, { icon: string; verb: string }> = {
   pause: { icon: "⏸️", verb: "paused" },
   hold: { icon: "⚠️", verb: "couldn't finish" },
   finish: { icon: "✅", verb: "finished" },
+  // Paso 5.6: el técnico creó (o actualizó) la factura en borrador desde el teléfono
+  invoice: { icon: "🧾", verb: "created a draft invoice for" },
+  invoice_update: { icon: "🧾", verb: "updated the draft invoice for" },
 };
-const KIND: Record<string, string> = { on_my_way: "on_my_way", start: "started", resume: "resumed", pause: "paused", hold: "on_hold", finish: "finished" };
+const KIND: Record<string, string> = { on_my_way: "on_my_way", start: "started", resume: "resumed", pause: "paused", hold: "on_hold", finish: "finished", invoice: "invoiced", invoice_update: "invoiced" };
 
 // El técnico avanzó en un trabajo: aviso en la campana + push a la oficina (dueño, manager y oficina)
 export async function POST(request: NextRequest) {
@@ -31,20 +34,27 @@ export async function POST(request: NextRequest) {
 
   const db = admin();
   if (!db) return NextResponse.json({ ok: false, error: "SUPABASE_SERVICE_ROLE_KEY is missing" });
-  const { data: v } = await db.from("job_visits").select("id, job_id, jobs ( id, number, customer_name, title, site_address, hold_reason, hold_note )").eq("id", b.visitId).maybeSingle();
-  const job = (v as unknown as { jobs: { id: string; number: string; customer_name: string; title: string | null; site_address: Record<string, string | null> | null; hold_note: string | null } } | null)?.jobs;
+  const { data: v } = await db.from("job_visits").select("id, job_id, jobs ( id, number, customer_name, title, site_address, hold_reason, hold_note, invoice_id )").eq("id", b.visitId).maybeSingle();
+  const job = (v as unknown as { jobs: { id: string; number: string; customer_name: string; title: string | null; site_address: Record<string, string | null> | null; hold_note: string | null; invoice_id: string | null } } | null)?.jobs;
   if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const [{ data: me }, { data: office }] = await Promise.all([
     db.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
     db.from("company_members").select("user_id").eq("company_id", current.id).in("role", ["owner", "manager", "office"]).eq("is_active", true),
   ]);
+  const isInvoice = b.action === "invoice" || b.action === "invoice_update";
+  if (isInvoice && !job.invoice_id) return NextResponse.json({ error: "No invoice" }, { status: 400 });
   const who = ((me?.full_name as string) || "Your technician").split(" ")[0];
   const title = `${w.icon} ${who} ${w.verb} ${job.customer_name || job.number}`;
-  const body = b.action === "hold" ? `Needs follow-up${job.hold_note ? `: ${job.hold_note}` : ""} · ${job.number}` : b.action === "finish" ? `Ready to invoice · ${job.number}` : [job.title, addressText(job.site_address)].filter(Boolean).join(" · ") || job.number;
-  const url = `/dashboard/jobs/${job.id}/edit`;
+  const body = b.action === "hold" ? `Needs follow-up${job.hold_note ? `: ${job.hold_note}` : ""} · ${job.number}` : b.action === "finish" ? `Ready to invoice · ${job.number}` : isInvoice ? `Review it and send it to the customer · ${job.number}` : [job.title, addressText(job.site_address)].filter(Boolean).join(" · ") || job.number;
+  const url = isInvoice ? `/dashboard/invoices/${job.invoice_id}` : `/dashboard/jobs/${job.id}/edit`;
 
   const ids = (office ?? []).map((o) => o.user_id as string).filter((id) => id !== user.id);
-  if (ids.length) await db.from("job_notices").insert(ids.map((user_id) => ({ company_id: current.id, user_id, job_id: job.id, kind: KIND[b.action!], title, body })));
+  if (ids.length) {
+    const rows = (kind: string) => ids.map((user_id) => ({ company_id: current.id, user_id, job_id: job.id, kind, title, body }));
+    const first = await db.from("job_notices").insert(rows(KIND[b.action!]));
+    // Si la base aún no acepta el tipo "invoiced", el aviso sale igual como "finished"
+    if (first.error && isInvoice) await db.from("job_notices").insert(rows("finished"));
+  }
   const sent = await pushToCompany(current.id, { title, body, url, tag: `job-${job.id}` });
   return NextResponse.json({ ok: true, sent });
 }
