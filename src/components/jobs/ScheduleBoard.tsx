@@ -70,6 +70,8 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
   const reqId = useRef(0);
   const pendingReload = useRef(false);
 
+  // Vistas por filas (una fila por persona): Dispatch (semana) y Day (un solo día, grande)
+  const byRows = view === "dispatch" || view === "day";
   const slot = settings.slot_minutes || 30;
   const workStart = timeToMin(settings.day_start);
   const workEnd = Math.max(workStart + 60, timeToMin(settings.day_end));
@@ -147,7 +149,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
   const shown = useMemo(() => colored.filter((v) =>
     (statusF === "all" || asJobStatus(v) === statusF)
     && (!typeF || v.job_type_id === typeF)
-    && (!techF.length || view === "dispatch" || techF.some((t) => (t === UNASSIGNED ? v.tech_ids.length === 0 : v.tech_ids.includes(t))))), [colored, statusF, typeF, techF, view]);
+    && (!techF.length || byRows || techF.some((t) => (t === UNASSIGNED ? v.tech_ids.length === 0 : v.tech_ids.includes(t))))), [colored, statusF, typeF, techF, byRows]);
 
   // Horas visibles: el horario de trabajo, más lo necesario si hay trabajos antes o después
   const [visStart, visEnd] = useMemo(() => {
@@ -167,14 +169,16 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
   // Solo técnicos (oficina y dueño aparecen únicamente si tienen un trabajo asignado en estas fechas)
   const techs = useMemo(() => team.filter((m) => receivesJobs(m) || visits.some((v) => v.tech_ids.includes(m.user_id))), [team, visits]);
   const cols: Col[] = useMemo(() => {
-    if (view === "dispatch") {
+    if (byRows) {
       const list = techF.length ? techs.filter((m) => techF.includes(m.user_id)) : techs;
       const out: Col[] = list.map((m) => ({ key: `t:${m.user_id}`, day: anchor, techId: m.user_id, label: m.full_name, color: m.color, initials: m.initials, avatar: m.avatar_url }));
-      if (!techF.length || techF.includes(UNASSIGNED)) out.push({ key: "t:none", day: anchor, techId: null, label: "Unassigned" });
+      const none: Col = { key: "t:none", day: anchor, techId: null, label: "Unassigned" };
+      // Day: "Unassigned" va arriba para arrastrar de ahí a cada persona; Dispatch lo deja al final
+      if (!techF.length || techF.includes(UNASSIGNED)) { if (view === "day") out.unshift(none); else out.push(none); }
       return out;
     }
     return days.map((d) => ({ key: isoDay(d), day: d, techId: null, label: d.toLocaleDateString("en-US", { weekday: "short" }), sub: String(d.getDate()), today: sameDay(d, now) }));
-  }, [view, days, anchor, techs, techF, now]);
+  }, [view, byRows, days, anchor, techs, techF, now]);
 
   const chipsFor = useCallback((ids: string[], lead: string | null): TechChip[] => ids.map((id) => {
     const m = team.find((x) => x.user_id === id);
@@ -351,7 +355,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
 
     if (s.kind === "tray" && s.job) {
       const start = view === "month" ? atMinute(p.day, workStart) : atMinute(p.day, p.startMin);
-      scheduleFromTray(s.job, start, addMinutes(start, s.durMin), view === "dispatch" && hit?.techId ? [hit.techId] : null);
+      scheduleFromTray(s.job, start, addMinutes(start, s.durMin), byRows && hit?.techId ? [hit.techId] : null);
       return;
     }
     const v = s.visit; if (!v) return;
@@ -364,7 +368,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
 
     // Dispatch: soltar en el carril de otro técnico cambia el técnico
     let techIds: string[] | null = null, lead: string | null = null, techMsg = "";
-    if (view === "dispatch" && s.kind === "move" && s.col && hit && hit.techId !== s.col.techId) {
+    if (byRows && s.kind === "move" && s.col && hit && hit.techId !== s.col.techId) {
       const from = s.col.techId, to = hit.techId;
       const set = v.tech_ids.filter((t) => t !== from);
       if (to && !set.includes(to)) set.push(to);
@@ -484,7 +488,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
   const toggleTray = () => setTrayOpen((o) => { try { localStorage.setItem(TRAY_KEY, o ? "0" : "1"); } catch { /* */ } return !o; });
   const trayCount = tray.length;
   const holdCount = tray.filter((j) => j.status === "on_hold").length;
-  const scrollTo = days.some((d) => sameDay(d, now)) ? Math.max(visStart, minutesOf(now) - 90) : Math.max(visStart, workStart - 30);
+  const scrollTo = days.some((d) => sameDay(d, now)) && minutesOf(now) >= workStart && minutesOf(now) <= workEnd ? Math.max(visStart, minutesOf(now) - 90) : Math.max(visStart, workStart - 30);
 
   return (
     <div className="flex h-[calc(100dvh-4rem)] flex-col bg-white lg:bg-[#f4f6f8]">
@@ -547,6 +551,8 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
         <div className="relative min-h-0 min-w-0 flex-1">
           {view === "dispatch" ? (
             <DispatchGrid days={days} rows={cols} visits={shown} dStart={visStart} dEnd={visEnd} preview={preview} handlers={handlers} apiRef={apiRef} now={now} />
+          ) : view === "day" ? (
+            <DispatchGrid big days={days} rows={cols} visits={shown} dStart={visStart} dEnd={visEnd} preview={preview} handlers={handlers} apiRef={apiRef} now={now} scrollTo={scrollTo} />
           ) : view === "month" ? (
             <MonthGrid days={days} month={anchor.getMonth()} visits={shown} preview={preview} handlers={handlers} apiRef={apiRef} now={now}
               onOpenDay={(d) => { setAnchor(d); setView("day"); }} />
