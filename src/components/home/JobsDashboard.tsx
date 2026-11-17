@@ -323,18 +323,18 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
   return (
     <div className="pb-24 lg:pb-10">
       {header}
-      <div className="w-full px-3 pt-4 lg:px-8 lg:pt-6">
+      <div className="w-full px-4 pt-5 lg:px-8 lg:pt-6">
         {error && <p role="alert" className="mb-4 rounded-xl border border-[#fecdd3] bg-[#fff1f2] px-4 py-3 text-[14px] text-[#be123c]">{error}</p>}
 
         {/* ======= 1. Resumen (KPIs): cada tarjeta lleva a sus trabajos ======= */}
-        <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="mb-4 flex items-center justify-between gap-3 lg:mb-3">
           <div>
             <h2 className="text-[18px] font-semibold text-[#0b1f3a] lg:text-[20px]">Jobs overview</h2>
             <p className="hidden text-[13px] text-slate-500 sm:block">Tap a card to open those jobs</p>
           </div>
           <Pick value={period} options={PERIODS} onChange={(v) => setPeriod(v as Period)} ariaLabel="Period for the summary cards" />
         </div>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:gap-4 2xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3.5 md:grid-cols-3 lg:gap-4 2xl:grid-cols-6">
           <Kpi label="Total jobs" value={kpi.total} art={<JobsArt size={46} />} loading={loading} href={opsHref()}
             delta={kpi.total - kpi.prevTotal} deltaText={periodInfo.prev} hint={`${kpi.pct}% overall progress`} action="Open Operations" bar={kpi.pct} barColor="#14a39a" />
           <Kpi label="Pending" value={kpi.unassigned} art={<GroupArt g="unassigned" size={46} />} loading={loading} href="/dashboard/jobs/assign"
@@ -350,22 +350,22 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
         </div>
 
         {/* ======= 2. Trabajos (lo principal) + Equipo ======= */}
-        <div className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-4 lg:mt-6 xl:grid-cols-[minmax(0,1.75fr)_minmax(20rem,1fr)]">
+        <div className="mt-7 grid grid-cols-[minmax(0,1fr)] gap-6 lg:mt-6 lg:gap-4 xl:grid-cols-[minmax(0,1.75fr)_minmax(20rem,1fr)]">
           <JobsAlertsSection items={jobAlerts} loading={loading} />
           <TeamCard people={people} loading={loading || !members} onPick={setOpenPerson} />
         </div>
 
         {/* ======= 3. Inventario + Cobros (facturas por vencer o vencidas) ======= */}
-        <div className={`mt-5 grid grid-cols-[minmax(0,1fr)] gap-4 lg:mt-6 ${canSeePrice ? "xl:grid-cols-2" : ""}`}>
+        <div className={`mt-6 grid grid-cols-[minmax(0,1fr)] gap-6 lg:mt-6 lg:gap-4 ${canSeePrice ? "xl:grid-cols-2" : ""}`}>
           <InventorySection items={stock} wide={!canSeePrice} />
           {canSeePrice && <InvoicesSection items={invoices} />}
         </div>
 
         {/* ======= 4. Ingresos (solo el dueño) ======= */}
-        {revenue && <div className="mt-5 lg:mt-6"><RevenueCard data={revenue} /></div>}
+        {revenue && <div className="mt-6"><RevenueCard data={revenue} /></div>}
 
         {/* ======= 5. Lista de trabajos ======= */}
-        <div id="bp-task-list" className="mt-5 scroll-mt-24 rounded-2xl border border-slate-200 bg-white lg:mt-6">
+        <div id="bp-task-list" className="mt-6 scroll-mt-24 rounded-2xl border border-slate-200 bg-white">
           <div className="flex flex-wrap items-center gap-2.5 border-b border-slate-100 px-3 py-3 lg:gap-3 lg:px-5 lg:py-4">
             <div className="mr-auto flex min-w-0 flex-1 items-center gap-2.5 sm:flex-none">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-[#0f766e]">
@@ -479,28 +479,28 @@ function JobsAlertsSection({ items, loading }: { items: JobAlert[]; loading: boo
   const urgent = count("delayed") + count("unassigned");
   return (
     <section className="rounded-2xl border border-slate-200 bg-white" aria-label="Jobs">
-      <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-4 lg:px-5">
-        <div className="group flex items-center gap-3">
+      <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-5 lg:px-5 lg:pt-4">
+        <div className="group flex min-w-0 items-center gap-3">
           <JobsArt size={42} />
-          <div>
-            <h2 className="text-[18px] font-semibold leading-tight text-[#0b1f3a] lg:text-[19px]">Jobs right now</h2>
-            <p className="text-[12.5px] text-slate-500">{loading ? "Checking…" : urgent ? `${urgent} need${urgent === 1 ? "s" : ""} you now · tap a box to filter` : "Nothing urgent · tap a box to filter"}</p>
+          <div className="min-w-0">
+            <h2 className="truncate text-[17px] font-semibold leading-tight text-[#0b1f3a] sm:text-[18px] lg:text-[19px]">Jobs right now</h2>
+            <p className="mt-0.5 truncate text-[12.5px] text-slate-500">{loading ? "Checking…" : urgent ? `${urgent} need${urgent === 1 ? "s" : ""} you now` : "Nothing urgent"}<span className="hidden sm:inline">{loading ? "" : " · tap a box to filter"}</span></p>
           </div>
         </div>
         <Link prefetch={false} href="/dashboard/jobs/operations" className="shrink-0 rounded-lg px-2.5 py-1.5 text-[13.5px] font-semibold text-[#2563eb] hover:bg-[#eef4ff]">Operations →</Link>
       </div>
       {/* 6 cajitas: tocar una filtra la lista */}
-      <div className="grid grid-cols-3 gap-2 px-4 pt-3 sm:grid-cols-6 lg:gap-2.5 lg:px-5">
+      <div className="grid grid-cols-2 gap-3 px-4 pt-4 sm:grid-cols-6 sm:gap-2 lg:gap-2.5 lg:px-5 lg:pt-3">
         {JOB_CATS.map((c) => {
           const n = count(c.id), on = cat === c.id, t = CAT_TONE[c.level];
           return (
             <button key={c.id} type="button" onClick={() => { setCat(on ? null : c.id); setAll(false); }} aria-pressed={on}
-              className={`group relative flex flex-col items-start rounded-xl p-2.5 text-left ring-1 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(15,40,60,0.08)] lg:p-3 ${n ? `${t.bg} ${t.ring}` : "bg-white ring-slate-200"} ${on ? "ring-2 ring-[#0f766e]" : ""}`}>
+              className={`group relative flex flex-col items-start rounded-2xl p-3.5 text-left ring-1 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(15,40,60,0.08)] sm:rounded-xl sm:p-2.5 lg:p-3 ${n ? `${t.bg} ${t.ring}` : "bg-white ring-slate-200"} ${on ? "ring-2 ring-[#0f766e]" : ""}`}>
               <span className="flex w-full items-center justify-between">
                 <AlertIcon kind={c.icon} level={n ? c.level : "gray"} size={30} />
                 <span className={`text-[22px] font-semibold leading-none tabular-nums lg:text-[24px] ${n ? t.text : "text-slate-300"}`}>{loading ? "–" : n}</span>
               </span>
-              <span className={`mt-2 block text-[12.5px] font-semibold leading-tight lg:text-[13px] ${n ? "text-[#0b1f3a]" : "text-slate-400"}`}>{c.label}</span>
+              <span className={`mt-3 block text-[13.5px] font-semibold leading-tight sm:mt-2 sm:text-[12.5px] lg:text-[13px] ${n ? "text-[#0b1f3a]" : "text-slate-400"}`}>{c.label}</span>
               <span className="mt-0.5 hidden text-[11px] leading-tight text-slate-400 lg:block">{c.hint}</span>
             </button>
           );
@@ -517,19 +517,19 @@ function JobsAlertsSection({ items, loading }: { items: JobAlert[]; loading: boo
           <p className="mt-1 max-w-sm text-[13px] text-slate-500">Late jobs, jobs without a collaborator, paused work and who is on the way or working show up here.</p>
         </div>
       ) : (
-        <ul className="mt-2 divide-y divide-slate-100 px-2 pb-2 lg:px-3">
+        <ul className="mt-5 divide-y divide-slate-100 border-t border-slate-100 px-2 pb-3 pt-1.5 lg:mt-2 lg:border-0 lg:px-3 lg:pb-2 lg:pt-0">
           {shown.map((a) => {
             const c = JOB_CATS.find((x) => x.id === a.cat)!;
             return (
               <li key={a.id}>
-                <Link prefetch={false} href={a.href} className="group flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-slate-50 lg:px-3">
+                <Link prefetch={false} href={a.href} className="group flex items-center gap-3.5 rounded-xl px-2 py-3.5 transition-colors hover:bg-slate-50 lg:gap-3 lg:px-3 lg:py-2.5">
                   <AlertIcon kind={c.icon} level={c.level} />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2">
                       <span className="truncate text-[14.5px] font-semibold text-[#0b1f3a]">{a.title}</span>
-                      {a.number && <span className="shrink-0 text-[12px] tabular-nums text-slate-400">{a.number}</span>}
+                      {a.number && <span className="hidden shrink-0 text-[12px] tabular-nums text-slate-400 sm:inline">{a.number}</span>}
                     </span>
-                    <span className="block truncate text-[12.5px] text-slate-500">{a.sub}</span>
+                    <span className="mt-0.5 block truncate text-[12.5px] text-slate-500 lg:mt-0">{a.number && <span className="tabular-nums text-slate-400 sm:hidden">{a.number} · </span>}{a.sub}</span>
                   </span>
                   <span className="shrink-0">{a.tag}</span>
                   <svg viewBox="0 0 20 20" className="hidden h-4 w-4 shrink-0 text-slate-300 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-slate-500 sm:block" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m8 5 5 5-5 5" /></svg>
@@ -558,19 +558,19 @@ function InventorySection({ items, wide }: { items: HomeAlert[]; wide: boolean }
   const shown = all ? list : list.slice(0, wide ? 8 : 5);
   return (
     <section className="flex flex-col rounded-2xl border border-slate-200 bg-white" aria-label="Inventory">
-      <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-4 lg:px-5">
-        <div className="group flex items-center gap-3">
+      <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-5 lg:px-5 lg:pt-4">
+        <div className="group flex min-w-0 items-center gap-3">
           <InventoryArt size={42} />
-          <div>
-            <h2 className="text-[18px] font-semibold leading-tight text-[#0b1f3a] lg:text-[19px]">Inventory</h2>
-            <p className="text-[12.5px] text-slate-500">{list.length ? "Stock that needs restocking" : "Everything is stocked"}</p>
+          <div className="min-w-0">
+            <h2 className="truncate text-[17px] font-semibold leading-tight text-[#0b1f3a] sm:text-[18px] lg:text-[19px]">Inventory</h2>
+            <p className="mt-0.5 truncate text-[12.5px] text-slate-500">{list.length ? "Stock that needs restocking" : "Everything is stocked"}</p>
           </div>
         </div>
         <Link prefetch={false} href="/dashboard/inventory" className="shrink-0 rounded-lg px-2.5 py-1.5 text-[13.5px] font-semibold text-[#b45309] hover:bg-[#fff6e6]">Open Inventory →</Link>
       </div>
-      <div className="grid grid-cols-2 gap-2 px-4 pt-3 lg:gap-2.5 lg:px-5">
+      <div className="grid grid-cols-2 gap-3 px-4 pt-4 lg:gap-2.5 lg:px-5 lg:pt-3">
         {[{ n: out.length, label: "Out of stock", hint: "None left", level: "red" as const, kind: "out_of_stock" }, { n: low.length, label: "Low stock", hint: "Below the alert level", level: "orange" as const, kind: "low_stock" }].map((t) => (
-          <div key={t.label} className={`group flex items-center gap-3 rounded-xl p-3 ring-1 ${t.n ? `${CAT_TONE[t.level].bg} ${CAT_TONE[t.level].ring}` : "bg-white ring-slate-200"}`}>
+          <div key={t.label} className={`group flex items-center gap-3 rounded-2xl p-3.5 ring-1 lg:rounded-xl lg:p-3 ${t.n ? `${CAT_TONE[t.level].bg} ${CAT_TONE[t.level].ring}` : "bg-white ring-slate-200"}`}>
             <AlertIcon kind={t.kind} level={t.n ? t.level : "gray"} size={34} />
             <span className="min-w-0">
               <span className={`block text-[22px] font-semibold leading-none tabular-nums ${t.n ? CAT_TONE[t.level].text : "text-slate-300"}`}>{t.n}</span>
@@ -591,7 +591,7 @@ function InventorySection({ items, wide }: { items: HomeAlert[]; wide: boolean }
             const qty = a.qty ?? 0, min = Math.max(1, a.min ?? 1), pct = Math.min(100, Math.round((qty / (min * 2)) * 100));
             return (
               <li key={a.id} className="border-b border-slate-100 last:border-0">
-                <Link prefetch={false} href={a.href} className="group flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-slate-50 lg:px-3">
+                <Link prefetch={false} href={a.href} className="group flex items-center gap-3.5 rounded-xl px-2 py-3.5 transition-colors hover:bg-slate-50 lg:gap-3 lg:px-3 lg:py-2.5">
                   <AlertIcon kind={a.kind} level={a.level} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[14.5px] font-semibold text-[#0b1f3a]">{a.item ?? a.title}</span>
@@ -627,16 +627,25 @@ function TeamCard({ people, loading, onPick }: { people: Person[]; loading: bool
   const chips: { s: PState; label: string }[] = [{ s: "on_site", label: "On site" }, { s: "on_my_way", label: "On the way" }, { s: "available", label: "Available" }, { s: "offline", label: "Offline" }];
   return (
     <section className="flex flex-col rounded-2xl border border-slate-200 bg-white" aria-label="Team activity">
-      <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-4 lg:px-5">
-        <div className="group flex items-center gap-3">
+      <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-5 lg:px-5 lg:pt-4">
+        <div className="group flex min-w-0 items-center gap-3">
           <TeamArt size={42} />
-          <div>
-            <h2 className="text-[18px] font-semibold leading-tight text-[#0b1f3a] lg:text-[19px]">Team activity</h2>
-            <p className="text-[12.5px] text-slate-500">Tap a person to see their jobs</p>
+          <div className="min-w-0">
+            <h2 className="truncate text-[17px] font-semibold leading-tight text-[#0b1f3a] sm:text-[18px] lg:text-[19px]">Team activity</h2>
+            <p className="mt-0.5 truncate text-[12.5px] text-slate-500">Tap a person to see their jobs</p>
           </div>
         </div>
       </div>
-      <div className="flex flex-wrap gap-1.5 px-4 pt-3 lg:px-5">
+      <ul className="mx-4 mt-4 divide-y divide-slate-100 rounded-2xl bg-slate-50/70 px-3.5 ring-1 ring-slate-100 sm:hidden">
+        {chips.map((c) => (
+          <li key={c.s} className="flex items-center gap-3 py-3">
+            <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${PERSON_STATE[c.s].dot}`} />
+            <span className="flex-1 text-[14px] text-slate-600">{c.label}</span>
+            <span className={`text-[16px] font-semibold tabular-nums ${n(c.s) ? "text-[#0b1f3a]" : "text-slate-300"}`}>{n(c.s)}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="hidden flex-wrap gap-1.5 px-4 pt-3 sm:flex lg:px-5">
         {chips.map((c) => (
           <span key={c.s} className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-2.5 py-1 text-[12px] font-medium text-slate-600 ring-1 ring-slate-200">
             <span className={`h-2 w-2 rounded-full ${PERSON_STATE[c.s].dot}`} />{n(c.s)} {c.label.toLowerCase()}
@@ -652,12 +661,12 @@ function TeamCard({ people, loading, onPick }: { people: Person[]; loading: bool
           <Link prefetch={false} href="/dashboard/jobs/team" className="mt-3 inline-block rounded-lg px-3 py-1.5 text-[13.5px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4]">Go to Team →</Link>
         </div>
       ) : (
-        <ul className="mt-2 divide-y divide-slate-100 px-2 pb-2 lg:px-3">
+        <ul className="mt-5 divide-y divide-slate-100 border-t border-slate-100 px-2 pb-3 pt-1.5 lg:mt-2 lg:border-0 lg:px-3 lg:pb-2 lg:pt-0">
           {shown.map((p) => {
             const st = PERSON_STATE[p.state];
             return (
               <li key={p.id}>
-                <button type="button" onClick={() => onPick(p.id)} className="group flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-slate-50 lg:px-3">
+                <button type="button" onClick={() => onPick(p.id)} className="group flex w-full items-center gap-3.5 rounded-xl px-2 py-3.5 text-left transition-colors hover:bg-slate-50 lg:gap-3 lg:px-3 lg:py-2.5">
                   <span className={`relative shrink-0 transition-transform duration-200 group-hover:scale-105 ${p.state === "offline" ? "opacity-60 grayscale" : ""}`}>
                     <TechDot t={{ initials: p.initials, color: p.color, avatar_url: p.avatar_url, name: p.name }} size={40} />
                     <span className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full ring-2 ring-white ${st.dot} ${p.state === "available" ? "animate-pulse" : ""}`} />
@@ -1044,19 +1053,19 @@ function InvoicesSection({ items }: { items: HomeAlert[] }) {
   const dueText = (d: number) => (d < 0 ? `Overdue ${-d} day${d === -1 ? "" : "s"}` : d === 0 ? "Due today" : d === 1 ? "Due tomorrow" : `Due in ${d} days`);
   return (
     <section className="flex flex-col rounded-2xl border border-slate-200 bg-white" aria-label="Payments to collect">
-      <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-4 lg:px-5">
-        <div className="group flex items-center gap-3">
+      <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-5 lg:px-5 lg:pt-4">
+        <div className="group flex min-w-0 items-center gap-3">
           <FinanceArt size={42} />
-          <div>
-            <h2 className="text-[18px] font-semibold leading-tight text-[#0b1f3a] lg:text-[19px]">Payments to collect</h2>
-            <p className="text-[12.5px] text-slate-500">{list.length ? "Call these customers to collect" : "No invoices overdue or due this week"}</p>
+          <div className="min-w-0">
+            <h2 className="truncate text-[17px] font-semibold leading-tight text-[#0b1f3a] sm:text-[18px] lg:text-[19px]">Payments to collect</h2>
+            <p className="mt-0.5 truncate text-[12.5px] text-slate-500">{list.length ? "Call these customers to collect" : "No invoices overdue or due this week"}</p>
           </div>
         </div>
         <Link prefetch={false} href="/dashboard/invoices" className="shrink-0 rounded-lg px-2.5 py-1.5 text-[13.5px] font-semibold text-[#2563eb] hover:bg-[#eef4ff]">Invoices →</Link>
       </div>
-      <div className="grid grid-cols-2 gap-2 px-4 pt-3 lg:gap-2.5 lg:px-5">
+      <div className="grid grid-cols-2 gap-3 px-4 pt-4 lg:gap-2.5 lg:px-5 lg:pt-3">
         {[{ l: overdue, label: "Overdue", level: "red" as const, kind: "overdue" }, { l: soon, label: "Due in 7 days", level: "orange" as const, kind: "due_soon" }].map((t) => (
-          <div key={t.label} className={`group flex items-center gap-3 rounded-xl p-3 ring-1 ${t.l.length ? `${CAT_TONE[t.level].bg} ${CAT_TONE[t.level].ring}` : "bg-white ring-slate-200"}`}>
+          <div key={t.label} className={`group flex items-center gap-3 rounded-2xl p-3.5 ring-1 lg:rounded-xl lg:p-3 ${t.l.length ? `${CAT_TONE[t.level].bg} ${CAT_TONE[t.level].ring}` : "bg-white ring-slate-200"}`}>
             <AlertIcon kind={t.kind} level={t.l.length ? t.level : "gray"} size={34} />
             <span className="min-w-0">
               <span className={`block text-[20px] font-semibold leading-none tabular-nums ${t.l.length ? CAT_TONE[t.level].text : "text-slate-300"}`}>{usd0(sum(t.l))}</span>
@@ -1072,23 +1081,23 @@ function InvoicesSection({ items }: { items: HomeAlert[] }) {
           <p className="mt-1 max-w-sm text-[13px] text-slate-500">Invoices that are overdue or due in the next 7 days show up here so you can call the customer.</p>
         </div>
       ) : (
-        <ul className="mt-2 px-2 pb-2 lg:px-3">
+        <ul className="mt-5 border-t border-slate-100 px-2 pb-3 pt-1.5 lg:mt-2 lg:border-0 lg:px-3 lg:pb-2 lg:pt-0">
           {shown.map((a) => {
             const d = a.days ?? 0;
             return (
               <li key={a.id} className="border-b border-slate-100 last:border-0">
-                <Link prefetch={false} href={a.href} className="group flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-slate-50 lg:px-3">
+                <Link prefetch={false} href={a.href} className="group flex items-center gap-3.5 rounded-xl px-2 py-3.5 transition-colors hover:bg-slate-50 lg:gap-3 lg:px-3 lg:py-2.5">
                   <AlertIcon kind={a.kind} level={d < 0 ? "red" : d <= 1 ? "orange" : "blue"} />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2">
                       <span className="truncate text-[14.5px] font-semibold text-[#0b1f3a]">{a.customer}</span>
-                      <span className="shrink-0 text-[12px] tabular-nums text-slate-400">{a.number}</span>
+                      <span className="hidden shrink-0 text-[12px] tabular-nums text-slate-400 sm:inline">{a.number}</span>
                     </span>
-                    <span className={`block truncate text-[12.5px] font-medium ${d < 0 ? "text-[#be123c]" : "text-[#b45309]"}`}>{dueText(d)} · {d < 0 ? "call to collect" : "remind the customer"}</span>
+                    <span className={`mt-0.5 block truncate text-[12.5px] font-medium lg:mt-0 ${d < 0 ? "text-[#be123c]" : "text-[#b45309]"}`}>{dueText(d)}<span className="hidden sm:inline"> · {d < 0 ? "call to collect" : "remind the customer"}</span><span className="font-normal tabular-nums text-slate-400 sm:hidden"> · {a.number}</span></span>
                   </span>
                   <span className="shrink-0 text-right">
                     <span className="block text-[14.5px] font-semibold tabular-nums text-[#0b1f3a]">{usd2(a.amount ?? 0)}</span>
-                    <span className="block text-[11.5px] font-semibold text-[#0f766e] opacity-0 transition-opacity group-hover:opacity-100">Follow up →</span>
+                    <span className="hidden text-[11.5px] font-semibold text-[#0f766e] opacity-0 transition-opacity group-hover:opacity-100 lg:block">Follow up →</span>
                   </span>
                 </Link>
               </li>
@@ -1183,7 +1192,7 @@ function JobsHub({ header, error, loading, membersLoading, now, withGroup, peopl
   return (
     <div className="pb-24 lg:pb-10">
       {header}
-      <div className="w-full px-3 pt-4 lg:px-8 lg:pt-6">
+      <div className="w-full px-4 pt-5 lg:px-8 lg:pt-6">
         {error && <p role="alert" className="mb-4 rounded-xl border border-[#fecdd3] bg-[#fff1f2] px-4 py-3 text-[14px] text-[#be123c]">{error}</p>}
 
         {/* 1. Resumen de hoy por estado */}
