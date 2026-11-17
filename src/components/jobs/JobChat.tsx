@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { TECH_COLORS } from "@/lib/jobs";
+import { compressPhoto, fileId } from "@/lib/photo-compress";
 
 // =====================================================================
 // Chat del trabajo (Paso 5.3k). Un chat por trabajo: oficina, manager, dueño y los
@@ -10,7 +11,8 @@ import { TECH_COLORS } from "@/lib/jobs";
 // esperes media hora", etc. Botón flotante + panel (en celular ocupa toda la pantalla).
 // Los mensajes llegan al instante y avisan por la campana y push a los demás.
 // =====================================================================
-type Msg = { id: string; user_id: string; body: string; created_at: string; name: string; avatar_url: string | null; role: string | null; pending?: boolean };
+type Msg = { id: string; user_id: string; body: string; created_at: string; name: string; avatar_url: string | null; role: string | null; pending?: boolean; photo_path?: string | null };
+const PHOTO_ONLY = "📷 Photo";
 const ROLE: Record<string, string> = { owner: "Owner", manager: "Manager", office: "Office", technician: "Technician" };
 const initialsOf = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "?";
 const colorOf = (id: string) => TECH_COLORS[Array.from(id).reduce((a, c) => a + c.charCodeAt(0), 0) % TECH_COLORS.length];
@@ -23,7 +25,7 @@ function dayLabel(d: Date) {
 }
 const timeOf = (d: Date) => d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
-export default function JobChat({ jobId, title, raised = false }: { jobId: string; title: string; raised?: boolean }) {
+export default function JobChat({ jobId, title, raised = false, companyId }: { jobId: string; title: string; raised?: boolean; companyId?: string }) {
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [me, setMe] = useState<string | null>(null);
@@ -33,6 +35,11 @@ export default function JobChat({ jobId, title, raised = false }: { jobId: strin
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState("");
+  // Paso 5.4: fotos en el chat (comprimidas en el teléfono antes de subir)
+  const [photos, setPhotos] = useState<Record<string, string>>({}); // id del mensaje → enlace de la foto
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const signedIds = useRef<Set<string>>(new Set());
   const openRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -56,6 +63,17 @@ export default function JobChat({ jobId, title, raised = false }: { jobId: strin
     setMsgs(d.messages ?? []);
     if (openRef.current) markRead(); else setLastRead(d.last_read);
     setReady(true);
+    // Fotos del chat: se leen aparte (si falta el SQL del Paso 5.4 simplemente no hay fotos)
+    const sb = createClient();
+    const { data: rows } = await sb.from("job_messages").select("id, photo_path").eq("job_id", jobId).not("photo_path", "is", null);
+    const fresh = ((rows ?? []) as { id: string; photo_path: string }[]).filter((r) => !signedIds.current.has(r.id));
+    if (fresh.length) {
+      fresh.forEach((r) => signedIds.current.add(r.id));
+      const { data: s } = await sb.storage.from("job-photos").createSignedUrls(fresh.map((r) => r.photo_path), 3600);
+      const byPath: Record<string, string> = {};
+      ((s ?? []) as { path: string | null; signedUrl: string }[]).forEach((x) => { if (x.path && x.signedUrl) byPath[x.path] = x.signedUrl; });
+      setPhotos((p) => { const n = { ...p }; fresh.forEach((r) => { if (byPath[r.photo_path]) n[r.id] = byPath[r.photo_path]; }); return n; });
+    }
   }, [jobId, markRead]);
 
   // Carga inicial · se abre solo si el enlace trae ?chat=1 (al tocar el aviso)
@@ -114,6 +132,29 @@ export default function JobChat({ jobId, title, raised = false }: { jobId: strin
     load();
     // Aviso (campana + push) a los demás del trabajo
     fetch("/api/jobs/chat-notify", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messageId: id }) }).catch(() => undefined);
+  }
+
+  async function sendPhoto(list: FileList | null) {
+    const f = list?.[0];
+    if (fileRef.current) fileRef.current.value = "";
+    if (!f || !companyId || photoBusy) return;
+    setPhotoBusy(true); setFailed("");
+    try {
+      const c = await compressPhoto(f);
+      const sb = createClient();
+      const path = `${companyId}/${jobId}/chat/${fileId()}.${c.ext}`;
+      const up = await sb.storage.from("job-photos").upload(path, c.blob, { contentType: c.mime, cacheControl: "31536000", upsert: false });
+      if (up.error) throw new Error("upload");
+      const caption = text.trim();
+      const { data: id, error } = await sb.rpc("job_chat_send_photo", { p_job: jobId, p_path: path, p_body: caption || null });
+      if (error || !id) { await sb.storage.from("job-photos").remove([path]); throw new Error(/does not exist|Could not find/.test(error?.message ?? "") ? "sql" : "send"); }
+      setText("");
+      await load();
+      fetch("/api/jobs/chat-notify", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messageId: id }) }).catch(() => undefined);
+    } catch (e) {
+      setFailed(e instanceof Error && e.message === "sql" ? "Photos in the chat need paso-5.4b-files.sql in Supabase." : "The photo couldn't be sent. Check your connection and try again.");
+    }
+    setPhotoBusy(false);
   }
 
   return (
@@ -184,7 +225,14 @@ export default function JobChat({ jobId, title, raised = false }: { jobId: strin
                         : <span className="w-8 shrink-0" />)}
                       <div className={`max-w-[80%] ${mine ? "items-end" : "items-start"} flex flex-col`}>
                         {head && !mine && <p className="mb-1 px-1 text-[12px] font-semibold text-[#0b1f3a]">{m.name}{m.role && ROLE[m.role] ? <span className="font-normal text-slate-400"> · {ROLE[m.role]}</span> : null}</p>}
-                        <div className={`whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-[14.5px] leading-snug ${mine ? "rounded-br-md bg-[#0f766e] text-white" : "rounded-bl-md bg-white text-[#0b1f3a] ring-1 ring-slate-200"} ${m.pending ? "opacity-60" : ""}`}>{m.body}</div>
+                        <div className={`whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-[14.5px] leading-snug ${mine ? "rounded-br-md bg-[#0f766e] text-white" : "rounded-bl-md bg-white text-[#0b1f3a] ring-1 ring-slate-200"} ${m.pending ? "opacity-60" : ""}`}>
+                          {photos[m.id] && (
+                            <a href={photos[m.id]} target="_blank" rel="noreferrer" className="-mx-2 -mt-0.5 mb-1 block overflow-hidden rounded-xl">
+                              <img src={photos[m.id]} alt="Photo sent in the chat" loading="lazy" className="max-h-64 w-full min-w-[9rem] object-cover transition-opacity duration-150 hover:opacity-90" />
+                            </a>
+                          )}
+                          {photos[m.id] && m.body === PHOTO_ONLY ? null : m.body}
+                        </div>
                         <p className="mt-1 px-1 text-[11px] text-slate-400">{m.pending ? "Sending…" : timeOf(d)}</p>
                       </div>
                     </div>
@@ -199,6 +247,16 @@ export default function JobChat({ jobId, title, raised = false }: { jobId: strin
             <div className="border-t border-slate-100 bg-white px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
               {failed && <p role="alert" className="mb-2 rounded-lg bg-[#fff1f2] px-3 py-2 text-[12.5px] font-medium text-[#be123c]">{failed}</p>}
               <div className="flex items-end gap-2">
+                {companyId && (
+                  <>
+                    <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => sendPhoto(e.target.files)} />
+                    <button type="button" onClick={() => fileRef.current?.click()} disabled={photoBusy || !ready} aria-label="Send a photo"
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 text-[#0f766e] transition-all duration-150 hover:-translate-y-0.5 hover:border-[#14a39a] hover:bg-[#e9f7f4] active:scale-95 disabled:translate-y-0 disabled:opacity-50">
+                      {photoBusy ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#0f766e] border-t-transparent" />
+                        : <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" /><circle cx="12" cy="13.5" r="3.5" /></svg>}
+                    </button>
+                  </>
+                )}
                 <textarea ref={inputRef} value={text} rows={1} maxLength={2000} placeholder="Write a message…" aria-label="Message"
                   onChange={(e) => { setText(e.target.value); e.target.style.height = "auto"; e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`; }}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && window.innerWidth >= 1024) { e.preventDefault(); send(); } }}

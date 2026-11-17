@@ -15,6 +15,7 @@ import { DelayTag, GROUP_TONE, ProgressRing } from "@/components/jobs/ops/OpsBit
 import { Timeline } from "@/components/catalog/DetailBits";
 import JobChat from "@/components/jobs/JobChat";
 import JobPhases from "@/components/jobs/JobPhases";
+import JobFiles from "@/components/jobs/JobFiles";
 
 type Visit = {
   id: string; visit_no: number; status: VisitStatus; starts_at: string | null; ends_at: string | null; arrival_window_min: number; techs: TechChip[];
@@ -317,20 +318,13 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
             )}
           </section>
 
-          {/* Fotos y reportes */}
+          {/* Fotos, reportes y documentos por fase (Paso 5.4) */}
+          <JobFiles jobId={j.id} readOnly={cancelled} />
+
+          {/* Formularios del campo */}
+          {data.forms.length > 0 && (
           <section className={`${card} p-5`}>
-            <h2 className="text-[16px] font-semibold text-[#0b1f3a]">Photos &amp; reports</h2>
-            {data.photos.length === 0 && data.forms.length === 0 && <p className="mt-2 text-[14px] text-slate-500">Photos and forms from the field show up here.</p>}
-            {data.photos.length > 0 && (
-              <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-6">
-                {data.photos.map((p) => (
-                  <button key={p.id} type="button" onClick={() => setPhoto(p)} className="group relative aspect-square overflow-hidden rounded-xl bg-slate-100">
-                    {photoUrls[p.path] && <img src={photoUrls[p.path]} alt={p.caption ?? p.kind} loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />}
-                    <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/55 to-transparent px-1.5 pb-1 pt-4 text-left text-[10.5px] font-semibold capitalize text-white">{p.kind}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+            <h2 className="text-[16px] font-semibold text-[#0b1f3a]">Field forms</h2>
             {data.forms.map((f) => (
               <div key={f.id} className="mt-3 rounded-xl border border-slate-100 px-3.5 py-3">
                 <p className="text-[14px] font-semibold text-[#0b1f3a]">{f.kind === "tune_up" ? "Tune-Up readings" : "Work report"}
@@ -344,6 +338,7 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
               </div>
             ))}
           </section>
+          )}
 
           {/* Historial */}
           <section className={`${card} p-5`}>
@@ -407,7 +402,7 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
           <p className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-4 py-1.5 text-[13px] text-white">{photo.caption || photo.kind}{photo.uploaded_by_name ? ` · ${photo.uploaded_by_name}` : ""} · {when(photo.created_at)}</p>
         </div>
       )}
-      <JobChat jobId={j.id} title={`${j.customer_name || "Job"} · ${j.number}`} />
+      <JobChat jobId={j.id} companyId={companyId} title={`${j.customer_name || "Job"} · ${j.number}`} />
       {toast && <div role="status" className={`fixed bottom-5 left-1/2 z-[95] max-w-[92vw] -translate-x-1/2 rounded-xl px-4 py-2.5 text-[13.5px] font-medium text-white shadow-lg animate-[bp-pop-in_0.2s_ease-out] ${toast.err ? "bg-[#be123c]" : "bg-[#0b1f3a]"}`}>{toast.m}</div>}
     </div>
   );

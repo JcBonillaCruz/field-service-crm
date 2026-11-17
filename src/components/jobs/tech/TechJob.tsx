@@ -2,6 +2,7 @@
 
 import JobChat from "@/components/jobs/JobChat";
 import JobPhases from "@/components/jobs/JobPhases";
+import JobFiles from "@/components/jobs/JobFiles";
 import { askConfirm } from "@/lib/confirm";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -210,6 +211,9 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
         </div>
       )}
 
+      {/* Fotos (comprimidas en el teléfono), reportes y PDF, por fase (Paso 5.4) */}
+      <JobFiles jobId={jobId} variant="tech" readOnly={st === "cancelled"} />
+
       {/* Servicios y piezas */}
       <div className={`${card} mt-3 px-4 py-3`}>
         <div className="flex items-center justify-between">
@@ -293,7 +297,7 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
 
       {partOpen && visit && <PartPicker companyId={companyId} visitId={visit.id} onClose={() => setPartOpen(false)} onDone={(m) => { setPartOpen(false); flash(m); load(); }} />}
 
-      <JobChat jobId={jobId} title={`${j.customer_name || "Job"} · ${j.number}`} raised />
+      <JobChat jobId={jobId} companyId={j.company_id} title={`${j.customer_name || "Job"} · ${j.number}`} raised />
       {toast && <div role="status" className="fixed bottom-28 left-1/2 z-[95] max-w-[90vw] -translate-x-1/2 rounded-xl bg-[#0b1f3a] px-4 py-2.5 text-[14px] font-medium text-white shadow-lg animate-[bp-pop-in_0.2s_ease-out]">{toast}</div>}
     </div>
   );
