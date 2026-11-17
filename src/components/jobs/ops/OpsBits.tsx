@@ -92,7 +92,7 @@ export function OpsCard({ job, group, now, innerRef, onHover, dim = false, menu,
   return (
     <div ref={innerRef} role="link" tabIndex={0} onClick={open} onKeyDown={(e) => { if (e.key === "Enter") open(); }}
       onMouseEnter={() => onHover?.(true)} onMouseLeave={() => onHover?.(false)} {...drag}
-      title={delay ? `${delay.label} · ${delay.detail}` : live ? LIVE_TEXT[live] : undefined}
+      title={delay ? `${delay.label} · ${delay.detail}` : job.phase_now && !done ? `${job.phase_blocked ? "Blocked" : "Phase"}: ${job.phase_now}` : live ? LIVE_TEXT[live] : undefined}
       className={`group/card relative cursor-pointer select-none rounded-xl border ${tiny ? "px-2 py-1.5" : "px-2.5 py-2"} transition-all duration-100 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]
         ${tint ? "hover:-translate-y-0.5 hover:shadow-[0_8px_18px_rgba(15,40,60,0.10)] hover:brightness-[0.98]" : done ? "border-[#e2e8f0] bg-[#f1f5f9]" : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-[#14a39a] hover:shadow-[0_8px_18px_rgba(15,40,60,0.09)]"}
         ${drag?.draggable ? "active:cursor-grabbing" : ""} ${dim ? "opacity-35" : ""} ${dragging ? "opacity-40" : ""}`}

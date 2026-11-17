@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { createClient } from "@/lib/supabase/client";
 import { inputClass } from "@/components/customers/ui";
+import PhaseTemplates from "@/components/jobs/PhaseTemplates";
 import SelectMenu from "@/components/ui/SelectMenu";
 import ColorPicker from "@/components/ui/ColorPicker";
 import { confirmDelete } from "@/lib/confirm";
@@ -257,6 +258,9 @@ export default function JobSettingsForm({ companyId, settings, types: t0, tags: 
             </div>
           </div>
         </section>
+
+        {/* Paso 5.4: fases con peso por tipo de trabajo */}
+        <PhaseTemplates types={types} onSaved={(m, err) => say(m, err)} />
 
         <section className={`${card} p-5`}>
           <h2 className="text-[16px] font-semibold text-[#0b1f3a]">Tags</h2>

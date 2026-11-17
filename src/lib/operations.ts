@@ -16,6 +16,8 @@ export type OpsJob = {
   estimated_total: number; created_at: string; completed_at: string | null; invoiced_at: string | null; paid_at: string | null;
   visit: OpsVisit | null; techs: TechChip[];
   checklist_total: number; checklist_done: number; photos: number; visits_total: number; visits_done: number;
+  // Paso 5.4: fases con peso (solo si el trabajo tiene fases)
+  phase_pct?: number | null; phase_total?: number; phase_done?: number; phase_now?: string | null; phase_blocked?: boolean;
 };
 
 export type OpsGroup = "unassigned" | "assigned" | "in_progress" | "delayed" | "done";
@@ -52,10 +54,12 @@ export function delayOf(j: OpsJob, now = Date.now()): { label: string; detail: s
   return null;
 }
 
-// % de avance ponderado (mientras llegan las fases por industria del Paso 5.4):
+// % de avance. Con fases (Paso 5.4): peso de las fases terminadas. Sin fases, el cálculo de antes:
 // asignado 10 · agendado 20 · en camino 30 · empezó 45 · checklist hasta +40 · terminado 100
 export function progressOf(j: OpsJob): number {
   if (j.status === "completed") return 100;
+  // 100% solo cuando el trabajo se cierra: con todas las fases listas se queda en 95 hasta que lo terminen
+  if (j.phase_pct != null) return Math.min(Math.max(Math.round(j.phase_pct), 0), 95);
   const v = j.visit;
   const checklist = j.checklist_total ? j.checklist_done / j.checklist_total : 0;
   let p = 0;
@@ -86,6 +90,7 @@ export function groupOf(j: OpsJob, now = Date.now()): OpsGroup {
 export const STAGE_LABEL = (j: OpsJob): string => {
   if (j.status === "completed") return j.paid_at ? "Paid" : j.invoiced_at ? "Invoiced" : "Completed";
   const s = j.visit?.status;
+  if (j.phase_blocked) return "Phase blocked";
   if (j.status === "on_hold" && s !== "scheduled") return "On hold";
   if (s === "on_my_way") return "On my way";
   if (s === "in_progress") return "Working";

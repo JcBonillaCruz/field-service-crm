@@ -207,6 +207,7 @@ export function jobError(e: { message?: string; code?: string; hint?: string } |
   if (m.includes("BAD_CUSTOMER")) return "Choose a customer from your list.";
   if (m.includes("BAD_COLOR")) return "Pick a valid color.";
   if (m.includes("job_types_name_uniq") || m.includes("job_tags_name_uniq") || e.code === "23505") return "That name is already in use.";
+  if (m.includes("job_phase") && (m.includes("does not exist") || m.includes("Could not find"))) return "Run paso-5.4-phases.sql in Supabase first.";
   if ((m.includes("ops_move") || m.includes("ops_delete_job")) && (m.includes("Could not find") || m.includes("does not exist"))) return "Run paso-5.3b-ops-moves.sql in Supabase first.";
   if (m.includes("visit_set_collaborators") || m.includes("ops_board") || m.includes("team_save_") || m.includes("member_work_profiles") || m.includes("member_pay_rates")) return "Run paso-5.3-operations.sql in Supabase first.";
   if (m.includes("does not exist") || m.includes("Could not find the function")) return "Run the SQL for Paso 5.1 (Jobs) in Supabase first.";

@@ -7,6 +7,7 @@ import { Menu, MenuButton, MenuItem, MenuItems, Popover, PopoverButton, PopoverP
 import { createClient } from "@/lib/supabase/client";
 import { JobSettings, TeamMember, addDays, addressLine, afterHoursOf, dayStart, fromIsoDay, isoDay, jobError, receivesJobs, startOfMonth, startOfWeek } from "@/lib/jobs";
 import { Modal, btnGhost, btnPrimary } from "@/components/sales/SalesBits";
+import { loadPhaseProgress, withPhases } from "@/lib/phases";
 import { OPS_GROUPS, OpsGroup, OpsJob, delayOf, fold, groupOf as groupAt, progressOf } from "@/lib/operations";
 import { TechDot } from "@/components/jobs/EventBar";
 import { notifyAssigned } from "@/lib/jobs-assign-notify";
@@ -133,10 +134,14 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
     const base = addDays(dayStart(new Date()), -100).getTime();
     const since = (!span && when === "all") || colF.done.when === "all" ? new Date(2000, 0, 1)
       : new Date(Math.min(base, span ? fromIsoDay(span.from).getTime() : base, colF.done.when === "custom" && colF.done.from ? fromIsoDay(colF.done.from).getTime() : base));
-    const { data, error: err } = await createClient().rpc("ops_board", { p_company: companyId, p_done_since: since.toISOString() });
+    const sb = createClient();
+    const [{ data, error: err }, phases] = await Promise.all([
+      sb.rpc("ops_board", { p_company: companyId, p_done_since: since.toISOString() }),
+      loadPhaseProgress(sb, companyId), // Paso 5.4: % por fases
+    ]);
     if (id !== reqId.current) return;
     if (err) { setError(jobError(err)); setLoading(false); return; }
-    setError(""); setJobs((data ?? []) as OpsJob[]); setLoading(false); setUpdatedAt(Date.now());
+    setError(""); setJobs(withPhases((data ?? []) as OpsJob[], phases)); setLoading(false); setUpdatedAt(Date.now());
   }, [companyId, when, span, colF.done.when, colF.done.from]);
 
   useEffect(() => { load(); }, [load]);
@@ -149,6 +154,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
       .on("postgres_changes", { event: "*", schema: "public", table: "jobs", filter: `company_id=eq.${companyId}` }, again)
       .on("postgres_changes", { event: "*", schema: "public", table: "job_visits", filter: `company_id=eq.${companyId}` }, again)
       .on("postgres_changes", { event: "*", schema: "public", table: "job_visit_techs", filter: `company_id=eq.${companyId}` }, again)
+      .on("postgres_changes", { event: "*", schema: "public", table: "job_phases", filter: `company_id=eq.${companyId}` }, again)
       .subscribe();
     // El reloj: "Retrasado" aparece solo sin recargar
     const tick = setInterval(() => setNow(Date.now()), 30000);

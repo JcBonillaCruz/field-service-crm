@@ -13,6 +13,7 @@ import { TechDot, TechDots } from "@/components/jobs/EventBar";
 import { DelayTag, GroupArt, ProgressRing } from "@/components/jobs/ops/OpsBits";
 import { AlertIcon, TeamArt } from "@/components/home/DashArt";
 import { OpsDialog } from "@/components/jobs/ops/OpsDialogs";
+import { loadPhaseProgress, withPhases } from "@/lib/phases";
 import { OPS_GROUPS, OpsGroup, OpsJob, delayOf, fold, groupOf as groupAt, progressOf } from "@/lib/operations";
 import { TeamMember, addDays, dayStart, fmtTime, fromIsoDay, isoDay, jobError, receivesJobs, startOfMonth, startOfWeek } from "@/lib/jobs";
 import { Member, presenceOf } from "@/lib/team";
@@ -143,10 +144,14 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
     if (sample) { setJobs(sample); setLoading(false); return; }
     const id = ++reqId.current;
     const since = new Date(); since.setMonth(Math.min(since.getMonth() - 1, 0), 1); since.setHours(0, 0, 0, 0); // terminados desde enero (o el mes pasado si es enero)
-    const { data, error: err } = await createClient().rpc("ops_board", { p_company: companyId, p_done_since: since.toISOString() });
+    const sb = createClient();
+    const [{ data, error: err }, phases] = await Promise.all([
+      sb.rpc("ops_board", { p_company: companyId, p_done_since: since.toISOString() }),
+      loadPhaseProgress(sb, companyId), // Paso 5.4: % por fases
+    ]);
     if (id !== reqId.current) return;
     if (err) { setError(jobError(err)); setLoading(false); return; }
-    setError(""); setJobs((data ?? []) as OpsJob[]); setLoading(false);
+    setError(""); setJobs(withPhases((data ?? []) as OpsJob[], phases)); setLoading(false);
   }, [companyId, sample]);
   // Conexión de cada persona (la misma de Team: verde = usando la app, naranja = abierta sin moverse, gris = fuera)
   const loadPresence = useCallback(async () => {
@@ -164,6 +169,7 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
       .on("postgres_changes", { event: "*", schema: "public", table: "jobs", filter: `company_id=eq.${companyId}` }, again)
       .on("postgres_changes", { event: "*", schema: "public", table: "job_visits", filter: `company_id=eq.${companyId}` }, again)
       .on("postgres_changes", { event: "*", schema: "public", table: "job_visit_techs", filter: `company_id=eq.${companyId}` }, again)
+      .on("postgres_changes", { event: "*", schema: "public", table: "job_phases", filter: `company_id=eq.${companyId}` }, again)
       .subscribe();
     const tick = setInterval(() => { setNow(Date.now()); loadPresence(); }, 60000); // "Retrasado" y la conexión se actualizan solos
     const onVis = () => { if (document.visibilityState === "visible") { setNow(Date.now()); load(); loadPresence(); } };

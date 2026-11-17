@@ -14,6 +14,7 @@ import { AfterHoursMoon, StatusArt, TechDot } from "@/components/jobs/EventBar";
 import { DelayTag, GROUP_TONE, ProgressRing } from "@/components/jobs/ops/OpsBits";
 import { Timeline } from "@/components/catalog/DetailBits";
 import JobChat from "@/components/jobs/JobChat";
+import JobPhases from "@/components/jobs/JobPhases";
 
 type Visit = {
   id: string; visit_no: number; status: VisitStatus; starts_at: string | null; ends_at: string | null; arrival_window_min: number; techs: TechChip[];
@@ -63,6 +64,7 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
   const [busy, setBusy] = useState("");
   const [toast, setToast] = useState<{ m: string; err?: boolean } | null>(null);
   const [photo, setPhoto] = useState<Photo | null>(null);
+  const [phasePct, setPhasePct] = useState<number | null>(null); // Paso 5.4: avance por fases
   const flash = (m: string, err = false) => { setToast({ m, err }); setTimeout(() => setToast((t) => (t?.m === m ? null : t)), err ? 5000 : 2600); };
 
   // En vivo: si el colaborador cambia el estado o la oficina lo mueve, la ficha se actualiza sola
@@ -88,7 +90,8 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
     visit: cv ? { id: cv.id, visit_no: cv.visit_no, status: cv.status, starts_at: cv.starts_at, ends_at: cv.ends_at, arrival_window_min: cv.arrival_window_min, on_my_way_at: cv.on_my_way_at, started_at: cv.started_at, finished_at: cv.finished_at } : null,
     techs: cv?.techs ?? [], checklist_total: data.checklist.length, checklist_done: data.checklist.filter((c) => c.done).length,
     photos: data.photos.length, visits_total: data.visits.filter((v) => v.status !== "cancelled").length, visits_done: data.visits.filter((v) => v.status === "completed").length,
-  }), [j, data, cv]);
+    phase_pct: phasePct,
+  }), [j, data, cv, phasePct]);
   const group = groupOf(ops, now);
   const pct = progressOf(ops);
   const cancelled = Boolean(j.cancelled_at);
@@ -263,6 +266,9 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
               ))}
             </ul>
           </section>
+
+          {/* Fases con peso (Paso 5.4) */}
+          <JobPhases jobId={j.id} canEdit readOnly={cancelled || j.status === "completed"} onProgress={setPhasePct} onToast={flash} />
 
           {/* Checklist */}
           {data.checklist.length > 0 && (

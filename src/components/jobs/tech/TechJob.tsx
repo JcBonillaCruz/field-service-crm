@@ -1,6 +1,7 @@
 "use client";
 
 import JobChat from "@/components/jobs/JobChat";
+import JobPhases from "@/components/jobs/JobPhases";
 import { askConfirm } from "@/lib/confirm";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -186,6 +187,9 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
           </button>
         </div>
       )}
+
+      {/* Fases del trabajo (Paso 5.4): el colaborador las marca y mueve el % en Operations */}
+      <JobPhases jobId={jobId} variant="tech" readOnly={readOnly} onToast={(m) => flash(m)} />
 
       {/* Checklist */}
       {d.checklist.length > 0 && (
