@@ -1,14 +1,18 @@
 import type { Metadata, Viewport } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import SplashScreen from "@/components/SplashScreen";
 import ConfirmHost from "@/components/ConfirmHost";
 import InstallPrompt from "@/components/InstallPrompt";
 
-const jakarta = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+// Plus Jakarta Sans guardada dentro del proyecto (src/app/fonts). Antes se descargaba de Google Fonts en cada
+// deploy, y si Google fallaba o cambiaba algo, el build de Vercel se caía. Ahora no depende de internet.
+const jakarta = localFont({
+  src: "./fonts/PlusJakartaSans.woff2",
+  weight: "200 800",
+  style: "normal",
   display: "swap",
+  fallback: ["system-ui", "-apple-system", "Segoe UI", "Arial", "sans-serif"],
 });
 
 export const metadata: Metadata = {
