@@ -5,7 +5,32 @@ import { createClient } from "@/lib/supabase/client";
 import { confirmDelete } from "@/lib/confirm";
 import { jobError } from "@/lib/jobs";
 import { compressPhoto, fileId, kb } from "@/lib/photo-compress";
-import SelectMenu from "@/components/ui/SelectMenu";
+import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "@headlessui/react";
+import { Check, Chevron, optionClass, panelClass } from "@/components/ui/SearchSelect";
+import { CameraArt, GalleryArt, PdfArt, ReportArt } from "@/components/jobs/FileArt";
+
+// Selector que SIEMPRE muestra el texto completo (en el teléfono los nombres de fase no se cortan)
+function Pick({ label, value, options, onChange }: { label: string; value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }) {
+  const cur = options.find((o) => o.value === value);
+  return (
+    <Listbox value={value} onChange={onChange}>
+      <ListboxButton aria-label={label}
+        className="relative flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 py-2 pl-3 pr-9 text-left text-[14px] text-slate-800 focus:border-[#0f766e] focus:bg-white focus:outline-none data-[open]:border-[#0f766e] data-[open]:bg-white">
+        <span className="shrink-0 text-[12px] font-semibold text-slate-400">{label}</span>
+        <span className="min-w-0 flex-1 break-words font-medium text-[#0b1f3a]">{cur?.label ?? "Select…"}</span>
+        <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400"><Chevron /></span>
+      </ListboxButton>
+      <ListboxOptions anchor="bottom start" transition className={`${panelClass} w-[var(--button-width)] focus:outline-none`}>
+        {options.map((o) => (
+          <ListboxOption key={o.value} value={o.value} className={`${optionClass} !py-2.5 text-[14.5px]`}>
+            <span className="min-w-0 flex-1 whitespace-normal break-words leading-snug">{o.label}</span>
+            <Check />
+          </ListboxOption>
+        ))}
+      </ListboxOptions>
+    </Listbox>
+  );
+}
 
 // =====================================================================
 // Fotos, reportes y documentos del trabajo (Paso 5.4) — misma pieza para el teléfono y la ficha de oficina.
@@ -55,6 +80,7 @@ export default function JobFiles({ jobId, variant = "office", readOnly = false, 
   const [openC, setOpenC] = useState<string | null>(null);
   const camRef = useRef<HTMLInputElement>(null);
   const upRef = useRef<HTMLInputElement>(null);
+  const pdfRef = useRef<HTMLInputElement>(null);
   const signed = useRef<Set<string>>(new Set());
   const tech = variant === "tech";
 
@@ -135,6 +161,7 @@ export default function JobFiles({ jobId, variant = "office", readOnly = false, 
     setWork("");
     if (camRef.current) camRef.current.value = "";
     if (upRef.current) upRef.current.value = "";
+    if (pdfRef.current) pdfRef.current.value = "";
     await load();
     if (bad.length) say(bad.slice(0, 3).join(" · "), true);
     else if (big) say(`${ok} saved. ${big} kept a little over 100 KB so the label stays readable.`);
@@ -230,18 +257,29 @@ export default function JobFiles({ jobId, variant = "office", readOnly = false, 
 
       {!readOnly && (
         <>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <div><p className="mb-1 text-[12px] font-semibold text-slate-500">Type of photo</p><SelectMenu value={kind} ariaLabel="Type of photo" options={KINDS} onChange={setKind} /></div>
-            <div><p className="mb-1 text-[12px] font-semibold text-slate-500">Phase</p><SelectMenu value={phaseId} ariaLabel="Phase" options={phaseOpts} onChange={setPhase} /></div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <Pick label="Type" value={kind} options={KINDS} onChange={setKind} />
+            <Pick label="Phase" value={phaseId} options={phaseOpts} onChange={setPhase} />
           </div>
-          <div className={`mt-2 grid gap-2 ${tech ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-3"}`}>
-            <button type="button" onClick={() => camRef.current?.click()} disabled={Boolean(work)} className={`${btn} bg-[#0f766e] text-white hover:bg-[#0c5f59] ${tech ? "" : "lg:hidden"}`}><I d={CAM} />Take photo</button>
-            <button type="button" onClick={() => upRef.current?.click()} disabled={Boolean(work)} className={`${btn} border border-slate-200 text-[#0b1f3a] hover:border-[#14a39a] hover:bg-[#f3fbf9]`}><I d={UP} />Upload</button>
-            <button type="button" onClick={() => setRep({ id: null, body: "", phase: phaseId })} disabled={Boolean(work)} className={`${btn} border border-slate-200 text-[#0b1f3a] hover:border-[#14a39a] hover:bg-[#f3fbf9]`}><I d={PEN} />Report</button>
+          {/* Acciones: íconos redondos ilustrados (no botones) */}
+          <div className="mt-3 flex items-start justify-around gap-1">
+            {[
+              { key: "cam", label: "Camera", art: <CameraArt size={tech ? 46 : 44} />, go: () => camRef.current?.click(), cls: tech ? "" : "lg:hidden" },
+              { key: "gal", label: "Gallery", art: <GalleryArt size={tech ? 46 : 44} />, go: () => upRef.current?.click(), cls: "" },
+              { key: "pdf", label: "PDF file", art: <PdfArt size={tech ? 46 : 44} />, go: () => pdfRef.current?.click(), cls: "" },
+              { key: "rep", label: "Report", art: <ReportArt size={tech ? 46 : 44} />, go: () => setRep({ id: null, body: "", phase: phaseId }), cls: "" },
+            ].map((a) => (
+              <button key={a.key} type="button" onClick={a.go} disabled={Boolean(work)} aria-label={a.label}
+                className={`group flex w-16 flex-col items-center gap-1 rounded-xl py-1 text-[11.5px] font-semibold text-slate-600 transition-colors duration-150 hover:text-[#0f766e] disabled:opacity-50 ${a.cls}`}>
+                <span className="rounded-full transition-shadow duration-150 group-hover:shadow-[0_6px_14px_rgba(15,40,60,0.14)]">{a.art}</span>{a.label}
+              </button>
+            ))}
           </div>
           <input ref={camRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => addFiles(e.target.files)} />
-          <input ref={upRef} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={(e) => addFiles(e.target.files)} />
-          <p className="mt-2 text-[12px] text-slate-400">Photos are made lighter on this device before they upload (about 100 KB each). PDF files up to 10 MB.</p>
+          {/* Solo imágenes: el teléfono abre la galería directo (sin el menú Cámara / Archivos) */}
+          <input ref={upRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => addFiles(e.target.files)} />
+          <input ref={pdfRef} type="file" accept="application/pdf,.pdf" multiple className="hidden" onChange={(e) => addFiles(e.target.files)} />
+          <p className="mt-1.5 text-center text-[11.5px] text-slate-400">Photos are made lighter on this device before they upload.</p>
         </>
       )}
       {work && <p className="mt-2 flex items-center gap-2 rounded-lg bg-[#e9f7f4] px-3 py-2 text-[13px] font-medium text-[#0f766e]"><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#0f766e] border-t-transparent" />{work}</p>}
@@ -254,7 +292,7 @@ export default function JobFiles({ jobId, variant = "office", readOnly = false, 
           <textarea autoFocus value={rep.body} onChange={(e) => setRep({ ...rep, body: e.target.value })} rows={4} maxLength={6000} placeholder="What you found, what you did and what's next"
             className="mt-2 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-[14.5px] text-[#0b1f3a] outline-none focus:border-[#14a39a]" />
           <div className="mt-2 flex flex-wrap items-end justify-between gap-2">
-            <div className="w-48"><SelectMenu value={rep.phase} ariaLabel="Phase of the report" options={phaseOpts} onChange={(v) => setRep({ ...rep, phase: v })} /></div>
+            <div className="w-full sm:w-64"><Pick label="Phase" value={rep.phase} options={phaseOpts} onChange={(v) => setRep({ ...rep, phase: v })} /></div>
             <div className="flex gap-2">
               <button type="button" onClick={() => setRep(null)} className="rounded-lg px-3.5 py-2 text-[13.5px] font-semibold text-slate-500 hover:bg-slate-100">Cancel</button>
               <button type="button" onClick={saveReport} disabled={saving} className="rounded-lg bg-[#0f766e] px-4 py-2 text-[13.5px] font-semibold text-white transition-colors hover:bg-[#0c5f59] disabled:opacity-60">{saving ? "Saving…" : "Save report"}</button>

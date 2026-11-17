@@ -139,39 +139,39 @@ export default function JobPhases({ jobId, canEdit = false, readOnly = false, va
 
       {/* Lista */}
       {!draft && list.length > 0 && (
-        <ul className={tech ? "mt-2 space-y-1" : "mt-3 divide-y divide-slate-100"}>
+        <ul className={tech ? "mt-2 divide-y divide-slate-50" : "mt-3 divide-y divide-slate-100"}>
           {list.map((p) => {
             const m = PHASE_META[p.status];
             const share = phaseShare(p.weight, list);
             return (
-              <li key={p.id} className={tech ? "rounded-xl px-1 py-2" : "py-3"}>
+              <li key={p.id} className={tech ? "py-1.5" : "py-2.5"}>
                 <div className="flex items-center gap-3">
                   <button type="button" onClick={() => tap(p)} disabled={readOnly || busy === p.id} aria-label={`${p.name}: ${m.label}. Tap to change`}
-                    className={`flex ${tech ? "h-9 w-9" : "h-7 w-7"} shrink-0 items-center justify-center rounded-full border-2 transition-all duration-150 active:scale-90 disabled:cursor-default ${m.ring} ${p.status === "completed" ? "bg-[#14a39a] text-white" : p.status === "blocked" ? "bg-[#fff1f2] text-[#e11d48]" : p.status === "in_progress" ? "bg-[#fff6e6]" : "bg-white"}`}>
-                    {p.status === "completed" && <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 10.5 3 3 7-7" /></svg>}
-                    {p.status === "in_progress" && <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-[#f59e0b]" />}
-                    {p.status === "blocked" && <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M6 6l8 8M14 6l-8 8" /></svg>}
+                    className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-all duration-150 active:scale-90 disabled:cursor-default ${m.ring} ${p.status === "completed" ? "bg-[#14a39a] text-white" : p.status === "blocked" ? "bg-[#fff1f2] text-[#e11d48]" : p.status === "in_progress" ? "bg-[#fff6e6]" : "bg-white"}`}>
+                    {p.status === "completed" && <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 10.5 3 3 7-7" /></svg>}
+                    {p.status === "in_progress" && <span className="h-2 w-2 animate-pulse rounded-full bg-[#f59e0b]" />}
+                    {p.status === "blocked" && <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M6 6l8 8M14 6l-8 8" /></svg>}
                   </button>
                   <button type="button" onClick={() => tap(p)} disabled={readOnly || busy === p.id} className="min-w-0 flex-1 text-left disabled:cursor-default">
-                    <span className={`block truncate ${tech ? "text-[15px]" : "text-[14.5px]"} font-medium ${p.status === "completed" ? "text-slate-500" : "text-[#0b1f3a]"}`}>{p.name}</span>
-                    <span className="block text-[12px] text-slate-400">
+                    <span className={`block break-words text-[14px] leading-snug font-medium ${p.status === "completed" ? "text-slate-500" : "text-[#0b1f3a]"}`}>{p.name}</span>
+                    <span className="block text-[11.5px] text-slate-400">
                       <span className={`font-semibold ${m.text}`}>{m.label}</span> · {share}% of the job
                       {p.status === "completed" && p.updated_by_name ? ` · ${p.updated_by_name}, ${when(p.completed_at)}` : ""}
                       {p.status === "in_progress" && p.updated_by_name ? ` · ${p.updated_by_name}` : ""}
                     </span>
                   </button>
                   {!readOnly && p.status !== "completed" && p.status !== "blocked" && blockId !== p.id && (
-                    <button type="button" onClick={() => { setBlockId(p.id); setReason(""); }} className="shrink-0 rounded-lg px-2 py-1.5 text-[12.5px] font-semibold text-slate-400 transition-colors hover:bg-[#fff1f2] hover:text-[#be123c]">Block</button>
+                    <button type="button" onClick={() => { setBlockId(p.id); setReason(""); }} className="shrink-0 rounded-md px-1.5 py-1 text-[11.5px] font-medium text-slate-400 transition-colors hover:bg-[#fff1f2] hover:text-[#be123c]">Block</button>
                   )}
                 </div>
                 {p.status === "blocked" && p.blocked_reason && (
-                  <p className={`${tech ? "ml-12" : "ml-10"} mt-1.5 rounded-lg bg-[#fff1f2] px-3 py-2 text-[13px] text-[#9f1239]`}>
+                  <p className={`ml-[34px] mt-1.5 rounded-lg bg-[#fff1f2] px-3 py-2 text-[13px] text-[#9f1239]`}>
                     <span className="font-semibold">Blocked{p.updated_by_name ? ` by ${p.updated_by_name}` : ""}:</span> {p.blocked_reason}
                     {!readOnly && <span className="mt-0.5 block text-[12px] text-[#be123c]/80">Tap the phase to continue it.</span>}
                   </p>
                 )}
                 {blockId === p.id && (
-                  <div className={`${tech ? "ml-12" : "ml-10"} mt-2`}>
+                  <div className="ml-[34px] mt-2">
                     <textarea autoFocus value={reason} onChange={(e) => setReason(e.target.value)} rows={2} maxLength={300} placeholder="Why is it blocked? e.g. waiting on the part, customer not home"
                       className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-[14px] text-[#0b1f3a] outline-none transition-colors focus:border-[#14a39a]" />
                     <div className="mt-1.5 flex justify-end gap-2">

@@ -25,7 +25,11 @@ function dayLabel(d: Date) {
 }
 const timeOf = (d: Date) => d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
-export default function JobChat({ jobId, title, raised = false, companyId }: { jobId: string; title: string; raised?: boolean; companyId?: string }) {
+// placement: "bar" = botón compacto dentro de la barra de abajo del trabajo (teléfono del colaborador);
+//            "float" = burbuja flotante en computadora y una barrita abajo en el celular (nunca encima del contenido).
+export default function JobChat({ jobId, title, companyId, placement = "float", showLabel = false }: {
+  jobId: string; title: string; raised?: boolean; companyId?: string; placement?: "float" | "bar"; showLabel?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [me, setMe] = useState<string | null>(null);
@@ -159,21 +163,43 @@ export default function JobChat({ jobId, title, raised = false, companyId }: { j
 
   return (
     <>
-      {/* Botón flotante con el contador de mensajes sin leer */}
-      {!open && (
-        <button type="button" onClick={() => setOpen(true)} aria-label={unread ? `Job chat, ${unread} new message${unread === 1 ? "" : "s"}` : "Job chat"}
-          className={`group fixed right-4 z-40 flex h-14 items-center gap-2 rounded-full bg-[#0f766e] pl-4 pr-5 text-[15px] font-semibold text-white shadow-[0_10px_28px_rgba(15,118,110,0.38)] transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#0c5f59] hover:shadow-[0_14px_32px_rgba(15,118,110,0.45)] active:scale-95 lg:bottom-6 lg:right-8 ${raised ? "bottom-[6.75rem]" : "bottom-5"}`}>
+      {/* Botón del chat con el contador de mensajes sin leer */}
+      {(() => {
+        const label = unread ? `Job chat, ${unread} new message${unread === 1 ? "" : "s"}` : "Job chat";
+        const icon = (cls: string) => (
           <span className="relative flex">
-            <svg viewBox="0 0 24 24" className="h-6 w-6 transition-transform duration-200 group-hover:-rotate-6 group-hover:scale-110" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+            <svg viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-4.5 3.5V17H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" /><path d="M8 10h8M8 13h5" />
             </svg>
             {unread > 0 && (
-              <span className="absolute -right-2.5 -top-2.5 flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-[#e11d48] px-1 text-[12px] font-bold text-white ring-2 ring-white animate-[bp-pop-in_0.25s_ease-out]">{unread > 9 ? "9+" : unread}</span>
+              <span className="absolute -right-2.5 -top-2.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#e11d48] px-1 text-[10.5px] font-bold text-white ring-2 ring-white animate-[bp-pop-in_0.25s_ease-out]">{unread > 9 ? "9+" : unread}</span>
             )}
           </span>
-          Chat
-        </button>
-      )}
+        );
+        const compact = (withLabel: boolean) => (
+          <button type="button" onClick={() => setOpen(true)} aria-label={label}
+            className={`group flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-[#bfe5dd] bg-[#e9f7f4] text-[13.5px] font-semibold text-[#0f766e] transition-all duration-150 hover:border-[#14a39a] hover:bg-[#d9f1ec] active:scale-95 ${withLabel ? "px-3.5" : "w-10"}`}>
+            {icon("h-5 w-5 transition-transform duration-200 group-hover:-rotate-6 group-hover:scale-110")}{withLabel && "Chat"}
+          </button>
+        );
+        if (placement === "bar") return compact(showLabel);
+        return (
+          <>
+            {/* Celular: barrita fija abajo (no tapa nada) + espacio para que el contenido no quede debajo */}
+            <div className="h-14 lg:hidden" aria-hidden="true" />
+            {!open && (
+              <div className="fixed inset-x-0 bottom-0 z-30 flex justify-end border-t border-slate-200 bg-white/95 px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur lg:hidden">{compact(true)}</div>
+            )}
+            {/* Computadora: burbuja flotante */}
+            {!open && (
+              <button type="button" onClick={() => setOpen(true)} aria-label={label}
+                className="group fixed bottom-6 right-8 z-40 hidden h-12 items-center gap-2 rounded-full bg-[#0f766e] pl-4 pr-5 text-[14.5px] font-semibold text-white shadow-[0_10px_28px_rgba(15,118,110,0.38)] transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#0c5f59] hover:shadow-[0_14px_32px_rgba(15,118,110,0.45)] active:scale-95 lg:flex">
+                {icon("h-5 w-5 transition-transform duration-200 group-hover:-rotate-6 group-hover:scale-110")}Chat
+              </button>
+            )}
+          </>
+        );
+      })()}
 
       {open && (
         <div role="dialog" aria-label="Job chat"
