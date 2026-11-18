@@ -15,11 +15,12 @@ const MODULE_GROUPS: { group: string; items: string[] }[] = [
 const ENDPOINTS: Record<string, string> = {
   Customers: "/dashboard/customers/export", Items: "/dashboard/items/export", Coupons: "/dashboard/coupons/export",
   Quotes: "/dashboard/quotes/export", Invoices: "/dashboard/invoices/export", Subscriptions: "/dashboard/subscriptions/export",
-  Inventory: "/dashboard/inventory/export",
+  Inventory: "/dashboard/inventory/export", Timesheets: "/dashboard/jobs/timesheets/export",
 };
 const ENABLED = new Set(Object.keys(ENDPOINTS));
-export type ExportModule = "Customers" | "Items" | "Coupons" | "Quotes" | "Invoices" | "Subscriptions" | "Inventory";
-export type ExportView = { module: ExportModule; label: string; ids: string[]; columns: string[] };
+export type ExportModule = "Customers" | "Items" | "Coupons" | "Quotes" | "Invoices" | "Subscriptions" | "Inventory" | "Timesheets";
+// range: fechas de la vista (Timesheets exporta el periodo que tienes en pantalla)
+export type ExportView = { module: ExportModule; label: string; ids: string[]; columns: string[]; range?: { from: string; to: string } };
 
 const DECIMALS = ["1,234,567.89", "1234567.89", "1.234.567,89", "1,23,456.78"];
 
@@ -103,6 +104,8 @@ export default function ExportModal({ open, onClose, initialModule = "Customers"
           ids: useView ? view!.ids : undefined, columns: useView ? view!.columns : undefined,
           format, password: password || undefined, decimal,
           period: records === "period" ? { from: from || undefined, to: to || undefined } : undefined,
+          range: useView ? view!.range : undefined,
+          tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
       });
       if (!res.ok) {
@@ -194,12 +197,12 @@ export default function ExportModal({ open, onClose, initialModule = "Customers"
               {view && view.module === module && (
                 <label className="flex items-center gap-2 text-sm text-slate-700">
                   <input type="radio" name="records" checked={records === "view"} onChange={() => setRecords("view")} className="h-4 w-4 accent-[#0f766e]" />
-                  Current view <span className="text-slate-400">({view.label} · {view.ids.length} {view.ids.length === 1 ? "record" : "records"}, same columns)</span>
+                  Current view <span className="text-slate-400">({view.label} · {view.ids.length} {view.range ? (view.ids.length === 1 ? "person" : "people") : `${view.ids.length === 1 ? "record" : "records"}, same columns`})</span>
                 </label>
               )}
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="radio" name="records" checked={records === "period"} onChange={() => setRecords("period")} className="h-4 w-4 accent-[#0f766e]" />
-                Specific period <span className="text-slate-400">(by created date)</span>
+                Specific period <span className="text-slate-400">{module === "Timesheets" ? "(by work day)" : "(by created date)"}</span>
               </label>
             </div>
             {records === "period" && (

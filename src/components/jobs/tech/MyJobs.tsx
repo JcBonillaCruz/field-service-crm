@@ -89,6 +89,10 @@ export default function MyJobs({ companyId, userId }: { companyId: string; userI
           <h1 className="text-[20px] font-semibold tracking-tight text-[#0b1f3a]">My jobs</h1>
           <p className="text-[13px] text-slate-500">{sameDay(day, today) ? "Today, " : ""}{day.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</p>
         </div>
+        <Link prefetch={false} href="/dashboard/jobs/my-timesheet" aria-label="My timesheet" title="My timesheet"
+          className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-[#0f766e] transition-all hover:scale-110 hover:border-[#14a39a] hover:bg-[#e9f7f4] active:scale-95">
+          <svg viewBox="0 0 24 24" className="h-[17px] w-[17px]" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 9v4l2.5 1.5M9.5 2.5h5" /></svg>
+        </Link>
         <button type="button" onClick={clock} disabled={busy}
           className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-semibold transition-all active:scale-95 disabled:opacity-60 ${shift ? "bg-[#fff1f2] text-[#be123c] ring-1 ring-[#fecdd3]" : "bg-[#0f766e] text-white"}`}>
           <span className={`h-1.5 w-1.5 rounded-full ${shift ? "animate-pulse bg-[#e11d48]" : "bg-white"}`} />
