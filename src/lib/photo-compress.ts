@@ -67,11 +67,11 @@ export async function compressPhoto(file: Blob, opts: { label?: boolean; target?
 // Por qué falló la subida al almacenamiento, en palabras claras (antes solo decía "upload failed")
 export function uploadReason(e: { message?: string; statusCode?: string | number; error?: string } | null | undefined): string {
   const m = `${e?.message ?? ""} ${e?.error ?? ""} ${e?.statusCode ?? ""}`;
-  if (/row-level security|unauthorized|not authorized|permission|403/i.test(m)) return "the photo storage didn't allow it (permissions). Tell the office: run paso-5.8b in Supabase";
+  if (/jwt|token|expired|401/i.test(m)) return "your session expired. Close the app, sign in again and retry";
+  if (/row-level security|unauthorized|not authorized|permission|403/i.test(m)) return `the photo storage didn't allow it (${(e?.message ?? "permissions").slice(0, 80)})`;
   if (/bucket.*not found|not found.*bucket|404/i.test(m)) return "the photo storage isn't set up. Tell the office: run paso-5.8b in Supabase";
   if (/mime|type.*not (allowed|supported)|415/i.test(m)) return "the photo storage doesn't accept this kind of file. Tell the office: run paso-5.8b in Supabase";
   if (/too large|exceeded|maximum|413/i.test(m)) return "the file is too big for the photo storage";
-  if (/jwt|token|401/i.test(m)) return "your session expired. Close the app, sign in again and retry";
   if (/failed to fetch|network|load failed|timeout/i.test(m)) return "no connection. Check your signal and try again";
   return `it couldn't be saved${e?.message ? ` (${e.message.slice(0, 90)})` : ""}`;
 }

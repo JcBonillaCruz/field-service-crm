@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { confirmDelete } from "@/lib/confirm";
 import { jobError } from "@/lib/jobs";
 import { compressPhoto, fileId, kb, uploadReason } from "@/lib/photo-compress";
+import { removeJobFiles, signJobFiles, uploadJobFile } from "@/lib/job-storage";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "@headlessui/react";
 import { Check, Chevron, optionClass, panelClass } from "@/components/ui/SearchSelect";
 import { CameraArt, GalleryArt, PdfArt, ReportArt } from "@/components/jobs/FileArt";
@@ -98,9 +99,8 @@ export default function JobFiles({ jobId, variant = "office", readOnly = false, 
     const need = x.files.map((f) => f.path).filter((p) => !signed.current.has(p));
     if (need.length) {
       need.forEach((p) => signed.current.add(p));
-      const { data: s } = await sb.storage.from(BUCKET).createSignedUrls(need, 3600);
-      const m: Record<string, string> = {};
-      ((s ?? []) as { path: string | null; signedUrl: string }[]).forEach((r) => { if (r.path && r.signedUrl) m[r.path] = r.signedUrl; });
+      const m = await signJobFiles(jobId, need);
+      need.filter((p) => !m[p]).forEach((p) => signed.current.delete(p)); // lo que no se pudo abrir se intenta otra vez después
       setUrls((u) => ({ ...u, ...m }));
     }
   }, [jobId]);
@@ -147,14 +147,14 @@ export default function JobFiles({ jobId, variant = "office", readOnly = false, 
           body = c.blob; ext = c.ext; mime = c.mime; w = c.width; h = c.height;
           if (c.overTarget) big++;
         }
-        const path = `${d.company_id}/${jobId}/${fileId()}.${ext}`;
-        const up = await sb.storage.from(BUCKET).upload(path, body, { contentType: mime, cacheControl: "31536000", upsert: false });
-        if (up.error) { bad.push(`${f.name}: ${uploadReason(up.error)}`); continue; }
+        const up = await uploadJobFile({ companyId: d.company_id, jobId, body, ext, mime });
+        if ("error" in up) { bad.push(`${f.name}: ${up.error}`); continue; }
+        const path = up.path;
         const { error } = await sb.rpc("job_file_add", {
           p_job: jobId, p_path: path, p_kind: kind, p_caption: null, p_phase: phaseId || null,
           p_file_type: isPdf ? "pdf" : "image", p_file_name: isPdf ? f.name : null, p_bytes: body.size, p_width: w, p_height: h,
         });
-        if (error) { await sb.storage.from(BUCKET).remove([path]); bad.push(`${f.name}: ${jobError(error)}`); continue; }
+        if (error) { await removeJobFiles(jobId, [path]); bad.push(`${f.name}: ${jobError(error)}`); continue; }
         ok++;
       } catch (e) { bad.push(`${f.name}: ${e instanceof Error ? e.message : "could not be prepared"}`); }
     }
@@ -197,7 +197,7 @@ export default function JobFiles({ jobId, variant = "office", readOnly = false, 
     if (del.type === "file") {
       const { data: path, error } = await sb.rpc("job_file_delete", { p_id: del.id, p_reason: why || null });
       if (error) return say(jobError(error), true);
-      if (path) await sb.storage.from(BUCKET).remove([path as string]);
+      if (path) await removeJobFiles(jobId, [path as string]);
       setView(null);
     } else {
       const { error } = await sb.rpc("job_report_delete", { p_id: del.id, p_reason: why || null });

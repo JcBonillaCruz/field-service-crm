@@ -4,6 +4,7 @@ import { canManageJobs } from "@/lib/jobs";
 import NoAccess from "@/components/customers/NoAccess";
 import JobDetail, { JobDetailData, JobDetailDoc } from "@/components/jobs/ops/JobDetail";
 import { loadJobBasics } from "@/lib/jobs-server";
+import { admin } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,8 @@ export default async function JobDetailPage({ params, searchParams }: { params: 
   const docIds = [d.job.quote_id, d.job.invoice_id].filter(Boolean) as string[];
   const [docs, signed, basics] = await Promise.all([
     docIds.length ? supabase.from("sales_docs").select("id, kind, number, status, total, amount_paid").in("id", docIds) : Promise.resolve({ data: [] }),
-    d.photos.length ? supabase.storage.from("job-photos").createSignedUrls(d.photos.map((p) => p.path), 3600) : Promise.resolve({ data: [] }),
+    // Paso 5.8d: los enlaces de las fotos los firma el servidor (la persona ya pasó el permiso de tech_job arriba)
+    d.photos.length ? (admin() ?? supabase).storage.from("job-photos").createSignedUrls(d.photos.map((p) => p.path), 3600) : Promise.resolve({ data: [] }),
     loadJobBasics(supabase, current.id),
   ]);
   const urls: Record<string, string> = {};

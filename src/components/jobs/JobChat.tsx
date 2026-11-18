@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 import { TECH_COLORS } from "@/lib/jobs";
 import { compressPhoto, fileId, uploadReason } from "@/lib/photo-compress";
+import { removeJobFiles, signJobFiles, uploadJobFile } from "@/lib/job-storage";
 import { CameraArt } from "@/components/jobs/FileArt";
 
 // =====================================================================
@@ -75,9 +76,8 @@ export default function JobChat({ jobId, title, companyId, placement = "float", 
     const fresh = ((rows ?? []) as { id: string; photo_path: string }[]).filter((r) => !signedIds.current.has(r.id));
     if (fresh.length) {
       fresh.forEach((r) => signedIds.current.add(r.id));
-      const { data: s } = await sb.storage.from("job-photos").createSignedUrls(fresh.map((r) => r.photo_path), 3600);
-      const byPath: Record<string, string> = {};
-      ((s ?? []) as { path: string | null; signedUrl: string }[]).forEach((x) => { if (x.path && x.signedUrl) byPath[x.path] = x.signedUrl; });
+      const byPath = await signJobFiles(jobId, fresh.map((r) => r.photo_path));
+      fresh.filter((r) => !byPath[r.photo_path]).forEach((r) => signedIds.current.delete(r.id));
       setPhotos((p) => { const n = { ...p }; fresh.forEach((r) => { if (byPath[r.photo_path]) n[r.id] = byPath[r.photo_path]; }); return n; });
     }
   }, [jobId, markRead]);
@@ -148,12 +148,12 @@ export default function JobChat({ jobId, title, companyId, placement = "float", 
     try {
       const c = await compressPhoto(f);
       const sb = createClient();
-      const path = `${companyId}/${jobId}/chat/${fileId()}.${c.ext}`;
-      const up = await sb.storage.from("job-photos").upload(path, c.blob, { contentType: c.mime, cacheControl: "31536000", upsert: false });
-      if (up.error) throw new Error(`up:${uploadReason(up.error)}`);
+      const up = await uploadJobFile({ companyId, jobId, body: c.blob, ext: c.ext, mime: c.mime, chat: true });
+      if ("error" in up) throw new Error(`up:${up.error}`);
+      const path = up.path;
       const caption = text.trim();
       const { data: id, error } = await sb.rpc("job_chat_send_photo", { p_job: jobId, p_path: path, p_body: caption || null });
-      if (error || !id) { await sb.storage.from("job-photos").remove([path]); throw new Error(/does not exist|Could not find/.test(error?.message ?? "") ? "sql" : "send"); }
+      if (error || !id) { await removeJobFiles(jobId, [path]); throw new Error(/does not exist|Could not find/.test(error?.message ?? "") ? "sql" : "send"); }
       setText("");
       await load();
       fetch("/api/jobs/chat-notify", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messageId: id }) }).catch(() => undefined);
