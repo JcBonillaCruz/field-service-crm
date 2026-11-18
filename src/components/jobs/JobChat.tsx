@@ -30,10 +30,10 @@ const timeOf = (d: Date) => d.toLocaleTimeString("en-US", { hour: "numeric", min
 
 // placement: "bar" = botón compacto dentro de la barra de abajo del trabajo (teléfono del colaborador);
 //            "float" = burbuja flotante en computadora y una barrita abajo en el celular (nunca encima del contenido).
-export default function JobChat({ jobId, title, companyId, placement = "float", showLabel = false }: {
-  jobId: string; title: string; raised?: boolean; companyId?: string; placement?: "float" | "bar"; showLabel?: boolean;
+export default function JobChat({ jobId, title, companyId, placement = "float", showLabel = false, startOpen = false }: {
+  jobId: string; title: string; raised?: boolean; companyId?: string; placement?: "float" | "bar"; showLabel?: boolean; startOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(startOpen); // startOpen: el técnico tocó "Chat" desde su pantalla de inicio
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [me, setMe] = useState<string | null>(null);
   const [lastRead, setLastRead] = useState<string | null>(null);

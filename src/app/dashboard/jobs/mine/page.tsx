@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 // Técnico (y cualquiera que tenga trabajos asignados): sus trabajos del día
 export default async function MyJobsPage() {
-  const { current, user } = await getSession();
+  const { current, user, firstName } = await getSession();
   if (!current) redirect("/dashboard");
-  return <MyJobs companyId={current.id} userId={user.id} />;
+  return <MyJobs companyId={current.id} userId={user.id} firstName={firstName} />;
 }

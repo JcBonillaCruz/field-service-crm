@@ -25,7 +25,7 @@ export default function JoinInvite({ token, state, info, userEmail }: { token: s
     const { data, error: err } = await createClient().rpc("accept_invite", { p_token: token });
     if (err || !data) { setBusy(false); return setError(teamError(err)); }
     setCurrentCompany(data as string);
-    router.push(info?.role === "technician" ? "/dashboard/inventory/van" : "/dashboard");
+    router.push(info?.role === "technician" ? "/dashboard/jobs/mine" : "/dashboard");
     router.refresh();
   }
   async function switchAccount() {

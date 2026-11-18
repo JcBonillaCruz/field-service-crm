@@ -72,3 +72,6 @@ html, body { overflow-x: clip; } /* clip (no hidden): no rompe los encabezados p
 
 @keyframes bp-drive { 0%, 100% { transform: translateX(-1.5px); } 50% { transform: translateX(1.5px) translateY(-0.5px); } }
 @keyframes bp-wrench { 0%, 100% { transform: rotate(-14deg); } 50% { transform: rotate(14deg); } }
+
+/* Pantalla de inicio del técnico: la línea del lector sube y baja sobre el código de barras */
+@keyframes bp-scan { 0%, 100% { transform: translateY(-5px); } 50% { transform: translateY(6px); } }

@@ -26,8 +26,8 @@ export default async function DashboardPage({ searchParams }: { searchParams?: {
     return <NoCompanyWelcome firstName={firstName} invites={(invites ?? []) as { token: string; company_name: string; role: string; invited_by_name: string | null }[]} />;
   }
 
-  // El técnico no ve finanzas: va directo a su van (igual que antes)
-  if (current.role === "technician") redirect("/dashboard/inventory/van");
+  // El técnico no ve finanzas: su inicio es Jobs (sus trabajos del día). My Van sigue en el menú de Inventory.
+  if (current.role === "technician") redirect("/dashboard/jobs/mine");
 
   const owner = current.role === "owner";
   const canFinance = owner || current.role === "manager";

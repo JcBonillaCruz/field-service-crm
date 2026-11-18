@@ -23,7 +23,7 @@ export default function NoCompanyWelcome({ firstName, invites }: { firstName: st
     const { data, error: err } = await createClient().rpc("accept_invite", { p_token: i.token });
     if (err || !data) { setBusy(null); return setError(teamError(err)); }
     setCurrentCompany(data as string);
-    router.push(i.role === "technician" ? "/dashboard/inventory/van" : "/dashboard");
+    router.push(i.role === "technician" ? "/dashboard/jobs/mine" : "/dashboard");
     router.refresh();
   }
 

@@ -19,6 +19,7 @@ import {
 import { StatusArt, TechDot } from "@/components/jobs/EventBar";
 import { ETA_DEFAULT } from "@/lib/customer-notice-text";
 import EtaWheel from "@/components/jobs/tech/EtaWheel";
+import { NavArt } from "@/components/jobs/tech/TechArt";
 
 type Visit = { id: string; visit_no: number; status: VisitStatus; starts_at: string | null; ends_at: string | null; arrival_window_min: number; techs: TechChip[]; started_at: string | null };
 type Line = { id: string; name: string; description: string | null; quantity: number; unit: string | null; kind: string; source: string; rate?: number; amount?: number };
@@ -141,6 +142,7 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
   const j = d.job;
   const s = visit?.starts_at ? new Date(visit.starts_at) : null, e = visit?.ends_at ? new Date(visit.ends_at) : null;
   const maps = navLink(j.site_address), addr = addressLine(j.site_address);
+  const openChat = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("chat"); // llegó tocando "Chat" en My jobs
   const st = visit?.status ?? "scheduled";
   const canWork = ["on_my_way", "in_progress", "paused"].includes(st);
   // Terminado o cancelado: se puede ver todo, pero ya no se cambia nada
@@ -182,10 +184,13 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
               {visit && visit.arrival_window_min > 0 && <p className="text-[13px] text-slate-500">Customer expects you between {fmtTime(s)} and {fmtTime(addMinutes(s, visit.arrival_window_min))}</p>}</div></div>
         )}
         {addr && (
-          <a href={maps ?? "#"} target="_blank" rel="noreferrer" className="flex items-center gap-3 px-4 py-3 active:bg-slate-50">
+          <a href={maps ?? "#"} target="_blank" rel="noreferrer" aria-label="Navigate with Google Maps" className="group flex items-center gap-3 px-4 py-3 active:bg-slate-50">
             <span className="text-slate-400"><Icon d="M12 21s7-6.2 7-11.5a7 7 0 1 0-14 0C5 14.8 12 21 12 21zM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" /></span>
             <span className="min-w-0 flex-1 text-[14.5px] text-[#0b1f3a]">{addr}</span>
-            <span className="shrink-0 rounded-lg bg-[#e9f7f4] px-2.5 py-1.5 text-[13px] font-semibold text-[#0f766e]">Navigate</span>
+            <span className="flex shrink-0 flex-col items-center transition-transform duration-150 group-hover:scale-105 group-active:scale-95">
+              <NavArt size={42} />
+              <span className="mt-0.5 text-[10.5px] font-semibold leading-none text-[#0f766e]">Navigate</span>
+            </span>
           </a>
         )}
         {j.customer_phone && (
@@ -307,7 +312,7 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
           <div className={`mx-auto flex max-w-2xl items-stretch gap-1.5 ${hasActions ? "" : "justify-end"}`}>
             {/* Chat a la izquierda · botones del trabajo a la derecha, del ancho de su texto */}
             {/* Chat del trabajo: dentro de la barra, ya no flota encima del contenido */}
-            <JobChat jobId={jobId} companyId={j.company_id} title={`${j.customer_name || "Job"} · ${j.number}`} placement="bar" showLabel={!hasActions} />
+            <JobChat jobId={jobId} companyId={j.company_id} title={`${j.customer_name || "Job"} · ${j.number}`} placement="bar" showLabel={!hasActions} startOpen={openChat} />
             {hasActions && <span className="flex-1" />}
             {hasActions && st === "scheduled" && <>
               <Big onClick={() => setEtaOpen(true)} busy={busy === "on_my_way"} tone="violet" icon="M3 12h11V6H3zM14 9h3l3 3v3h-6M7 18a1.6 1.6 0 1 0 0-3.2A1.6 1.6 0 0 0 7 18zM17 18a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2z">On my way</Big>
