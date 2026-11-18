@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ConfirmationsStrip } from "@/components/jobs/Confirmations";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions, Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
@@ -331,6 +332,9 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
       {header}
       <div className="w-full px-4 pt-5 lg:px-8 lg:pt-6">
         {error && <p role="alert" className="mb-4 rounded-xl border border-[#fecdd3] bg-[#fff1f2] px-4 py-3 text-[14px] text-[#be123c]">{error}</p>}
+
+        {/* Paso 5.8b: qué respondieron los clientes de las próximas visitas */}
+        <ConfirmationsStrip className="mb-5 lg:mb-6" />
 
         {/* ======= 1. Resumen (KPIs): cada tarjeta lleva a sus trabajos ======= */}
         <div className="mb-4 flex items-center justify-between gap-3 lg:mb-3">
@@ -1209,6 +1213,9 @@ function JobsHub({ header, error, loading, membersLoading, now, withGroup, peopl
           <Kpi label="Delayed" value={kpiGroups.delayed} art={<GroupArt g="delayed" size={46} />} loading={loading} href={ops("delayed")} hint={kpiGroups.delayed ? "Need attention" : "Nothing late"} tone={kpiGroups.delayed ? "red" : undefined} action="See late jobs" />
           <Kpi label="Completed" value={kpiGroups.done} art={<GroupArt g="done" size={46} />} loading={loading} href={ops("done")} hint="Finished today" tone={kpiGroups.done ? "green" : undefined} action="See finished jobs" />
         </div>
+
+        {/* Paso 5.8b: qué respondieron los clientes de las próximas visitas */}
+        <ConfirmationsStrip className="mt-5 lg:mt-6" />
 
         {/* 2. Atención · Equipo · Próximos */}
         <div className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-4 lg:mt-6 lg:grid-cols-2 2xl:grid-cols-3">

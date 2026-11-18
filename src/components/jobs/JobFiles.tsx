@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { confirmDelete } from "@/lib/confirm";
 import { jobError } from "@/lib/jobs";
-import { compressPhoto, fileId, kb } from "@/lib/photo-compress";
+import { compressPhoto, fileId, kb, uploadReason } from "@/lib/photo-compress";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "@headlessui/react";
 import { Check, Chevron, optionClass, panelClass } from "@/components/ui/SearchSelect";
 import { CameraArt, GalleryArt, PdfArt, ReportArt } from "@/components/jobs/FileArt";
@@ -149,7 +149,7 @@ export default function JobFiles({ jobId, variant = "office", readOnly = false, 
         }
         const path = `${d.company_id}/${jobId}/${fileId()}.${ext}`;
         const up = await sb.storage.from(BUCKET).upload(path, body, { contentType: mime, cacheControl: "31536000", upsert: false });
-        if (up.error) { bad.push(`${f.name}: upload failed`); continue; }
+        if (up.error) { bad.push(`${f.name}: ${uploadReason(up.error)}`); continue; }
         const { error } = await sb.rpc("job_file_add", {
           p_job: jobId, p_path: path, p_kind: kind, p_caption: null, p_phase: phaseId || null,
           p_file_type: isPdf ? "pdf" : "image", p_file_name: isPdf ? f.name : null, p_bytes: body.size, p_width: w, p_height: h,

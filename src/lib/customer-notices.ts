@@ -12,10 +12,16 @@ export const CN_OFF: CnSettings = { cn_on_my_way: false, cn_reminder: false, cn_
 
 // null = todavía no se corrió el SQL del Paso 5.8
 export async function cnSettings(db: SupabaseClient, companyId: string): Promise<CnSettings | null> {
-  const { data, error } = await db.from("job_settings").select("cn_on_my_way, cn_reminder, cn_reminder_days, cn_review, review_url").eq("company_id", companyId).maybeSingle();
-  if (error) return null;
-  const d = (data ?? {}) as Partial<CnSettings>;
-  return { cn_on_my_way: Boolean(d.cn_on_my_way), cn_reminder: Boolean(d.cn_reminder), cn_reminder_days: d.cn_reminder_days === 2 ? 2 : 1, cn_review: Boolean(d.cn_review), review_url: d.review_url?.trim() || null };
+  const base = "cn_on_my_way, cn_reminder, cn_reminder_days, cn_review, review_url";
+  // Con el SQL del 5.8b vienen también los mensajes propios de la reseña; sin él, todo lo demás sigue funcionando
+  let r = await db.from("job_settings").select(`${base}, review_msg_en, review_msg_es`).eq("company_id", companyId).maybeSingle();
+  if (r.error) r = await db.from("job_settings").select(base).eq("company_id", companyId).maybeSingle() as typeof r;
+  if (r.error) return null;
+  const d = (r.data ?? {}) as Partial<CnSettings>;
+  return {
+    cn_on_my_way: Boolean(d.cn_on_my_way), cn_reminder: Boolean(d.cn_reminder), cn_reminder_days: d.cn_reminder_days === 2 ? 2 : 1, cn_review: Boolean(d.cn_review), review_url: d.review_url?.trim() || null,
+    review_msg_en: d.review_msg_en?.trim() || null, review_msg_es: d.review_msg_es?.trim() || null,
+  };
 }
 
 export type Contact = { email: string | null; phone: string | null; lang: Lang; first: string };
@@ -61,6 +67,7 @@ export async function logNotice(db: SupabaseClient, o: { job: Pick<JobInfo, "id"
 export type NoticeInput = {
   kind: CnKind; job: JobInfo; visit: (VisitInfo & { customer_token?: string | null }) | null; brand: Brand; origin: string;
   etaAt?: Date | null; techName?: string | null; reviewUrl?: string | null; contact?: Contact;
+  reviewMsg?: { en?: string | null; es?: string | null }; // mensaje propio de la reseña (Jobs → Settings)
 };
 // Arma el aviso completo (asunto, texto, botones y la versión corta para texto/WhatsApp)
 export async function buildNotice(db: SupabaseClient, o: NoticeInput): Promise<{ copy: CnCopy; contact: Contact; lang: Lang }> {
@@ -76,6 +83,7 @@ export async function buildNotice(db: SupabaseClient, o: NoticeInput): Promise<{
     day: o.visit?.starts_at ? dayText(o.visit.starts_at, tz, lang) : undefined, arrival: o.visit ? arrivalText(o.visit, tz, lang) : undefined,
     daysAway: o.visit?.starts_at ? daysUntil(o.visit.starts_at, tz) : undefined, eta: o.etaAt ? clockText(o.etaAt, tz, lang) : null,
     companyPhone: await companyPhone(db, o.job.company_id), confirmUrl, changeUrl, reviewUrl: o.reviewUrl,
+    customReview: o.kind === "review" ? (lang === "es" ? o.reviewMsg?.es : o.reviewMsg?.en) : null,
   });
   return { copy, contact, lang };
 }
@@ -118,15 +126,22 @@ export async function processCustomerReminders(db: SupabaseClient, origin: strin
   const { data: companies, error } = await db.from("job_settings").select("company_id, cn_reminder_days").eq("cn_reminder", true).limit(2000);
   if (error) return 0; // falta el SQL del Paso 5.8
   let sent = 0;
-  for (const c of companies ?? []) {
-    const days = c.cn_reminder_days === 2 ? 2 : 1;
+  for (const c of companies ?? []) sent += (await remindCompany(db, c.company_id as string, c.cn_reminder_days === 2 ? 2 : 1, origin)).sent;
+  return sent;
+}
+
+// Los recordatorios pendientes de UNA compañía (la tarea diaria, o el botón "Send reminders now" de la oficina)
+export async function remindCompany(db: SupabaseClient, companyId: string, days: number, origin: string, actor?: { id: string | null; name: string }) {
+  const out = { sent: 0, noEmail: 0, failed: 0 };
+  {
+    const c = { company_id: companyId };
     const { data: visits } = await db.from("job_visits")
       .select("id, visit_no, starts_at, ends_at, arrival_window_min, customer_token, jobs!inner ( id, company_id, number, title, customer_id, customer_name, customer_phone, site_address, cancelled_at )")
       .eq("company_id", c.company_id).eq("status", "scheduled").is("reminder_sent_at", null)
       .gt("starts_at", new Date().toISOString()).lt("starts_at", new Date(Date.now() + (days + 1) * 86400000).toISOString()).order("starts_at").limit(500);
     type Row = VisitInfo & { customer_token: string | null; jobs: JobInfo & { cancelled_at: string | null } };
     const all = (visits ?? []) as unknown as Row[];
-    if (!all.length) continue;
+    if (!all.length) return out;
     const brand = await brandOf(db, c.company_id as string);
     // Mañana (o pasado mañana, si la compañía eligió 2 días). Nunca el mismo día de la visita.
     const due = all.filter((v) => { const d = daysUntil(v.starts_at!, brand.timezone); return d >= 1 && d <= days && !v.jobs.cancelled_at && v.jobs.customer_id; });
@@ -134,12 +149,11 @@ export async function processCustomerReminders(db: SupabaseClient, origin: strin
       const oks = await Promise.all(due.slice(i, i + 5).map(async (v) => {
         // Se aparta primero: si la tarea corre dos veces, el cliente recibe un solo correo
         const { data: claimed } = await db.from("job_visits").update({ reminder_sent_at: new Date().toISOString() }).eq("id", v.id).is("reminder_sent_at", null).select("id");
-        if (!claimed?.length) return false;
-        const r = await sendCustomerNotice(db, { kind: "reminder", job: v.jobs, visit: v, brand, origin });
-        return r.ok;
+        if (!claimed?.length) return null;
+        return sendCustomerNotice(db, { kind: "reminder", job: v.jobs, visit: v, brand, origin, actor });
       }));
-      sent += oks.filter(Boolean).length;
+      for (const r of oks) { if (!r) continue; if (r.ok) out.sent++; else if (r.reason === "no_email") out.noEmail++; else out.failed++; }
     }
   }
-  return sent;
+  return out;
 }

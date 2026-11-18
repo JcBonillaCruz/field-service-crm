@@ -46,7 +46,7 @@ export type JobSettings = {
   // Paso 5.5: rangos propios del Tune-Up (null = los de la app)
   tuneup_ranges?: Record<string, { min?: number | null; max?: number | null }> | null;
   // Paso 5.8: avisos al cliente (sin el SQL nuevo llegan vacíos y todo queda apagado)
-  cn_on_my_way?: boolean; cn_reminder?: boolean; cn_reminder_days?: number; cn_review?: boolean; review_url?: string | null;
+  cn_on_my_way?: boolean; cn_reminder?: boolean; cn_reminder_days?: number; cn_review?: boolean; review_url?: string | null; review_msg_en?: string | null; review_msg_es?: string | null;
 };
 export type JobType = { id: string; name: string; color: string; default_duration_min: number; form_kind: "work" | "tune_up"; position: number; is_active: boolean };
 export type JobTag = { id: string; name: string; color: string };

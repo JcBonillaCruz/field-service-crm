@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
   const origin = appOrigin(request.nextUrl.origin);
   const reviewOk = validReviewUrl(settings.review_url);
   const reminder = next && !job.cancelled_at ? await buildNotice(db, { kind: "reminder", job, visit: next, brand, origin }) : null;
-  const review = reviewOk ? await buildNotice(db, { kind: "review", job, visit: null, brand, origin, reviewUrl: settings.review_url, contact: reminder?.contact }) : null;
+  const review = reviewOk ? await buildNotice(db, { kind: "review", job, visit: null, brand, origin, reviewUrl: settings.review_url, reviewMsg: { en: settings.review_msg_en, es: settings.review_msg_es }, contact: reminder?.contact }) : null;
   const contact = reminder?.contact ?? review?.contact ?? await customerContact(db, job);
   const allowed = job.review_asked_at ? { ok: false, reason: "already_asked" } : await reviewAllowed(db, job);
   return NextResponse.json({
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
   };
   if (via === "email") {
     const brand = await brandOf(db, current.id);
-    const r = await sendCustomerNotice(db, { kind, job, visit: kind === "reminder" ? next : null, brand, origin: appOrigin(request.nextUrl.origin), reviewUrl: settings.review_url, actor });
+    const r = await sendCustomerNotice(db, { kind, job, visit: kind === "reminder" ? next : null, brand, origin: appOrigin(request.nextUrl.origin), reviewUrl: settings.review_url, reviewMsg: { en: settings.review_msg_en, es: settings.review_msg_es }, actor });
     if (r.ok) await mark();
     return NextResponse.json(r);
   }

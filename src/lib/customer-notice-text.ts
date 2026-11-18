@@ -4,9 +4,14 @@
 // =====================================================================
 export type CnKind = "on_my_way" | "reminder" | "review";
 export type Lang = "en" | "es";
-export type CnSettings = { cn_on_my_way: boolean; cn_reminder: boolean; cn_reminder_days: number; cn_review: boolean; review_url: string | null };
+export type CnSettings = { cn_on_my_way: boolean; cn_reminder: boolean; cn_reminder_days: number; cn_review: boolean; review_url: string | null; review_msg_en?: string | null; review_msg_es?: string | null };
 
-export const ETA_CHOICES = [15, 30, 45, 60];
+// Hora de llegada: de 5 minutos a 4 horas, de 5 en 5 (el técnico la escoge en una rueda)
+export const ETA_MIN = 5, ETA_MAX = 240, ETA_STEP = 5, ETA_DEFAULT = 30;
+export const ETA_VALUES = Array.from({ length: (ETA_MAX - ETA_MIN) / ETA_STEP + 1 }, (_, i) => ETA_MIN + i * ETA_STEP);
+export const etaValid = (m: unknown) => Number.isInteger(m) && (m as number) >= ETA_MIN && (m as number) <= ETA_MAX;
+export const etaLabel = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}`);
+export const REVIEW_MSG_MAX = 600;
 export const REVIEW_GAP_DAYS = 90;
 
 // "Spanish", "Español", "es", "es-MX" → español; todo lo demás, inglés
@@ -36,6 +41,7 @@ export type CnVars = {
   company: string; customer: string; tech?: string | null; service?: string | null; address?: string | null; number: string;
   day?: string; arrival?: string; eta?: string | null; daysAway?: number; companyPhone?: string | null;
   confirmUrl?: string; changeUrl?: string; reviewUrl?: string | null;
+  customReview?: string | null; // mensaje propio de la compañía para pedir la reseña ({name} y {company} se reemplazan)
 };
 export type CnCopy = {
   subject: string; heading: string; intro: string; rows: [string, string][]; footer: string;
@@ -80,7 +86,17 @@ export function noticeCopy(kind: CnKind, lang: Lang, v: CnVars): CnCopy {
     };
   }
 
-  // review
+  // review (con el mensaje propio de la compañía, si lo escribió)
+  const own = (v.customReview ?? "").trim().replace(/\{name\}/gi, v.customer || (es ? "" : "there")).replace(/\{company\}/gi, v.company).replace(/\s+,/g, ",").replace(/ {2,}/g, " ").trim();
+  if (own) return {
+    subject: es ? `Gracias por elegir a ${v.company}` : `Thank you for choosing ${v.company}`,
+    heading: es ? "Gracias por su confianza" : "Thank you for your business",
+    intro: own,
+    rows: [[es ? "Servicio" : "Service", v.service ?? ""], [es ? "Atendido por" : "Served by", v.tech ?? ""], [es ? "Referencia" : "Reference", v.number]],
+    button: v.reviewUrl ? { label: es ? "Dejar una reseña en Google" : "Leave a Google review", url: v.reviewUrl } : undefined,
+    footer: es ? `${v.company} · Si algo no quedó como esperaba, responda a este correo${call} y lo resolvemos.` : `${v.company} · If anything wasn't right, reply to this email${call} and we'll make it right.`,
+    sms: `${own} ${v.reviewUrl ?? ""}`.trim(),
+  };
   return {
     subject: es ? `Gracias por elegir a ${v.company}` : `Thank you for choosing ${v.company}`,
     heading: es ? "Gracias por su confianza" : "Thank you for your business",

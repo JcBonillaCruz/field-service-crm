@@ -3,7 +3,7 @@ import { getSession } from "@/lib/session";
 import { admin, pushToCompany } from "@/lib/push";
 import { JobInfo, addressText, brandOf } from "@/lib/jobs-notify";
 import { cnSettings, markReviewAsked, reviewAllowed, sendCustomerNotice } from "@/lib/customer-notices";
-import { ETA_CHOICES, clockText, validReviewUrl } from "@/lib/customer-notice-text";
+import { clockText, etaValid, validReviewUrl } from "@/lib/customer-notice-text";
 import { appOrigin } from "@/lib/team";
 
 export const runtime = "nodejs";
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
   if (isInvoice && !job.invoice_id) return NextResponse.json({ error: "No invoice" }, { status: 400 });
   const who = ((me?.full_name as string) || "Your technician").split(" ")[0];
   // Paso 5.8: hora estimada de llegada que eligió el técnico al tocar "On my way"
-  const etaMin = b.action === "on_my_way" && ETA_CHOICES.includes(Number(b.etaMin)) ? Number(b.etaMin) : null;
+  const etaMin = b.action === "on_my_way" && etaValid(Number(b.etaMin)) ? Number(b.etaMin) : null;
   const etaAt = etaMin ? new Date(Date.now() + etaMin * 60000) : null;
   const brand = b.action === "on_my_way" || b.action === "finish" ? await brandOf(db, current.id) : null;
   const etaText = etaAt && brand ? clockText(etaAt, brand.timezone, "en") : null;
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
         // Solo cuando el trabajo quedó terminado de verdad (no si falta otra visita) y sin repetirle al mismo cliente
         const { data: fresh } = await db.from("jobs").select("status, cancelled_at").eq("id", job.id).maybeSingle();
         if (fresh?.status === "completed" && !fresh.cancelled_at && (await reviewAllowed(db, job)).ok) {
-          customer = await sendCustomerNotice(db, { kind: "review", job, visit, brand, origin, reviewUrl: cn.review_url, techName: me?.full_name as string | null, actor: { id: null, name: "Automatic" } });
+          customer = await sendCustomerNotice(db, { kind: "review", job, visit, brand, origin, reviewUrl: cn.review_url, reviewMsg: { en: cn.review_msg_en, es: cn.review_msg_es }, techName: me?.full_name as string | null, actor: { id: null, name: "Automatic" } });
           if (customer.ok) await markReviewAsked(db, job.id);
         }
       }

@@ -64,5 +64,17 @@ export async function compressPhoto(file: Blob, opts: { label?: boolean; target?
   } finally { img.close(); }
 }
 
+// Por qué falló la subida al almacenamiento, en palabras claras (antes solo decía "upload failed")
+export function uploadReason(e: { message?: string; statusCode?: string | number; error?: string } | null | undefined): string {
+  const m = `${e?.message ?? ""} ${e?.error ?? ""} ${e?.statusCode ?? ""}`;
+  if (/row-level security|unauthorized|not authorized|permission|403/i.test(m)) return "the photo storage didn't allow it (permissions). Tell the office: run paso-5.8b in Supabase";
+  if (/bucket.*not found|not found.*bucket|404/i.test(m)) return "the photo storage isn't set up. Tell the office: run paso-5.8b in Supabase";
+  if (/mime|type.*not (allowed|supported)|415/i.test(m)) return "the photo storage doesn't accept this kind of file. Tell the office: run paso-5.8b in Supabase";
+  if (/too large|exceeded|maximum|413/i.test(m)) return "the file is too big for the photo storage";
+  if (/jwt|token|401/i.test(m)) return "your session expired. Close the app, sign in again and retry";
+  if (/failed to fetch|network|load failed|timeout/i.test(m)) return "no connection. Check your signal and try again";
+  return `it couldn't be saved${e?.message ? ` (${e.message.slice(0, 90)})` : ""}`;
+}
+
 export const kb = (bytes: number | null | undefined) => (bytes ? (bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`) : "");
 export const fileId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;

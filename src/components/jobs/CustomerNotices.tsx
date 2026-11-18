@@ -56,10 +56,10 @@ const Dot = ({ tone }: { tone: "green" | "rose" | "amber" | "slate" }) => (
 const linkBtn = "text-[13px] font-semibold text-[#0f766e] hover:underline disabled:opacity-50";
 const viaBtn = "flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 transition-colors hover:border-[#b6dcd5] hover:bg-[#e9f7f4] hover:text-[#0f766e] disabled:opacity-50";
 
-export default function CustomerNotices({ jobId, state, reload, cancelled, onToast }: {
-  jobId: string; state: CnState | null; reload: () => void; cancelled: boolean; onToast: (m: string, err?: boolean) => void;
+export default function CustomerNotices({ jobId, state, reload, cancelled, onToast, startOpen = null }: {
+  jobId: string; state: CnState | null; reload: () => void; cancelled: boolean; onToast: (m: string, err?: boolean) => void; startOpen?: Kind | null;
 }) {
-  const [open, setOpen] = useState<Kind | null>(null);
+  const [open, setOpen] = useState<Kind | null>(startOpen);
   const [busy, setBusy] = useState("");
   if (!state) return <div className="h-16 animate-pulse rounded-xl bg-slate-100" />;
   if (state.needsSql || !state.settings) return <p className="mt-1 text-[13px] text-slate-500">Customer notices need the Paso 5.8 database update.</p>;

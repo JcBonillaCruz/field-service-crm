@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     company: brand.companyName, customer: lang === "es" ? "María" : "Mary", tech: "Luis", service: "AC Tune-Up", address: "1234 Main St, Dallas, TX 75201", number: "JOB-000123",
     day: dayText(visit.toISOString(), tz, lang), arrival: `${clockText(visit, tz, lang)} – ${clockText(new Date(visit.getTime() + 3600000), tz, lang)}`, daysAway: days,
     eta: clockText(new Date(Date.now() + 30 * 60000), tz, lang), companyPhone: ((prefs?.org_info as { phone?: string } | null)?.phone ?? "").trim() || null,
-    confirmUrl: "#", changeUrl: "#", reviewUrl: cn?.review_url || "#",
+    confirmUrl: "#", changeUrl: "#", reviewUrl: cn?.review_url || "#", customReview: lang === "es" ? cn?.review_msg_es : cn?.review_msg_en,
   });
   return new NextResponse(noticeHtml(brand, copy), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Subject": encodeURIComponent(copy.subject) } });
 }

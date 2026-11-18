@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { inputClass } from "@/components/customers/ui";
 import SelectMenu from "@/components/ui/SelectMenu";
 import type { JobSettings } from "@/lib/jobs";
-import { CnKind, validReviewUrl } from "@/lib/customer-notice-text";
+import { CnKind, REVIEW_MSG_MAX, validReviewUrl } from "@/lib/customer-notice-text";
 
 // =====================================================================
 // Paso 5.8 · Jobs → Settings → Customer notices
@@ -97,6 +97,20 @@ export default function CustomerNoticeSettings({ s, patch }: { s: JobSettings; p
               {urlError ? <span role="alert" className="mt-1 block text-[12.5px] font-medium text-[#be123c]">{urlError}</span>
                 : <span className="mt-1 block text-[12px] text-slate-400">Google Business Profile → Ask for reviews → copy the link.</span>}
             </label>
+            {/* Paso 5.8b: mensaje propio (opcional). Vacío = el mensaje de BrightPro */}
+            {s.review_msg_en !== undefined && (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {([["review_msg_en", "Your own message · English", "Hi {name}, thank you for trusting {company}…"], ["review_msg_es", "Your own message · Spanish", "Hola {name}, gracias por confiar en {company}…"]] as const).map(([key, label, ph]) => (
+                  <label key={key} className="block">
+                    <span className="mb-1.5 block text-[13px] font-medium text-slate-600">{label}</span>
+                    <textarea key={`${key}-${s[key] ?? ""}`} defaultValue={s[key] ?? ""} rows={4} maxLength={REVIEW_MSG_MAX} placeholder={ph}
+                      onBlur={(e) => { const v = e.target.value.trim(); if (v !== (s[key] ?? "")) patch({ [key]: v || null }); }}
+                      className={`${inputClass} resize-none leading-snug`} />
+                  </label>
+                ))}
+                <p className="text-[12px] text-slate-400 sm:col-span-2">Optional. Leave them empty to use the BrightPro message. Write {"{name}"} for the customer&apos;s first name and {"{company}"} for your company. The service, technician and Google button are added below your text.</p>
+              </div>
+            )}
           </Row>
         </div>
       )}

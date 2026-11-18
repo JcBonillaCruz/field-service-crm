@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 import { TECH_COLORS } from "@/lib/jobs";
-import { compressPhoto, fileId } from "@/lib/photo-compress";
+import { compressPhoto, fileId, uploadReason } from "@/lib/photo-compress";
 import { CameraArt } from "@/components/jobs/FileArt";
 
 // =====================================================================
@@ -150,7 +150,7 @@ export default function JobChat({ jobId, title, companyId, placement = "float", 
       const sb = createClient();
       const path = `${companyId}/${jobId}/chat/${fileId()}.${c.ext}`;
       const up = await sb.storage.from("job-photos").upload(path, c.blob, { contentType: c.mime, cacheControl: "31536000", upsert: false });
-      if (up.error) throw new Error("upload");
+      if (up.error) throw new Error(`up:${uploadReason(up.error)}`);
       const caption = text.trim();
       const { data: id, error } = await sb.rpc("job_chat_send_photo", { p_job: jobId, p_path: path, p_body: caption || null });
       if (error || !id) { await sb.storage.from("job-photos").remove([path]); throw new Error(/does not exist|Could not find/.test(error?.message ?? "") ? "sql" : "send"); }
@@ -158,7 +158,7 @@ export default function JobChat({ jobId, title, companyId, placement = "float", 
       await load();
       fetch("/api/jobs/chat-notify", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messageId: id }) }).catch(() => undefined);
     } catch (e) {
-      setFailed(e instanceof Error && e.message === "sql" ? "Photos in the chat need paso-5.4b-files.sql in Supabase." : "The photo couldn't be sent. Check your connection and try again.");
+      setFailed(e instanceof Error && e.message === "sql" ? "Photos in the chat need paso-5.4b-files.sql in Supabase." : e instanceof Error && e.message.startsWith("up:") ? `The photo couldn't be sent: ${e.message.slice(3)}.` : "The photo couldn't be sent. Check your connection and try again.");
     }
     setPhotoBusy(false);
   }

@@ -16,7 +16,8 @@ import {
   HOLD_REASONS, SiteAddress, TechChip, VISIT_LABEL, VisitStatus, addMinutes, addressLine, fmtDayShort, fmtTime, holdLabel, jobError, mapsLink, usd,
 } from "@/lib/jobs";
 import { StatusArt, TechDot } from "@/components/jobs/EventBar";
-import { ETA_CHOICES } from "@/lib/customer-notice-text";
+import { ETA_DEFAULT } from "@/lib/customer-notice-text";
+import EtaWheel from "@/components/jobs/tech/EtaWheel";
 
 type Visit = { id: string; visit_no: number; status: VisitStatus; starts_at: string | null; ends_at: string | null; arrival_window_min: number; techs: TechChip[]; started_at: string | null };
 type Line = { id: string; name: string; description: string | null; quantity: number; unit: string | null; kind: string; source: string; rate?: number; amount?: number };
@@ -46,7 +47,7 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
   const [busy, setBusy] = useState("");
   const [holdOpen, setHoldOpen] = useState(false);
   const [etaOpen, setEtaOpen] = useState(false); // Paso 5.8: hora estimada de llegada al tocar "On my way"
-  const [eta, setEta] = useState(30);
+  const [eta, setEta] = useState(ETA_DEFAULT);
   const [reason, setReason] = useState("");
   const [holdNote, setHoldNote] = useState("");
   const [partOpen, setPartOpen] = useState(false);
@@ -331,15 +332,8 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
       {/* Paso 5.8: "On my way" pregunta en cuánto llega (un toque) para avisarle a la oficina y al cliente */}
       {etaOpen && (
         <Sheet title="When will you get there?" onClose={() => setEtaOpen(false)}>
-          <p className="text-[13.5px] text-slate-500">The office sees your arrival time. If your company turned it on, the customer gets it by email too.</p>
-          <div className="mt-3 grid grid-cols-4 gap-2">
-            {ETA_CHOICES.map((m) => (
-              <button key={m} type="button" onClick={() => setEta(m)} aria-pressed={eta === m}
-                className={`rounded-xl border py-2.5 text-center transition-colors ${eta === m ? "border-[#6d28d9] bg-[#f3efff] text-[#6d28d9]" : "border-slate-200 text-[#0b1f3a]"}`}>
-                <span className="block text-[17px] font-semibold leading-tight">{m}</span><span className="block text-[11.5px] text-slate-500">min</span>
-              </button>
-            ))}
-          </div>
+          <p className="text-[13.5px] text-slate-500">Slide to pick the time, counting stops on the way. The office sees it, and the customer too if your company turned it on.</p>
+          <div className="mt-2"><EtaWheel value={eta} onChange={setEta} /></div>
           <p className="mt-3 text-center text-[13.5px] text-slate-600">Arriving around <b className="text-[#0b1f3a]">{fmtTime(addMinutes(new Date(), eta))}</b></p>
           <div className="mt-4 flex justify-end">
             <button type="button" disabled={busy === "on_my_way"} onClick={() => act("on_my_way", eta)}
