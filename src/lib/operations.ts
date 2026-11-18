@@ -18,14 +18,19 @@ export type OpsJob = {
   checklist_total: number; checklist_done: number; photos: number; visits_total: number; visits_done: number;
   // Paso 5.4: fases con peso (solo si el trabajo tiene fases)
   phase_pct?: number | null; phase_total?: number; phase_done?: number; phase_now?: string | null; phase_blocked?: boolean;
+  // Paso 5.6b: cobro del trabajo terminado (solo se llena en Operations, para oficina y dueño)
+  billing?: Billing; invoice_id?: string | null; invoice_number?: string | null; invoice_status?: string | null;
 };
+export type Billing = "to_invoice" | "awaiting" | "paid" | "none";
 
-export type OpsGroup = "unassigned" | "assigned" | "in_progress" | "delayed" | "done";
+export type OpsGroup = "unassigned" | "assigned" | "in_progress" | "delayed" | "to_invoice" | "done";
 export const OPS_GROUPS: { id: OpsGroup; label: string; hint: string; tone: string; dot: string }[] = [
   { id: "unassigned", label: "Unassigned", hint: "No collaborator yet", tone: "#64748b", dot: "bg-slate-400" },
   { id: "assigned", label: "Assigned", hint: "Ready to go", tone: "#2563eb", dot: "bg-[#2563eb]" },
   { id: "in_progress", label: "In progress", hint: "On the way or working", tone: "#d97706", dot: "bg-[#f59e0b]" },
   { id: "delayed", label: "Delayed", hint: "Late and not started yet", tone: "#e11d48", dot: "bg-[#e11d48]" },
+  // Paso 5.6b: el técnico ya terminó, pero la oficina todavía no envía la factura
+  { id: "to_invoice", label: "To invoice", hint: "Finished — invoice not sent yet", tone: "#e8713a", dot: "bg-[#e8713a]" },
   { id: "done", label: "Completed", hint: "Finished jobs", tone: "#0f766e", dot: "bg-[#14a39a]" },
 ];
 
@@ -74,7 +79,7 @@ export function progressOf(j: OpsJob): number {
 }
 
 export function groupOf(j: OpsJob, now = Date.now()): OpsGroup {
-  if (j.status === "completed") return "done";
+  if (j.status === "completed") return j.billing === "to_invoice" ? "to_invoice" : "done";
   const s = j.visit?.status;
   const working = s === "on_my_way" || s === "in_progress" || s === "paused";
   // Sin nadie asignado SIEMPRE va a "Sin asignar" (aunque ya vaya tarde: ahí se ve la etiqueta roja)
@@ -88,7 +93,13 @@ export function groupOf(j: OpsJob, now = Date.now()): OpsGroup {
 }
 
 export const STAGE_LABEL = (j: OpsJob): string => {
-  if (j.status === "completed") return j.paid_at ? "Paid" : j.invoiced_at ? "Invoiced" : "Completed";
+  if (j.status === "completed") {
+    if (j.billing === "to_invoice") return j.invoice_id ? "Send invoice" : "Create invoice";
+    if (j.billing === "awaiting") return "Awaiting payment";
+    if (j.billing === "paid") return "Paid";
+    if (j.billing === "none") return "No invoice";
+    return j.paid_at ? "Paid" : j.invoiced_at ? "Invoiced" : "Completed";
+  }
   const s = j.visit?.status;
   if (j.phase_blocked) return "Phase blocked";
   if (j.status === "on_hold" && s !== "scheduled") return "On hold";

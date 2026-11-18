@@ -20,12 +20,13 @@ const CARD_TINTS: { bg: string; border: string }[] = [
 const DONE_TINT = { bg: "#f1f3f6", border: "#e3e7ec" };
 // Fila + columna·7: la de arriba/abajo y la de al lado nunca tienen el mismo color
 const tintAt = (row: number, col: number) => CARD_TINTS[(row + col * 7) % CARD_TINTS.length];
-type Show = "in_progress" | "assigned" | "delayed" | "unassigned" | "done";
+type Show = "in_progress" | "assigned" | "delayed" | "unassigned" | "to_invoice" | "done";
 const SHOW: { v: Show; label: string; dot: string }[] = [
   { v: "in_progress", label: "In progress", dot: "bg-[#f59e0b]" },
   { v: "assigned", label: "Assigned", dot: "bg-[#2563eb]" },
   { v: "delayed", label: "Delayed", dot: "bg-[#e11d48]" },
   { v: "unassigned", label: "Unassigned", dot: "bg-slate-400" },
+  { v: "to_invoice", label: "To invoice", dot: "bg-[#e8713a]" }, // Paso 5.6b
   { v: "done", label: "Completed", dot: "bg-[#16a34a]" },
 ];
 
@@ -53,7 +54,7 @@ export default function OpsConnections({ companyId, jobs: rawJobs, groupOf, team
   const [hoverJob, setHoverJob] = useState<string | null>(null);
   const [hoverUser, setHoverUser] = useState<string | null>(null);
   const [onlyUser, setOnlyUser] = useState<string | null>(null);
-  const [show, setShow] = useState<Show[]>(["in_progress", "assigned", "delayed", "unassigned"]);
+  const [show, setShow] = useState<Show[]>(["in_progress", "assigned", "delayed", "unassigned", "to_invoice"]);
   const [drag, setDrag] = useState<{ kind: "job"; id: string } | { kind: "person"; id: string } | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [pOrder, setPOrder] = useState<string[]>([]);
@@ -62,7 +63,12 @@ export default function OpsConnections({ companyId, jobs: rawJobs, groupOf, team
   useEffect(() => {
     try {
       setPOrder(JSON.parse(localStorage.getItem(PK) || "[]")); setJOrder(JSON.parse(localStorage.getItem(JK) || "[]"));
-      const sv = JSON.parse(localStorage.getItem(SK) || "null") as Show[] | null; if (Array.isArray(sv) && sv.length) setShow(sv);
+      const sv = JSON.parse(localStorage.getItem(SK) || "null") as Show[] | null;
+      if (Array.isArray(sv) && sv.length) {
+        // Paso 5.6b: "To invoice" es nuevo; se enciende una vez para quien ya tenía su selección guardada
+        const first = !localStorage.getItem(`${SK}-ti`); if (first) localStorage.setItem(`${SK}-ti`, "1");
+        setShow(first && !sv.includes("to_invoice") ? [...sv, "to_invoice"] : sv);
+      }
     } catch { /* */ }
   }, [PK, JK, SK]);
   const toggleShow = (v: Show) => setShow((cur) => {
@@ -144,7 +150,7 @@ export default function OpsConnections({ companyId, jobs: rawJobs, groupOf, team
     const m = new Map<string, { total: number; done: number; live: ReturnType<typeof liveStatus> }>();
     jobs.forEach((j) => j.techs.forEach((t) => {
       const x = m.get(t.user_id) ?? { total: 0, done: 0, live: null };
-      x.total++; if (groupOf(j) === "done") x.done++;
+      x.total++; if (groupOf(j) === "done" || groupOf(j) === "to_invoice") x.done++;
       const l = liveStatus(j);
       if (l === "in_progress" || (l && !x.live)) x.live = l === "on_hold" ? x.live : l;
       m.set(t.user_id, x);
@@ -171,7 +177,7 @@ export default function OpsConnections({ companyId, jobs: rawJobs, groupOf, team
         const dx = Math.max(50, Math.min(220, (x2 - x1) * 0.45));
         out.push({ key: `${j.id}-${t.user_id}`, job: j.id, user: t.user_id, d: `M${x1} ${y1} C${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`, ex: x2, ey: y2,
           color: g === "delayed" ? "#e11d48" : t.color, lead: t.is_lead,
-          flow: g === "in_progress" || g === "delayed" ? "fast" : g === "done" ? "none" : "slow" });
+          flow: g === "in_progress" || g === "delayed" ? "fast" : g === "done" || g === "to_invoice" ? "none" : "slow" });
       });
     });
     setLines(out);
@@ -210,7 +216,7 @@ export default function OpsConnections({ companyId, jobs: rawJobs, groupOf, team
       setPOrder(ids); try { localStorage.setItem(PK, JSON.stringify(ids)); } catch { /* */ }
       return;
     }
-    const j = jobs.find((x) => x.id === d.id); if (!j || groupOf(j) === "done") return;
+    const j = jobs.find((x) => x.id === d.id); if (!j || groupOf(j) === "done" || groupOf(j) === "to_invoice") return;
     const ids = j.techs.map((t) => t.user_id), label = j.customer_name || `#${j.number}`;
     if (ids.includes(pid)) return onChanged(`${nameOf(pid)} is already on ${label}`);
     // Sin nadie → se asigna · con 1 persona → se le pasa (Ctrl/⌥ = ayudante) · con varias → se agrega como ayudante
@@ -231,7 +237,7 @@ export default function OpsConnections({ companyId, jobs: rawJobs, groupOf, team
     e.preventDefault(); const d = drag; setDrag(null); setOver(null);
     if (d?.kind !== "job") return;
     const j = jobs.find((x) => x.id === d.id);
-    if (j && j.techs.length && groupOf(j) !== "done") onUnassign(j);
+    if (j && j.techs.length && groupOf(j) !== "done" && groupOf(j) !== "to_invoice") onUnassign(j);
   }
   const target = (key: string, onDrop: (e: React.DragEvent) => void) => ({
     onDragOver: (e: React.DragEvent) => { if (drag) { e.preventDefault(); e.stopPropagation(); if (over !== key) setOver(key); } },

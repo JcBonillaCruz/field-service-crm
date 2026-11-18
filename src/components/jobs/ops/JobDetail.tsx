@@ -18,7 +18,7 @@ import JobPhases from "@/components/jobs/JobPhases";
 import JobFiles from "@/components/jobs/JobFiles";
 import JobForms from "@/components/jobs/forms/JobForms";
 import SiteEquipment from "@/components/jobs/forms/SiteEquipment";
-import JobInvoice, { AddServiceSheet } from "@/components/jobs/JobInvoice";
+import JobInvoice, { AddServiceSheet, InvoiceNudge } from "@/components/jobs/JobInvoice";
 
 type Visit = {
   id: string; visit_no: number; status: VisitStatus; starts_at: string | null; ends_at: string | null; arrival_window_min: number; techs: TechChip[];
@@ -224,6 +224,8 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
 
       <div className="grid gap-4 px-3 pt-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:px-8">
         <div className="min-w-0 space-y-4">
+          {/* Paso 5.6b: el técnico terminó, pero falta enviar la factura */}
+          {!cancelled && j.status === "completed" && <InvoiceNudge jobId={j.id} refreshKey={invKey + data.lines.length + (invoice ? 1 : 0)} onToast={flash} onChanged={() => router.refresh()} />}
           {afterHours && !cancelled && (
             <section className="flex flex-wrap items-center gap-3 rounded-2xl border border-[#c7d2fe] bg-[#f5f6ff] px-4 py-3.5">
               <AfterHoursMoon size={34} />

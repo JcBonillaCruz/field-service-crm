@@ -15,6 +15,7 @@ import { jobError, usd } from "@/lib/jobs";
 export type InvoiceState = {
   prices_visible: boolean; can_open: boolean; line_count: number; lines_total: number | null;
   started: boolean; cancelled: boolean; has_customer: boolean; pending: number;
+  completed?: boolean; no_invoice?: { at: string; by: string | null } | null; // Paso 5.6b
   invoice: { id: string; number: string; status: string; is_draft: boolean; total: number | null; created_by_name: string | null; created_at: string } | null;
 };
 type Service = { id: string; name: string; unit: string | null; description: string | null; price: number | null };
@@ -243,5 +244,72 @@ export default function JobInvoice({ jobId, variant = "tech", visitId = null, re
         </div>
       )}
     </div>
+  );
+}
+
+// =====================================================================
+// Paso 5.6b · Aviso fuerte en la ficha de oficina: el técnico terminó, falta enviar la factura.
+// (Terminado para el técnico no es terminado para la oficina.) El técnico nunca ve esto.
+// =====================================================================
+export function InvoiceNudge({ jobId, refreshKey = 0, onToast, onChanged }: { jobId: string; refreshKey?: number; onToast?: (m: string, err?: boolean) => void; onChanged?: () => void }) {
+  const [s, setS] = useState<InvoiceState | null>(null);
+  const [busy, setBusy] = useState("");
+  const load = useCallback(async () => {
+    const { data, error } = await createClient().rpc("job_invoice_state", { p_job: jobId });
+    if (!error) setS(data as InvoiceState);
+  }, [jobId]);
+  useEffect(() => { load(); }, [load, refreshKey]);
+  if (!s || !s.can_open || s.cancelled || !s.completed) return null;
+  const inv = s.invoice;
+
+  async function setNoInvoice(on: boolean) {
+    if (on && !(await askConfirm({ title: "No invoice needed?", message: "The job moves to Completed without an invoice (warranty, courtesy, covered by a plan). It stays on the history with your name.", confirmLabel: "No invoice needed", tone: "green" }))) return;
+    setBusy("none");
+    const { error } = await createClient().rpc("job_no_invoice", { p_job: jobId, p_on: on });
+    setBusy("");
+    if (error) { onToast?.(error.hint || jobError(error), true); return; }
+    onToast?.(on ? "Marked as no invoice needed" : "This job needs an invoice again"); await load(); onChanged?.();
+  }
+  async function create() {
+    setBusy("make");
+    const { data, error } = await createClient().rpc("job_invoice_make", { p_job: jobId });
+    setBusy("");
+    if (error) { onToast?.(error.hint || jobError(error), true); return; }
+    const d = data as InvoiceState;
+    setS(d); onChanged?.();
+    if (d.invoice) window.location.assign(`/dashboard/invoices/${d.invoice.id}`);
+  }
+
+  if (s.no_invoice) {
+    return (
+      <section className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-[13.5px] text-slate-600">
+        <span><b className="text-[#0b1f3a]">No invoice needed.</b> Marked by {s.no_invoice.by || "the office"} on {new Date(s.no_invoice.at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}.</span>
+        <button type="button" onClick={() => setNoInvoice(false)} disabled={busy !== ""} className="ml-auto text-[13px] font-semibold text-[#0f766e] hover:underline disabled:opacity-60">Undo</button>
+      </section>
+    );
+  }
+  if (inv && !inv.is_draft && inv.status !== "void") return null; // ya se envió: nada que avisar
+  const draft = inv && inv.is_draft ? inv : null;
+  return (
+    <section className="group flex flex-wrap items-center gap-3 rounded-2xl border border-[#fbd5bd] bg-[#fff7f1] px-4 py-3.5">
+      <span className="relative shrink-0">
+        <InvoiceArt size={40} />
+        <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#e8713a] opacity-70" /><span className="relative inline-flex h-3 w-3 rounded-full bg-[#e8713a] ring-2 ring-white" /></span>
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[15px] font-semibold text-[#7c2d12]">{draft ? `Job finished — send invoice ${draft.number}` : "Job finished — it still needs an invoice"}</p>
+        <p className="text-[13px] text-[#9a3412]">
+          {draft
+            ? <>The draft has the services and materials used{s.prices_visible && draft.total != null ? <> (<b>{usd(Number(draft.total))}</b>)</> : null}. Review it and send it to the customer.{s.pending > 0 ? ` ${s.pending} item${s.pending === 1 ? "" : "s"} of the job ${s.pending === 1 ? "isn't" : "aren't"} on it yet.` : ""}</>
+            : s.line_count > 0 ? "The services and materials are ready. Create the invoice and send it to the customer." : "Add the services to the job, then create the invoice."}
+        </p>
+      </div>
+      <span className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => setNoInvoice(true)} disabled={busy !== ""} className="rounded-lg border border-[#fbd5bd] bg-white px-3 py-2 text-[13.5px] font-semibold text-[#9a3412] transition-colors hover:border-[#e8713a] disabled:opacity-60">No invoice needed</button>
+        {draft
+          ? <Link prefetch={false} href={`/dashboard/invoices/${draft.id}`} className="rounded-lg bg-[#e8713a] px-4 py-2 text-[14px] font-semibold text-white transition-colors hover:bg-[#d4602b]">Review &amp; send invoice</Link>
+          : <button type="button" onClick={create} disabled={busy !== "" || s.line_count === 0} className="rounded-lg bg-[#e8713a] px-4 py-2 text-[14px] font-semibold text-white transition-colors hover:bg-[#d4602b] disabled:opacity-50">{busy === "make" ? "Creating..." : "Create draft invoice"}</button>}
+      </span>
+    </section>
   );
 }

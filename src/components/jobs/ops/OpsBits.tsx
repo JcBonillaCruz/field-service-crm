@@ -55,6 +55,7 @@ const STAGE_PILL: Record<OpsGroup, string> = {
   assigned: "bg-[#eef4ff] text-[#2563eb]",
   in_progress: "bg-[#fff6e6] text-[#b45309]",
   delayed: "bg-[#fff1f2] text-[#be123c]",
+  to_invoice: "bg-[#fff1e8] text-[#c2410c]",
   done: "bg-[#e7f6f1] text-[#0f766e]",
 };
 
@@ -80,7 +81,9 @@ export function OpsCard({ job, group, now, innerRef, onHover, dim = false, menu,
 }) {
   const router = useRouter();
   const pct = progressOf(job);
-  const done = group === "done";
+  const toInvoice = group === "to_invoice";          // Paso 5.6b: terminado, falta enviar la factura
+  const done = group === "done" || toInvoice;        // el trabajo de campo ya terminó
+  const gray = group === "done";                     // completado del todo: tarjeta gris, solo la palomita en verde
   const live = liveStatus(job);
   const delay = delayOf(job, now);
   const addr = addressLine(job.site_address).split(",")[0];
@@ -94,10 +97,10 @@ export function OpsCard({ job, group, now, innerRef, onHover, dim = false, menu,
       onMouseEnter={() => onHover?.(true)} onMouseLeave={() => onHover?.(false)} {...drag}
       title={delay ? `${delay.label} · ${delay.detail}` : job.phase_now && !done ? `${job.phase_blocked ? "Blocked" : "Phase"}: ${job.phase_now}` : live ? LIVE_TEXT[live] : undefined}
       className={`group/card relative cursor-pointer select-none rounded-xl border ${tiny ? "px-2 py-1.5" : "px-2.5 py-2"} transition-all duration-100 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]
-        ${tint ? "hover:-translate-y-0.5 hover:shadow-[0_8px_18px_rgba(15,40,60,0.10)] hover:brightness-[0.98]" : done ? "border-[#e2e8f0] bg-[#f1f5f9]" : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-[#14a39a] hover:shadow-[0_8px_18px_rgba(15,40,60,0.09)]"}
+        ${tint ? "hover:-translate-y-0.5 hover:shadow-[0_8px_18px_rgba(15,40,60,0.10)] hover:brightness-[0.98]" : gray ? "border-[#e2e8f0] bg-[#f1f5f9]" : toInvoice ? "border-[#fbd5bd] bg-white hover:-translate-y-0.5 hover:border-[#e8713a] hover:shadow-[0_8px_18px_rgba(232,113,58,0.14)]" : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-[#14a39a] hover:shadow-[0_8px_18px_rgba(15,40,60,0.09)]"}
         ${drag?.draggable ? "active:cursor-grabbing" : ""} ${dim ? "opacity-35" : ""} ${dragging ? "opacity-40" : ""}`}
       style={tint ? { background: tint.bg, borderColor: tint.border, ...(delay && !done ? { borderTop: "3px solid #e11d48" } : {}) }
-        : { borderTop: `3px solid ${done ? "#16a34a" : delay ? "#e11d48" : color}` }}>
+        : { borderTop: `3px solid ${toInvoice ? "#e8713a" : gray ? "#cbd5e1" : delay ? "#e11d48" : color}` }}>
       {ports && ports.length > 0 && (
         <span className="pointer-events-none absolute -left-[5px] top-1/2 flex -translate-y-1/2 flex-col gap-0.5">
           {ports.map((c, i) => <span key={i} className="h-2 w-2 rounded-full ring-2 ring-white" style={{ background: c }} />)}
@@ -113,7 +116,7 @@ export function OpsCard({ job, group, now, innerRef, onHover, dim = false, menu,
       </div>
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
-          <p className={`truncate ${tiny ? "text-[12px]" : "text-[13.5px]"} font-semibold leading-snug ${done ? (tint ? "text-slate-500" : "text-slate-600") : "text-[#0b1f3a]"}`}>{job.customer_name || job.title || `#${job.number}`}</p>
+          <p className={`truncate ${tiny ? "text-[12px]" : "text-[13.5px]"} font-semibold leading-snug ${gray ? "text-slate-500" : "text-[#0b1f3a]"}`}>{job.customer_name || job.title || `#${job.number}`}</p>
           <p className={`truncate ${tiny ? "text-[10.5px]" : "text-[11.5px]"} text-slate-500`}>
             {[job.type_name ?? job.title, addr].filter(Boolean).join(" · ") || `#${job.number}`}
           </p>
@@ -126,10 +129,14 @@ export function OpsCard({ job, group, now, innerRef, onHover, dim = false, menu,
             : <ProgressRing pct={pct} size={tiny ? 22 : 28} stroke={3} color={GROUP_TONE[group]} />}
       </div>
       <div className={`${tiny ? "mt-0.5" : "mt-1"} flex items-center gap-1.5`}>
-        <span className={`flex ${done && tint ? "opacity-60 grayscale" : ""}`}><TechDots techs={job.techs} size={tiny ? 15 : 18} max={3} /></span>
-        {job.techs.length === 1 && !tiny && <span className="truncate text-[11px] font-medium text-slate-500">{job.techs[0].name.split(" ")[0]}</span>}
+        <span className={`flex ${gray ? "opacity-60 grayscale" : ""}`}><TechDots techs={job.techs} size={tiny ? 15 : 18} max={3} /></span>
+        {job.techs.length === 1 && !tiny && !done && <span className="truncate text-[11px] font-medium text-slate-500">{job.techs[0].name.split(" ")[0]}</span>}
         <span className="ml-auto flex items-center gap-1.5">
-          {done ? <span className={`text-[10px] font-semibold uppercase tracking-wide ${tint ? "text-slate-400" : "text-[#16a34a]"}`}>{STAGE_LABEL(job)}</span>
+          {toInvoice ? (
+            <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-[#e8713a] px-1.5 py-px text-[10.5px] font-semibold text-white">
+              <span className="relative flex h-1.5 w-1.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-80" /><span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" /></span>
+              {STAGE_LABEL(job)}</span>
+          ) : done ? <span className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-wide text-slate-400">{STAGE_LABEL(job)}</span>
             : group === "unassigned" && !job.techs.length ? (
               <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-[#0f766e]">Assign
                 <svg viewBox="0 0 20 20" className="h-3 w-3 transition-transform group-hover/card:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M7.5 5 12.5 10l-5 5" /></svg></span>
@@ -168,7 +175,7 @@ function CardActions({ items }: { items: CardMenu }) {
 
 // Íconos ilustrados de cada grupo (estilo de los íconos de las apps, se mueven al pasar el mouse)
 export function GroupArt({ g, size = 44 }: { g: OpsGroup; size?: number }) {
-  const ring = { unassigned: ["#f1f5f9", "#cbd5e1", "#64748b"], assigned: ["#eef4ff", "#bfd3fe", "#2563eb"], in_progress: ["#fff6e6", "#fcd9a1", "#d97706"], delayed: ["#fff1f2", "#fecdd3", "#e11d48"], done: ["#e7f6f1", "#a7dcc9", "#0f766e"] }[g];
+  const ring = { unassigned: ["#f1f5f9", "#cbd5e1", "#64748b"], assigned: ["#eef4ff", "#bfd3fe", "#2563eb"], in_progress: ["#fff6e6", "#fcd9a1", "#d97706"], delayed: ["#fff1f2", "#fecdd3", "#e11d48"], to_invoice: ["#fff1e8", "#fbd5bd", "#e8713a"], done: ["#e7f6f1", "#a7dcc9", "#0f766e"] }[g];
   return (
     <svg viewBox="0 0 48 48" width={size} height={size} aria-hidden="true" className="shrink-0 drop-shadow-sm">
       <circle cx="24" cy="24" r="22.5" fill={ring[0]} stroke={ring[1]} strokeWidth="1.5" />
@@ -178,6 +185,7 @@ export function GroupArt({ g, size = 44 }: { g: OpsGroup; size?: number }) {
         {g === "assigned" && <><circle cx="20" cy="19" r="5" /><path d="M11.5 33a8.5 8.5 0 0 1 17 0" /><path d="m29 26 3 3 6-6" /></>}
         {g === "in_progress" && <path d="M29.5 14.5a6 6 0 0 0-7.6 7.6l-8.4 8.4a2.2 2.2 0 0 0 3.1 3.1l8.4-8.4a6 6 0 0 0 7.6-7.6l-3.6 3.6-3.1-.6-.6-3.1z" />}
         {g === "delayed" && <><circle cx="24" cy="25.5" r="10" /><path d="M24 20v5.5l3.5 2.4M21 12.5h6" /></>}
+        {g === "to_invoice" && <><path d="M16 12h16v24l-2.7-1.8-2.7 1.8-2.6-1.8-2.6 1.8-2.7-1.8L16 36z" /><path d="M20.5 19h7M20.5 24h7M20.5 29h3.5" /></>}
         {g === "done" && <path d="m15 24.5 6 6 12-12.5" />}
       </g>
     </svg>

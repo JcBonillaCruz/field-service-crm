@@ -37,7 +37,7 @@ const LIST_WHEN: { v: ListWhen; label: string }[] = [
   { v: "today", label: "Today" }, { v: "tomorrow", label: "Tomorrow" }, { v: "week", label: "This week" },
   { v: "month", label: "This month" }, { v: "open", label: "All open jobs" }, { v: "pick", label: "Pick a date…" },
 ];
-const STATUS_OPTS: { v: OpsGroup | "all"; label: string }[] = [{ v: "all", label: "Any status" }, ...OPS_GROUPS.map((g) => ({ v: g.id, label: g.label }))];
+const STATUS_OPTS: { v: OpsGroup | "all"; label: string }[] = [{ v: "all", label: "Any status" }, ...OPS_GROUPS.filter((g) => g.id !== "to_invoice").map((g) => ({ v: g.id, label: g.label }))];
 const PAGE = 12;
 
 // Etiqueta de estado (azul = asignado/en camino, naranja = en proceso/pausa, rojo = retraso, verde = terminado/disponible)

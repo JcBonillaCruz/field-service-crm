@@ -8,6 +8,8 @@ import { createClient } from "@/lib/supabase/client";
 import { JobSettings, TeamMember, addDays, addressLine, afterHoursOf, dayStart, fromIsoDay, isoDay, jobError, receivesJobs, startOfMonth, startOfWeek } from "@/lib/jobs";
 import { Modal, btnGhost, btnPrimary } from "@/components/sales/SalesBits";
 import { loadPhaseProgress, withPhases } from "@/lib/phases";
+import { loadBilling, withBilling } from "@/lib/job-billing";
+import { askConfirm } from "@/lib/confirm";
 import { OPS_GROUPS, OpsGroup, OpsJob, delayOf, fold, groupOf as groupAt, progressOf } from "@/lib/operations";
 import { TechDot } from "@/components/jobs/EventBar";
 import { notifyAssigned } from "@/lib/jobs-assign-notify";
@@ -58,6 +60,8 @@ const ICON = {
   assigned: "M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3.5 20a6.5 6.5 0 0 1 13 0M16 12l2 2 4-4",
   in_progress: "M15 4.5a4.5 4.5 0 0 0-5.7 5.7L3.6 15.9a1.7 1.7 0 0 0 2.5 2.5l5.7-5.7a4.5 4.5 0 0 0 5.7-5.7l-2.7 2.7-2.3-.4-.4-2.3z",
   cancel: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM5.6 5.6l12.8 12.8",
+  invoice: "M7 3h10v18l-2.5-1.7L12 21l-2.5-1.7L7 21zM10 8h4M10 12h4",
+  check: "M5 12.5 10 17.5 19 7",
   del: "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",
 };
 const UNASSIGNED = "__none";
@@ -88,7 +92,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
   const [when, setWhenState] = useState<When>("week");
   const [span, setSpanState] = useState<Span | null>(null); // si hay uno, manda sobre "when"
   const [ask, setAsk] = useState<OpsAsk | null>(null);
-  const [colF, setColF] = useState<Record<OpsGroup, ColFilter>>({ unassigned: NO_FILTER, assigned: NO_FILTER, in_progress: NO_FILTER, delayed: NO_FILTER, done: NO_FILTER });
+  const [colF, setColF] = useState<Record<OpsGroup, ColFilter>>({ unassigned: NO_FILTER, assigned: NO_FILTER, in_progress: NO_FILTER, delayed: NO_FILTER, to_invoice: NO_FILTER, done: NO_FILTER });
   const [searchOpen, setSearchOpen] = useState<Partial<Record<OpsGroup, boolean>>>({});
   const setCol = (g: OpsGroup, f: Partial<ColFilter>) => setColF((m) => ({ ...m, [g]: { ...m[g], ...f } }));
   const [toast, setToast] = useState<{ m: string; err?: boolean } | null>(null);
@@ -135,13 +139,14 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
     const since = (!span && when === "all") || colF.done.when === "all" ? new Date(2000, 0, 1)
       : new Date(Math.min(base, span ? fromIsoDay(span.from).getTime() : base, colF.done.when === "custom" && colF.done.from ? fromIsoDay(colF.done.from).getTime() : base));
     const sb = createClient();
-    const [{ data, error: err }, phases] = await Promise.all([
+    const [{ data, error: err }, phases, billing] = await Promise.all([
       sb.rpc("ops_board", { p_company: companyId, p_done_since: since.toISOString() }),
       loadPhaseProgress(sb, companyId), // Paso 5.4: % por fases
+      loadBilling(sb, companyId, since), // Paso 5.6b: ¿ya se envió la factura?
     ]);
     if (id !== reqId.current) return;
     if (err) { setError(jobError(err)); setLoading(false); return; }
-    setError(""); setJobs(withPhases((data ?? []) as OpsJob[], phases)); setLoading(false); setUpdatedAt(Date.now());
+    setError(""); setJobs(withBilling(withPhases((data ?? []) as OpsJob[], phases), billing)); setLoading(false); setUpdatedAt(Date.now());
   }, [companyId, when, span, colF.done.when, colF.done.from]);
 
   useEffect(() => { load(); }, [load]);
@@ -176,14 +181,17 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
   // Con el periodo de la página, lo que está pasando ahora y lo atrasado siempre se ve; si la columna tiene su propio filtro, se respeta tal cual.
   const inPeriod = useCallback((j: OpsJob, g: OpsGroup, f: ColFilter) => {
     const own = Boolean(f.when);
+    // Por facturar: siempre a la vista (es dinero pendiente), salvo que la columna tenga su propio filtro
+    if (g === "to_invoice" && !own) return true;
+    const closed = g === "done" || g === "to_invoice";
     let r: [Date, Date] | null;
     if (f.when === "custom") r = f.from && f.to ? [fromIsoDay(f.from), addDays(fromIsoDay(f.to), 1)] : null;
-    else r = f.when ? rangeOf(f.when, now, weekStartsOn, g === "done") : pageRange(g === "done", now);
+    else r = f.when ? rangeOf(f.when, now, weekStartsOn, closed) : pageRange(closed, now);
     if (!r) return true;
     const [from, to] = r;
     const s = j.visit?.starts_at ? new Date(j.visit.starts_at) : null;
-    const d = g === "done" ? (j.completed_at ? new Date(j.completed_at) : s) : s;
-    if (!d) return g !== "done"; // sin fecha: siempre a la vista (necesita atención)
+    const d = closed ? (j.completed_at ? new Date(j.completed_at) : s) : s;
+    if (!d) return !closed; // sin fecha: siempre a la vista (necesita atención)
     if (!own && (g === "in_progress" || g === "delayed")) return true;
     return d >= from && d < to;
   }, [now, weekStartsOn, pageRange]);
@@ -204,6 +212,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
     // Retrasados: el más tarde primero · Terminados: el más reciente primero
     m.delayed.sort((a, b) => (delayOf(b, now)?.minutes ?? 0) - (delayOf(a, now)?.minutes ?? 0));
     m.done.sort((a, b) => (b.completed_at ?? "").localeCompare(a.completed_at ?? ""));
+    m.to_invoice.sort((a, b) => (a.completed_at ?? "").localeCompare(b.completed_at ?? "")); // el que lleva más tiempo esperando, primero
     // El orden que la persona acomodó a mano manda (los nuevos quedan al final en su orden normal)
     (Object.keys(m) as OpsGroup[]).forEach((g) => {
       const pos = new Map((cardOrder[g] ?? []).map((id, i) => [id, i]));
@@ -222,7 +231,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
     const pct = all.length ? Math.round(all.reduce((a, j) => a + progressOf(j), 0) / all.length) : 0;
     const open = all.filter((j) => j.status !== "completed");
     const openPct = open.length ? Math.round(open.reduce((a, j) => a + progressOf(j), 0) / open.length) : 0;
-    return { pct, openPct, total: all.length, done: byGroup.done.length, working: byGroup.in_progress.length, late: byGroup.delayed.length, assigned: byGroup.assigned.length, unassigned: byGroup.unassigned.length };
+    return { pct, openPct, total: all.length, done: byGroup.done.length + byGroup.to_invoice.length, working: byGroup.in_progress.length, late: byGroup.delayed.length, assigned: byGroup.assigned.length, unassigned: byGroup.unassigned.length };
   }, [byGroup]);
   const [cash, setCash] = useState<Money | null>(null);
   useEffect(() => {
@@ -261,8 +270,32 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
   const hrefFor = (j: OpsJob, g: OpsGroup) => (g === "unassigned" && !j.techs.length ? assignHref(j) : undefined);
 
   // ---------- Menú ⋯ de cada tarjeta (también sirve para mover en el celular) ----------
+  // ---------- Paso 5.6b: por facturar ----------
+  async function draftInvoice(j: OpsJob) {
+    if (j.invoice_id) { router.push(`/dashboard/invoices/${j.invoice_id}`); return; }
+    if (!(await askConfirm({ title: "Create a draft invoice?", message: "It copies the services and materials of this job. You can edit it before sending.", confirmLabel: "Create draft", tone: "green" }))) return;
+    const { data: id, error: e } = await createClient().rpc("job_draft_invoice", { p_job: j.id });
+    if (e || !id) return flash(e?.hint || jobError(e), true);
+    router.push(`/dashboard/invoices/${id}`);
+  }
+  async function noInvoice(j: OpsJob, on: boolean) {
+    if (on && !(await askConfirm({ title: "No invoice needed?", message: `${j.customer_name || `Job ${j.number}`} moves to Completed without an invoice (warranty, courtesy, covered by a plan). It stays on the job's history with your name.`, confirmLabel: "No invoice needed", tone: "green" }))) return;
+    const { error: e } = await createClient().rpc("job_no_invoice", { p_job: j.id, p_on: on });
+    if (e) return flash(e.hint || jobError(e), true);
+    flash(on ? "Moved to Completed — no invoice needed" : "Back in To invoice"); load();
+  }
+
   const menuFor = (j: OpsJob, g: OpsGroup): CardMenu => {
-    if (g === "done") return [{ label: "Open job", icon: ICON.open, onClick: () => router.push(`/dashboard/jobs/${j.id}`) }];
+    if (g === "to_invoice") return [
+      { label: "Open job", icon: ICON.open, onClick: () => router.push(`/dashboard/jobs/${j.id}`) },
+      { label: j.invoice_id ? `Review & send ${j.invoice_number ?? "invoice"}` : "Create draft invoice", icon: ICON.invoice, onClick: () => draftInvoice(j) },
+      { label: "No invoice needed", icon: ICON.check, divider: true, onClick: () => noInvoice(j, true) },
+    ];
+    if (g === "done") return [
+      { label: "Open job", icon: ICON.open, onClick: () => router.push(`/dashboard/jobs/${j.id}`) },
+      ...(j.invoice_id ? [{ label: `Open ${j.invoice_number ?? "invoice"}`, icon: ICON.invoice, onClick: () => router.push(`/dashboard/invoices/${j.invoice_id}`) }] : []),
+      ...(j.billing === "none" ? [{ label: "Invoice needed after all", icon: ICON.invoice, divider: true, onClick: () => noInvoice(j, false) }] : []),
+    ];
     const moves: CardMenu = MOVABLE.filter((t) => t !== g).map((t, i) => ({
       label: `Move to ${OPS_GROUPS.find((x) => x.id === t)!.label}`, icon: ICON[t as MoveTarget], divider: i === 0,
       onClick: () => setAsk({ kind: "move", job: j, from: g, to: t as MoveTarget }),
@@ -277,7 +310,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
   };
 
   // ---------- Arrastrar y soltar ----------
-  const cardDrag = (j: OpsJob, g: OpsGroup) => g === "done" ? undefined : ({
+  const cardDrag = (j: OpsJob, g: OpsGroup) => g === "done" || g === "to_invoice" ? undefined : ({
     draggable: true,
     onDragStart: (e: React.DragEvent) => { e.stopPropagation(); e.dataTransfer.setData("text/plain", `card:${j.id}`); e.dataTransfer.effectAllowed = "move"; setDrag({ kind: "card", id: j.id, from: g }); },
     onDragEnd: () => { setDrag(null); setOver(null); },
@@ -297,7 +330,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
       ids.splice(i < 0 ? ids.length : i, 0, d.id);
       saveCards({ ...cardOrder, [g]: ids }); return;
     }
-    if (!MOVABLE.includes(g)) return flash(g === "done" ? "Use Finish on the job to complete it." : "Delayed is automatic: a job shows here when it's running late.", true);
+    if (!MOVABLE.includes(g)) return flash(g === "done" ? "Use Finish on the job to complete it." : g === "to_invoice" ? "Jobs show here on their own when they're finished and the invoice isn't sent." : "Delayed is automatic: a job shows here when it's running late.", true);
     setAsk({ kind: "move", job, from: d.from, to: g as MoveTarget });
   }
   // Mover o arrastrar en Operations es solo acomodar: no se pregunta nada ni se avisa al cliente.
@@ -357,8 +390,8 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
 
       <Overview totals={totals} cash={cash} money={money} period={periodLabel} />
 
-      {/* Resumen de los 5 grupos (tocar = ver solo ese grupo) */}
-      <div className="mt-4 hidden gap-2.5 sm:grid sm:grid-cols-3 xl:grid-cols-5">
+      {/* Resumen de los grupos (tocar = ver solo ese grupo) */}
+      <div className="mt-4 hidden gap-2.5 sm:grid sm:grid-cols-3 xl:grid-cols-6">
         {ordered.map((g) => {
           const n = byGroup[g.id].length, on = focus === g.id;
           return (
@@ -367,7 +400,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate text-[12.5px] font-medium text-slate-500">{g.label}</p>
-                  <p className={`mt-0.5 text-[24px] font-semibold tabular-nums tracking-tight ${g.id === "delayed" && n ? "text-[#be123c]" : "text-[#0b1f3a]"}`}>{loading ? "–" : n}</p>
+                  <p className={`mt-0.5 text-[24px] font-semibold tabular-nums tracking-tight ${g.id === "delayed" && n ? "text-[#be123c]" : g.id === "to_invoice" && n ? "text-[#c2410c]" : "text-[#0b1f3a]"}`}>{loading ? "–" : n}</p>
                 </div>
                 <GroupArt g={g.id} size={42} />
               </div>
@@ -388,7 +421,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
       ) : (
         <>
           {/* Computadora: columnas */}
-          <div className={`mt-4 hidden gap-3 lg:grid ${focus ? "lg:grid-cols-1" : "lg:grid-cols-5"}`}>
+          <div className={`mt-4 hidden gap-3 lg:grid ${focus ? "lg:grid-cols-1" : "lg:grid-cols-6"}`}>
             {columns.map((g) => {
               const can = accepts(g.id), isOver = over === g.id;
               const blocked = drag?.kind === "card" && !can;
@@ -404,12 +437,13 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
                     onDragStart={(e) => { e.dataTransfer.setData("text/plain", `col:${g.id}`); e.dataTransfer.effectAllowed = "move"; setDrag({ kind: "col", id: g.id }); }}
                     onDragEnd={() => { setDrag(null); setOver(null); }}
                     title={focus ? undefined : "Drag to reorder the columns"}
-                    className={`group/h flex items-center gap-2 border-b border-slate-200/70 px-3 py-2.5 ${focus ? "" : "cursor-grab active:cursor-grabbing"}`}>
-                    {!focus && <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 shrink-0 text-slate-300 transition-colors group-hover/h:text-slate-500" fill="currentColor"><circle cx="7" cy="5" r="1.4" /><circle cx="13" cy="5" r="1.4" /><circle cx="7" cy="10" r="1.4" /><circle cx="13" cy="10" r="1.4" /><circle cx="7" cy="15" r="1.4" /><circle cx="13" cy="15" r="1.4" /></svg>}
-                    <span className={`h-2.5 w-2.5 rounded-full ${g.dot}`} />
-                    <p className="text-[13.5px] font-semibold text-[#0b1f3a]">{g.label}</p>
+                    className={`group/h flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-slate-200/70 px-3 py-2 ${focus ? "" : "cursor-grab active:cursor-grabbing"}`}>
+                    {!focus && <svg viewBox="0 0 20 20" className="hidden h-3.5 w-3.5 shrink-0 text-slate-300 transition-colors group-hover/h:text-slate-500 2xl:block" fill="currentColor"><circle cx="7" cy="5" r="1.4" /><circle cx="13" cy="5" r="1.4" /><circle cx="7" cy="10" r="1.4" /><circle cx="13" cy="10" r="1.4" /><circle cx="7" cy="15" r="1.4" /><circle cx="13" cy="15" r="1.4" /></svg>}
+                    <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${g.dot}`} />
+                    <p className="min-w-0 truncate whitespace-nowrap text-[13.5px] font-semibold text-[#0b1f3a]">{g.label}</p>
                     <span className="rounded-full bg-white px-2 py-0.5 text-[12px] font-semibold text-slate-500 ring-1 ring-slate-200">{byGroup[g.id].length}</span>
-                    <span className="ml-auto flex items-center gap-1.5">
+                    {/* Con 6 columnas las herramientas van en una segunda línea, para que el nombre del grupo se lea completo */}
+                    <span className={`ml-auto flex items-center gap-1.5 ${focus ? "" : "-mr-1 basis-full justify-end"}`}>
                       {focus && <button type="button" onClick={() => setFocus(null)} className="text-[12.5px] font-semibold text-[#0f766e] hover:underline">Show all</button>}
                       <button type="button" onClick={() => setSearchOpen((m) => ({ ...m, [g.id]: !m[g.id] }))} aria-label={`Search in ${g.label}`} title={`Search in ${g.label}`}
                         className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${searchOpen[g.id] || colF[g.id].q ? "bg-[#eef4ff] text-[#2563eb]" : "text-slate-400 hover:bg-white hover:text-[#0b1f3a]"}`}>
@@ -429,7 +463,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
                   ) : null}
                   {drag?.kind === "card" && drag.from !== g.id && (
                     <p className={`mx-2 mt-2 rounded-lg border-2 border-dashed py-1.5 text-center text-[12px] font-semibold ${can ? "border-[#14a39a] text-[#0f766e]" : "border-slate-300 text-slate-400"}`}>
-                      {can ? `Drop to move to ${g.label}` : g.id === "done" ? "Finish the job to complete it" : "Automatic — late jobs show here"}
+                      {can ? `Drop to move to ${g.label}` : g.id === "done" ? "Finish the job to complete it" : g.id === "to_invoice" ? "Automatic — finished, invoice not sent" : "Automatic — late jobs show here"}
                     </p>
                   )}
                   <div className={`flex-1 overflow-y-auto p-2 ${focus ? "grid content-start gap-2 sm:grid-cols-2 xl:grid-cols-4" : "space-y-2"}`}>
@@ -481,7 +515,7 @@ function FocusNote({ label, onClear }: { label: string; onClear: () => void }) {
 function EmptyGroup({ g }: { g: OpsGroup }) {
   const text: Record<OpsGroup, string> = {
     unassigned: "Every job has someone on it. New jobs without a collaborator show up here.", assigned: "Nothing waiting to start.", in_progress: "Nobody is working right now.",
-    delayed: "Nothing is running late. 🎉", done: "No finished jobs in this period.",
+    delayed: "Nothing is running late. 🎉", to_invoice: "Every finished job has its invoice sent.", done: "No finished jobs in this period.",
   };
   return (
     <div className="flex flex-col items-center px-3 py-8 text-center">

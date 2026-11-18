@@ -46,7 +46,8 @@ export async function POST(request: NextRequest) {
   const who = ((me?.full_name as string) || "Your technician").split(" ")[0];
   const title = `${w.icon} ${who} ${w.verb} ${job.customer_name || job.number}`;
   const body = b.action === "hold" ? `Needs follow-up${job.hold_note ? `: ${job.hold_note}` : ""} · ${job.number}` : b.action === "finish" ? `Ready to invoice · ${job.number}` : isInvoice ? `Review it and send it to the customer · ${job.number}` : [job.title, addressText(job.site_address)].filter(Boolean).join(" · ") || job.number;
-  const url = isInvoice ? `/dashboard/invoices/${job.invoice_id}` : `/dashboard/jobs/${job.id}/edit`;
+  // Los avisos abren la ficha completa del trabajo (no el formulario de editar): ahí está todo, también la factura
+  const url = `/dashboard/jobs/${job.id}`;
 
   const ids = (office ?? []).map((o) => o.user_id as string).filter((id) => id !== user.id);
   if (ids.length) {
