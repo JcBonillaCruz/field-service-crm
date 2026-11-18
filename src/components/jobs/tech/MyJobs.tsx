@@ -101,7 +101,8 @@ export default function MyJobs({ companyId, userId, firstName = "" }: { companyI
   const doneOnes = visits.filter((v) => v.visit_status === "completed").sort((a, b) => b.starts_at.localeCompare(a.starts_at));
 
   // Resumen de hoy
-  const todays = visits.filter((v) => sameDay(new Date(v.starts_at), today) && v.visit_status !== "cancelled");
+  const isLive = (v: MyVisit) => v.visit_status === "on_my_way" || v.visit_status === "in_progress";
+  const todays = visits.filter((v) => (sameDay(new Date(v.starts_at), today) && v.visit_status !== "cancelled") || isLive(v));
   const todayLeft = todays.filter((v) => ["scheduled", "on_my_way", "in_progress"].includes(v.visit_status)).length;
   const todayDone = todays.filter((v) => v.visit_status === "completed").length;
   const pct = todays.length ? Math.round((todayDone / todays.length) * 100) : 0;
@@ -120,7 +121,7 @@ export default function MyJobs({ companyId, userId, firstName = "" }: { companyI
   const TABS: [Tab, string, number][] = [["today", "Today", todayLeft], ["new", "New", newOnes.length], ["paused", "Paused", pausedOnes.length], ["done", "Done", doneOnes.length]];
 
   return (
-    <div className="min-h-[calc(100dvh-4rem)] w-full bg-[#f4f6f8] px-3 pb-24 pt-3 sm:px-4 lg:px-6 lg:pb-8 lg:pt-5">
+    <div className="min-h-[calc(100dvh-4rem)] w-full max-w-[100vw] overflow-x-hidden bg-[#f4f6f8] px-3 pb-24 pt-3 sm:px-4 lg:px-6 lg:pb-8 lg:pt-5">
       {/* Saludo */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -132,9 +133,9 @@ export default function MyJobs({ companyId, userId, firstName = "" }: { companyI
 
       {error && <p className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-[14px] text-red-700">{error}</p>}
 
-      <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_23rem] lg:grid-rows-[auto_1fr] lg:items-start lg:gap-5">
+      <div className="mt-3 grid grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,1fr)_23rem] lg:grid-rows-[auto_1fr] lg:items-start lg:gap-5">
         {/* ===== Resumen: reloj, avance del día y el próximo trabajo (arriba en el celular, a la derecha en la computadora) ===== */}
-        <div className="space-y-3 lg:col-start-2 lg:row-start-1">
+        <div className="min-w-0 space-y-3 lg:col-start-2 lg:row-start-1">
           {/* Reloj del día */}
           <div className={`group flex items-center gap-3 px-3 py-2.5 ${box} ${shift ? "border-[#9ad9cd]" : ""}`}>
             <ClockArt size={46} running={Boolean(shift)} />
@@ -212,10 +213,11 @@ export default function MyJobs({ companyId, userId, firstName = "" }: { companyI
             </div>
             {!sameDay(day, today) && <button type="button" onClick={() => goDay(dayStart(new Date()))} className="mt-2 text-[13px] font-semibold text-[#0f766e]">Back to today</button>}
 
-            {open.length > 0 && (
+            {/* El trabajo en curso ya está en la tarjeta grande de arriba: aquí solo se repite si hay más de uno */}
+            {open.length > 1 && (
               <>
-                <p className="mb-1.5 mt-4 flex items-center gap-1.5 text-[12.5px] font-semibold text-[#b45309]"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#f59e0b]" />Working now</p>
-                <div className="space-y-2">{open.map((v) => <JobRow key={v.visit_id} v={v} live />)}</div>
+                <p className="mb-1.5 mt-4 flex items-center gap-1.5 text-[12.5px] font-semibold text-[#b45309]"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#f59e0b]" />{open.some((v) => v.visit_status === "in_progress") ? "Working now" : "On my way"}</p>
+                <div className="space-y-2">{open.slice(1).map((v) => <JobRow key={v.visit_id} v={v} live />)}</div>
               </>
             )}
 
@@ -224,6 +226,8 @@ export default function MyJobs({ companyId, userId, firstName = "" }: { companyI
             </p>
             {loading ? (
               <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-[62px] animate-pulse rounded-2xl bg-slate-200/70" />)}</div>
+            ) : ofDay.length === 0 && sameDay(day, today) && open.length > 0 ? (
+              <p className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-3 text-center text-[13px] text-slate-500">Nothing else scheduled for today.</p>
             ) : ofDay.length === 0 ? (
               <Empty title={sameDay(day, today) && todayDone > 0 && open.length === 0 ? "All done for today" : "No jobs this day"}
                 hint={sameDay(day, today) && todayDone > 0 && open.length === 0 ? "Nice work. New jobs show up here as soon as the office assigns them." : "When the office assigns you a job it shows up here and you get an alert."} />
@@ -234,7 +238,7 @@ export default function MyJobs({ companyId, userId, firstName = "" }: { companyI
         </div>
 
         {/* ===== Accesos rápidos ===== */}
-        <div className="lg:col-start-2 lg:row-start-2">
+        <div className="min-w-0 lg:col-start-2 lg:row-start-2">
           <p className="mb-1.5 mt-2 text-[12.5px] font-semibold text-slate-500 lg:mt-0">Shortcuts</p>
           <div className="grid grid-cols-3 gap-2">
             <Shortcut href="/dashboard/jobs/my-timesheet" label="My Timesheet" art={<TimesheetArt size={40} />} />
@@ -275,7 +279,7 @@ function NextCard({ v, now, since }: { v: MyVisit; now: number; since: number | 
   const isToday = sameDay(s, new Date(now));
   const isTomorrow = sameDay(s, addDays(dayStart(new Date(now)), 1));
   const head = v.visit_status === "in_progress" ? "Working now" : v.visit_status === "on_my_way" ? "On my way" : "Up next";
-  const chip = live ? (since ? `${v.visit_status === "on_my_way" ? "Driving" : "Working"} ${span((now - since) / 60000)}` : VISIT_LABEL[v.visit_status])
+  const chip = live ? (since ? `${v.visit_status === "on_my_way" ? "Driving" : "Working"} ${span((now - since) / 60000)}` : "")
     : !isToday ? (isTomorrow ? "Tomorrow" : s.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }))
     : mins > 0 ? `Starts in ${span(mins)}` : mins > -5 ? "Starting now" : `Due ${span(-mins)} ago`;
   const late = !live && isToday && mins <= -5;
@@ -288,7 +292,7 @@ function NextCard({ v, now, since }: { v: MyVisit; now: number; since: number | 
           <p className={`flex items-center gap-1.5 text-[12.5px] font-semibold ${live ? "text-[#b45309]" : "text-[#0f766e]"}`}>
             {live && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#f59e0b]" />}{head}
           </p>
-          <span suppressHydrationWarning className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${late ? "bg-[#fff1f2] text-[#be123c]" : live ? "bg-[#fff1d6] text-[#b45309]" : "bg-white text-[#b45309] ring-1 ring-[#fcd9b6]"}`}>{chip}</span>
+          {chip && <span suppressHydrationWarning className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${late ? "bg-[#fff1f2] text-[#be123c]" : live ? "bg-[#fff1d6] text-[#b45309]" : "bg-white text-[#b45309] ring-1 ring-[#fcd9b6]"}`}>{chip}</span>}
         </div>
         <div className="mt-1.5 flex items-start gap-2.5">
           {live ? <StatusArt s={v.visit_status} size={40} /> : <JobArt size={40} color={v.type_color ?? "#14a39a"} />}
@@ -298,7 +302,7 @@ function NextCard({ v, now, since }: { v: MyVisit; now: number; since: number | 
               <span className="truncate">{v.customer_name || v.number}</span>
             </p>
             <p className="mt-0.5 truncate text-[12.5px] text-slate-600">{[v.type_name ?? v.title, `${fmtTime(s)} – ${fmtTime(e)}`].filter(Boolean).join(" · ")}</p>
-            {addr && <p className="mt-0.5 truncate text-[12.5px] text-slate-500">{addr}</p>}
+            {addr && <p className="mt-0.5 line-clamp-2 text-[12.5px] leading-snug text-slate-500">{addr}</p>}
           </div>
           {v.estimated_total != null && <span className="shrink-0 text-[13px] font-semibold text-slate-700">{usd(v.estimated_total)}</span>}
         </div>

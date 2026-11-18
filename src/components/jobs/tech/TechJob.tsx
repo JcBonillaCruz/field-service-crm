@@ -78,8 +78,28 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
   // Tune-Up sin enviar: se avisa al terminar (no bloquea)
   const tuneUpPending = d?.type?.form_kind === "tune_up" && formsState !== null && !formsState.tuneUpSubmitted;
 
+  // Un solo trabajo activo a la vez: si ya va en camino o está trabajando en OTRO trabajo, primero lo termina o lo pausa.
+  // (Los trabajos en pausa o esperando una pieza no bloquean: para eso se pausan.)
+  async function busyElsewhere(): Promise<boolean> {
+    const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+    const { data } = await createClient().rpc("tech_my_visits", { p_company: companyId, p_from: new Date(t0.getTime() - 60 * 864e5).toISOString(), p_to: new Date(t0.getTime() + 45 * 864e5).toISOString() });
+    const other = ((data ?? []) as { job_id: string; number: string; customer_name: string; visit_status: string }[])
+      .find((v) => v.job_id !== jobId && (v.visit_status === "on_my_way" || v.visit_status === "in_progress"));
+    if (!other) return false;
+    const name = other.customer_name || other.number;
+    const go = await askConfirm({
+      title: "You already have a job going",
+      message: `${other.visit_status === "on_my_way" ? "You're on your way to" : "You're working at"} ${name} (${other.number}). Finish or pause that job before you start another one.`,
+      confirmLabel: "Open that job", cancelLabel: "Stay here",
+    });
+    if (go) window.location.assign(`/dashboard/jobs/mine/${other.job_id}`);
+    return true;
+  }
+  async function openEta() { if (!(await busyElsewhere())) setEtaOpen(true); }
+
   async function act(action: "on_my_way" | "start" | "resume" | "pause" | "hold" | "finish", etaMin?: number) {
     if (!visit) return;
+    if ((action === "on_my_way" || action === "start" || action === "resume") && (await busyElsewhere())) { setEtaOpen(false); return; }
     if (action === "finish" && !(await askConfirm({ title: "Finish this job?", message: missing ? `There are still ${missing} required checklist task(s).` : tuneUpPending ? "The Tune-Up form isn't submitted yet. You can still finish and send it after." : "The office gets an alert right away so they can send the invoice.", confirmLabel: "Finish job", tone: "green" }))) return;
     setBusy(action); setError("");
     const pos = action === "pause" ? null : await gps();
@@ -103,6 +123,7 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
   }
   // Regresar a un trabajo que quedó a medias (ya llegó la pieza, etc.)
   async function resumeHold() {
+    if (await busyElsewhere()) return;
     if (!visit) return;
     setBusy("back"); setError("");
     const pos = await gps();
@@ -315,7 +336,7 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
             <JobChat jobId={jobId} companyId={j.company_id} title={`${j.customer_name || "Job"} · ${j.number}`} placement="bar" showLabel={!hasActions} startOpen={openChat} />
             {hasActions && <span className="flex-1" />}
             {hasActions && st === "scheduled" && <>
-              <Big onClick={() => setEtaOpen(true)} busy={busy === "on_my_way"} tone="violet" icon="M3 12h11V6H3zM14 9h3l3 3v3h-6M7 18a1.6 1.6 0 1 0 0-3.2A1.6 1.6 0 0 0 7 18zM17 18a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2z">On my way</Big>
+              <Big onClick={openEta} busy={busy === "on_my_way"} tone="violet" icon="M3 12h11V6H3zM14 9h3l3 3v3h-6M7 18a1.6 1.6 0 1 0 0-3.2A1.6 1.6 0 0 0 7 18zM17 18a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2z">On my way</Big>
               <Big onClick={() => act("start")} busy={busy === "start"} tone="light" icon="M8 5v14l11-7z">Start</Big>
             </>}
             {hasActions && st === "on_my_way" && <>
