@@ -61,6 +61,7 @@ const CAM = "M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1
 const UP = "M12 16V4M7 9l5-5 5 5M4 20h16";
 const PEN = "M4 20h4L19 9l-4-4L4 16zM14 6l4 4";
 const DOC = "M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6";
+const TRASH = "M5 7h14M10 7V4.5h4V7M7 7l.8 12.5h8.4L17 7M10 11v5M14 11v5";
 
 export default function JobFiles({ jobId, variant = "office", readOnly = false, onToast }: {
   jobId: string; variant?: "tech" | "office"; readOnly?: boolean; onToast?: (m: string, err?: boolean) => void;
@@ -84,6 +85,8 @@ export default function JobFiles({ jobId, variant = "office", readOnly = false, 
   const [bulkDel, setBulkDel] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null); // nota de la foto abierta (null = no se está editando)
+  // Paso 5.9a: menú de clic derecho sobre una foto o archivo (Open / Edit note / Select / Delete)
+  const [menu, setMenu] = useState<{ x: number; y: number; f: FileRow } | null>(null);
   const camRef = useRef<HTMLInputElement>(null);
   const upRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
@@ -123,6 +126,14 @@ export default function JobFiles({ jobId, variant = "office", readOnly = false, 
       .subscribe();
     return () => { clearTimeout(t); sb.removeChannel(ch); };
   }, [jobId, load]);
+
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") setMenu(null); };
+    window.addEventListener("scroll", close, true); window.addEventListener("resize", close); window.addEventListener("keydown", key);
+    return () => { window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); window.removeEventListener("keydown", key); };
+  }, [menu]);
 
   // Fase sugerida: la que está en proceso (o bloqueada); si no hay, "General"
   const autoPhase = useMemo(() => d?.phases.find((p) => p.status === "in_progress" || p.status === "blocked")?.id ?? "", [d]);
@@ -193,22 +204,31 @@ export default function JobFiles({ jobId, variant = "office", readOnly = false, 
   }
 
   // ---------- Borrar (con aviso, motivo y registro) ----------
-  async function doDelete() {
-    if (!del) return;
+  async function doDelete(pick?: Target) {
+    const t = pick ?? del;
+    if (!t) return;
     const why = reason.trim();
-    if (needsReason(del.author) && !why) return say("Write why you are deleting it.", true);
-    if (!(await confirmDelete({ title: `Delete this ${del.label}?`, message: "It's removed for everyone on the job. The job history keeps who deleted it and when." }))) return;
+    if (needsReason(t.author) && !why) return say("Write why you are deleting it.", true);
+    if (!(await confirmDelete({ title: `Delete this ${t.label}?`, message: "It's removed for everyone on the job. The job history keeps who deleted it and when." }))) return;
     const sb = createClient();
-    if (del.type === "file") {
-      const { data: path, error } = await sb.rpc("job_file_delete", { p_id: del.id, p_reason: why || null });
+    if (t.type === "file") {
+      const { data: path, error } = await sb.rpc("job_file_delete", { p_id: t.id, p_reason: why || null });
       if (error) return say(jobError(error), true);
       if (path) await removeJobFiles(jobId, [path as string]);
       setView(null);
     } else {
-      const { error } = await sb.rpc("job_report_delete", { p_id: del.id, p_reason: why || null });
+      const { error } = await sb.rpc("job_report_delete", { p_id: t.id, p_reason: why || null });
       if (error) return say(jobError(error), true);
     }
     setDel(null); setReason(""); say("Deleted"); load();
+  }
+
+  // Papelera en la esquina de cada foto: borra sin abrirla. Si hay que escribir el motivo, sale un cuadro pequeño.
+  const targetOf = (f: FileRow): Target => ({ type: "file", id: f.id, author: f.uploaded_by, label: f.file_type === "pdf" ? "document" : "photo", path: f.path });
+  function quickDelete(f: FileRow) {
+    const t = targetOf(f);
+    setReason(""); setView(null);
+    if (needsReason(f.uploaded_by)) setDel(t); else doDelete(t);
   }
 
   // ---------- Varias a la vez (Paso 5.8e) ----------
@@ -289,7 +309,7 @@ export default function JobFiles({ jobId, variant = "office", readOnly = false, 
       )}
       <div className="mt-2 flex justify-end gap-2">
         <button type="button" onClick={() => { setDel(null); setReason(""); }} className="rounded-lg px-3 py-1.5 text-[13px] font-semibold text-slate-600 hover:bg-white">Cancel</button>
-        <button type="button" onClick={doDelete} className="rounded-lg bg-[#e11d48] px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#be123c]">Delete</button>
+        <button type="button" onClick={() => doDelete()} className="rounded-lg bg-[#e11d48] px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#be123c]">Delete</button>
       </div>
     </div>
   );
@@ -315,7 +335,7 @@ export default function JobFiles({ jobId, variant = "office", readOnly = false, 
               className="rounded-lg px-2.5 py-1.5 text-[13px] font-semibold text-[#0f766e] hover:bg-white">{picked.length && picked.length === d.files.filter((f) => canDelete(f.uploaded_by)).length ? "Clear all" : "Select all"}</button>
             <button type="button" disabled={!picked.length || bulkBusy} onClick={() => { setBulkDel(true); setReason(""); }}
               className="flex items-center gap-1.5 rounded-lg bg-[#e11d48] px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#be123c] disabled:opacity-40">
-              <I d="M5 7h14M10 7V4.5h4V7M7 7l.8 12.5h8.4L17 7M10 11v5M14 11v5" className="h-4 w-4" />Delete</button>
+              <I d={TRASH} className="h-4 w-4" />Delete</button>
           </div>
           {picked.some((f) => f.file_type === "image") && !bulkDel && (
             <div className="mt-2 max-w-xs"><Pick label="Change type to" value="" options={[{ value: "", label: "Choose…" }, ...KINDS]} onChange={(v) => { if (v) typeMany(v); }} /></div>
@@ -406,16 +426,25 @@ export default function JobFiles({ jobId, variant = "office", readOnly = false, 
           {g.files.length > 0 && (
             <div className={`grid gap-2 ${tech ? "grid-cols-3" : "grid-cols-3 sm:grid-cols-4 xl:grid-cols-6"}`}>
               {g.files.map((f) => {
-                const n = commentsOf("file", f.id).length;
+                const n = commentsOf("file", f.id).length, mine = canDelete(f.uploaded_by);
                 return (
-                  <button key={f.id} type="button" aria-pressed={sel ? sel.has(f.id) : undefined} disabled={Boolean(sel) && !canDelete(f.uploaded_by)}
-                    onClick={() => { if (sel) toggle(f.id); else { setView(f); setDel(null); setNote(null); } }}
-                    className={`group relative aspect-square overflow-hidden rounded-xl bg-slate-100 text-left transition-shadow duration-150 hover:shadow-[0_8px_18px_rgba(15,40,60,0.14)] disabled:opacity-35 ${sel?.has(f.id) ? "ring-[3px] ring-[#0f766e] ring-offset-2" : ""}`}>
-                    {sel && canDelete(f.uploaded_by) && (
-                      <span className={`absolute left-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full border-2 transition-colors ${sel.has(f.id) ? "border-[#0f766e] bg-[#0f766e] text-white" : "border-white bg-black/25 text-transparent"}`}>
+                  <div key={f.id} onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, f }); }}
+                    className={`group relative aspect-square overflow-hidden rounded-xl bg-slate-100 transition-shadow duration-150 hover:shadow-[0_8px_18px_rgba(15,40,60,0.14)] ${sel && !mine ? "opacity-35" : ""} ${sel?.has(f.id) ? "ring-[3px] ring-[#0f766e] ring-offset-2" : ""}`}>
+                    {mine && (
+                      <button type="button" aria-label={sel?.has(f.id) ? "Unselect" : "Select"} aria-pressed={Boolean(sel?.has(f.id))} title="Select"
+                        onClick={() => toggle(f.id)}
+                        className={`absolute left-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full border-2 shadow-sm transition-all duration-100 hover:scale-110 ${sel?.has(f.id) ? "border-[#0f766e] bg-[#0f766e] text-white" : "border-white bg-black/30 text-transparent hover:text-white"}`}>
                         <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m4.5 10.5 3.5 3.5 7.5-8" /></svg>
-                      </span>
+                      </button>
                     )}
+                    {mine && !sel && (
+                      <button type="button" aria-label="Delete" title="Delete" onClick={() => quickDelete(f)}
+                        className="absolute right-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-white/95 text-slate-600 shadow-sm transition-all duration-100 hover:scale-110 hover:bg-[#e11d48] hover:text-white">
+                        <I d={TRASH} className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    <button type="button" disabled={Boolean(sel) && !mine} aria-label={f.file_type === "pdf" ? f.file_name ?? "PDF" : KIND_LABEL[f.kind] ?? "Photo"}
+                      onClick={() => { if (sel) toggle(f.id); else { setView(f); setDel(null); setNote(null); } }} className="absolute inset-0 block h-full w-full text-left">
                     {f.file_type === "pdf" ? (
                       <span className="flex h-full w-full flex-col items-center justify-center gap-1 bg-[#fff7f2] px-2 text-[#e8713a]"><I d={DOC} className="h-8 w-8 transition-transform duration-150 group-hover:scale-110" />
                         <span className="line-clamp-2 break-all text-center text-[11px] font-medium text-slate-600">{f.file_name ?? "PDF"}</span></span>
@@ -424,13 +453,39 @@ export default function JobFiles({ jobId, variant = "office", readOnly = false, 
                     <span className="absolute inset-x-0 bottom-0 flex items-end justify-between bg-gradient-to-t from-black/60 to-transparent px-1.5 pb-1 pt-5 text-[10.5px] font-semibold text-white">
                       <span>{KIND_LABEL[f.kind] ?? "Photo"}</span>{n > 0 && <span className="rounded-full bg-white/90 px-1.5 text-[10px] text-[#0f766e]">{n}</span>}
                     </span>
-                  </button>
+                    </button>
+                  </div>
                 );
               })}
             </div>
           )}
         </div>
       ))}
+
+      {/* Clic derecho sobre una foto o archivo */}
+      {menu && (() => {
+        const f = menu.f, mine = canDelete(f.uploaded_by);
+        const item = "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13.5px] font-medium text-[#0b1f3a] transition-colors duration-100 hover:bg-[#e9f7f4] hover:text-[#0f766e]";
+        const left = Math.max(8, Math.min(menu.x, (typeof window === "undefined" ? 9999 : window.innerWidth) - 196));
+        const top = Math.max(8, Math.min(menu.y, (typeof window === "undefined" ? 9999 : window.innerHeight) - (mine ? 176 : 56)));
+        return (
+          <div className="fixed inset-0 z-[97]" onClick={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null); }}>
+            <div role="menu" style={{ left, top }} onClick={(e) => e.stopPropagation()} className="absolute w-[11.5rem] rounded-xl border border-[#cfe9e3] bg-white p-1 shadow-[0_12px_28px_rgba(15,40,60,0.18)]">
+              <button type="button" role="menuitem" className={item} onClick={() => { setMenu(null); setView(f); setDel(null); setNote(null); }}><I d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12zM12 14.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" className="h-4 w-4" />Open</button>
+              {mine && <button type="button" role="menuitem" className={item} onClick={() => { setMenu(null); setDel(null); setView(f); setNote(f.caption ?? ""); }}><I d={PEN} className="h-4 w-4" />{f.caption ? "Edit note" : "Add a note"}</button>}
+              {mine && <button type="button" role="menuitem" className={item} onClick={() => { setMenu(null); toggle(f.id); }}><I d="M4 12.5 9 17.5 20 6.5" className="h-4 w-4" />{sel?.has(f.id) ? "Unselect" : "Select"}</button>}
+              {mine && <button type="button" role="menuitem" className={`${item} !text-[#be123c] hover:!bg-[#fff1f2] hover:!text-[#be123c]`} onClick={() => { setMenu(null); quickDelete(f); }}><I d={TRASH} className="h-4 w-4" />Delete</button>}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Motivo para borrar desde la papelera de la esquina (manager y oficina, cuando la foto es de otra persona) */}
+      {del?.type === "file" && !view && (
+        <div className="fixed inset-0 z-[98] flex items-center justify-center bg-slate-950/40 p-4 animate-[bp-fade_0.15s_ease-out]" role="dialog" aria-label="Delete file" onClick={() => { setDel(null); setReason(""); }}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-3 shadow-xl" onClick={(e) => e.stopPropagation()}>{deletePanel(del)}</div>
+        </div>
+      )}
 
       {/* Visor: foto grande o PDF, con autor, nota, comentarios y borrar */}
       {view && (
@@ -461,7 +516,7 @@ export default function JobFiles({ jobId, variant = "office", readOnly = false, 
                     {!(del?.type === "file" && del.id === view.id) && (
                       <button type="button" onClick={() => { setDel({ type: "file", id: view.id, author: view.uploaded_by, label: view.file_type === "pdf" ? "document" : "photo", path: view.path }); setReason(""); }}
                         className="flex items-center gap-1.5 rounded-lg border border-[#fecdd3] px-3 py-1.5 text-[13px] font-semibold text-[#be123c] transition-colors hover:bg-[#fff1f2]">
-                        <I d="M5 7h14M10 7V4.5h4V7M7 7l.8 12.5h8.4L17 7M10 11v5M14 11v5" className="h-4 w-4" />Delete</button>
+                        <I d={TRASH} className="h-4 w-4" />Delete</button>
                     )}
                   </div>
                 )}
