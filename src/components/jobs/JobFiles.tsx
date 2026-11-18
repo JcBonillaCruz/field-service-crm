@@ -79,6 +79,11 @@ export default function JobFiles({ jobId, variant = "office", readOnly = false, 
   const [reason, setReason] = useState("");
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [openC, setOpenC] = useState<string | null>(null);
+  // Paso 5.8e: elegir varias fotos o archivos con un chequecito para borrarlos o cambiarles el tipo de una vez
+  const [sel, setSel] = useState<Set<string> | null>(null);
+  const [bulkDel, setBulkDel] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null); // nota de la foto abierta (null = no se está editando)
   const camRef = useRef<HTMLInputElement>(null);
   const upRef = useRef<HTMLInputElement>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
@@ -206,6 +211,47 @@ export default function JobFiles({ jobId, variant = "office", readOnly = false, 
     setDel(null); setReason(""); say("Deleted"); load();
   }
 
+  // ---------- Varias a la vez (Paso 5.8e) ----------
+  const picked = d && sel ? d.files.filter((f) => sel.has(f.id)) : [];
+  const bulkNeedsReason = picked.some((f) => needsReason(f.uploaded_by));
+  const stopSelect = () => { setSel(null); setBulkDel(false); setReason(""); };
+  const toggle = (id: string) => setSel((x) => { const n = new Set(x ?? []); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  async function deleteMany() {
+    if (!picked.length || bulkBusy) return;
+    const why = reason.trim();
+    if (bulkNeedsReason && !why) return say("Write why you are deleting them.", true);
+    if (!(await confirmDelete({ title: `Delete ${picked.length} file${picked.length === 1 ? "" : "s"}?`, message: "They are removed for everyone on the job. The job history keeps who deleted them and when." }))) return;
+    setBulkBusy(true);
+    const sb = createClient(); const paths: string[] = []; let failed = "";
+    for (const f of picked) {
+      const { data: path, error } = await sb.rpc("job_file_delete", { p_id: f.id, p_reason: why || null });
+      if (error) { failed = jobError(error); continue; }
+      if (path) paths.push(path as string);
+    }
+    await removeJobFiles(jobId, paths);
+    setBulkBusy(false); stopSelect();
+    say(failed ? `${paths.length} deleted. Some couldn't be deleted: ${failed}` : `${paths.length} deleted`, Boolean(failed));
+    load();
+  }
+  async function editFiles(ids: string[], change: { kind?: string; caption?: string }) {
+    const { error } = await createClient().rpc("job_files_edit", { p_ids: ids, p_kind: change.kind ?? null, p_caption: change.caption ?? null, p_set_caption: change.caption !== undefined });
+    if (error) { say(/job_files_edit|does not exist|Could not find/i.test(error.message) ? "Editing needs paso-5.8e in Supabase." : error.hint || jobError(error), true); return false; }
+    return true;
+  }
+  async function typeMany(kind: string) {
+    const ids = picked.filter((f) => f.file_type === "image").map((f) => f.id);
+    if (!ids.length) return say("Choose at least one photo. PDF files don't have a type.", true);
+    setBulkBusy(true);
+    const ok = await editFiles(ids, { kind });
+    setBulkBusy(false);
+    if (ok) { stopSelect(); say(`${ids.length} photo${ids.length === 1 ? "" : "s"} changed to ${KINDS.find((k) => k.value === kind)?.label ?? kind}`); load(); }
+  }
+  async function saveNote() {
+    if (!view || note === null) return;
+    const ok = await editFiles([view.id], { caption: note });
+    if (ok) { setView({ ...view, caption: note.trim() || null }); setNote(null); say("Note saved"); load(); }
+  }
+
   if (off || !d) return null;
 
   const groups = [...d.phases.map((p) => ({ id: p.id as string | null, name: p.name })), { id: null as string | null, name: d.phases.length ? "General" : "" }]
@@ -252,8 +298,43 @@ export default function JobFiles({ jobId, variant = "office", readOnly = false, 
     <section className={box}>
       <div className="flex items-center justify-between gap-3">
         <h2 className={title}>Photos, reports &amp; files</h2>
-        {!empty && <span className="text-[12.5px] text-slate-400">{photos} photo{photos === 1 ? "" : "s"} · {d.reports.length} report{d.reports.length === 1 ? "" : "s"}</span>}
+        <span className="flex items-center gap-3">
+          {!empty && <span className="text-[12.5px] text-slate-400">{photos} photo{photos === 1 ? "" : "s"} · {d.reports.length} report{d.reports.length === 1 ? "" : "s"}</span>}
+          {d.files.some((f) => canDelete(f.uploaded_by)) && (
+            <button type="button" onClick={() => (sel ? stopSelect() : setSel(new Set()))} className={`rounded-lg px-2.5 py-1 text-[13px] font-semibold transition-colors ${sel ? "bg-slate-100 text-slate-600 hover:bg-slate-200" : "text-[#0f766e] hover:bg-[#e9f7f4]"}`}>{sel ? "Cancel" : "Select"}</button>
+          )}
+        </span>
       </div>
+
+      {/* Paso 5.8e: barra para varias fotos o archivos a la vez */}
+      {sel && (
+        <div className="mt-3 rounded-xl border border-[#b6dcd5] bg-[#f3fbf8] p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="mr-auto text-[13.5px] font-semibold text-[#0b1f3a]">{picked.length ? `${picked.length} selected` : "Tap the photos or files you want"}</p>
+            <button type="button" onClick={() => { const all = d.files.filter((f) => canDelete(f.uploaded_by)).map((f) => f.id); setSel(new Set(picked.length === all.length ? [] : all)); }}
+              className="rounded-lg px-2.5 py-1.5 text-[13px] font-semibold text-[#0f766e] hover:bg-white">{picked.length && picked.length === d.files.filter((f) => canDelete(f.uploaded_by)).length ? "Clear all" : "Select all"}</button>
+            <button type="button" disabled={!picked.length || bulkBusy} onClick={() => { setBulkDel(true); setReason(""); }}
+              className="flex items-center gap-1.5 rounded-lg bg-[#e11d48] px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#be123c] disabled:opacity-40">
+              <I d="M5 7h14M10 7V4.5h4V7M7 7l.8 12.5h8.4L17 7M10 11v5M14 11v5" className="h-4 w-4" />Delete</button>
+          </div>
+          {picked.some((f) => f.file_type === "image") && !bulkDel && (
+            <div className="mt-2 max-w-xs"><Pick label="Change type to" value="" options={[{ value: "", label: "Choose…" }, ...KINDS]} onChange={(v) => { if (v) typeMany(v); }} /></div>
+          )}
+          {bulkDel && (
+            <div className="mt-2 rounded-xl border border-[#fecdd3] bg-[#fff1f2] p-3">
+              <p className="text-[13px] font-semibold text-[#9f1239]">Delete {picked.length} file{picked.length === 1 ? "" : "s"}?</p>
+              {bulkNeedsReason && (
+                <textarea autoFocus value={reason} onChange={(e) => setReason(e.target.value)} rows={2} maxLength={300} placeholder="Why are you deleting them? (the owner will see this)"
+                  className="mt-2 w-full resize-none rounded-lg border border-[#fecdd3] bg-white px-3 py-2 text-[14px] text-[#0b1f3a] outline-none focus:border-[#e11d48]" />
+              )}
+              <div className="mt-2 flex justify-end gap-2">
+                <button type="button" onClick={() => { setBulkDel(false); setReason(""); }} className="rounded-lg px-3 py-1.5 text-[13px] font-semibold text-slate-600 hover:bg-white">Cancel</button>
+                <button type="button" onClick={deleteMany} disabled={bulkBusy} className="rounded-lg bg-[#e11d48] px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#be123c] disabled:opacity-60">{bulkBusy ? "Deleting…" : "Delete"}</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {!readOnly && (
         <>
@@ -327,7 +408,14 @@ export default function JobFiles({ jobId, variant = "office", readOnly = false, 
               {g.files.map((f) => {
                 const n = commentsOf("file", f.id).length;
                 return (
-                  <button key={f.id} type="button" onClick={() => { setView(f); setDel(null); }} className="group relative aspect-square overflow-hidden rounded-xl bg-slate-100 text-left transition-shadow duration-150 hover:shadow-[0_8px_18px_rgba(15,40,60,0.14)]">
+                  <button key={f.id} type="button" aria-pressed={sel ? sel.has(f.id) : undefined} disabled={Boolean(sel) && !canDelete(f.uploaded_by)}
+                    onClick={() => { if (sel) toggle(f.id); else { setView(f); setDel(null); setNote(null); } }}
+                    className={`group relative aspect-square overflow-hidden rounded-xl bg-slate-100 text-left transition-shadow duration-150 hover:shadow-[0_8px_18px_rgba(15,40,60,0.14)] disabled:opacity-35 ${sel?.has(f.id) ? "ring-[3px] ring-[#0f766e] ring-offset-2" : ""}`}>
+                    {sel && canDelete(f.uploaded_by) && (
+                      <span className={`absolute left-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full border-2 transition-colors ${sel.has(f.id) ? "border-[#0f766e] bg-[#0f766e] text-white" : "border-white bg-black/25 text-transparent"}`}>
+                        <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m4.5 10.5 3.5 3.5 7.5-8" /></svg>
+                      </span>
+                    )}
                     {f.file_type === "pdf" ? (
                       <span className="flex h-full w-full flex-col items-center justify-center gap-1 bg-[#fff7f2] px-2 text-[#e8713a]"><I d={DOC} className="h-8 w-8 transition-transform duration-150 group-hover:scale-110" />
                         <span className="line-clamp-2 break-all text-center text-[11px] font-medium text-slate-600">{f.file_name ?? "PDF"}</span></span>
@@ -363,13 +451,34 @@ export default function JobFiles({ jobId, variant = "office", readOnly = false, 
               <button type="button" onClick={() => setView(null)} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-500 transition-all duration-200 hover:rotate-90 hover:bg-red-50 hover:text-red-600">
                 <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 5l10 10M15 5 5 15" /></svg></button>
             </div>
-            {view.caption && <p className="mt-2 text-[14px] text-slate-700">{view.caption}</p>}
+            {note === null ? (
+              <>
+                {view.caption && <p className="mt-2 text-[14px] text-slate-700">{view.caption}</p>}
+                {canDelete(view.uploaded_by) && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button type="button" onClick={() => setNote(view.caption ?? "")} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-[13px] font-semibold text-slate-700 transition-colors hover:border-[#b6dcd5] hover:bg-[#e9f7f4] hover:text-[#0f766e]">
+                      <I d={PEN} className="h-4 w-4" />{view.caption ? "Edit note" : "Add a note"}</button>
+                    {!(del?.type === "file" && del.id === view.id) && (
+                      <button type="button" onClick={() => { setDel({ type: "file", id: view.id, author: view.uploaded_by, label: view.file_type === "pdf" ? "document" : "photo", path: view.path }); setReason(""); }}
+                        className="flex items-center gap-1.5 rounded-lg border border-[#fecdd3] px-3 py-1.5 text-[13px] font-semibold text-[#be123c] transition-colors hover:bg-[#fff1f2]">
+                        <I d="M5 7h14M10 7V4.5h4V7M7 7l.8 12.5h8.4L17 7M10 11v5M14 11v5" className="h-4 w-4" />Delete</button>
+                    )}
+                  </div>
+                )}
+                {del?.type === "file" && del.id === view.id && deletePanel(del)}
+              </>
+            ) : (
+              <div className="mt-2">
+                <textarea autoFocus value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={300} placeholder="Note for this file"
+                  className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-[14px] text-[#0b1f3a] outline-none focus:border-[#14a39a]" />
+                <div className="mt-2 flex justify-end gap-2">
+                  <button type="button" onClick={() => setNote(null)} className="rounded-lg px-3 py-1.5 text-[13px] font-semibold text-slate-500 hover:bg-slate-100">Cancel</button>
+                  <button type="button" onClick={saveNote} className="rounded-lg bg-[#0f766e] px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#0c5f59]">Save note</button>
+                </div>
+              </div>
+            )}
             <p className="mt-3 text-[12.5px] font-semibold text-slate-500">Comments</p>
             {commentBox("file", view.id)}
-            {canDelete(view.uploaded_by) && (del?.type === "file" && del.id === view.id ? deletePanel(del) : (
-              <button type="button" onClick={() => { setDel({ type: "file", id: view.id, author: view.uploaded_by, label: view.file_type === "pdf" ? "document" : "photo", path: view.path }); setReason(""); }}
-                className="mt-4 rounded-lg px-2.5 py-1.5 text-[13px] font-semibold text-slate-400 transition-colors hover:bg-[#fff1f2] hover:text-[#e11d48]">Delete {view.file_type === "pdf" ? "document" : "photo"}</button>
-            ))}
           </div>
         </div>
       )}
