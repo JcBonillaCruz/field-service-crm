@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { locCheck } from "@/lib/live-map";
+import { SharingBadge } from "@/components/jobs/tech/LocationPinger";
 import { dayStart, isoDay, sameDay } from "@/lib/jobs";
 import { KIND_META, RemovedTime, TimeEntry, byDay, fmtClock, hm, moveAnchor, needsTimeSql, rangeLabel, rangeOf, sumDay, timeError, totalOf } from "@/lib/timesheets";
 import { useSwipe } from "@/components/ui/useSwipe";
@@ -57,6 +59,7 @@ export default function MyTimesheet({ companyId, userId, weekStartsOn }: { compa
     const { error: e } = await createClient().rpc("tech_clock", { p_company: companyId, p_action: shift ? "out" : "in", p_lat: pos?.coords.latitude ?? null, p_lng: pos?.coords.longitude ?? null });
     setBusy(false);
     if (e) return setError(timeError(e));
+    locCheck(); // Paso 5.9
     load();
   }
 
@@ -90,6 +93,7 @@ export default function MyTimesheet({ companyId, userId, weekStartsOn }: { compa
           <div className="min-w-0">
             <h1 className="text-[20px] font-semibold tracking-tight text-[#0b1f3a]">My timesheet</h1>
             <p className="truncate text-[13px] text-slate-500">Your hours, day by day</p>
+            <SharingBadge />
           </div>
         </div>
         <button type="button" onClick={clock} disabled={busy}

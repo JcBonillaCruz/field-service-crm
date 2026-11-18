@@ -3,6 +3,7 @@
 import { askConfirm } from "@/lib/confirm";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions, Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { createClient } from "@/lib/supabase/client";
@@ -20,8 +21,11 @@ import JobTray from "@/components/jobs/JobTray";
 import { TechDot } from "@/components/jobs/EventBar";
 import { Check, Chevron, optionClass, panelClass } from "@/components/ui/SearchSelect";
 
+// Paso 5.9: el mapa solo se descarga cuando alguien abre la vista Map (no pesa en el calendario)
+const LiveMap = dynamic(() => import("@/components/jobs/map/LiveMap"), { ssr: false, loading: () => <div className="flex h-full items-center justify-center text-[13.5px] text-slate-400">Loading map…</div> });
+
 const VIEWS: { id: CalView; label: string }[] = [
-  { id: "day", label: "Day" }, { id: "week", label: "Week" }, { id: "workweek", label: "Mon–Fri" }, { id: "month", label: "Month" }, { id: "dispatch", label: "Dispatch" },
+  { id: "day", label: "Day" }, { id: "week", label: "Week" }, { id: "workweek", label: "Mon–Fri" }, { id: "month", label: "Month" }, { id: "map", label: "Map" }, { id: "dispatch", label: "Dispatch" },
 ];
 const COLOR_KEY = "bp-schedule-color";
 const TRAY_KEY = "bp-schedule-tray";
@@ -549,7 +553,9 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
       </div>
 
         <div className="relative min-h-0 min-w-0 flex-1">
-          {view === "dispatch" ? (
+          {view === "map" ? (
+            <LiveMap companyId={companyId} day={anchor} visits={shown} team={team} />
+          ) : view === "dispatch" ? (
             <DispatchGrid days={days} rows={cols} visits={shown} dStart={visStart} dEnd={visEnd} preview={preview} handlers={handlers} apiRef={apiRef} now={now} />
           ) : view === "day" ? (
             <DispatchGrid big days={days} rows={cols} visits={shown} dStart={visStart} dEnd={visEnd} preview={preview} handlers={handlers} apiRef={apiRef} now={now} scrollTo={scrollTo} />
@@ -560,7 +566,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
             <TimeGrid cols={cols} visits={shown} visStart={visStart} visEnd={visEnd} workStart={workStart} workEnd={workEnd} slot={slot}
               preview={preview} handlers={handlers} apiRef={apiRef} now={now} dispatch={false} scrollTo={scrollTo} />
           )}
-          {!loading && visits.length === 0 && view !== "month" && (
+          {!loading && visits.length === 0 && view !== "month" && view !== "map" && (
             <div className="pointer-events-none absolute left-1/2 top-24 -translate-x-1/2 rounded-full bg-white/90 px-4 py-2 text-[13px] text-slate-500 shadow-sm ring-1 ring-slate-200">
               No jobs here yet. Tap or drag on an empty time to create one.
             </div>
@@ -627,6 +633,7 @@ const VIEW_ICON: Record<CalView, string> = {
   day: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 15h6", week: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 10v10M14 10v10",
   workweek: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M10 10v10M15 10v10", month: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M4 15h16M9 10v10M14 10v10",
   dispatch: "M4 6h16M4 12h16M4 18h16M8 4v4M13 10v4M10 16v4",
+  map: "M12 21s6.5-5.8 6.5-11A6.5 6.5 0 1 0 5.5 10c0 5.2 6.5 11 6.5 11zM12 12.3a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6z",
 };
 function ViewMenu({ value, onChange }: { value: CalView; onChange: (v: CalView) => void }) {
   return (
@@ -651,13 +658,13 @@ function ViewMenu({ value, onChange }: { value: CalView; onChange: (v: CalView) 
   );
 }
 
-// Selector de vista en computadora: Day · Week · Month a la vista; Mon–Fri y Dispatch en "More"
+// Selector de vista en computadora: Day · Week · Month · Map a la vista; Mon–Fri y Dispatch en "More"
 function ViewSwitch({ value, onChange }: { value: CalView; onChange: (v: CalView) => void }) {
   const extra = value === "workweek" || value === "dispatch";
   const seg = (on: boolean) => `flex h-9 items-center gap-1 rounded-[9px] px-4 text-[14px] font-semibold transition-all duration-150 focus:outline-none ${on ? "bg-[#0f766e] text-white shadow-sm shadow-[#0f766e]/30" : "text-slate-600 hover:bg-[#e9f7f4] hover:text-[#0f766e]"}`;
   return (
     <div className="hidden items-center gap-0.5 rounded-xl border border-[#cfe9e3] bg-white p-[3px] lg:flex" role="group" aria-label="Calendar view">
-      {(["day", "week", "month"] as const).map((id) => (
+      {(["day", "week", "month", "map"] as const).map((id) => (
         <button key={id} type="button" aria-pressed={value === id} onClick={() => onChange(id)} className={seg(value === id)}>{VIEWS.find((v) => v.id === id)?.label}</button>
       ))}
       <Listbox value={value} onChange={onChange}>

@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { locCheck } from "@/lib/live-map";
+import { SharingBadge } from "@/components/jobs/tech/LocationPinger";
 import {
   JobStatus, SiteAddress, TechChip, VISIT_LABEL, VisitStatus, addDays, addressLine, dayStart, fmtTime, isoDay, jobError, sameDay, startOfWeek, usd,
 } from "@/lib/jobs";
@@ -64,6 +66,7 @@ export default function MyJobs({ companyId, userId }: { companyId: string; userI
     const { error: e } = await createClient().rpc("tech_clock", { p_company: companyId, p_action: shift ? "out" : "in", p_lat: pos?.coords.latitude ?? null, p_lng: pos?.coords.longitude ?? null });
     setBusy(false);
     if (e) return setError(e.hint || jobError(e));
+    locCheck(); // Paso 5.9: empieza o deja de compartir la ubicación al momento
     load();
   }
   function goDay(d: Date) { setDay(d); const w = startOfWeek(d, 0); if (w.getTime() !== week.getTime()) setWeek(w); }
@@ -88,6 +91,7 @@ export default function MyJobs({ companyId, userId }: { companyId: string; userI
         <div className="min-w-0">
           <h1 className="text-[20px] font-semibold tracking-tight text-[#0b1f3a]">My jobs</h1>
           <p className="text-[13px] text-slate-500">{sameDay(day, today) ? "Today, " : ""}{day.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</p>
+          <SharingBadge className="mt-0.5" />
         </div>
         <Link prefetch={false} href="/dashboard/jobs/my-timesheet" aria-label="My timesheet" title="My timesheet"
           className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-[#0f766e] transition-all hover:scale-110 hover:border-[#14a39a] hover:bg-[#e9f7f4] active:scale-95">

@@ -6,7 +6,7 @@ import { Role } from "@/lib/types";
 // =====================================================================
 export type JobStatus = "unscheduled" | "scheduled" | "on_my_way" | "in_progress" | "on_hold" | "completed" | "cancelled";
 export type VisitStatus = "unscheduled" | "scheduled" | "on_my_way" | "in_progress" | "paused" | "on_hold" | "completed" | "cancelled";
-export type CalView = "day" | "week" | "workweek" | "month" | "dispatch";
+export type CalView = "day" | "week" | "workweek" | "month" | "dispatch" | "map";
 export type Priority = "low" | "normal" | "high" | "urgent";
 
 export type SiteAddress = { label?: string | null; street?: string | null; unit?: string | null; city?: string | null; state?: string | null; zip?: string | null; country?: string | null } | null;
@@ -46,6 +46,8 @@ export type JobSettings = {
   // Paso 5.5: rangos propios del Tune-Up (null = los de la app)
   tuneup_ranges?: Record<string, { min?: number | null; max?: number | null }> | null;
   // Paso 5.8: avisos al cliente (sin el SQL nuevo llegan vacíos y todo queda apagado)
+  // Paso 5.9: compartir ubicación con el día iniciado (sin el SQL nuevo llega vacío = encendido)
+  track_location?: boolean;
   cn_on_my_way?: boolean; cn_reminder?: boolean; cn_reminder_days?: number; cn_review?: boolean; review_url?: string | null; review_msg_en?: string | null; review_msg_es?: string | null;
 };
 export type JobType = { id: string; name: string; color: string; default_duration_min: number; form_kind: "work" | "tune_up"; position: number; is_active: boolean };
@@ -165,7 +167,7 @@ export const durationLabel = (min: number) => { const h = Math.floor(min / 60), 
 
 // Días visibles de cada vista
 export function viewDays(view: CalView, anchor: Date, weekStartsOn: number): Date[] {
-  if (view === "day") return [dayStart(anchor)];
+  if (view === "day" || view === "map") return [dayStart(anchor)];
   if (view === "dispatch") { const s = startOfWeek(anchor, weekStartsOn); return [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(s, i)); }
   if (view === "workweek") { const mon = startOfWeek(anchor, 1); return [0, 1, 2, 3, 4].map((i) => addDays(mon, i)); }
   if (view === "week") { const s = startOfWeek(anchor, weekStartsOn); return [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(s, i)); }
@@ -179,7 +181,7 @@ export function shiftAnchor(view: CalView, anchor: Date, dir: -1 | 1): Date {
 }
 export function rangeLabel(view: CalView, anchor: Date, weekStartsOn: number): string {
   if (view === "month") return anchor.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-  if (view === "day") return anchor.toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric", year: "numeric" });
+  if (view === "day" || view === "map") return anchor.toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric", year: "numeric" });
   const days = viewDays(view, anchor, weekStartsOn);
   const a = days[0], b = days[days.length - 1];
   const mon = (d: Date) => d.toLocaleDateString("en-US", { month: "short" });
@@ -189,6 +191,8 @@ export function rangeLabel(view: CalView, anchor: Date, weekStartsOn: number): s
 
 export const addressLine = (a: SiteAddress) => (a ? [a.street, a.unit, a.city, [a.state, a.zip].filter(Boolean).join(" ")].filter((x) => x && String(x).trim()).join(", ") : "");
 export const mapsLink = (a: SiteAddress) => { const q = addressLine(a); return q ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}` : null; };
+// Paso 5.9: abre Google Maps con la ruta lista hacia la dirección (en el teléfono abre la app con la voz)
+export const navLink = (a: SiteAddress) => { const q = addressLine(a); return q ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}` : null; };
 export const usd = (v: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(v) || 0);
 
 // Color con transparencia (para el fondo suave de la barra)

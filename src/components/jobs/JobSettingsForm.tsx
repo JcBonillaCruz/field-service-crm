@@ -136,6 +136,8 @@ export default function JobSettingsForm({ companyId, settings, types: t0, tags: 
             text="On: they can quote and collect on site. Off: they only see names and quantities, never amounts." />
           <Switch on={s.require_gps_on_start} onChange={(v) => patch({ require_gps_on_start: v })} label="Require location to start a job"
             text="The start of every job saves where the technician was." />
+          <Switch on={s.track_location !== false} onChange={(v) => patch({ track_location: v })} label="Share live location during the work day"
+            text="From Clock in to Clock out, the office sees each person on the Schedule map while BrightPro is open on their phone. They see a “Sharing location” notice. The route is kept for 30 days." />
           <Switch on={s.auto_clock_in} onChange={(v) => patch({ auto_clock_in: v })} label="Clock in automatically"
             text="Tapping On my way clocks the technician in for the day if they forgot." />
         </section>

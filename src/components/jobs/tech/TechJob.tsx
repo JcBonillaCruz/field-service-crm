@@ -10,10 +10,11 @@ import { askConfirm } from "@/lib/confirm";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { locCheck } from "@/lib/live-map";
 import BarcodeScanner from "@/components/catalog/BarcodeScanner";
 import { inputClass } from "@/components/customers/ui";
 import {
-  HOLD_REASONS, SiteAddress, TechChip, VISIT_LABEL, VisitStatus, addMinutes, addressLine, fmtDayShort, fmtTime, holdLabel, jobError, mapsLink, usd,
+  HOLD_REASONS, SiteAddress, TechChip, VISIT_LABEL, VisitStatus, addMinutes, addressLine, fmtDayShort, fmtTime, holdLabel, jobError, navLink, usd,
 } from "@/lib/jobs";
 import { StatusArt, TechDot } from "@/components/jobs/EventBar";
 import { ETA_DEFAULT } from "@/lib/customer-notice-text";
@@ -87,6 +88,7 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
     });
     setBusy("");
     if (e) { setError(e.hint || jobError(e)); return; }
+    locCheck(); // Paso 5.9: la oficina ve en el mapa dónde tocó el botón
     // Aviso a la oficina (campana + push): para que el dueño sepa al momento y pueda cobrar antes de que te vayas
     fetch("/api/jobs/tech-event", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ visitId: visit.id, action, etaMin }) })
       .then((r) => r.json()).then((r: { customer?: { ok: boolean } | null; eta?: string | null }) => {
@@ -138,7 +140,7 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
 
   const j = d.job;
   const s = visit?.starts_at ? new Date(visit.starts_at) : null, e = visit?.ends_at ? new Date(visit.ends_at) : null;
-  const maps = mapsLink(j.site_address), addr = addressLine(j.site_address);
+  const maps = navLink(j.site_address), addr = addressLine(j.site_address);
   const st = visit?.status ?? "scheduled";
   const canWork = ["on_my_way", "in_progress", "paused"].includes(st);
   // Terminado o cancelado: se puede ver todo, pero ya no se cambia nada
@@ -183,7 +185,7 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
           <a href={maps ?? "#"} target="_blank" rel="noreferrer" className="flex items-center gap-3 px-4 py-3 active:bg-slate-50">
             <span className="text-slate-400"><Icon d="M12 21s7-6.2 7-11.5a7 7 0 1 0-14 0C5 14.8 12 21 12 21zM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" /></span>
             <span className="min-w-0 flex-1 text-[14.5px] text-[#0b1f3a]">{addr}</span>
-            <span className="shrink-0 rounded-lg bg-[#e9f7f4] px-2.5 py-1.5 text-[13px] font-semibold text-[#0f766e]">Directions</span>
+            <span className="shrink-0 rounded-lg bg-[#e9f7f4] px-2.5 py-1.5 text-[13px] font-semibold text-[#0f766e]">Navigate</span>
           </a>
         )}
         {j.customer_phone && (
