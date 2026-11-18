@@ -83,7 +83,7 @@ export default function MyTimesheet({ companyId, userId, weekStartsOn }: { compa
   );
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-3 pb-24 pt-3 sm:px-4 lg:pt-6" {...swipe}>
+    <div className="min-h-[calc(100dvh-4rem)] w-full bg-[#f4f6f8] px-3 pb-24 pt-3 sm:px-4 lg:px-6 lg:pb-8 lg:pt-5" {...swipe}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="hidden shrink-0 sm:inline-flex"><TimesheetArt size={40} /></span>
@@ -99,6 +99,8 @@ export default function MyTimesheet({ companyId, userId, weekStartsOn }: { compa
         </button>
       </div>
 
+      <div className="lg:mt-4 lg:grid lg:grid-cols-[23rem_minmax(0,1fr)] lg:items-start lg:gap-5">
+      <div className="lg:sticky lg:top-20">
       {/* Semana: flechas (o deslizar con el dedo) */}
       <div className="mt-3 flex items-center gap-1 rounded-2xl border border-slate-200 bg-white p-1.5">
         <button type="button" aria-label="Previous week" onClick={() => go(-1)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100"><Arrow dir="left" /></button>
@@ -129,8 +131,10 @@ export default function MyTimesheet({ companyId, userId, weekStartsOn }: { compa
         )}
       </section>
 
+      </div>
+
       {/* Día por día */}
-      <ul className="mt-4 space-y-2">
+      <ul className="mt-4 space-y-2 lg:mt-3">
         {sums.map((s, i) => {
           const d = days[i], isToday = sameDay(d, today), future = d > today && !isToday;
           const open = openDay === s.key, gone = removedOf(s.key);
@@ -169,12 +173,13 @@ export default function MyTimesheet({ companyId, userId, weekStartsOn }: { compa
           );
         })}
       </ul>
+      </div>
 
-      <p className="mt-4 text-center text-[12.5px] leading-relaxed text-slate-500">
+      <p className="mt-4 text-center text-[12.5px] leading-relaxed text-slate-500 lg:text-left">
         Time is recorded when you tap Clock in, On my way, Start and Finish.<br />
         Something wrong? Ask the office to correct it — the change shows here with the reason.
       </p>
-      <p className="mt-2 text-center"><Link prefetch={false} href="/dashboard/jobs/mine" className="text-[13px] font-semibold text-[#0f766e]">Go to My Jobs</Link></p>
+      <p className="mt-2 text-center lg:text-left"><Link prefetch={false} href="/dashboard/jobs/mine" className="text-[13px] font-semibold text-[#0f766e]">Go to My Jobs</Link></p>
     </div>
   );
 }

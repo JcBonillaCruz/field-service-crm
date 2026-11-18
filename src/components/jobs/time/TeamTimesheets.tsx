@@ -243,7 +243,7 @@ export default function TeamTimesheets({ companyId, team, weekStartsOn, canDelet
           <div className="mt-3 hidden overflow-hidden rounded-2xl border border-slate-200 bg-white lg:block">
             <table className="w-full text-left text-[14px]">
               <thead><tr className="border-b border-slate-200 text-[11.5px] font-semibold uppercase tracking-wide text-slate-400">
-                <th className="py-3 pl-5 pr-3">Team member</th><th className="py-3 pr-3">Right now</th><th className="py-3 pr-3 text-right">Days</th><th className="py-3 pr-3 text-right">On site</th>
+                <th className="py-3 pl-5 pr-3">Team member</th><th className="py-3 pr-3">Right now</th><th className="py-3 pr-3 text-right" title="Days with time recorded in this period">Days worked</th><th className="py-3 pr-3 text-right">On site</th>
                 <th className="py-3 pr-3 text-right">Travel</th><th className="py-3 pr-3 text-right">Other</th><th className="py-3 pr-3 text-right">Jobs</th><th className="w-56 py-3 pr-3">Hours worked</th><th className="w-10 py-3 pr-4" />
               </tr></thead>
               <tbody>

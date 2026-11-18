@@ -7,25 +7,109 @@ import { KIND_META, RemovedTime, TimeEntry, fmtClock, hm, isStale, minutesOf } f
 export function TimesheetArt({ size = 44 }: { size?: number }) {
   return (
     <svg viewBox="0 0 48 48" width={size} height={size} aria-hidden="true">
-      <circle cx="24" cy="24" r="22" fill="#e9f7f4" />
-      <rect x="11" y="10" width="20" height="26" rx="3.5" fill="#fff" stroke="#14a39a" strokeWidth="1.6" />
-      <path d="M15.5 17h11M15.5 22h8M15.5 27h5" stroke="#9ad9cd" strokeWidth="1.8" strokeLinecap="round" />
-      <circle cx="31.5" cy="31.5" r="8.5" fill="#0f766e" />
-      <path d="M31.5 26.8v5l3.2 2" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <circle cx="24" cy="25" r="20" fill="#dff5ef" />
+      <rect x="9" y="8" width="21" height="28" rx="2.8" fill="#fff" stroke="#8fd3c5" strokeWidth="1.2" />
+      <rect x="15.5" y="6" width="8" height="4" rx="1.6" fill="#0f766e" />
+      <rect x="12.5" y="14" width="10" height="1.9" rx=".95" fill="#14a39a" />
+      <rect x="12.5" y="18.6" width="14" height="1.6" rx=".8" fill="#c9ece5" /><rect x="12.5" y="22.4" width="12" height="1.6" rx=".8" fill="#c9ece5" /><rect x="12.5" y="26.2" width="8" height="1.6" rx=".8" fill="#c9ece5" />
+      <circle cx="32" cy="32" r="9.6" fill="#0f766e" stroke="#fff" strokeWidth="1.6" />
+      <circle cx="32" cy="32" r="6.6" fill="#fff" />
+      <path d="M32 27.8V32" stroke="#0b1f3a" strokeWidth="1.7" strokeLinecap="round" /><path d="M32 32l3 1.9" stroke="#e8713a" strokeWidth="1.7" strokeLinecap="round" />
+      <circle cx="32" cy="32" r="1.2" fill="#0b1f3a" />
     </svg>
   );
 }
 export type KpiKind = "hours" | "site" | "travel" | "live" | "review";
-export function KpiArt({ kind, size = 40 }: { kind: KpiKind; size?: number }) {
-  const bg = { hours: "#e9f7f4", site: "#fff6e6", travel: "#f3efff", live: "#e7f8ee", review: "#fff1f2" }[kind];
+// Íconos de las tarjetas: ilustrados a color, con varias capas, igual que los de All apps (una pieza se mueve al pasar el mouse)
+export function KpiArt({ kind, size = 48 }: { kind: KpiKind; size?: number }) {
+  const move = "transition-transform duration-300 ease-out";
   return (
-    <svg viewBox="0 0 48 48" width={size} height={size} aria-hidden="true" className="transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110">
-      <rect x="2" y="2" width="44" height="44" rx="13" fill={bg} />
-      {kind === "hours" && <><circle cx="24" cy="24" r="12" fill="#fff" stroke="#0f766e" strokeWidth="2" /><path d="M24 17v7.5l4.6 2.8" stroke="#14a39a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none" /></>}
-      {kind === "site" && <><path d="M13 34V22l11-8 11 8v12z" fill="#fff" stroke="#d97706" strokeWidth="2" strokeLinejoin="round" /><path d="M21 34v-7h6v7" stroke="#f59e0b" strokeWidth="2" strokeLinejoin="round" fill="#fde9c4" /></>}
-      {kind === "travel" && <><path d="M11 20h15v11H11z" fill="#fff" stroke="#6d28d9" strokeWidth="2" strokeLinejoin="round" /><path d="M26 23h6l5 4.5V31H26z" fill="#ddd2fb" stroke="#6d28d9" strokeWidth="2" strokeLinejoin="round" /><circle cx="17" cy="32.5" r="3" fill="#6d28d9" /><circle cx="31.5" cy="32.5" r="3" fill="#6d28d9" /></>}
-      {kind === "live" && <><circle cx="24" cy="19" r="5.5" fill="#fff" stroke="#16a34a" strokeWidth="2" /><path d="M13.5 36a10.5 10.5 0 0 1 21 0" fill="#fff" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" /><circle cx="35" cy="14" r="4.5" fill="#22c55e" stroke="#fff" strokeWidth="1.6" /></>}
-      {kind === "review" && <><path d="M24 12 37 35H11z" fill="#fff" stroke="#e11d48" strokeWidth="2" strokeLinejoin="round" /><path d="M24 20.5v7" stroke="#e11d48" strokeWidth="2.4" strokeLinecap="round" /><circle cx="24" cy="31" r="1.5" fill="#e11d48" /></>}
+    <svg viewBox="0 0 48 48" width={size} height={size} aria-hidden="true" className="shrink-0">
+      {kind === "hours" && <>
+        <circle cx="24" cy="25" r="20" fill="#dff5ef" />
+        {/* hoja de tiempos detrás */}
+        <rect x="7" y="9" width="19" height="25" rx="2.6" fill="#fff" stroke="#8fd3c5" strokeWidth="1.2" />
+        <rect x="10" y="13" width="9" height="1.8" rx=".9" fill="#14a39a" />
+        <rect x="10" y="17.4" width="13" height="1.5" rx=".75" fill="#c9ece5" /><rect x="10" y="21" width="11" height="1.5" rx=".75" fill="#c9ece5" /><rect x="10" y="24.6" width="7" height="1.5" rx=".75" fill="#c9ece5" />
+        {/* reloj */}
+        <circle cx="29" cy="28.5" r="12.6" fill="#0b5f59" />
+        <circle cx="29" cy="28" r="12" fill="#0f766e" />
+        <circle cx="29" cy="28" r="9.4" fill="#fff" />
+        <path d="M29 20.4v1.6M29 34v1.6M21.4 28H23M35 28h1.6" stroke="#9ad9cd" strokeWidth="1.3" strokeLinecap="round" />
+        <g className={`origin-[29px_28px] ${move} group-hover:rotate-[60deg]`}><path d="M29 28v-5.6" stroke="#0b1f3a" strokeWidth="1.9" strokeLinecap="round" /></g>
+        <path d="M29 28l4.2 2.6" stroke="#e8713a" strokeWidth="1.9" strokeLinecap="round" />
+        <circle cx="29" cy="28" r="1.5" fill="#0b1f3a" />
+      </>}
+      {kind === "site" && <>
+        <circle cx="24" cy="25" r="20" fill="#fff1d6" />
+        <ellipse cx="24" cy="39.5" rx="15" ry="2.2" fill="#f1d7a4" />
+        {/* casa */}
+        <rect x="27.5" y="12" width="3.6" height="7" rx=".6" fill="#b45309" />
+        <path d="M12 23.5 24 13l12 10.5V38H12z" fill="#fff" />
+        <path d="M12 23.5 24 13v25H12z" fill="#fdf3e0" />
+        <path d="M9.5 24.6 24 11.8l14.5 12.8" fill="none" stroke="#d97706" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+        <rect x="21" y="28" width="6" height="10" rx="1" fill="#f59e0b" /><circle cx="25.4" cy="33.2" r=".7" fill="#7c3f00" />
+        <rect x="14.6" y="26.5" width="4.4" height="4.4" rx=".7" fill="#bfe3f7" stroke="#d97706" strokeWidth=".9" />
+        <rect x="29" y="26.5" width="4.4" height="4.4" rx=".7" fill="#bfe3f7" stroke="#d97706" strokeWidth=".9" />
+        {/* llave de trabajo */}
+        <g className={`origin-[36px_33px] ${move} group-hover:-rotate-[18deg] group-hover:scale-110`}>
+          <circle cx="36" cy="33" r="7.2" fill="#0f766e" stroke="#fff" strokeWidth="1.6" />
+          <path d="M38.9 30.2a2.7 2.7 0 0 1-3.4 3.4l-2.6 2.6a1 1 0 0 1-1.5-1.5l2.6-2.6a2.7 2.7 0 0 1 3.4-3.4l-1.6 1.6.4 1.5 1.5.4z" fill="#fff" />
+        </g>
+      </>}
+      {kind === "travel" && <>
+        <circle cx="24" cy="25" r="20" fill="#ece7ff" />
+        {/* camino */}
+        <rect x="5" y="36.4" width="38" height="3" rx="1.5" fill="#c9bef5" />
+        <path d="M9 37.9h4M17 37.9h4M26 37.9h4M35 37.9h4" stroke="#fff" strokeWidth="1" strokeLinecap="round" />
+        {/* pin de destino */}
+        <path d="M38.5 9.5c-2.7 0-4.8 2-4.8 4.6 0 3.3 4.8 7.6 4.8 7.6s4.8-4.3 4.8-7.6c0-2.6-2.1-4.6-4.8-4.6z" fill="#e8713a" />
+        <circle cx="38.5" cy="14.2" r="1.8" fill="#fff" />
+        {/* van */}
+        <g className={`${move} group-hover:translate-x-1`}>
+          <path d="M4.5 19.8h3.4M3 23.4h3.6" stroke="#b9aaf2" strokeWidth="1.5" strokeLinecap="round" />
+          <rect x="9" y="17" width="18" height="16" rx="2.2" fill="#6d28d9" />
+          <path d="M27 21.5h5.4c.7 0 1.3.3 1.7.9l3 4.3c.3.4.4.8.4 1.3V33H27z" fill="#8b5cf6" />
+          <path d="M28.6 23.4h3.5l2.6 3.8h-6.1z" fill="#d8ecfb" />
+          <rect x="11.5" y="20" width="12.5" height="2" rx="1" fill="#a78bfa" />
+          <rect x="8" y="31.6" width="30.6" height="2.4" rx="1.2" fill="#4c1d95" />
+          <circle cx="15.5" cy="34.6" r="3.5" fill="#1e1b4b" /><circle cx="15.5" cy="34.6" r="1.4" fill="#c9bef5" />
+          <circle cx="31" cy="34.6" r="3.5" fill="#1e1b4b" /><circle cx="31" cy="34.6" r="1.4" fill="#c9bef5" />
+          <rect x="36.6" y="28.4" width="1.6" height="2" rx=".5" fill="#ffd25e" />
+        </g>
+      </>}
+      {kind === "live" && <>
+        <circle cx="24" cy="25" r="20" fill="#dcf7e6" />
+        {/* persona con casco */}
+        <path d="M9.5 41c0-7.2 5.4-11.6 12.5-11.6S34.5 33.8 34.5 41z" fill="#16a34a" />
+        <path d="M18.4 29.9 22 34.4l3.6-4.5z" fill="#fff" />
+        <circle cx="22" cy="21.5" r="6.6" fill="#f6c9a4" />
+        <path d="M14.6 19.4c.3-4.3 3.4-7.2 7.4-7.2s7.1 2.9 7.4 7.2z" fill="#f5b52a" />
+        <rect x="13.2" y="18.6" width="17.6" height="2.4" rx="1.2" fill="#e59a17" />
+        <rect x="20.9" y="11.4" width="2.2" height="5" rx="1.1" fill="#ffd25e" />
+        {/* punto verde "en vivo" con reloj */}
+        <g className={`origin-[35px_33px] ${move} group-hover:scale-[1.18]`}>
+          <circle cx="35" cy="33" r="8.4" fill="#22c55e" fillOpacity=".25" />
+          <circle cx="35" cy="33" r="6.4" fill="#fff" stroke="#16a34a" strokeWidth="1.8" />
+          <path d="M35 29.6V33l2.4 1.5" stroke="#0b1f3a" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        </g>
+      </>}
+      {kind === "review" && <>
+        <circle cx="24" cy="25" r="20" fill="#ffe7ea" />
+        {/* reloj que se quedó corriendo */}
+        <circle cx="21.5" cy="26.5" r="13.6" fill="#be123c" />
+        <circle cx="21.5" cy="26" r="13" fill="#e11d48" />
+        <circle cx="21.5" cy="26" r="10.2" fill="#fff" />
+        <path d="M21.5 17.8v1.6M21.5 32.6v1.6M13.3 26h1.6M28.1 26h1.6" stroke="#fda4af" strokeWidth="1.3" strokeLinecap="round" />
+        <path d="M21.5 26v-6M21.5 26l-4.4 2.8" stroke="#0b1f3a" strokeWidth="1.9" strokeLinecap="round" />
+        <circle cx="21.5" cy="26" r="1.5" fill="#0b1f3a" />
+        <rect x="19.3" y="9.6" width="4.4" height="3" rx="1" fill="#be123c" />
+        {/* aviso */}
+        <g className={`origin-[35.5px_34px] ${move} group-hover:rotate-[-10deg] group-hover:scale-110`}>
+          <path d="M35.5 25.4 44 40H27z" fill="#f5b52a" stroke="#fff" strokeWidth="1.6" strokeLinejoin="round" />
+          <path d="M35.5 31v4" stroke="#7c3f00" strokeWidth="1.9" strokeLinecap="round" /><circle cx="35.5" cy="37.4" r="1.1" fill="#7c3f00" />
+        </g>
+      </>}
     </svg>
   );
 }
