@@ -19,6 +19,7 @@ import JobFiles from "@/components/jobs/JobFiles";
 import JobForms from "@/components/jobs/forms/JobForms";
 import SiteEquipment from "@/components/jobs/forms/SiteEquipment";
 import JobInvoice, { AddServiceSheet, InvoiceNudge } from "@/components/jobs/JobInvoice";
+import CustomerNotices, { RescheduleBanner, useCustomerNotices } from "@/components/jobs/CustomerNotices";
 
 type Visit = {
   id: string; visit_no: number; status: VisitStatus; starts_at: string | null; ends_at: string | null; arrival_window_min: number; techs: TechChip[];
@@ -88,6 +89,8 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
   }, [j.id, companyId, router]);
 
   const cv = useMemo(() => currentVisit(data.visits), [data.visits]);
+  // Paso 5.8: avisos al cliente (se vuelve a leer cuando cambia el historial, la fecha o el estado)
+  const notices = useCustomerNotices(j.id, `${data.events.length}-${cv?.starts_at ?? ""}-${j.status}`);
   const ops: OpsJob = useMemo(() => ({
     id: j.id, number: j.number, title: j.title, status: j.status, priority: j.priority, customer_id: j.customer_id, customer_name: j.customer_name,
     customer_phone: j.customer_phone, site_address: j.site_address, type_name: data.type?.name ?? null, type_color: data.type?.color ?? null,
@@ -226,6 +229,8 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
         <div className="min-w-0 space-y-4">
           {/* Paso 5.6b: el técnico terminó, pero falta enviar la factura */}
           {!cancelled && j.status === "completed" && <InvoiceNudge jobId={j.id} refreshKey={invKey + data.lines.length + (invoice ? 1 : 0)} onToast={flash} onChanged={() => router.refresh()} />}
+          {/* Paso 5.8: el cliente pidió otro horario desde el recordatorio */}
+          {!cancelled && <RescheduleBanner state={notices.state} jobId={j.id} phone={j.customer_phone} />}
           {afterHours && !cancelled && (
             <section className="flex flex-wrap items-center gap-3 rounded-2xl border border-[#c7d2fe] bg-[#f5f6ff] px-4 py-3.5">
               <AfterHoursMoon size={34} />
@@ -375,6 +380,14 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
               </>
             ) : <p className="mt-1 text-[14px] text-slate-400">No address</p>}
           </section>
+
+          {/* Paso 5.8: recordatorio, respuesta del cliente y reseña en Google */}
+          {j.customer_id && (
+            <section className={`${card} p-5`}>
+              <h2 className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Customer notices</h2>
+              <CustomerNotices jobId={j.id} state={notices.state} reload={notices.reload} cancelled={cancelled} onToast={flash} />
+            </section>
+          )}
 
           <section className={`${card} p-5`}>
             <div className="flex items-center justify-between"><h2 className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Collaborators</h2>

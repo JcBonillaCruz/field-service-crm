@@ -16,6 +16,7 @@ import {
   HOLD_REASONS, SiteAddress, TechChip, VISIT_LABEL, VisitStatus, addMinutes, addressLine, fmtDayShort, fmtTime, holdLabel, jobError, mapsLink, usd,
 } from "@/lib/jobs";
 import { StatusArt, TechDot } from "@/components/jobs/EventBar";
+import { ETA_CHOICES } from "@/lib/customer-notice-text";
 
 type Visit = { id: string; visit_no: number; status: VisitStatus; starts_at: string | null; ends_at: string | null; arrival_window_min: number; techs: TechChip[]; started_at: string | null };
 type Line = { id: string; name: string; description: string | null; quantity: number; unit: string | null; kind: string; source: string; rate?: number; amount?: number };
@@ -44,6 +45,8 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [holdOpen, setHoldOpen] = useState(false);
+  const [etaOpen, setEtaOpen] = useState(false); // Paso 5.8: hora estimada de llegada al tocar "On my way"
+  const [eta, setEta] = useState(30);
   const [reason, setReason] = useState("");
   const [holdNote, setHoldNote] = useState("");
   const [partOpen, setPartOpen] = useState(false);
@@ -72,7 +75,7 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
   // Tune-Up sin enviar: se avisa al terminar (no bloquea)
   const tuneUpPending = d?.type?.form_kind === "tune_up" && formsState !== null && !formsState.tuneUpSubmitted;
 
-  async function act(action: "on_my_way" | "start" | "resume" | "pause" | "hold" | "finish") {
+  async function act(action: "on_my_way" | "start" | "resume" | "pause" | "hold" | "finish", etaMin?: number) {
     if (!visit) return;
     if (action === "finish" && !(await askConfirm({ title: "Finish this job?", message: missing ? `There are still ${missing} required checklist task(s).` : tuneUpPending ? "The Tune-Up form isn't submitted yet. You can still finish and send it after." : "The office gets an alert right away so they can send the invoice.", confirmLabel: "Finish job", tone: "green" }))) return;
     setBusy(action); setError("");
@@ -84,9 +87,14 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
     setBusy("");
     if (e) { setError(e.hint || jobError(e)); return; }
     // Aviso a la oficina (campana + push): para que el dueño sepa al momento y pueda cobrar antes de que te vayas
-    fetch("/api/jobs/tech-event", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ visitId: visit.id, action }) }).catch(() => null);
+    fetch("/api/jobs/tech-event", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ visitId: visit.id, action, etaMin }) })
+      .then((r) => r.json()).then((r: { customer?: { ok: boolean } | null; eta?: string | null }) => {
+        // Paso 5.8: solo se dice que el cliente fue avisado cuando el correo salió de verdad
+        if (action === "on_my_way" && r?.customer?.ok) flash(`The customer got an email${r.eta ? `: arriving around ${r.eta}` : ""}.`);
+      }).catch(() => null);
     if (action === "hold") { setHoldOpen(false); setReason(""); setHoldNote(""); }
-    flash({ on_my_way: "On your way. The customer and office can see it.", start: "Job started", resume: "Work resumed", pause: "Paused", hold: "Sent to the office to schedule the next visit", finish: "Job finished. Great work!" }[action]);
+    if (action === "on_my_way") setEtaOpen(false);
+    flash({ on_my_way: "On your way. The office can see it.", start: "Job started", resume: "Work resumed", pause: "Paused", hold: "Sent to the office to schedule the next visit", finish: "Job finished. Great work!" }[action]);
     load();
   }
   // Regresar a un trabajo que quedó a medias (ya llegó la pieza, etc.)
@@ -299,7 +307,7 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
             <JobChat jobId={jobId} companyId={j.company_id} title={`${j.customer_name || "Job"} · ${j.number}`} placement="bar" showLabel={!hasActions} />
             {hasActions && <span className="flex-1" />}
             {hasActions && st === "scheduled" && <>
-              <Big onClick={() => act("on_my_way")} busy={busy === "on_my_way"} tone="violet" icon="M3 12h11V6H3zM14 9h3l3 3v3h-6M7 18a1.6 1.6 0 1 0 0-3.2A1.6 1.6 0 0 0 7 18zM17 18a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2z">On my way</Big>
+              <Big onClick={() => setEtaOpen(true)} busy={busy === "on_my_way"} tone="violet" icon="M3 12h11V6H3zM14 9h3l3 3v3h-6M7 18a1.6 1.6 0 1 0 0-3.2A1.6 1.6 0 0 0 7 18zM17 18a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2z">On my way</Big>
               <Big onClick={() => act("start")} busy={busy === "start"} tone="light" icon="M8 5v14l11-7z">Start</Big>
             </>}
             {hasActions && st === "on_my_way" && <>
@@ -319,6 +327,28 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
           </div>
         </div>
       ); })()}
+
+      {/* Paso 5.8: "On my way" pregunta en cuánto llega (un toque) para avisarle a la oficina y al cliente */}
+      {etaOpen && (
+        <Sheet title="When will you get there?" onClose={() => setEtaOpen(false)}>
+          <p className="text-[13.5px] text-slate-500">The office sees your arrival time. If your company turned it on, the customer gets it by email too.</p>
+          <div className="mt-3 grid grid-cols-4 gap-2">
+            {ETA_CHOICES.map((m) => (
+              <button key={m} type="button" onClick={() => setEta(m)} aria-pressed={eta === m}
+                className={`rounded-xl border py-2.5 text-center transition-colors ${eta === m ? "border-[#6d28d9] bg-[#f3efff] text-[#6d28d9]" : "border-slate-200 text-[#0b1f3a]"}`}>
+                <span className="block text-[17px] font-semibold leading-tight">{m}</span><span className="block text-[11.5px] text-slate-500">min</span>
+              </button>
+            ))}
+          </div>
+          <p className="mt-3 text-center text-[13.5px] text-slate-600">Arriving around <b className="text-[#0b1f3a]">{fmtTime(addMinutes(new Date(), eta))}</b></p>
+          <div className="mt-4 flex justify-end">
+            <button type="button" disabled={busy === "on_my_way"} onClick={() => act("on_my_way", eta)}
+              className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-[#6d28d9] px-5 text-[14px] font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-60">
+              {busy === "on_my_way" ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : null}I&apos;m on my way
+            </button>
+          </div>
+        </Sheet>
+      )}
 
       {/* Dejar a medias: motivo + nota */}
       {holdOpen && (

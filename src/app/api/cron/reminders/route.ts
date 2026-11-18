@@ -2,9 +2,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import { admin, pushToCompany } from "@/lib/push";
 import { SalesDoc, balanceOf, daysBetween, money, today } from "@/lib/sales";
 import { processInventoryAlerts } from "@/lib/inventory-alerts";
+import { processCustomerReminders } from "@/lib/customer-notices";
+import { appOrigin } from "@/lib/team";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 // Corre solo todos los días (Vercel Cron): facturas que vencen en 2 días, 1 día, hoy o ya vencidas
 export async function GET(request: NextRequest) {
@@ -30,6 +33,8 @@ export async function GET(request: NextRequest) {
   }
   // Inventario: repite los avisos de stock bajo (diario / semanal) según los ajustes de cada compañía
   sent += await processInventoryAlerts(db).catch(() => 0);
+  // Paso 5.8: recordatorio a los clientes con visita mañana (o en 2 días), solo en compañías que lo encendieron
+  const reminders = await processCustomerReminders(db, appOrigin(`https://${request.headers.get("host")}`)).catch(() => 0);
   await db.from("push_log").delete().lt("created_at", new Date(Date.now() - 30 * 86400000).toISOString());
-  return NextResponse.json({ ok: true, sent });
+  return NextResponse.json({ ok: true, sent, reminders });
 }

@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { inputClass } from "@/components/customers/ui";
 import PhaseTemplates from "@/components/jobs/PhaseTemplates";
 import TuneUpRanges from "@/components/jobs/forms/TuneUpRanges";
+import CustomerNoticeSettings from "@/components/jobs/CustomerNoticeSettings";
 import SelectMenu from "@/components/ui/SelectMenu";
 import ColorPicker from "@/components/ui/ColorPicker";
 import { confirmDelete } from "@/lib/confirm";
@@ -160,6 +161,9 @@ export default function JobSettingsForm({ companyId, settings, types: t0, tags: 
             </div>
           </div>
         </section>
+
+        {/* Paso 5.8: avisos al cliente (va en camino, recordatorio, reseña en Google) */}
+        <CustomerNoticeSettings s={s} patch={patch} />
 
         <section className={`${card} p-5`}>
           <div className="flex items-start gap-3">

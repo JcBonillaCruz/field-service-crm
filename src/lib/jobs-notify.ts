@@ -62,7 +62,7 @@ export async function pushToUsers(db: SupabaseClient, companyId: string, userIds
 }
 
 // ---------- Correo ----------
-export function emailShell(o: { brand: Brand; heading: string; rows: [string, string][]; intro: string; button?: { label: string; url: string }; footer?: string }) {
+export function emailShell(o: { brand: Brand; heading: string; rows: [string, string][]; intro: string; button?: { label: string; url: string }; button2?: { label: string; url: string }; footer?: string }) {
   const accent = "#0f766e";
   const rows = o.rows.filter(([, v]) => v).map(([k, v]) => `<tr><td style="padding:6px 0;color:#64748b;font-size:13px;width:110px;vertical-align:top">${esc(k)}</td><td style="padding:6px 0;font-size:14px;color:#0b1f3a">${esc(v)}</td></tr>`).join("");
   return `<!doctype html><html><body style="margin:0;background:#f4f6f8;font-family:Arial,Helvetica,sans-serif;color:#1f2937">
@@ -73,7 +73,7 @@ export function emailShell(o: { brand: Brand; heading: string; rows: [string, st
 <tr><td style="padding:10px 30px 0"><p style="margin:0;font-size:21px;font-weight:700;color:#0b1f3a">${esc(o.heading)}</p>
 <p style="margin:8px 0 0;font-size:15px;line-height:1.55">${esc(o.intro)}</p></td></tr>
 <tr><td style="padding:14px 30px"><table role="presentation" width="100%" style="background:#f8fafc;border-radius:10px;padding:8px 16px">${rows}</table></td></tr>
-${o.button ? `<tr><td style="padding:4px 30px 18px"><a href="${o.button.url}" style="display:inline-block;background:${accent};color:#fff;text-decoration:none;font-weight:600;padding:11px 24px;border-radius:8px;font-size:15px">${esc(o.button.label)}</a></td></tr>` : ""}
+${o.button ? `<tr><td style="padding:4px 30px 18px"><a href="${esc(o.button.url)}" style="display:inline-block;background:${accent};color:#fff;text-decoration:none;font-weight:600;padding:11px 24px;border-radius:8px;font-size:15px;margin:0 8px 8px 0">${esc(o.button.label)}</a>${o.button2 ? `<a href="${esc(o.button2.url)}" style="display:inline-block;background:#ffffff;color:${accent};text-decoration:none;font-weight:600;padding:10px 22px;border-radius:8px;font-size:15px;border:1px solid #b6dcd5;margin:0 0 8px 0">${esc(o.button2.label)}</a>` : ""}</td></tr>` : ""}
 <tr><td style="padding:14px 30px 22px;border-top:1px solid #f1f5f9;color:#94a3b8;font-size:12px">${esc(o.footer ?? o.brand.companyName)}</td></tr>
 </table></td></tr></table></body></html>`;
 }

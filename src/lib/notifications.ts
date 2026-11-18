@@ -70,7 +70,7 @@ export function myJobNotices(rows: JobNoticeRow[], reads: string[]): Notice[] {
   return rows.map((r) => {
     const id = `jn-${r.id}`;
     const office = ["on_my_way", "started", "paused", "resumed", "on_hold", "finished", "part_used"].includes(r.kind);
-    const n: Notice = { id, key: id, kind: "job", title: r.title, body: r.body ?? "", href: r.kind === "message" && r.job_id ? `/dashboard/jobs/${r.job_id}?chat=1` : (r.kind === "phase_blocked" || r.kind === "invoiced") && r.job_id ? `/dashboard/jobs/${r.job_id}` : office && r.job_id ? `/dashboard/jobs/${r.job_id}` : r.job_id ? `/dashboard/jobs/mine/${r.job_id}` : "/dashboard/jobs/mine", when: r.created_at };
+    const n: Notice = { id, key: id, kind: "job", title: r.title, body: r.body ?? "", href: r.kind === "message" && r.job_id ? `/dashboard/jobs/${r.job_id}?chat=1` : (r.kind === "phase_blocked" || r.kind === "invoiced" || r.kind === "customer_reply") && r.job_id ? `/dashboard/jobs/${r.job_id}` : office && r.job_id ? `/dashboard/jobs/${r.job_id}` : r.job_id ? `/dashboard/jobs/mine/${r.job_id}` : "/dashboard/jobs/mine", when: r.created_at };
     return n;
   }).filter((n) => !read.has(n.key));
 }
