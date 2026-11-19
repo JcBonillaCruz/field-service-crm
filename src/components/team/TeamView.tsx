@@ -37,6 +37,12 @@ export default function TeamView({ companyId, members, invites, vanOf, me, myRol
   // Presencia en vivo: se actualiza cada minuto
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const t = setInterval(() => { setNow(Date.now()); router.refresh(); }, 60000); return () => clearInterval(t); }, [router]);
+  // Un clic en cualquier parte de la fila abre a esa persona (menos sobre el teléfono, el lápiz, la papelera o el menú ⋯)
+  const openRow = (e: React.MouseEvent | React.KeyboardEvent, m: Member) => {
+    if ((e.target as HTMLElement).closest("a, button, input, [role='menu'], [role='menuitem'], [role='dialog']")) return;
+    if ("key" in e) { if (e.key !== "Enter" || e.target !== e.currentTarget) return; }
+    router.push(`${base}/${m.user_id}/edit`);
+  };
   const onlineCount = members.filter((m) => m.is_active && presenceOf(m, now).tone === "on").length;
   const kpi = {
     total: members.length, active: members.filter((m) => m.is_active).length,
@@ -132,7 +138,8 @@ export default function TeamView({ companyId, members, invites, vanOf, me, myRol
                 </tr></thead>
                 <tbody>
                   {shown.map((m) => (
-                    <tr key={m.user_id} className="group border-b border-slate-100 transition-colors last:border-0 hover:bg-[#f6fbfa]">
+                    <tr key={m.user_id} tabIndex={0} title={`Open ${m.full_name}`} onClick={(e) => openRow(e, m)} onKeyDown={(e) => openRow(e, m)}
+                      className="group cursor-pointer border-b border-slate-100 transition-colors last:border-0 hover:bg-[#f6fbfa] focus-visible:bg-[#f6fbfa] focus-visible:outline-none">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <span className="relative shrink-0"><Avatar name={m.full_name} url={m.avatar_url} seed={m.user_id} size={38} />
@@ -159,7 +166,7 @@ export default function TeamView({ companyId, members, invites, vanOf, me, myRol
             </div>
             <ul className="divide-y divide-slate-100 lg:hidden">
               {shown.map((m) => (
-                <li key={m.user_id} className="flex items-center gap-3 px-4 py-3">
+                <li key={m.user_id} onClick={(e) => openRow(e, m)} className="flex cursor-pointer items-center gap-3 px-4 py-3 active:bg-[#f6fbfa]">
                   <span className="relative shrink-0"><Avatar name={m.full_name} url={m.avatar_url} seed={m.user_id} size={44} />
                     <span className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full ring-2 ring-white ${PRESENCE_DOT[presenceOf(m, now).tone]}`} /></span>
                   <div className="min-w-0 flex-1">
