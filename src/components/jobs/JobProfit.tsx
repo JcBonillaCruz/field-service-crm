@@ -6,7 +6,7 @@ import { usd } from "@/lib/jobs";
 import { JobProfitData, PAY_LABEL, needsReportSql } from "@/lib/job-reports";
 import ReportArt from "@/components/jobs/reports/ReportArt";
 
-// Ganancia de este trabajo (Paso 5.10). SOLO el dueño: la base de datos no le entrega estos números a nadie más.
+// Ganancia de este trabajo (Paso 5.10). Dueño y manager: la base de datos no le entrega estos números a nadie más.
 // Facturado (sin impuesto) − materiales al costo − mano de obra (horas en sitio × tarifa) − gastos ligados a la factura.
 export default function JobProfit({ jobId, refreshKey = 0 }: { jobId: string; refreshKey?: number }) {
   const [p, setP] = useState<JobProfitData | null>(null);
@@ -27,7 +27,7 @@ export default function JobProfit({ jobId, refreshKey = 0 }: { jobId: string; re
     <div className="flex items-center justify-between gap-2">
       <h2 className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Job profit</h2>
       <span className="inline-flex items-center gap-1 text-[11.5px] text-slate-400">
-        <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><rect x="4.5" y="9" width="11" height="7.5" rx="1.5" /><path d="M7 9V7a3 3 0 0 1 6 0v2" /></svg>Only you see this
+        <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><rect x="4.5" y="9" width="11" height="7.5" rx="1.5" /><path d="M7 9V7a3 3 0 0 1 6 0v2" /></svg>Owner &amp; manager only
       </span>
     </div>
   );

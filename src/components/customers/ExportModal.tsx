@@ -9,17 +9,17 @@ const MODULE_GROUPS: { group: string; items: string[] }[] = [
   { group: "Contacts", items: ["Customers", "Contact persons", "Contact's addresses"] },
   { group: "Sales", items: ["Quotes", "Invoices", "Invoice payments", "Subscriptions", "Credit notes", "Credit notes applied to invoices", "Refunds"] },
   { group: "Purchases", items: ["Expenses", "Recurring expenses"] },
-  { group: "Projects", items: ["Projects", "Tasks", "Timesheets", "Team performance", "Unscanned parts"] },
+  { group: "Projects", items: ["Projects", "Tasks", "Timesheets", "Team performance", "Unscanned parts", "Profit and loss"] },
   { group: "Items & other", items: ["Items", "Coupons", "Inventory", "Price lists", "Exchange rates", "Taxes", "Users", "Documents"] },
 ];
 const ENDPOINTS: Record<string, string> = {
   Customers: "/dashboard/customers/export", Items: "/dashboard/items/export", Coupons: "/dashboard/coupons/export",
   Quotes: "/dashboard/quotes/export", Invoices: "/dashboard/invoices/export", Subscriptions: "/dashboard/subscriptions/export",
   Inventory: "/dashboard/inventory/export", Timesheets: "/dashboard/jobs/timesheets/export",
-  "Team performance": "/dashboard/jobs/reports/export?kind=team", "Unscanned parts": "/dashboard/jobs/reports/export?kind=parts",
+  "Team performance": "/dashboard/jobs/reports/export?kind=team", "Unscanned parts": "/dashboard/jobs/reports/export?kind=parts", "Profit and loss": "/dashboard/jobs/reports/export?kind=pnl",
 };
 const ENABLED = new Set(Object.keys(ENDPOINTS));
-export type ExportModule = "Customers" | "Items" | "Coupons" | "Quotes" | "Invoices" | "Subscriptions" | "Inventory" | "Timesheets" | "Team performance" | "Unscanned parts";
+export type ExportModule = "Customers" | "Items" | "Coupons" | "Quotes" | "Invoices" | "Subscriptions" | "Inventory" | "Timesheets" | "Team performance" | "Unscanned parts" | "Profit and loss";
 // range: fechas de la vista (Timesheets exporta el periodo que tienes en pantalla)
 export type ExportView = { module: ExportModule; label: string; ids: string[]; columns: string[]; range?: { from: string; to: string } };
 

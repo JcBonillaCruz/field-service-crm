@@ -3,7 +3,7 @@ import { getSession } from "@/lib/session";
 import { canManageJobs, TeamMember } from "@/lib/jobs";
 import { checkExportBody, exportResponse, fileBase } from "@/lib/export-file";
 import { hoursDec } from "@/lib/timesheets";
-import { NOBODY, RawReport, buildParts, buildTeam, needsReportSql } from "@/lib/job-reports";
+import { NOBODY, RawReport, buildParts, buildPnl, buildTeam, needsReportSql } from "@/lib/job-reports";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,12 +27,14 @@ function tzMidnight(day: string, tz: string): Date {
 }
 const nextDay = (day: string) => new Date(new Date(`${day}T12:00:00Z`).getTime() + 86400000).toISOString().slice(0, 10);
 
-// Exportar Reports (mismo pop-up de siempre). ?kind=team → una fila por colaborador · ?kind=parts → una fila por pieza sin escanear.
+// Exportar Reports (mismo pop-up de siempre). ?kind=team → una fila por colaborador · ?kind=parts → una fila por pieza sin escanear · ?kind=pnl → una fila por trabajo.
 // El dinero sale solo para quien lo puede ver: la base de datos no se lo entrega a nadie más.
 export async function POST(request: NextRequest) {
   const { supabase, current } = await getSession();
   if (!current || !canManageJobs(current.role)) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
-  const kind = request.nextUrl.searchParams.get("kind") === "parts" ? "parts" : "team";
+  const k = request.nextUrl.searchParams.get("kind");
+  const kind = k === "parts" ? "parts" : k === "pnl" ? "pnl" : "team";
+  if (kind === "pnl" && current.role !== "owner" && current.role !== "manager") return NextResponse.json({ error: "Not allowed" }, { status: 403 });
   let body: Body = {};
   try { body = await request.json(); } catch { /* valores por defecto */ }
   const format = body.format === "xlsx" ? "xlsx" : "csv";
@@ -60,20 +62,30 @@ export async function POST(request: NextRequest) {
   const members = (team.data ?? []) as TeamMember[];
   const only = body.scope === "view" && body.ids?.length ? new Set(body.ids) : null;
   const roleOf = (m: TeamMember | null) => (m ? `${m.job_title || m.role}${m.worker_type === "subcontractor" ? " (subcontractor)" : ""}` : "");
-  const base = `${fileBase(kind === "team" ? "team-performance" : "unscanned-parts", current.name)}_${fromKey}_to_${toKey}`;
+  const base = `${fileBase(kind === "team" ? "team-performance" : kind === "pnl" ? "profit-and-loss" : "unscanned-parts", current.name)}_${fromKey}_to_${toKey}`;
+
+  // Profit & loss: una fila por trabajo terminado (de la mayor pérdida a la mayor ganancia) y el total
+  if (kind === "pnl") {
+    const p = buildPnl(raw, members);
+    const matrix: unknown[][] = [["Date", "Job", "Job Type", "Customer", "Collaborators", "Invoice", "Revenue (before tax)", "Labor", "Materials (at cost)", "Expenses", "Total Costs", "Profit", "Margin %", "Notes"]];
+    for (const j of p.jobs) matrix.push([dayOf(j.when), j.number, j.type, j.customer, j.techs.join(", "), j.invoice ?? "", j.revenue, j.labor, j.materials, j.expenses, j.costs, j.profit, j.margin ?? "", j.reasons.join(" | ")]);
+    const t = p.totals;
+    matrix.push(["TOTAL", `${t.jobs} jobs`, "", "", "", "", t.revenue, t.labor, t.materials, t.expenses, t.costs, t.profit, t.margin ?? "", `${t.lossJobs} job(s) lost money: ${t.lossAmount}`]);
+    return exportResponse(matrix, base, format, password, "Profit and loss");
+  }
 
   if (kind === "team") {
     const rows = buildTeam(raw, members).rows.filter((r) => !only || only.has(r.user_id));
     const matrix: unknown[][] = [[
       "Team Member", "Role", "Jobs Completed", "Visits Worked", "Return Visits", "Need Follow-up", "Visits With A Set Time", "On Time", "Late", "On Time %", "Avg Minutes Late",
       "On-site Hours", "Avg On-site Hours Per Job", "Travel Hours", "Clocked Hours", "Hours Not On A Job", "Time On Jobs %",
-      ...(raw.money ? ["Revenue (before tax)"] : []), ...(raw.owner ? ["Labor Cost", "Pay Note"] : []),
+      ...(raw.money ? ["Revenue (before tax)"] : []), ...(raw.costs ? ["Labor Cost", "Pay Note"] : []),
     ]];
     for (const r of rows) {
       matrix.push([
         r.name, roleOf(r.member), r.jobsDone, r.visits, r.returns, r.held, r.measured, r.onTime, r.late, r.onTimePct ?? "", r.lateMinAvg,
         hoursDec(r.siteMin), hoursDec(r.avgSiteMin), hoursDec(r.travelMin), hoursDec(r.shiftMin), hoursDec(r.idleMin), r.utilPct ?? "",
-        ...(raw.money ? [r.revenue ?? 0] : []), ...(raw.owner ? [r.labor ?? 0, r.noRate ? "No pay rate" : r.salaried ? "Salary" : ""] : []),
+        ...(raw.money ? [r.revenue ?? 0] : []), ...(raw.costs ? [r.labor ?? 0, r.noRate ? "No pay rate" : r.salaried ? "Salary" : ""] : []),
       ]);
     }
     return exportResponse(matrix, base, format, password, "Team performance");

@@ -29,5 +29,5 @@ export default async function JobDetailPage({ params, searchParams }: { params: 
   ]);
   const urls: Record<string, string> = {};
   ((signed.data ?? []) as { path: string | null; signedUrl: string }[]).forEach((s) => { if (s.path) urls[s.path] = s.signedUrl; });
-  return <JobDetail companyId={current.id} data={d} docs={(docs.data ?? []) as JobDetailDoc[]} photoUrls={urls} isOwner={current.role === "owner"} settings={basics.settings} />;
+  return <JobDetail companyId={current.id} data={d} docs={(docs.data ?? []) as JobDetailDoc[]} photoUrls={urls} isOwner={current.role === "owner"} seeProfit={current.role === "owner" || current.role === "manager"} settings={basics.settings} />;
 }

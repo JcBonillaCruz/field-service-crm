@@ -61,8 +61,8 @@ function currentVisit(vs: Visit[]): Visit | null {
     ?? open.find((v) => v.status === "unscheduled") ?? open.find((v) => v.status === "on_hold") ?? open[open.length - 1] ?? null;
 }
 
-export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, settings }: {
-  companyId: string; data: JobDetailData; docs: JobDetailDoc[]; photoUrls: Record<string, string>; isOwner: boolean; settings: JobSettings;
+export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, seeProfit = isOwner, settings }: {
+  companyId: string; data: JobDetailData; docs: JobDetailDoc[]; photoUrls: Record<string, string>; isOwner: boolean; seeProfit?: boolean; settings: JobSettings;
 }) {
   const router = useRouter();
   const j = data.job;
@@ -417,8 +417,8 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
             <JobInvoice jobId={j.id} variant="office" refreshKey={invKey + data.lines.length} readOnly={cancelled} onToast={flash} onChanged={() => router.refresh()} />
           </section>
 
-          {/* Paso 5.10: ganancia del trabajo (solo el dueño) */}
-          {isOwner && !cancelled && <JobProfit jobId={j.id} refreshKey={invKey + data.lines.length} />}
+          {/* Paso 5.10: ganancia del trabajo (dueño y manager) */}
+          {seeProfit && !cancelled && <JobProfit jobId={j.id} refreshKey={invKey + data.lines.length} />}
 
           <section className={`${card} p-5 text-[13px] text-slate-500`}>
             <p>Created {when(j.created_at)}{j.created_by_name ? ` by ${j.created_by_name}` : ""}{j.source === "quote" ? " from a quote" : ""}.</p>

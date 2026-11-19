@@ -358,7 +358,8 @@ function JobRow({ v, live = false, showDay = false, delay = 0 }: { v: MyVisit; l
         {!showDay && <p className="text-[11.5px] leading-tight text-slate-400">{fmtTime(e).replace(" ", " ")}</p>}
       </div>
       <span className="transition-transform duration-150 group-hover:scale-110">
-        {art ? <StatusArt s={v.visit_status} size={34} /> : <JobArt size={34} color={v.type_color ?? "#14a39a"} />}
+        {/* el check de los terminados va más chico: son muchos y no deben pesar en la lista */}
+        {art ? <StatusArt s={v.visit_status} size={done ? 24 : 34} /> : <JobArt size={34} color={v.type_color ?? "#14a39a"} />}
       </span>
       <div className="min-w-0 flex-1">
         <p className={`flex items-center gap-1.5 truncate text-[15px] font-semibold leading-tight ${done ? "text-slate-500" : "text-[#0b1f3a]"}`}>

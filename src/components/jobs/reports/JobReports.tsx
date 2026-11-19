@@ -6,14 +6,15 @@ import { createClient } from "@/lib/supabase/client";
 import { TeamMember, addDays, isoDay } from "@/lib/jobs";
 import { hm } from "@/lib/timesheets";
 import {
-  NOBODY, PartsRow, PersonRow, REPORT_PERIODS, RawReport, ReportPeriod, buildParts, buildTeam, money0, needsReportSql, qty, rangeText, reportError, reportRange, shortDay,
+  LOW_MARGIN, NOBODY, PartsRow, PersonRow, PnlGroup, PnlJob, REPORT_PERIODS, RawReport, ReportPeriod, buildParts, buildPnl, buildTeam, money0, needsReportSql, pnlHtml, qty, rangeText,
+  reportError, reportRange, shortDay,
 } from "@/lib/job-reports";
 import SelectMenu from "@/components/ui/SelectMenu";
 import ExportModal from "@/components/customers/ExportModal";
 import { TechDot } from "@/components/jobs/EventBar";
 import ReportArt, { ReportArtKind } from "@/components/jobs/reports/ReportArt";
 
-type Tab = "team" | "parts";
+type Tab = "team" | "parts" | "pnl";
 const card = "rounded-2xl border border-slate-200 bg-white";
 // Las columnas van escritas completas (Tailwind no arma clases a partir de números)
 const TEAM_COLS: Record<number, string> = {
@@ -21,6 +22,8 @@ const TEAM_COLS: Record<number, string> = {
   7: "lg:grid-cols-[minmax(0,2.2fr)_repeat(7,minmax(0,1fr))_1.25rem]",
   8: "lg:grid-cols-[minmax(0,2.2fr)_repeat(8,minmax(0,1fr))_1.25rem]",
 };
+const PNL_COLS = "lg:grid-cols-[minmax(0,2.4fr)_repeat(6,minmax(0,1fr))]";
+const GROUP_COLS = "grid-cols-[minmax(0,1.6fr)_repeat(4,minmax(0,1fr))]";
 const PARTS_COLS: Record<number, string> = {
   4: "lg:grid-cols-[minmax(0,2.2fr)_repeat(4,minmax(0,1fr))_1.25rem]",
   5: "lg:grid-cols-[minmax(0,2.2fr)_repeat(5,minmax(0,1fr))_1.25rem]",
@@ -29,12 +32,15 @@ const Chevron = ({ open }: { open: boolean }) => (
   <svg viewBox="0 0 20 20" className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 ${open ? "rotate-90" : ""}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7.5 5l5 5-5 5" /></svg>
 );
 const Lock = () => (
-  <svg viewBox="0 0 20 20" className="inline h-3 w-3 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-label="Only the owner sees this"><rect x="4.5" y="9" width="11" height="7.5" rx="1.5" /><path d="M7 9V7a3 3 0 0 1 6 0v2" /></svg>
+  <svg viewBox="0 0 20 20" className="inline h-3 w-3 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-label="Only the owner and the manager see this"><rect x="4.5" y="9" width="11" height="7.5" rx="1.5" /><path d="M7 9V7a3 3 0 0 1 6 0v2" /></svg>
 );
 
 // Reports de Jobs (Paso 5.10): rendimiento de cada colaborador y piezas cobradas que no se escanearon.
-// Dueño y manager ven el dinero; la oficina ve todo lo demás; la mano de obra solo el dueño (lo decide la base de datos).
-export default function JobReports({ companyId, team, weekStartsOn, initialTab = "team" }: { companyId: string; team: TeamMember[]; weekStartsOn: number; initialTab?: Tab }) {
+// Dueño y manager ven todo el dinero (facturado, costos, mano de obra y ganancia) y la pestaña Profit & loss;
+// la oficina ve lo demás sin dinero (lo decide la base de datos).
+export default function JobReports({ companyId, team, weekStartsOn, initialTab = "team", companyName = "", preparedBy = "" }: {
+  companyId: string; team: TeamMember[]; weekStartsOn: number; initialTab?: Tab; companyName?: string; preparedBy?: string;
+}) {
   const [tab, setTab] = useState<Tab>(initialTab);
   const [period, setPeriod] = useState<ReportPeriod>("month");
   const [raw, setRaw] = useState<RawReport | null>(null);
@@ -61,7 +67,21 @@ export default function JobReports({ companyId, team, weekStartsOn, initialTab =
   const match = (name: string, m: TeamMember | null) => terms.every((t) => `${name} ${m?.job_title ?? ""} ${m?.role ?? ""}`.toLowerCase().includes(t));
   const people = (teamRep?.rows ?? []).filter((r) => match(r.name, r.member));
   const partRows = (partsRep?.rows ?? []).filter((r) => match(r.name, r.member));
-  const money = Boolean(raw?.money), owner = Boolean(raw?.owner);
+  const money = Boolean(raw?.money), owner = Boolean(raw?.labor); // owner = ve costos y mano de obra (dueño y manager)
+  const pnl = useMemo(() => (raw && raw.labor ? buildPnl(raw, team) : null), [raw, team]);
+  const oldSql = Boolean(raw && raw.money && raw.costs === undefined); // falta correr paso-5.10b
+  const tabs: Tab[] = owner ? ["team", "parts", "pnl"] : ["team", "parts"];
+  const shown: Tab = tabs.includes(tab) ? tab : "team";
+  const periodLabel = REPORT_PERIODS.find((p) => p.value === period)?.label ?? "This period";
+  // Hoja para imprimir o guardar como PDF: lo que el manager le entrega al dueño
+  const printPnl = () => {
+    if (!pnl) return;
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(pnlHtml(pnl, { company: companyName, period: periodLabel, range: rangeText(from, to), by: preparedBy || "the manager" }));
+    w.document.close(); w.focus();
+    setTimeout(() => w.print(), 350);
+  };
   const toggle = (id: string) => setOpenIds((o) => (o.includes(id) ? o.filter((x) => x !== id) : [...o, id]));
 
   // Celular: se cambia de pestaña deslizando (regla de todo el sistema)
@@ -72,7 +92,8 @@ export default function JobReports({ companyId, team, weekStartsOn, initialTab =
     if (!s) return;
     const dx = e.changedTouches[0].clientX - s.x, dy = e.changedTouches[0].clientY - s.y;
     if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
-    setTab(dx < 0 ? "parts" : "team");
+    const i = tabs.indexOf(shown) + (dx < 0 ? 1 : -1);
+    if (i >= 0 && i < tabs.length) setTab(tabs[i]);
   };
 
   const kpi = (art: ReportArtKind, title: string, value: string, hint: string, tone = "text-[#0b1f3a]", lock = false) => (
@@ -231,10 +252,10 @@ export default function JobReports({ companyId, team, weekStartsOn, initialTab =
       {labels.map((l) => <span key={l} className="truncate">{l}</span>)}<span />
     </div>
   );
-  const tabBtn = (id: Tab, label: string, badge?: number) => (
-    <button type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)}
-      className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-3.5 py-2 text-[13.5px] font-semibold transition-colors sm:flex-none ${tab === id ? "bg-white text-[#0f766e] shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:text-[#0b1f3a]"}`}>
-      {label}
+  const tabBtn = (id: Tab, label: string, short: string, badge?: number) => (
+    <button type="button" role="tab" aria-selected={shown === id} onClick={() => setTab(id)}
+      className={`inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl px-2.5 py-2 text-[13.5px] font-semibold transition-colors sm:flex-none sm:gap-2 sm:px-3.5 ${shown === id ? "bg-white text-[#0f766e] shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:text-[#0b1f3a]"}`}>
+      <span className="hidden sm:inline">{label}</span><span className="truncate sm:hidden">{short}</span>
       {badge ? <span className="rounded-full bg-[#ffe4e6] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-[#be123c]">{badge}</span> : null}
     </button>
   );
@@ -258,12 +279,19 @@ export default function JobReports({ companyId, team, weekStartsOn, initialTab =
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <div role="tablist" className="flex w-full gap-1 rounded-2xl bg-slate-200/60 p-1 sm:w-auto">
-          {tabBtn("team", "Team performance")}
-          {tabBtn("parts", "Unscanned parts", pt?.jobs)}
+          {tabBtn("team", "Team performance", "Team")}
+          {tabBtn("parts", "Unscanned parts", "Parts", pt?.jobs)}
+          {owner && tabBtn("pnl", "Profit & loss", "Profit", pnl?.totals.lossJobs)}
         </div>
         <p className="text-[12.5px] text-slate-500">{rangeText(from, to)}</p>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a person" aria-label="Search a person"
-          className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-[14px] placeholder:text-slate-400 focus:border-[#0f766e] focus:outline-none focus:ring-4 focus:ring-[#14a39a]/15 sm:ml-auto sm:w-56" />
+        {shown !== "pnl" && <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a person" aria-label="Search a person"
+          className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-[14px] placeholder:text-slate-400 focus:border-[#0f766e] focus:outline-none focus:ring-4 focus:ring-[#14a39a]/15 sm:ml-auto sm:w-56" />}
+        {shown === "pnl" && (
+          <button type="button" onClick={printPnl} disabled={!pnl}
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#0f766e] px-3.5 text-[13.5px] font-semibold text-white transition-colors hover:bg-[#0b5f59] disabled:opacity-50 sm:ml-auto">
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M6 7V3h8v4M6 14H4.5A1.5 1.5 0 0 1 3 12.5v-4A1.5 1.5 0 0 1 4.5 7h11A1.5 1.5 0 0 1 17 8.5v4a1.5 1.5 0 0 1-1.5 1.5H14M6 11.5h8V17H6z" /></svg>Print / PDF
+          </button>
+        )}
       </div>
 
       {needSql ? (
@@ -278,7 +306,7 @@ export default function JobReports({ companyId, team, weekStartsOn, initialTab =
         </div>
       ) : (
         <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} className={`transition-opacity duration-200 ${loading && raw ? "opacity-60" : ""}`}>
-          {tab === "team" ? <>
+          {shown === "pnl" && pnl ? <PnlView pnl={pnl} oldSql={oldSql} kpi={kpi} /> : shown === "team" ? <>
             <div className={`mt-4 grid grid-cols-2 gap-3 ${money ? "xl:grid-cols-6" : "xl:grid-cols-5"} md:grid-cols-3`}>
               {kpi("done", "Jobs completed", String(tt?.jobsDone ?? 0), `${tt?.visits ?? 0} visit${tt?.visits === 1 ? "" : "s"} worked`)}
               {kpi("ontime", "Arrived on time", tt?.onTimePct == null ? "—" : `${tt.onTimePct}%`, tt?.measured ? `${tt.onTime} of ${tt.measured} visits` : "No scheduled visits yet")}
@@ -293,7 +321,7 @@ export default function JobReports({ companyId, team, weekStartsOn, initialTab =
             </section>
             <p className="mt-3 text-[12.5px] text-slate-500">
               On time means the work started inside the arrival window. &ldquo;On jobs&rdquo; compares travel and on-site time with the clocked day (Clock in → Clock out).
-              {owner && <> Labor uses the pay rates in Team → Edit; only you see it.</>}
+              {owner && <> Labor uses the pay rates in Team → Edit; only the owner and the manager see it.</>}
             </p>
           </> : <>
             <div className={`mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 ${money ? "xl:grid-cols-5" : "xl:grid-cols-4"}`}>
@@ -315,12 +343,129 @@ export default function JobReports({ companyId, team, weekStartsOn, initialTab =
         </div>
       )}
 
-      <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} initialModule={tab === "team" ? "Team performance" : "Unscanned parts"} defaultScope="view"
+      <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} initialModule={shown === "team" ? "Team performance" : shown === "pnl" ? "Profit and loss" : "Unscanned parts"} defaultScope="view"
         view={{
-          module: tab === "team" ? "Team performance" : "Unscanned parts", label: REPORT_PERIODS.find((p) => p.value === period)?.label ?? "This period",
-          ids: (tab === "team" ? people : partRows).map((r) => r.user_id), columns: [], range: { from: isoDay(from), to: isoDay(addDays(to, -1)) },
+          module: shown === "team" ? "Team performance" : shown === "pnl" ? "Profit and loss" : "Unscanned parts", label: periodLabel,
+          ids: shown === "pnl" ? (pnl?.jobs ?? []).map((j) => j.job_id) : (shown === "team" ? people : partRows).map((r) => r.user_id), columns: [], range: { from: isoDay(from), to: isoDay(addDays(to, -1)) },
         }} />
     </div>
+  );
+}
+
+// ---------- Profit & loss (dueño y manager) ----------
+type KpiFn = (art: ReportArtKind, title: string, value: string, hint: string, tone?: string, lock?: boolean) => React.ReactNode;
+function PnlView({ pnl, oldSql, kpi }: { pnl: import("@/lib/job-reports").Pnl; oldSql: boolean; kpi: KpiFn }) {
+  const [all, setAll] = useState(false);
+  const t = pnl.totals;
+  const tone = (v: number) => (v < 0 ? "text-[#be123c]" : "text-[#15803d]");
+  const share = (v: number) => (t.revenue > 0 ? Math.max(0, Math.min(100, (v / t.revenue) * 100)) : 0);
+  const bars = [
+    { label: "Labor", v: t.labor, color: "#f59e0b" }, { label: "Materials", v: t.materials, color: "#2563eb" },
+    { label: "Expenses", v: t.expenses, color: "#7c3aed" }, { label: t.profit >= 0 ? "Profit" : "Loss", v: t.profit, color: t.profit >= 0 ? "#16a34a" : "#e11d48" },
+  ];
+  const list = all ? pnl.jobs : pnl.jobs.slice(0, 12);
+  const cell = (label: string, value: React.ReactNode, cls = "") => (
+    <span className={`min-w-0 ${cls}`}>
+      <span className="block text-[11px] font-medium text-slate-400 lg:hidden">{label}</span>
+      <span className="block truncate text-[13.5px] font-semibold tabular-nums text-[#0b1f3a]">{value}</span>
+    </span>
+  );
+  const jobLine = (j: PnlJob) => (
+    <li key={j.job_id}>
+      <Link prefetch={false} href={`/dashboard/jobs/${j.job_id}`} className={`grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-3.5 py-3 transition-colors hover:bg-[#f6fbfa] lg:px-5 ${PNL_COLS} ${j.loss ? "bg-[#fff8f8]" : ""}`}>
+        <span className="col-span-3 min-w-0 lg:col-span-1">
+          <span className="flex items-center gap-2">
+            <span className="truncate text-[14px] font-semibold text-[#0b1f3a]">{j.customer || "No customer"}</span>
+            {j.loss ? <span className="shrink-0 rounded-full bg-[#ffe4e6] px-2 py-0.5 text-[11px] font-semibold text-[#be123c]">Lost money</span>
+              : j.revenue > 0 && (j.margin ?? 100) < LOW_MARGIN ? <span className="shrink-0 rounded-full bg-[#fff6e6] px-2 py-0.5 text-[11px] font-semibold text-[#b45309]">Low margin</span> : null}
+          </span>
+          <span className="block truncate text-[12px] text-slate-400">{shortDay(j.when)} · {j.number} · {j.type}{j.techs.length ? ` · ${j.techs.join(", ")}` : ""}</span>
+          {j.reasons.length > 0 && <span className="block truncate text-[12px] text-[#92400e]">{j.reasons.join(" · ")}</span>}
+        </span>
+        {cell("Revenue", money0(j.revenue))}
+        {cell("Labor", money0(j.labor))}
+        {cell("Materials", money0(j.materials))}
+        {cell("Expenses", money0(j.expenses))}
+        {cell("Profit", <span className={tone(j.profit)}>{money0(j.profit)}</span>)}
+        {cell("Margin", j.margin == null ? "—" : `${j.margin}%`)}
+      </Link>
+    </li>
+  );
+  const groupCard = (title: string, note: string, rows: PnlGroup[]) => (
+    <section className={`${card} overflow-hidden`}>
+      <div className="border-b border-slate-100 px-4 py-3 lg:px-5"><p className="text-[15px] font-semibold text-[#0b1f3a]">{title}</p><p className="text-[12.5px] text-slate-500">{note}</p></div>
+      {rows.length === 0 ? <p className="px-5 py-6 text-center text-[13px] text-slate-500">Nothing in this period.</p> : (
+        <div>
+          <div className={`grid items-center gap-x-3 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 lg:px-5 ${GROUP_COLS}`}><span /><span>Jobs</span><span>Revenue</span><span>Costs</span><span>Profit</span></div>
+          <ul className="divide-y divide-slate-100">
+            {rows.map((g) => (
+              <li key={g.key} className={`grid items-center gap-x-3 px-4 py-2.5 text-[13.5px] tabular-nums lg:px-5 ${GROUP_COLS}`}>
+                <span className="min-w-0"><span className="block truncate font-semibold text-[#0b1f3a]">{g.name}</span>{g.losses > 0 && <span className="block text-[11.5px] text-[#be123c]">{g.losses} lost money</span>}</span>
+                <span className="text-slate-600">{g.jobs}</span><span className="truncate text-slate-600">{money0(g.revenue)}</span><span className="truncate text-slate-600">{money0(g.costs)}</span>
+                <span className={`truncate font-semibold ${tone(g.profit)}`}>{money0(g.profit)}{g.margin != null && <span className="ml-1 text-[11.5px] font-normal text-slate-400">{g.margin}%</span>}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+
+  return (
+    <>
+      {oldSql && <p className="mt-4 rounded-xl border border-[#fcd38d] bg-[#fffbf3] px-4 py-3 text-[13px] text-[#92400e]">Run <b>paso-5.10b-reports-manager.sql</b> in Supabase to include materials and expenses here. Until then they count as $0.</p>}
+      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+        {kpi("revenue", "Revenue", money0(t.revenue), `${t.jobs} job${t.jobs === 1 ? "" : "s"} finished · before tax`)}
+        {kpi("idle", "Costs", money0(t.costs), `Labor ${money0(t.labor)} · Parts ${money0(t.materials)}`)}
+        {kpi("profit", t.profit >= 0 ? "Profit" : "Loss", money0(t.profit), t.margin == null ? "No revenue yet" : `${t.margin}% margin`, tone(t.profit))}
+        {kpi("value", "Jobs that lost money", String(t.lossJobs), t.lossJobs ? `${money0(t.lossAmount)} lost` : "None", t.lossJobs ? "text-[#be123c]" : undefined)}
+        {kpi("parts", "Parts not accounted", money0(t.unscannedValue + t.countValue), "Not scanned + missing in counts", t.unscannedValue + t.countValue > 0 ? "text-[#b45309]" : undefined)}
+      </div>
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-2">
+        <section className={`${card} p-4 lg:p-5`}>
+          <p className="text-[15px] font-semibold text-[#0b1f3a]">Summary for the owner</p>
+          <ul className="mt-2 space-y-1.5">
+            {pnl.findings.map((f) => (
+              <li key={f} className="flex gap-2 text-[13.5px] text-slate-700"><span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#14a39a]" />{f}</li>
+            ))}
+          </ul>
+        </section>
+        <section className={`${card} p-4 lg:p-5`}>
+          <p className="text-[15px] font-semibold text-[#0b1f3a]">Where the money went</p>
+          <p className="text-[12.5px] text-slate-500">Out of every dollar of revenue.</p>
+          <ul className="mt-3 space-y-2.5">
+            {bars.map((b) => (
+              <li key={b.label}>
+                <div className="flex items-center justify-between text-[13px]"><span className="text-slate-600">{b.label}</span>
+                  <span className="tabular-nums text-slate-700"><b className="text-[#0b1f3a]">{money0(b.v)}</b>{t.revenue > 0 && <span className="ml-1.5 text-slate-400">{Math.round((b.v / t.revenue) * 100)}%</span>}</span></div>
+                <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${share(Math.abs(b.v))}%`, background: b.color }} /></div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
+
+      <section className={`${card} mt-4 overflow-hidden`}>
+        <div className="border-b border-slate-100 px-4 py-3 lg:px-5"><p className="text-[15px] font-semibold text-[#0b1f3a]">Job by job</p><p className="text-[12.5px] text-slate-500">From the biggest loss to the biggest profit. Tap a job to open it.</p></div>
+        <div className={`hidden items-center gap-x-3 border-b border-slate-100 px-5 py-2.5 text-[11.5px] font-semibold uppercase tracking-wide text-slate-400 lg:grid ${PNL_COLS}`}>
+          {["Job", "Revenue", "Labor", "Materials", "Expenses", "Profit", "Margin"].map((l) => <span key={l}>{l}</span>)}
+        </div>
+        {pnl.jobs.length === 0 ? <Empty text="No jobs were finished in this period." /> : <ul className="divide-y divide-slate-100">{list.map(jobLine)}</ul>}
+        {pnl.jobs.length > 12 && (
+          <button type="button" onClick={() => setAll((a) => !a)} className="w-full border-t border-slate-100 py-2.5 text-[13px] font-semibold text-[#0f766e] hover:bg-[#f6fbfa]">{all ? "Show fewer" : `Show all ${pnl.jobs.length} jobs`}</button>
+        )}
+      </section>
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-2">
+        {groupCard("By job type", "Which kind of work makes or loses money.", pnl.byType)}
+        {groupCard("By collaborator", "A job with several collaborators counts in full for each of them.", pnl.byPerson)}
+      </div>
+      <p className="mt-3 text-[12.5px] text-slate-500">
+        Revenue is the invoice before tax; without an invoice, the price on the job. Labor is on-site hours × the pay rate in Team. Materials are the parts on the job at cost. Expenses are the ones linked to the job&apos;s invoice in Finances.
+        Use <b>This week</b> or <b>This month</b> above, then <b>Print / PDF</b> to hand it to the owner. Only the owner and the manager see this tab.
+      </p>
+    </>
   );
 }
 

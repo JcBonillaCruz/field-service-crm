@@ -4,7 +4,7 @@ import { TeamMember, addDays, dayStart, receivesJobs, startOfMonth, startOfWeek 
 // Reports de Jobs (Paso 5.10)
 // job_reports() entrega las filas del periodo (visitas, trabajos, tiempos, piezas y conteos);
 // aquí solo se suman. El dinero llega vacío a quien no le toca verlo (lo decide la base de datos):
-//   revenue / value  → dueño y manager · labor → solo el dueño
+//   revenue / value / materials / expenses / labor → dueño y manager (la oficina no recibe dinero)
 // El mismo cálculo sirve para la pantalla y para la exportación.
 // =====================================================================
 export type RawVisit = {
@@ -15,6 +15,7 @@ export type RawJob = {
   job_id: string; number: string; customer_name: string; title: string | null; status: string; completed_at: string | null;
   needs_followup: boolean; hold_reason: string | null; visits: number; tech_ids: string[]; scanned_units: number; is_done: boolean;
   invoice_number: string | null; invoice_status: string | null; revenue: number | null;
+  type_name?: string | null; materials?: number | null; expenses?: number | null;
 };
 export type RawTime = { user_id: string; job_id: string | null; kind: "shift" | "travel" | "on_site"; minutes: number };
 export type RawLabor = { job_id: string; user_id: string; hours: number; pay_type: string | null; cost: number };
@@ -24,7 +25,7 @@ export type RawPart = {
 };
 export type RawCount = { user_id: string | null; name: string | null; units: number; value: number | null };
 export type RawReport = {
-  money: boolean; owner: boolean; visits: RawVisit[]; jobs: RawJob[]; times: RawTime[]; labor: RawLabor[] | null; parts: RawPart[]; counts: RawCount[];
+  money: boolean; costs?: boolean; owner: boolean; visits: RawVisit[]; jobs: RawJob[]; times: RawTime[]; labor: RawLabor[] | null; parts: RawPart[]; counts: RawCount[];
 };
 
 const n = (v: unknown) => Number(v) || 0;
@@ -248,7 +249,134 @@ export function buildParts(raw: RawReport, team: TeamMember[]): { rows: PartsRow
   };
 }
 
-// ---------- Ganancia de un trabajo (job_profit, solo el dueño) ----------
+// ---------- Profit & loss (dueño y manager) ----------
+// Un renglón por trabajo terminado en el periodo: lo que se cobró, lo que costó y por qué se ganó o se perdió.
+export type PnlJob = {
+  job_id: string; number: string; customer: string; title: string | null; type: string; when: string | null; techs: string[];
+  revenue: number; materials: number; labor: number; expenses: number; costs: number; profit: number; margin: number | null;
+  invoice: string | null; reasons: string[]; loss: boolean;
+};
+export type PnlGroup = { key: string; name: string; jobs: number; revenue: number; costs: number; labor: number; profit: number; margin: number | null; losses: number };
+export type PnlTotals = {
+  jobs: number; revenue: number; materials: number; labor: number; expenses: number; costs: number; profit: number; margin: number | null;
+  lossJobs: number; lossAmount: number; noPrice: number; lowJobs: number; unscannedValue: number; countValue: number; noRate: number;
+};
+export type Pnl = { jobs: PnlJob[]; byType: PnlGroup[]; byPerson: PnlGroup[]; totals: PnlTotals; findings: string[] };
+export const LOW_MARGIN = 20; // menos de 20% de margen = "ganó poco"
+
+export function buildPnl(raw: RawReport, team: TeamMember[]): Pnl {
+  const members = new Map(team.map((m) => [m.user_id, m]));
+  const nameOf = (uid: string) => members.get(uid)?.full_name ?? "Former team member";
+  const laborBy = new Map<string, number>(), noRateJobs = new Set<string>(), noRatePeople = new Set<string>();
+  for (const l of raw.labor ?? []) {
+    laborBy.set(l.job_id, (laborBy.get(l.job_id) ?? 0) + n(l.cost));
+    if (!l.pay_type) { noRateJobs.add(l.job_id); noRatePeople.add(l.user_id); }
+  }
+  const unscanned = new Map<string, number>();
+  raw.parts.forEach((p) => unscanned.set(p.job_id, (unscanned.get(p.job_id) ?? 0) + n(p.value)));
+
+  const jobs: PnlJob[] = raw.jobs.filter((j) => j.is_done).map((j) => {
+    const revenue = n(j.revenue), materials = n(j.materials), labor = r2(laborBy.get(j.job_id) ?? 0), expenses = n(j.expenses);
+    const costs = r2(materials + labor + expenses), profit = r2(revenue - costs);
+    const margin = revenue > 0 ? Math.round((profit / revenue) * 100) : null;
+    const reasons: string[] = [];
+    if (revenue <= 0) reasons.push("No price and no invoice");
+    else if (profit < 0 || (margin ?? 100) < LOW_MARGIN) {
+      const top = [["Labor", labor], ["Materials", materials], ["Expenses", expenses]].sort((a, b) => (b[1] as number) - (a[1] as number))[0];
+      if ((top[1] as number) > 0) reasons.push(`${top[0]} took ${Math.round(((top[1] as number) / revenue) * 100)}% of the price`);
+    }
+    if (n(j.visits) > 1) reasons.push(`Needed ${j.visits} visits`);
+    if ((unscanned.get(j.job_id) ?? 0) > 0) reasons.push(`${money0(unscanned.get(j.job_id))} in parts not scanned`);
+    if (noRateJobs.has(j.job_id)) reasons.push("Labor not counted: no pay rate");
+    if (!j.invoice_number && revenue > 0) reasons.push("Not invoiced yet (estimated price)");
+    return {
+      job_id: j.job_id, number: j.number, customer: j.customer_name, title: j.title, type: j.type_name || "No job type", when: j.completed_at,
+      techs: (j.tech_ids ?? []).map(nameOf), revenue, materials, labor, expenses, costs, profit, margin,
+      invoice: j.invoice_number, reasons, loss: profit < 0,
+    };
+  }).sort((a, b) => a.profit - b.profit);
+
+  const group = (keyOf: (j: PnlJob, raw: RawJob) => { key: string; name: string }[]) => {
+    const map = new Map<string, PnlGroup>();
+    const src = new Map(raw.jobs.map((j) => [j.job_id, j]));
+    for (const j of jobs) for (const k of keyOf(j, src.get(j.job_id)!)) {
+      const g = map.get(k.key) ?? { key: k.key, name: k.name, jobs: 0, revenue: 0, costs: 0, labor: 0, profit: 0, margin: null, losses: 0 };
+      g.jobs += 1; g.revenue = r2(g.revenue + j.revenue); g.costs = r2(g.costs + j.costs); g.labor = r2(g.labor + j.labor); g.profit = r2(g.profit + j.profit);
+      if (j.loss) g.losses += 1;
+      map.set(k.key, g);
+    }
+    return Array.from(map.values()).map((g) => ({ ...g, margin: g.revenue > 0 ? Math.round((g.profit / g.revenue) * 100) : null })).sort((a, b) => a.profit - b.profit);
+  };
+  const byType = group((j) => [{ key: j.type, name: j.type }]);
+  // Por colaborador: el trabajo completo cuenta para cada persona que estuvo en él
+  const byPerson = group((_, rj) => (rj.tech_ids?.length ? rj.tech_ids : [NOBODY]).map((uid) => ({ key: uid, name: uid === NOBODY ? "No collaborator" : nameOf(uid) })));
+
+  const sum = (f: (j: PnlJob) => number) => r2(jobs.reduce((a, j) => a + f(j), 0));
+  const revenue = sum((j) => j.revenue), profit = sum((j) => j.profit);
+  const losers = jobs.filter((j) => j.loss);
+  const totals: PnlTotals = {
+    jobs: jobs.length, revenue, materials: sum((j) => j.materials), labor: sum((j) => j.labor), expenses: sum((j) => j.expenses), costs: sum((j) => j.costs),
+    profit, margin: revenue > 0 ? Math.round((profit / revenue) * 100) : null,
+    lossJobs: losers.length, lossAmount: r2(Math.abs(losers.reduce((a, j) => a + j.profit, 0))), noPrice: jobs.filter((j) => j.revenue <= 0).length,
+    lowJobs: jobs.filter((j) => !j.loss && j.revenue > 0 && (j.margin ?? 100) < LOW_MARGIN).length,
+    unscannedValue: r2(raw.parts.reduce((a, p) => a + n(p.value), 0)), countValue: r2(raw.counts.reduce((a, c) => a + n(c.value), 0)), noRate: noRatePeople.size,
+  };
+
+  // Lo que el manager le cuenta al dueño, en frases
+  const findings: string[] = [];
+  if (!jobs.length) findings.push("No jobs were finished in this period.");
+  else {
+    findings.push(`${jobs.length} job${jobs.length === 1 ? "" : "s"} finished: ${money0(revenue)} in revenue, ${money0(totals.costs)} in costs, ${money0(profit)} ${profit >= 0 ? "profit" : "loss"}${totals.margin != null ? ` (${totals.margin}% margin)` : ""}.`);
+    if (totals.costs > 0) {
+      const parts = [["labor", totals.labor], ["materials", totals.materials], ["expenses", totals.expenses]].filter((x) => (x[1] as number) > 0).sort((a, b) => (b[1] as number) - (a[1] as number));
+      findings.push(`Biggest cost: ${parts[0][0]} (${money0(parts[0][1] as number)}, ${Math.round(((parts[0][1] as number) / totals.costs) * 100)}% of all costs).`);
+    }
+    if (losers.length) findings.push(`${losers.length} job${losers.length === 1 ? "" : "s"} lost money, ${money0(totals.lossAmount)} in total. The worst: ${losers.slice(0, 3).map((j) => `${j.number} ${j.customer} (${money0(j.profit)})`).join(", ")}.`);
+    else findings.push("No job lost money.");
+    if (totals.lowJobs) findings.push(`${totals.lowJobs} job${totals.lowJobs === 1 ? "" : "s"} made less than ${LOW_MARGIN}% margin.`);
+    if (totals.noPrice) findings.push(`${totals.noPrice} finished job${totals.noPrice === 1 ? " has" : "s have"} no price and no invoice.`);
+    const worstType = byType.find((g) => g.profit < 0), bestType = [...byType].sort((a, b) => b.profit - a.profit)[0];
+    if (bestType && bestType.profit > 0 && byType.length > 1) findings.push(`Most profitable job type: ${bestType.name} (${money0(bestType.profit)}).`);
+    if (worstType) findings.push(`Job type losing money: ${worstType.name} (${money0(worstType.profit)}).`);
+  }
+  if (totals.unscannedValue > 0) findings.push(`${money0(totals.unscannedValue)} in parts were charged but never scanned from a van.`);
+  if (totals.countValue > 0) findings.push(`${money0(totals.countValue)} in parts (at cost) came up missing in inventory counts.`);
+  if (totals.noRate > 0) findings.push(`${totals.noRate} collaborator${totals.noRate === 1 ? " has" : "s have"} no pay rate, so their labor counts as $0 and the profit looks higher than it is.`);
+  return { jobs, byType, byPerson, totals, findings };
+}
+
+// Hoja lista para imprimir o guardar como PDF (lo que el manager le entrega al dueño)
+const esc = (v: unknown) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
+export function pnlHtml(p: Pnl, o: { company: string; period: string; range: string; by: string }): string {
+  const t = p.totals, m = (v: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(v || 0);
+  const pct = (v: number | null) => (v == null ? "—" : `${v}%`);
+  const groupRows = (g: PnlGroup[]) => g.map((x) => `<tr><td>${esc(x.name)}</td><td class="r">${x.jobs}</td><td class="r">${m(x.revenue)}</td><td class="r">${m(x.costs)}</td><td class="r ${x.profit < 0 ? "neg" : ""}">${m(x.profit)}</td><td class="r">${pct(x.margin)}</td></tr>`).join("");
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Profit &amp; loss · ${esc(o.company)} · ${esc(o.range)}</title><style>
+*{box-sizing:border-box}body{font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#0b1f3a;margin:28px;font-size:12.5px;line-height:1.45}
+h1{font-size:21px;margin:0}h2{font-size:14px;margin:22px 0 8px;color:#0f766e}.sub{color:#64748b;margin-top:3px}
+.kpis{display:flex;gap:10px;margin-top:16px}.kpi{flex:1;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px}.kpi b{display:block;font-size:17px}.kpi span{color:#64748b;font-size:11px}
+table{width:100%;border-collapse:collapse}th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:#64748b;border-bottom:1.5px solid #cbd5e1;padding:5px 6px}
+td{padding:5px 6px;border-bottom:1px solid #eef2f6;vertical-align:top}.r{text-align:right;white-space:nowrap}.neg{color:#be123c;font-weight:600}.pos{color:#15803d}.why{color:#64748b;font-size:11px}
+ul{margin:0;padding-left:18px}li{margin:3px 0}tfoot td{font-weight:700;border-top:1.5px solid #cbd5e1;border-bottom:0}.foot{margin-top:22px;color:#94a3b8;font-size:10.5px}
+tr{page-break-inside:avoid}@media print{body{margin:12mm}}</style></head><body>
+<h1>Profit &amp; loss report</h1><div class="sub">${esc(o.company)} · ${esc(o.period)} (${esc(o.range)}) · prepared by ${esc(o.by)}</div>
+<div class="kpis"><div class="kpi"><span>Revenue (before tax)</span><b>${m(t.revenue)}</b></div><div class="kpi"><span>Costs</span><b>${m(t.costs)}</b></div>
+<div class="kpi"><span>${t.profit >= 0 ? "Profit" : "Loss"}</span><b class="${t.profit < 0 ? "neg" : "pos"}">${m(t.profit)}</b></div><div class="kpi"><span>Margin</span><b>${pct(t.margin)}</b></div>
+<div class="kpi"><span>Jobs that lost money</span><b class="${t.lossJobs ? "neg" : ""}">${t.lossJobs} · ${m(t.lossAmount)}</b></div></div>
+<h2>Summary</h2><ul>${p.findings.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
+<h2>Where the money went</h2><table><tr><th>Concept</th><th class="r">Amount</th><th class="r">% of revenue</th></tr>
+${[["Revenue (before tax)", t.revenue], ["− Labor", t.labor], ["− Materials (at cost)", t.materials], ["− Expenses linked to invoices", t.expenses]].map(([k, v]) => `<tr><td>${k}</td><td class="r">${m(v as number)}</td><td class="r">${t.revenue > 0 ? Math.round(((v as number) / t.revenue) * 100) + "%" : "—"}</td></tr>`).join("")}
+<tfoot><tr><td>= ${t.profit >= 0 ? "Profit" : "Loss"}</td><td class="r ${t.profit < 0 ? "neg" : ""}">${m(t.profit)}</td><td class="r">${pct(t.margin)}</td></tr></tfoot></table>
+${p.byType.length ? `<h2>By job type</h2><table><tr><th>Job type</th><th class="r">Jobs</th><th class="r">Revenue</th><th class="r">Costs</th><th class="r">Profit</th><th class="r">Margin</th></tr>${groupRows(p.byType)}</table>` : ""}
+${p.byPerson.length ? `<h2>By collaborator</h2><table><tr><th>Collaborator</th><th class="r">Jobs</th><th class="r">Revenue</th><th class="r">Costs</th><th class="r">Profit</th><th class="r">Margin</th></tr>${groupRows(p.byPerson)}</table><div class="why">A job with several collaborators counts in full for each of them.</div>` : ""}
+<h2>Every job, from the biggest loss to the biggest profit</h2><table><tr><th>Date</th><th>Job</th><th>Customer</th><th>Collaborators</th><th class="r">Revenue</th><th class="r">Labor</th><th class="r">Materials</th><th class="r">Expenses</th><th class="r">Profit</th><th class="r">Margin</th></tr>
+${p.jobs.map((j) => `<tr><td>${esc(shortDay(j.when))}</td><td>${esc(j.number)}<div class="why">${esc(j.type)}</div></td><td>${esc(j.customer)}${j.reasons.length ? `<div class="why">${esc(j.reasons.join(" · "))}</div>` : ""}</td><td>${esc(j.techs.join(", "))}</td><td class="r">${m(j.revenue)}</td><td class="r">${m(j.labor)}</td><td class="r">${m(j.materials)}</td><td class="r">${m(j.expenses)}</td><td class="r ${j.loss ? "neg" : ""}">${m(j.profit)}</td><td class="r">${pct(j.margin)}</td></tr>`).join("")}
+<tfoot><tr><td colspan="4">Total · ${t.jobs} jobs</td><td class="r">${m(t.revenue)}</td><td class="r">${m(t.labor)}</td><td class="r">${m(t.materials)}</td><td class="r">${m(t.expenses)}</td><td class="r ${t.profit < 0 ? "neg" : ""}">${m(t.profit)}</td><td class="r">${pct(t.margin)}</td></tr></tfoot></table>
+<div class="foot">Revenue is the invoice before tax; without an invoice, the price on the job. Labor is on-site hours × pay rate. Materials are the parts on the job at cost. Generated by BrightPro on ${esc(new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }))}.</div>
+</body></html>`;
+}
+
+// ---------- Ganancia de un trabajo (job_profit, dueño y manager) ----------
 export type JobProfitData = {
   revenue: number; revenue_source: "invoice" | "lines" | "estimate" | "none"; tax: number;
   invoice_number: string | null; invoice_status: string | null; collected: number;
