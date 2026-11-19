@@ -13,6 +13,8 @@ import { loadProfit } from "@/lib/job-costing";
 import { CustomerProfitPanel } from "@/components/expenses/ProfitPanels";
 import SiteEquipment from "@/components/jobs/forms/SiteEquipment";
 import { cityLine } from "@/lib/customers";
+import { canManageJobs } from "@/lib/jobs";
+import { Plan, dayText, freqLabel, loadPlans, planState, whenText } from "@/lib/maintenance";
 
 const TABS = ["Overview", "Comments", "Transactions", "Mails", "Statement"];
 const MOBILE_TABS = ["Details", "Transactions", "Comments"];
@@ -36,14 +38,17 @@ export default async function CustomerPage({
   const c = customer as Customer;
   const editHref = `/dashboard/customers/${c.id}/edit`;
 
-  const [{ data: addrRows }, { data: phoneRows }, { data: emailRows }, profit] = await Promise.all([
+  const [{ data: addrRows }, { data: phoneRows }, { data: emailRows }, profit, planList] = await Promise.all([
     supabase.from("customer_addresses").select("id, label, street, unit, city, state, zip, country, is_primary")
       .eq("customer_id", c.id).order("is_primary", { ascending: false }).order("created_at"),
     supabase.from("customer_phones").select("id, label, country, dial_code, number, is_primary").eq("customer_id", c.id).order("position"),
     supabase.from("customer_emails").select("id, label, email, is_primary").eq("customer_id", c.id).order("position"),
     // Rentabilidad de este cliente (todo el tiempo): cobrado vs. gastos, y por trabajo
     loadProfit(supabase, current.id, c.id).catch(() => null),
+    // Paso 5.11: planes de mantenimiento de este cliente (solo dueño, manager y oficina; sin el SQL nuevo, nada)
+    canManageJobs(current.role) ? loadPlans(supabase, current.id).catch(() => ({ plans: [] as Plan[], needsSql: true })) : Promise.resolve({ plans: [] as Plan[], needsSql: true }),
   ]);
+  const plans = planList.plans.filter((p) => p.customer_id === c.id);
   const phones = phoneRows ?? [];
   const emails = emailRows ?? [];
   const addresses = (addrRows ?? []).map((a) => ({
@@ -178,6 +183,28 @@ export default async function CustomerPage({
               <SiteEquipment variant="customer" companyId={current.id} customerId={c.id}
                 sites={addresses.map((a, i) => ({ id: a.id, label: a.label || [a.street, cityLine(a)].filter(Boolean).join(", ") || `Address ${i + 1}` }))} />
             </Accordion>
+
+            {/* Paso 5.11: planes de mantenimiento del cliente */}
+            {!planList.needsSql && (
+              <Accordion flat title="Maintenance plans" count={plans.length}
+                action={<Link prefetch={false} href={`/dashboard/jobs/plans/new?customer=${c.id}`} className="rounded-lg px-2 py-1 text-[12.5px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4]">+ New plan</Link>}>
+                {plans.length === 0 ? <p className="text-sm text-slate-500">No plan yet. A plan books this customer&apos;s recurring visits by itself.</p> : (
+                  <ul className="divide-y divide-slate-100">
+                    {plans.map((p) => { const st = planState(p); return (
+                      <li key={p.id}>
+                        <Link prefetch={false} href={`/dashboard/jobs/plans/${p.id}`} className="flex items-center gap-3 py-2.5 transition-colors hover:bg-[#f6fbfa]">
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium text-[#0b1f3a]">{p.name}</span>
+                            <span className="block truncate text-xs text-slate-500">{freqLabel(p)} · {p.next_visit ? `Next visit ${whenText(p.next_visit)}` : p.status === "active" && p.next_due ? `Next visit ${dayText(p.next_due)}` : "No visit booked"}</span>
+                          </span>
+                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${st.cls}`}>{st.label}</span>
+                        </Link>
+                      </li>
+                    ); })}
+                  </ul>
+                )}
+              </Accordion>
+            )}
 
             <Accordion flat title="Other Details" action={<PencilLink href={editHref} />}>
               <dl className="grid grid-cols-[minmax(0,10rem)_1fr] gap-x-4 gap-y-3 text-sm">

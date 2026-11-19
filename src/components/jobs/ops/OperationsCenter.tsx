@@ -14,6 +14,7 @@ import { OPS_GROUPS, OpsGroup, OpsJob, delayOf, fold, groupOf as groupAt, progre
 import { TechDot } from "@/components/jobs/EventBar";
 import { notifyAssigned } from "@/lib/jobs-assign-notify";
 import { CardMenu, GroupArt, OpsCard, ProgressRing } from "@/components/jobs/ops/OpsBits";
+import { loadPlanJobIds } from "@/lib/maintenance";
 import OpsConnections from "@/components/jobs/ops/OpsConnections";
 import { MoveTarget, OpsAsk, OpsDialog } from "@/components/jobs/ops/OpsDialogs";
 
@@ -139,14 +140,15 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
     const since = (!span && when === "all") || colF.done.when === "all" ? new Date(2000, 0, 1)
       : new Date(Math.min(base, span ? fromIsoDay(span.from).getTime() : base, colF.done.when === "custom" && colF.done.from ? fromIsoDay(colF.done.from).getTime() : base));
     const sb = createClient();
-    const [{ data, error: err }, phases, billing] = await Promise.all([
+    const [{ data, error: err }, phases, billing, planIds] = await Promise.all([
       sb.rpc("ops_board", { p_company: companyId, p_done_since: since.toISOString() }),
       loadPhaseProgress(sb, companyId), // Paso 5.4: % por fases
       loadBilling(sb, companyId, since), // Paso 5.6b: ¿ya se envió la factura?
+      loadPlanJobIds(sb, companyId), // Paso 5.11: etiqueta "Plan"
     ]);
     if (id !== reqId.current) return;
     if (err) { setError(jobError(err)); setLoading(false); return; }
-    setError(""); setJobs(withBilling(withPhases((data ?? []) as OpsJob[], phases), billing)); setLoading(false); setUpdatedAt(Date.now());
+    setError(""); setJobs(withBilling(withPhases((data ?? []) as OpsJob[], phases), billing).map((j) => (planIds.has(j.id) ? { ...j, plan: true } : j))); setLoading(false); setUpdatedAt(Date.now());
   }, [companyId, when, span, colF.done.when, colF.done.from]);
 
   useEffect(() => { load(); }, [load]);

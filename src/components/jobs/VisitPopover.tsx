@@ -1,5 +1,6 @@
 "use client";
 
+import { PlanTag } from "@/components/jobs/plans/PlanArt";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
@@ -82,6 +83,7 @@ export default function VisitPopover({ v, rect, pinned, onClose, onEnter, onLeav
       <div className="flex items-start gap-2 px-4 pb-2 pt-3">
         <div className="min-w-0 flex-1">
           <Link prefetch={false} href={`/dashboard/jobs/${v.job_id}`} title="Open the full job" className="text-[15px] font-semibold text-[#0f766e] hover:underline">Job #{v.number}</Link>
+          {v.plan && <span className="ml-2 align-middle"><PlanTag /></span>}
           <p className="text-[12.5px] text-slate-500">{fmtDayShort(start)} · {fmtRange(start, end)}</p>
           {v.arrival_window_min > 0 && <p className="text-[12px] text-slate-400">Arrival {fmtTime(start)} – {fmtTime(addMinutes(start, v.arrival_window_min))}</p>}
         </div>

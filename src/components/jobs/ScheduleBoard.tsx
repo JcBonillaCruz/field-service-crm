@@ -1,5 +1,6 @@
 "use client";
 
+import { loadPlanJobIds } from "@/lib/maintenance";
 import { askConfirm } from "@/lib/confirm";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -107,15 +108,16 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
     if (drag.current?.active) { pendingReload.current = true; return; }
     const id = ++reqId.current;
     const sb = createClient();
-    const [cal, tr] = await Promise.all([
+    const [cal, tr, planIds] = await Promise.all([
       sb.from("v_job_calendar").select("*").eq("company_id", companyId)
         .lt("starts_at", rangeEnd.toISOString()).gt("ends_at", rangeStart.toISOString()).order("starts_at").limit(3000),
       sb.from("v_jobs").select("id, company_id, number, customer_id, customer_name, customer_phone, address_id, site_address, job_type_id, title, description, priority, status, estimated_total, visit_count, hold_reason, hold_note, hold_at, needs_followup, created_at, type_name, type_color, techs, tech_ids, tags")
         .eq("company_id", companyId).in("status", ["unscheduled", "on_hold"]).order("created_at", { ascending: false }).limit(300),
+      loadPlanJobIds(sb, companyId), // Paso 5.11: etiqueta "Plan" en la tarjeta del trabajo
     ]);
     if (id !== reqId.current) return;
     if (cal.error) flash(jobError(cal.error), "error");
-    else setVisits((cal.data ?? []).map((v) => ({ ...v, estimated_total: Number(v.estimated_total) })) as CalVisit[]);
+    else setVisits((cal.data ?? []).map((v) => ({ ...v, estimated_total: Number(v.estimated_total), plan: planIds.has(v.job_id) })) as CalVisit[]);
     if (!tr.error) setTray((tr.data ?? []) as unknown as JobRow[]);
     setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps

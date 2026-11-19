@@ -1,5 +1,6 @@
 "use client";
 
+import { PlanTag } from "@/components/jobs/plans/PlanArt";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -61,8 +62,9 @@ function currentVisit(vs: Visit[]): Visit | null {
     ?? open.find((v) => v.status === "unscheduled") ?? open.find((v) => v.status === "on_hold") ?? open[open.length - 1] ?? null;
 }
 
-export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, seeProfit = isOwner, settings }: {
+export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, seeProfit = isOwner, settings, plan = null }: {
   companyId: string; data: JobDetailData; docs: JobDetailDoc[]; photoUrls: Record<string, string>; isOwner: boolean; seeProfit?: boolean; settings: JobSettings;
+  plan?: { id: string; name: string } | null; // Paso 5.11: el plan de mantenimiento que creó este trabajo
 }) {
   const router = useRouter();
   const j = data.job;
@@ -182,6 +184,7 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
           <div className="min-w-0 flex-1">
             <p className="flex flex-wrap items-center gap-2 text-[13px] font-semibold text-slate-400">
               <span>Job #{j.number}</span>
+              {plan && <Link prefetch={false} href={`/dashboard/jobs/plans/${plan.id}`} title={`Maintenance plan: ${plan.name}. Open the plan.`} className="transition-transform hover:-translate-y-px"><PlanTag label="Maintenance plan" /></Link>}
               {data.type && <span className="rounded-full px-2 py-0.5 text-[11.5px]" style={{ background: `${data.type.color}18`, color: data.type.color }}>{data.type.name}</span>}
               {(j.priority === "urgent" || j.priority === "high") && <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold uppercase ${j.priority === "urgent" ? "bg-[#ffe4e6] text-[#be123c]" : "bg-[#fff4e0] text-[#b45309]"}`}>{j.priority}</span>}
               {data.tags.map((t) => <span key={t.id} className="rounded-full px-2 py-0.5 text-[11px]" style={{ background: `${t.color}18`, color: t.color }}>{t.name}</span>)}

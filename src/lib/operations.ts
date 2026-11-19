@@ -19,6 +19,7 @@ export type OpsJob = {
   // Paso 5.4: fases con peso (solo si el trabajo tiene fases)
   phase_pct?: number | null; phase_total?: number; phase_done?: number; phase_now?: string | null; phase_blocked?: boolean;
   // Paso 5.6b: cobro del trabajo terminado (solo se llena en Operations, para oficina y dueño)
+  plan?: boolean; // Paso 5.11: salió de un plan de mantenimiento
   billing?: Billing; invoice_id?: string | null; invoice_number?: string | null; invoice_status?: string | null;
 };
 export type Billing = "to_invoice" | "awaiting" | "paid" | "none";

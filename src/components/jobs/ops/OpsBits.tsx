@@ -1,5 +1,6 @@
 "use client";
 
+import { PlanTag } from "@/components/jobs/plans/PlanArt";
 import { useRouter } from "next/navigation";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import { VisitStatus, addressLine, fmtTime, sameDay } from "@/lib/jobs";
@@ -111,6 +112,7 @@ export function OpsCard({ job, group, now, innerRef, onHover, dim = false, menu,
         {!done && (job.priority === "urgent" || job.priority === "high") && (
           <span className={`shrink-0 rounded-full px-1.5 text-[9.5px] font-bold uppercase ${job.priority === "urgent" ? "bg-[#ffe4e6] text-[#be123c]" : "bg-[#fff4e0] text-[#b45309]"}`}>{job.priority}</span>
         )}
+        {job.plan && <PlanTag label={tiny ? "" : "Plan"} />}
         {afterHours && !done && <AfterHoursMoon size={16} />}
         {menu && menu.length > 0 && <CardActions items={menu} />}
       </div>

@@ -283,7 +283,7 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
     });
     // Guardados: quedó a medias (re-agendar) · Tune-Up con lecturas fuera de rango
     alerts.filter((a) => a.app === "jobs").forEach((a) => out.push({
-      id: a.id, cat: "followup", title: a.title, number: "", sub: `${a.sub} · ${agoText(a.at, now)}`,
+      id: a.id, cat: "followup", title: a.title, number: "", sub: a.kind.startsWith("plan_") ? a.sub : `${a.sub} · ${agoText(a.at, now)}`,
       tag: <Pill k={a.level === "red" ? "delayed" : "paused"}>{a.pill}</Pill>, href: a.href, sort: 0,
     }));
     return out;

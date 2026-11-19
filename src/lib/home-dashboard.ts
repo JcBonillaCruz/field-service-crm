@@ -1,3 +1,4 @@
+import type { Plan } from "@/lib/maintenance";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DashboardData } from "@/lib/dashboard-data";
 import { daysBetween, today } from "@/lib/sales";
@@ -17,12 +18,14 @@ export type HomeAlert = {
 
 // ---------- Alertas guardadas en la base (las de trabajos "en vivo" se calculan en el navegador) ----------
 export async function loadHomeAlerts(supabase: SupabaseClient, companyId: string, opts: { finances: boolean; inventory: boolean }): Promise<HomeAlert[]> {
-  const [jobs, stock, digest] = await Promise.all([
+  const [jobs, stock, digest, plans] = await Promise.all([
     supabase.from("job_alerts").select("id, job_id, kind, title, body, created_at").eq("company_id", companyId).is("resolved_at", null).order("created_at", { ascending: false }).limit(30),
     opts.inventory
       ? supabase.from("inventory_alerts").select("id, qty, min_qty, created_at, item_id, items ( name ), inventory_locations ( name )").eq("company_id", companyId).is("resolved_at", null).order("created_at", { ascending: false }).limit(30)
       : Promise.resolve({ data: [], error: null }),
     opts.finances ? supabase.rpc("get_company_notifications_digest", { p_company_id: companyId }) : Promise.resolve({ data: null, error: null }),
+    // Paso 5.11: planes de mantenimiento (los técnicos y las bases sin el SQL nuevo reciben error → sin avisos)
+    supabase.rpc("maintenance_plans_list", { p_company: companyId }).then((r) => r, () => ({ data: null, error: true })),
   ]);
   const out: HomeAlert[] = [];
 
@@ -34,6 +37,22 @@ export async function loadHomeAlerts(supabase: SupabaseClient, companyId: string
       sub: r.body ?? (followup ? "Book the next visit" : "Check the readings"), pill: followup ? "Follow-up" : "Check",
       href: followup ? "/dashboard/jobs/schedule" : `/dashboard/jobs/${r.job_id}`, at: r.created_at,
     });
+  }
+
+  // Maintenance plans: un plan que no pudo crear su visita · un plan que está por terminar (para renovarlo)
+  const todayMs = Date.now();
+  for (const p of ((plans.error ? [] : plans.data) ?? []) as Plan[]) {
+    const href = `/dashboard/jobs/plans/${p.id}`;
+    if (p.status === "active" && p.last_error) {
+      out.push({ id: `mp-err-${p.id}`, app: "jobs", level: "red", kind: "plan_error", title: `${p.customer_name} · ${p.name}`, sub: "The plan couldn't create its next visit", pill: "Check", href, at: new Date().toISOString() });
+      continue;
+    }
+    const daysLeft = p.end_kind === "date" && p.end_date ? Math.round((new Date(`${p.end_date}T12:00:00`).getTime() - todayMs) / 86400000) : null;
+    const endsSoon = (p.status === "active" || p.status === "finished") && ((daysLeft != null && daysLeft >= 0 && daysLeft <= 30) || (p.status === "finished" && p.end_kind === "count" && (p.visits_upcoming ?? 0) === 1));
+    if (endsSoon) {
+      out.push({ id: `mp-end-${p.id}`, app: "jobs", level: "orange", kind: "plan_ending", title: `${p.customer_name} · ${p.name}`,
+        sub: daysLeft != null ? `Maintenance plan ends ${daysLeft === 0 ? "today" : `in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`}` : "Last visit of the maintenance plan is coming up", pill: "Renew", href, at: p.next_visit ?? new Date().toISOString() });
+    }
   }
 
   // Inventario: stock bajo o agotado

@@ -37,6 +37,8 @@ export async function GET(request: NextRequest) {
   const reminders = await processCustomerReminders(db, appOrigin(`https://${request.headers.get("host")}`)).catch(() => 0);
   // Paso 5.10d: gastos que se repiten (renta, seguro…) que tocan hoy, en todas las compañías. Sin el SQL nuevo no pasa nada.
   const recurring = await db.rpc("recurring_expenses_run_all").then((r) => Number(r.data) || 0, () => 0);
+  // Paso 5.11: planes de mantenimiento. Crea las visitas que entran en los próximos 60 días, en todas las compañías. Sin el SQL nuevo no pasa nada.
+  const maintenance = await db.rpc("maintenance_run_all").then((r) => Number(r.data) || 0, () => 0);
   await db.from("push_log").delete().lt("created_at", new Date(Date.now() - 30 * 86400000).toISOString());
-  return NextResponse.json({ ok: true, sent, reminders, recurring });
+  return NextResponse.json({ ok: true, sent, reminders, recurring, maintenance });
 }

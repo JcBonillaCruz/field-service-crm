@@ -21,6 +21,7 @@ export type CalVisit = {
   visit_count: number; hold_reason: string | null; techs: TechChip[]; tech_ids: string[]; tags: TagChip[];
   color?: string; // color de la barra según "Color by" (técnico, tipo o prioridad)
   after_hours?: boolean; // fuera del horario de oficina (luna en la barra)
+  plan?: boolean; // Paso 5.11: salió de un plan de mantenimiento
 };
 
 // Fila de la bandeja "Unscheduled / On hold" (y de la lista de Jobs)
