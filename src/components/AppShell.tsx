@@ -98,6 +98,7 @@ const JOBS_NAV: NavItem[] = [
   { label: "Assign jobs", href: "/dashboard/jobs/assign", roles: MANAGE, icon: "M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2.5 15a5.5 5.5 0 0 1 11 0M14 12h7M18 9l3 3-3 3" },
   { label: "Confirmations", href: "/dashboard/jobs/confirmations", roles: MANAGE, icon: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 15l2.2 2.2L15.5 13" },
   { label: "Timesheets", href: "/dashboard/jobs/timesheets", roles: MANAGE, icon: "M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 9v4l2.5 1.5M9.5 2.5h5" },
+  { label: "Reports", href: "/dashboard/jobs/reports", roles: MANAGE, icon: "M4 4v16h16M8.5 16v-4M12.5 16V8M16.5 16v-6" },
   { label: "Cancelled", href: "/dashboard/jobs/cancelled", roles: MANAGE, icon: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM5.6 5.6l12.8 12.8" },
   // My Jobs: el técnico y cualquiera que reciba trabajos (el dueño también puede ser colaborador)
   { label: "My Jobs", href: "/dashboard/jobs/mine", icon: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M8 14h3M8 17h6" },

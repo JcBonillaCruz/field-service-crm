@@ -20,6 +20,7 @@ import JobForms from "@/components/jobs/forms/JobForms";
 import SiteEquipment from "@/components/jobs/forms/SiteEquipment";
 import JobInvoice, { AddServiceSheet, InvoiceNudge } from "@/components/jobs/JobInvoice";
 import CustomerNotices, { RescheduleBanner, useCustomerNotices } from "@/components/jobs/CustomerNotices";
+import JobProfit from "@/components/jobs/JobProfit";
 
 type Visit = {
   id: string; visit_no: number; status: VisitStatus; starts_at: string | null; ends_at: string | null; arrival_window_min: number; techs: TechChip[];
@@ -416,10 +417,12 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
             <JobInvoice jobId={j.id} variant="office" refreshKey={invKey + data.lines.length} readOnly={cancelled} onToast={flash} onChanged={() => router.refresh()} />
           </section>
 
+          {/* Paso 5.10: ganancia del trabajo (solo el dueño) */}
+          {isOwner && !cancelled && <JobProfit jobId={j.id} refreshKey={invKey + data.lines.length} />}
+
           <section className={`${card} p-5 text-[13px] text-slate-500`}>
             <p>Created {when(j.created_at)}{j.created_by_name ? ` by ${j.created_by_name}` : ""}{j.source === "quote" ? " from a quote" : ""}.</p>
             {data.equipment.length > 0 && <p className="mt-1">{data.equipment.filter((e) => e.is_active).length} equipment saved at this job site.</p>}
-            {isOwner && <p className="mt-2 rounded-lg bg-[#f6f9fc] px-3 py-2 text-[12.5px]">Job profitability (labor, materials and margin) arrives in a later step — only you will see it.</p>}
           </section>
         </aside>
       </div>
