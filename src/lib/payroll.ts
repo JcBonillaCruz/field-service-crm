@@ -3,6 +3,7 @@ import type { PayType } from "@/lib/operations";
 import type { RawReport } from "@/lib/job-reports";
 import { TimeEntry, byDay, isStale } from "@/lib/timesheets";
 import { FinPeriod, money, r2, spanLabel, weekStartIso } from "@/lib/finance-period";
+import { PdfBlock, PdfDoc, PdfRow, pdfFileName } from "@/lib/report-pdf";
 
 // =====================================================================
 // Payroll por trabajador (Paso 5.10c) — Finances → Payroll, dueño y manager
@@ -150,6 +151,26 @@ export function buildPayroll(o: {
 export const rateText = (r: Pick<PayRow, "payType" | "rate" | "overtimeRate">) =>
   !r.payType ? "No pay rate" : r.payType === "hourly" ? `${money(r.rate)}/h${r.overtimeRate ? ` · OT ${money(r.overtimeRate)}/h` : ""}`
     : r.payType === "per_job" ? `${money(r.rate)} per job` : r.payType === "percent" ? `${n(r.rate)}% of the job` : `${money(r.rate)} per year`;
+
+// La nómina del periodo como PDF real (para imprimir, firmar o mandar al contador)
+export function payrollPdf(p: Payroll, o: { company: string; range: string; by: string }): PdfDoc {
+  const t = p.totals;
+  const cols = [{ label: "Person", width: 3.6 }, { label: "Hours", width: 1, align: "right" as const }, { label: "Jobs", width: 0.8, align: "right" as const }, { label: "Earned", width: 1.6, align: "right" as const }, { label: "Paid", width: 1.6, align: "right" as const }, { label: "Still owed", width: 1.6, align: "right" as const }];
+  const line = (r: PayRow): PdfRow => ({ cells: [
+    { text: r.name, sub: [r.calculated > 0 ? r.basis : rateText(r), ...r.payments.map((x) => `Paid ${money(x.amount)} on ${String(x.paid_on).slice(0, 10)}${x.payment_mode ? ` (${x.payment_mode}${x.reference ? ` ${x.reference}` : ""})` : ""}`)].filter(Boolean).join(" · ") },
+    r.minutes > 0 ? String(hoursOf(r.minutes)) : "-", r.jobCount ? String(r.jobCount) : "-", money(r.calculated), money(r.paid), { text: money(r.balance), tone: r.balance > 0.005 ? "neg" : undefined }] });
+  const total = (label: string, g: PayGroup): PdfRow => ({ cells: [label, "", "", money(g.calculated), money(g.paid), { text: money(g.balance), tone: g.balance > 0.005 ? "neg" : undefined }], style: "total" });
+  const emp = p.rows.filter((r) => r.workerType === "employee"), subs = p.rows.filter((r) => r.workerType === "subcontractor");
+  const blocks: PdfBlock[] = [{ type: "kpis", items: [
+    { label: "Earned in this period", value: money(t.calculated) }, { label: "Already paid", value: money(t.paid), tone: "pos" },
+    { label: "Still to pay", value: money(t.balance), tone: t.balance > 0.005 ? "neg" : undefined }, { label: "Hours clocked", value: `${hoursOf(t.minutes)} h` },
+  ] }];
+  if (emp.length) blocks.push({ type: "heading", text: `Direct employees (${emp.length})` }, { type: "table", columns: cols, rows: [...emp.map(line), total("Total direct employees", t.employees)] });
+  if (subs.length) blocks.push({ type: "heading", text: `Subcontractors (${subs.length})` }, { type: "table", columns: cols, rows: [...subs.map(line), total("Total subcontractors", t.subs)] });
+  if (!p.rows.length) blocks.push({ type: "bullets", items: ["Nothing to pay in this period."] });
+  blocks.push({ type: "note", text: "Hours come from Timesheets (clock in to clock out). Subcontractors are paid per finished job or by their percent of each job. Taxes and deductions are not calculated in this report." });
+  return { title: "Payroll", subtitle: `${o.range} · prepared by ${o.by}`, company: o.company, blocks, footer: o.range, fileName: pdfFileName("payroll", o.company, o.range) };
+}
 
 export const needsPayrollSql = (e: { message?: string; code?: string } | null | undefined) =>
   Boolean(e && (e.code === "PGRST202" || e.code === "42883" || e.code === "42P01" || /does not exist|Could not find/.test(e.message ?? "")));

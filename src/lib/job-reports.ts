@@ -1,4 +1,5 @@
 import { TeamMember, addDays, dayStart, receivesJobs, startOfMonth, startOfWeek } from "@/lib/jobs";
+import { PdfBlock, PdfDoc, PdfRow, pdfFileName } from "@/lib/report-pdf";
 
 // =====================================================================
 // Reports de Jobs (Paso 5.10)
@@ -345,35 +346,43 @@ export function buildPnl(raw: RawReport, team: TeamMember[]): Pnl {
   return { jobs, byType, byPerson, totals, findings };
 }
 
-// Hoja lista para imprimir o guardar como PDF (lo que el manager le entrega al dueño)
-const esc = (v: unknown) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
-export function pnlHtml(p: Pnl, o: { company: string; period: string; range: string; by: string }): string {
+// El Profit & loss como PDF real (lo que el manager le entrega al dueño): se ve en el visor, se imprime o se descarga
+export function pnlPdf(p: Pnl, o: { company: string; period: string; range: string; by: string }): PdfDoc {
   const t = p.totals, m = (v: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(v || 0);
-  const pct = (v: number | null) => (v == null ? "—" : `${v}%`);
-  const groupRows = (g: PnlGroup[]) => g.map((x) => `<tr><td>${esc(x.name)}</td><td class="r">${x.jobs}</td><td class="r">${m(x.revenue)}</td><td class="r">${m(x.costs)}</td><td class="r ${x.profit < 0 ? "neg" : ""}">${m(x.profit)}</td><td class="r">${pct(x.margin)}</td></tr>`).join("");
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Profit &amp; loss · ${esc(o.company)} · ${esc(o.range)}</title><style>
-*{box-sizing:border-box}body{font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#0b1f3a;margin:28px;font-size:12.5px;line-height:1.45}
-h1{font-size:21px;margin:0}h2{font-size:14px;margin:22px 0 8px;color:#0f766e}.sub{color:#64748b;margin-top:3px}
-.kpis{display:flex;gap:10px;margin-top:16px}.kpi{flex:1;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px}.kpi b{display:block;font-size:17px}.kpi span{color:#64748b;font-size:11px}
-table{width:100%;border-collapse:collapse}th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:#64748b;border-bottom:1.5px solid #cbd5e1;padding:5px 6px}
-td{padding:5px 6px;border-bottom:1px solid #eef2f6;vertical-align:top}.r{text-align:right;white-space:nowrap}.neg{color:#be123c;font-weight:600}.pos{color:#15803d}.why{color:#64748b;font-size:11px}
-ul{margin:0;padding-left:18px}li{margin:3px 0}tfoot td{font-weight:700;border-top:1.5px solid #cbd5e1;border-bottom:0}.foot{margin-top:22px;color:#94a3b8;font-size:10.5px}
-tr{page-break-inside:avoid}@media print{body{margin:12mm}}</style></head><body>
-<h1>Profit &amp; loss report</h1><div class="sub">${esc(o.company)} · ${esc(o.period)} (${esc(o.range)}) · prepared by ${esc(o.by)}</div>
-<div class="kpis"><div class="kpi"><span>Revenue (before tax)</span><b>${m(t.revenue)}</b></div><div class="kpi"><span>Costs</span><b>${m(t.costs)}</b></div>
-<div class="kpi"><span>${t.profit >= 0 ? "Profit" : "Loss"}</span><b class="${t.profit < 0 ? "neg" : "pos"}">${m(t.profit)}</b></div><div class="kpi"><span>Margin</span><b>${pct(t.margin)}</b></div>
-<div class="kpi"><span>Jobs that lost money</span><b class="${t.lossJobs ? "neg" : ""}">${t.lossJobs} · ${m(t.lossAmount)}</b></div></div>
-<h2>Summary</h2><ul>${p.findings.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
-<h2>Where the money went</h2><table><tr><th>Concept</th><th class="r">Amount</th><th class="r">% of revenue</th></tr>
-${[["Revenue (before tax)", t.revenue], ["− Labor", t.labor], ["− Materials (at cost)", t.materials], ["− Expenses linked to invoices", t.expenses]].map(([k, v]) => `<tr><td>${k}</td><td class="r">${m(v as number)}</td><td class="r">${t.revenue > 0 ? Math.round(((v as number) / t.revenue) * 100) + "%" : "—"}</td></tr>`).join("")}
-<tfoot><tr><td>= ${t.profit >= 0 ? "Profit" : "Loss"}</td><td class="r ${t.profit < 0 ? "neg" : ""}">${m(t.profit)}</td><td class="r">${pct(t.margin)}</td></tr></tfoot></table>
-${p.byType.length ? `<h2>By job type</h2><table><tr><th>Job type</th><th class="r">Jobs</th><th class="r">Revenue</th><th class="r">Costs</th><th class="r">Profit</th><th class="r">Margin</th></tr>${groupRows(p.byType)}</table>` : ""}
-${p.byPerson.length ? `<h2>By collaborator</h2><table><tr><th>Collaborator</th><th class="r">Jobs</th><th class="r">Revenue</th><th class="r">Costs</th><th class="r">Profit</th><th class="r">Margin</th></tr>${groupRows(p.byPerson)}</table><div class="why">A job with several collaborators counts in full for each of them.</div>` : ""}
-<h2>Every job, from the biggest loss to the biggest profit</h2><table><tr><th>Date</th><th>Job</th><th>Customer</th><th>Collaborators</th><th class="r">Revenue</th><th class="r">Labor</th><th class="r">Materials</th><th class="r">Expenses</th><th class="r">Profit</th><th class="r">Margin</th></tr>
-${p.jobs.map((j) => `<tr><td>${esc(shortDay(j.when))}</td><td>${esc(j.number)}<div class="why">${esc(j.type)}</div></td><td>${esc(j.customer)}${j.reasons.length ? `<div class="why">${esc(j.reasons.join(" · "))}</div>` : ""}</td><td>${esc(j.techs.join(", "))}</td><td class="r">${m(j.revenue)}</td><td class="r">${m(j.labor)}</td><td class="r">${m(j.materials)}</td><td class="r">${m(j.expenses)}</td><td class="r ${j.loss ? "neg" : ""}">${m(j.profit)}</td><td class="r">${pct(j.margin)}</td></tr>`).join("")}
-<tfoot><tr><td colspan="4">Total · ${t.jobs} jobs</td><td class="r">${m(t.revenue)}</td><td class="r">${m(t.labor)}</td><td class="r">${m(t.materials)}</td><td class="r">${m(t.expenses)}</td><td class="r ${t.profit < 0 ? "neg" : ""}">${m(t.profit)}</td><td class="r">${pct(t.margin)}</td></tr></tfoot></table>
-<div class="foot">Revenue is the invoice before tax; without an invoice, the price on the job. Labor is on-site hours × pay rate. Materials are the parts on the job at cost. Generated by BrightPro on ${esc(new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }))}.</div>
-</body></html>`;
+  const pct = (v: number | null) => (v == null ? "-" : `${v}%`);
+  const neg = (v: number) => (v < 0 ? ("neg" as const) : undefined);
+  const groupCols = (first: string) => [{ label: first, width: 3.2 }, { label: "Jobs", width: 1, align: "right" as const }, { label: "Revenue", width: 1.8, align: "right" as const }, { label: "Costs", width: 1.8, align: "right" as const }, { label: "Profit", width: 1.8, align: "right" as const }, { label: "Margin", width: 1.1, align: "right" as const }];
+  const groupRows = (g: PnlGroup[]): PdfRow[] => g.map((x) => ({ cells: [x.name, String(x.jobs), m(x.revenue), m(x.costs), { text: m(x.profit), tone: neg(x.profit) }, pct(x.margin)] }));
+  const share = (v: number) => (t.revenue > 0 ? `${Math.round((v / t.revenue) * 100)}%` : "-");
+  const blocks: PdfBlock[] = [
+    { type: "kpis", items: [
+      { label: "Revenue (before tax)", value: m(t.revenue) }, { label: "Costs", value: m(t.costs) },
+      { label: t.profit >= 0 ? "Profit" : "Loss", value: m(t.profit), tone: t.profit < 0 ? "neg" : "pos" }, { label: "Margin", value: pct(t.margin) },
+      { label: "Jobs that lost money", value: `${t.lossJobs} · ${m(t.lossAmount)}`, tone: t.lossJobs ? "neg" : undefined },
+    ] },
+    { type: "heading", text: "Summary" }, { type: "bullets", items: p.findings },
+    { type: "heading", text: "Where the money went" },
+    { type: "table", columns: [{ label: "Concept", width: 6 }, { label: "Amount", width: 2, align: "right" }, { label: "% of revenue", width: 1.4, align: "right" }], rows: [
+      { cells: ["Revenue (before tax)", m(t.revenue), share(t.revenue)] }, { cells: ["- Labor", m(t.labor), share(t.labor)] },
+      { cells: ["- Materials (at cost)", m(t.materials), share(t.materials)] }, { cells: ["- Expenses linked to invoices", m(t.expenses), share(t.expenses)] },
+      { cells: [t.profit >= 0 ? "Profit" : "Loss", { text: m(t.profit), tone: t.profit < 0 ? "neg" : "pos" }, pct(t.margin)], style: "result" },
+    ] },
+  ];
+  if (p.byType.length) blocks.push({ type: "heading", text: "By job type" }, { type: "table", columns: groupCols("Job type"), rows: groupRows(p.byType) });
+  if (p.byPerson.length) blocks.push({ type: "heading", text: "By collaborator" }, { type: "table", columns: groupCols("Collaborator"), rows: groupRows(p.byPerson) },
+    { type: "note", text: "A job with several collaborators counts in full for each of them." });
+  blocks.push({ type: "heading", text: "Every job, from the biggest loss to the biggest profit" }, {
+    type: "table",
+    columns: [{ label: "Job", width: 3.6 }, { label: "Date", width: 1, align: "right" }, { label: "Revenue", width: 1.5, align: "right" }, { label: "Labor", width: 1.4, align: "right" }, { label: "Materials", width: 1.4, align: "right" }, { label: "Expenses", width: 1.4, align: "right" }, { label: "Profit", width: 1.5, align: "right" }, { label: "Margin", width: 1, align: "right" }],
+    rows: [
+      ...p.jobs.map((j): PdfRow => ({ cells: [
+        { text: `${j.number} · ${j.customer || "No customer"}`, sub: [j.type, j.techs.join(", "), ...j.reasons].filter(Boolean).join(" · ") },
+        shortDay(j.when), m(j.revenue), m(j.labor), m(j.materials), m(j.expenses), { text: m(j.profit), tone: neg(j.profit) }, pct(j.margin)] })),
+      { cells: [`Total · ${t.jobs} jobs`, "", m(t.revenue), m(t.labor), m(t.materials), m(t.expenses), { text: m(t.profit), tone: neg(t.profit) }, pct(t.margin)], style: "total" },
+    ],
+  });
+  blocks.push({ type: "note", text: "Revenue is the invoice before tax; without an invoice, the price on the job. Labor is on-site hours x pay rate. Materials are the parts on the job at cost." });
+  return { title: "Profit & loss report", subtitle: `${o.period} (${o.range}) · prepared by ${o.by}`, company: o.company, blocks, footer: o.range, fileName: pdfFileName("profit-and-loss", o.company, o.range) };
 }
 
 // ---------- Ganancia de un trabajo (job_profit, dueño y manager) ----------

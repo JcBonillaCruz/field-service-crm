@@ -57,12 +57,3 @@ export const PrintIcon = () => (
 export const Chevron = ({ open }: { open: boolean }) => (
   <svg viewBox="0 0 20 20" className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 ${open ? "rotate-90" : ""}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7.5 5l5 5-5 5" /></svg>
 );
-
-// Hoja para imprimir o guardar como PDF
-export function printHtml(html: string) {
-  const w = window.open("", "_blank");
-  if (!w) return;
-  w.document.write(html);
-  w.document.close(); w.focus();
-  setTimeout(() => w.print(), 350);
-}

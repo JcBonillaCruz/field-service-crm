@@ -35,6 +35,8 @@ export async function GET(request: NextRequest) {
   sent += await processInventoryAlerts(db).catch(() => 0);
   // Paso 5.8: recordatorio a los clientes con visita mañana (o en 2 días), solo en compañías que lo encendieron
   const reminders = await processCustomerReminders(db, appOrigin(`https://${request.headers.get("host")}`)).catch(() => 0);
+  // Paso 5.10d: gastos que se repiten (renta, seguro…) que tocan hoy, en todas las compañías. Sin el SQL nuevo no pasa nada.
+  const recurring = await db.rpc("recurring_expenses_run_all").then((r) => Number(r.data) || 0, () => 0);
   await db.from("push_log").delete().lt("created_at", new Date(Date.now() - 30 * 86400000).toISOString());
-  return NextResponse.json({ ok: true, sent, reminders });
+  return NextResponse.json({ ok: true, sent, reminders, recurring });
 }

@@ -60,8 +60,11 @@ const FINANCE_NAV: NavItem[] = [
     children: [
       { label: "Money In", href: "/dashboard/income", icon: "" },
       { label: "Expenses", href: "/dashboard/expenses", icon: "" },
+      { label: "Recurring expenses", href: "/dashboard/recurring", icon: "" },
       // Paso 5.10c: nómina por persona y el reporte de toda la compañía (dueño y manager)
       { label: "Payroll", href: "/dashboard/payroll", icon: "", roles: ["owner", "manager"] },
+      // Paso 5.10d: compras a pagos (dueño y manager)
+      { label: "Financing", href: "/dashboard/financing", icon: "", roles: ["owner", "manager"] },
       { label: "Reports", href: "/dashboard/reports", icon: "", roles: ["owner", "manager"] },
     ] },
   { label: "Payments", icon: "M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 10h18M7 15h3", roles: ["owner", "manager"] },

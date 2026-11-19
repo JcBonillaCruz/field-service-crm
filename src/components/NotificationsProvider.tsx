@@ -3,6 +3,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { Financed, financingNotices } from "@/lib/financing";
+import { today } from "@/lib/sales";
 import { Digest, JobAlertRow, JobNoticeRow, Notice, StockAlertRow, buildNotices, jobNotices, myJobNotices, stockNotices } from "@/lib/notifications";
 
 // =====================================================================
@@ -71,7 +73,7 @@ export default function NotificationsProvider({ companyId, userId, enabled, tech
         setItems(list);
         return;
       }
-      const [{ data, error }, alerts, jobAlerts, mine] = await Promise.all([
+      const [{ data, error }, alerts, jobAlerts, mine, fin] = await Promise.all([
         sb.rpc("get_company_notifications_digest", { p_company_id: companyId }),
         // Inventario: stock bajo (si la tabla aún no existe, simplemente no trae nada)
         sb.from("inventory_alerts").select("id, qty, min_qty, created_at, item_id, items ( name ), inventory_locations ( name )")
@@ -80,13 +82,16 @@ export default function NotificationsProvider({ companyId, userId, enabled, tech
         sb.from("job_alerts").select("id, job_id, kind, title, body, created_at")
           .eq("company_id", companyId).is("resolved_at", null).order("created_at", { ascending: false }).limit(20),
         mineQ,
+        // Finances: cuotas de compras a pagos (solo dueño y manager reciben algo; sin el SQL 5.10d no trae nada)
+        sb.rpc("financing_list", { p_company: companyId }),
       ]);
       if (error || !data) return;
       const d = data as Digest;
       const stockList = alerts.error ? [] : stockNotices((alerts.data ?? []) as unknown as StockAlertRow[], d.reads ?? []);
       const jobList = jobAlerts.error ? [] : jobNotices((jobAlerts.data ?? []) as JobAlertRow[], d.reads ?? []);
       const mineList = mine.error ? [] : myJobNotices((mine.data ?? []) as JobNoticeRow[], d.reads ?? []);
-      const list = [...buildNotices(d), ...mineList, ...jobList, ...stockList].slice(0, 50);
+      const finList = fin.error ? [] : financingNotices((fin.data ?? []) as Financed[], d.reads ?? [], today());
+      const list = [...buildNotices(d), ...finList, ...mineList, ...jobList, ...stockList].slice(0, 50);
       // Algo cambió (el cliente abrió, aceptó, pagaste…): refresca la pantalla, menos en formularios
       if (version.current !== null && d.version && d.version !== version.current && !/\/(new|edit)(\/|$)/.test(window.location.pathname)) router.refresh();
       if (d.version) version.current = d.version;

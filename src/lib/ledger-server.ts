@@ -18,6 +18,8 @@ export async function loadLedger(kind: LedgerKind, sp?: { range?: string; from?:
   if (!canManageSales(current.role)) return { denied: true as const };
   const s = SRC[kind];
   const range = resolveRange(sp?.range, todayIn(headers().get("x-vercel-ip-timezone")), sp?.from, sp?.to);
+  // Paso 5.10d: antes de listar, crea los gastos que se repiten y ya tocan (renta, seguro…). Sin el SQL nuevo no pasa nada.
+  if (kind === "expense") await supabase.rpc("recurring_expenses_run", { p_company: current.id, p_today: todayIn(headers().get("x-vercel-ip-timezone")) }).then(() => null, () => null);
   const base = `id, company_id, ${s.date}, category, ${s.party}, amount, payment_mode, reference, notes, receipt_path, receipt_name, created_by_name, created_at`;
   // Columnas de "a qué cliente / trabajo pertenece" (SQL nuevo). Si aún no se corrió, todo sigue funcionando como antes.
   const linkCols = kind === "income" ? "customer_id" : "customer_id, doc_id, cost_type";

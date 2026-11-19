@@ -6,11 +6,13 @@ import { createClient } from "@/lib/supabase/client";
 import { TeamMember, addDays, isoDay } from "@/lib/jobs";
 import { hm } from "@/lib/timesheets";
 import {
-  LOW_MARGIN, NOBODY, PartsRow, PersonRow, PnlGroup, PnlJob, REPORT_PERIODS, RawReport, ReportPeriod, buildParts, buildPnl, buildTeam, money0, needsReportSql, pnlHtml, qty, rangeText,
+  LOW_MARGIN, NOBODY, PartsRow, PersonRow, PnlGroup, PnlJob, REPORT_PERIODS, RawReport, ReportPeriod, buildParts, buildPnl, buildTeam, money0, needsReportSql, pnlPdf, qty, rangeText,
   reportError, reportRange, shortDay,
 } from "@/lib/job-reports";
 import SelectMenu from "@/components/ui/SelectMenu";
 import ExportModal from "@/components/customers/ExportModal";
+import PdfViewer from "@/components/ui/PdfViewer";
+import type { PdfDoc } from "@/lib/report-pdf";
 import { TechDot } from "@/components/jobs/EventBar";
 import ReportArt, { ReportArtKind } from "@/components/jobs/reports/ReportArt";
 
@@ -50,6 +52,7 @@ export default function JobReports({ companyId, team, weekStartsOn, initialTab =
   const [q, setQ] = useState("");
   const [openIds, setOpenIds] = useState<string[]>([]);
   const [exportOpen, setExportOpen] = useState(false);
+  const [pdf, setPdf] = useState<PdfDoc | null>(null); // el Profit & loss como PDF real, en el visor
   const { from, to } = useMemo(() => reportRange(period, weekStartsOn), [period, weekStartsOn]);
 
   const load = useCallback(async () => {
@@ -73,15 +76,8 @@ export default function JobReports({ companyId, team, weekStartsOn, initialTab =
   const tabs: Tab[] = owner ? ["team", "parts", "pnl"] : ["team", "parts"];
   const shown: Tab = tabs.includes(tab) ? tab : "team";
   const periodLabel = REPORT_PERIODS.find((p) => p.value === period)?.label ?? "This period";
-  // Hoja para imprimir o guardar como PDF: lo que el manager le entrega al dueño
-  const printPnl = () => {
-    if (!pnl) return;
-    const w = window.open("", "_blank");
-    if (!w) return;
-    w.document.write(pnlHtml(pnl, { company: companyName, period: periodLabel, range: rangeText(from, to), by: preparedBy || "the manager" }));
-    w.document.close(); w.focus();
-    setTimeout(() => w.print(), 350);
-  };
+  // PDF real en el visor (imprimir o descargar): lo que el manager le entrega al dueño
+  const printPnl = () => { if (pnl) setPdf(pnlPdf(pnl, { company: companyName, period: periodLabel, range: rangeText(from, to), by: preparedBy || "the manager" })); };
   const toggle = (id: string) => setOpenIds((o) => (o.includes(id) ? o.filter((x) => x !== id) : [...o, id]));
 
   // Celular: se cambia de pestaña deslizando (regla de todo el sistema)
@@ -343,6 +339,7 @@ export default function JobReports({ companyId, team, weekStartsOn, initialTab =
         </div>
       )}
 
+      {pdf && <PdfViewer doc={pdf} onClose={() => setPdf(null)} />}
       <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} initialModule={shown === "team" ? "Team performance" : shown === "pnl" ? "Profit and loss" : "Unscanned parts"} defaultScope="view"
         view={{
           module: shown === "team" ? "Team performance" : shown === "pnl" ? "Profit and loss" : "Unscanned parts", label: periodLabel,

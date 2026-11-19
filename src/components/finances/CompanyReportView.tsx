@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { FinPeriod, FinRange, REPORT_PERIODS, money } from "@/lib/finance-period";
-import { CompanyReport, RepBucket, RepExtras, changeText, companyReportHtml, findings, statement } from "@/lib/company-report";
+import { CompanyReport, RepBucket, RepExtras, changeText, companyReportPdf, findings, statement } from "@/lib/company-report";
 import ExportModal from "@/components/customers/ExportModal";
-import { ExportIcon, Kpi, PeriodBar, PrintIcon, card, ghostBtn, printHtml, tealBtn } from "@/components/finances/FinBits";
+import PdfViewer from "@/components/ui/PdfViewer";
+import type { PdfDoc } from "@/lib/report-pdf";
+import { ExportIcon, Kpi, PeriodBar, PrintIcon, card, ghostBtn, tealBtn } from "@/components/finances/FinBits";
 
 const tone = (v: number) => (v < 0 ? "text-[#be123c]" : "text-[#15803d]");
 const BUCKET_TITLE: Partial<Record<FinPeriod, string>> = { month: "Week by week", quarter: "Month by month", year: "Month by month" };
@@ -20,6 +22,7 @@ export default function CompanyReportView({ range, today, report: r, extras: x, 
   const router = useRouter();
   const [pending, start] = useTransition();
   const [exportOpen, setExportOpen] = useState(false);
+  const [pdf, setPdf] = useState<PdfDoc | null>(null);
   const go = (p: FinPeriod, d: string) => start(() => router.push(`/dashboard/reports?p=${p}&d=${d}`));
   const q = `?p=${range.period === "quarter" || range.period === "year" ? "month" : range.period}&d=${range.from}`;
   const lines = statement(r);
@@ -32,6 +35,7 @@ export default function CompanyReportView({ range, today, report: r, extras: x, 
     { label: "Materials", v: r.materials, color: "#2563eb" }, { label: "Labor paid", v: r.labor, color: "#f59e0b" },
     ...(r.jobOther > 0 ? [{ label: "Other job costs", v: r.jobOther, color: "#7c3aed" }] : []),
     { label: "General expenses", v: r.overheadTotal, color: "#64748b" },
+    ...(r.financingTotal > 0 ? [{ label: "Financed purchases", v: r.financingTotal, color: "#0891b2" }] : []),
     { label: r.net >= 0 ? "Real profit" : "Real loss", v: r.net, color: r.net >= 0 ? "#16a34a" : "#e11d48" },
   ];
   const side = (title: string, href: string, linkText: string, children: React.ReactNode) => (
@@ -53,7 +57,7 @@ export default function CompanyReportView({ range, today, report: r, extras: x, 
           <p className="text-[13px] text-slate-500">The whole company: what came in, what went out and what was really left.</p>
         </div>
         <button type="button" onClick={() => setExportOpen(true)} className={ghostBtn}><ExportIcon />Export</button>
-        <button type="button" onClick={() => printHtml(companyReportHtml(r, x, buckets, { company: companyName, title: range.title, range: range.label, by: preparedBy || "the manager" }))} className={tealBtn}><PrintIcon />Print / PDF</button>
+        <button type="button" onClick={() => setPdf(companyReportPdf(r, x, buckets, { company: companyName, title: range.title, range: range.label, by: preparedBy || "the manager" }))} className={tealBtn}><PrintIcon />Print / PDF</button>
       </div>
       <div className="mt-4"><PeriodBar periods={REPORT_PERIODS} range={range} today={today} onGo={go} /></div>
 
@@ -149,6 +153,13 @@ export default function CompanyReportView({ range, today, report: r, extras: x, 
               <p className="mt-1.5 text-[12px] leading-snug text-slate-400">That report says how much each finished job left. This one says how much money really moved, so the two don&apos;t have to match.</p>
             </div>)}
 
+            {x.financing && x.financing.count > 0 && side("Financed purchases", "/dashboard/financing", "Open Financing", <div className="mt-1.5">
+              {pair("Paid in this period", money(r.financingTotal))}
+              {pair(`Still owed on ${x.financing.count} purchase${x.financing.count === 1 ? "" : "s"}`, <span className="text-[#be123c]">{money(x.financing.owed)}</span>)}
+              {pair("Payments per month", money(x.financing.monthly))}
+              <p className="mt-1.5 text-[12px] leading-snug text-slate-400">{x.financing.overdue ? `${x.financing.overdue} payment${x.financing.overdue === 1 ? " is" : "s are"} past due. ` : ""}What is still owed is a debt, not an expense of this period.</p>
+            </div>)}
+
             {side("Customers still owe", "/dashboard/invoices", "Invoices", <div className="mt-1.5">
               {pair(`${x.receivableCount} open invoice${x.receivableCount === 1 ? "" : "s"}`, money(x.receivable))}
               <p className="mt-1.5 text-[12px] leading-snug text-slate-400">Not counted as income until it&apos;s collected.</p>
@@ -161,6 +172,7 @@ export default function CompanyReportView({ range, today, report: r, extras: x, 
         </p>
       </div>
 
+      {pdf && <PdfViewer doc={pdf} onClose={() => setPdf(null)} />}
       <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} initialModule="Company report" defaultScope="view"
         view={{ module: "Company report", label: range.title, ids: ["report"], columns: [], range: { from: range.from, to: range.to } }} />
     </div>

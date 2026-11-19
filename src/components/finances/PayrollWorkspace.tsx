@@ -7,13 +7,15 @@ import { createClient } from "@/lib/supabase/client";
 import { PAYMENT_MODES } from "@/lib/sales";
 import { askConfirm } from "@/lib/confirm";
 import { FinPeriod, FinRange, PAYROLL_PERIODS, money, r2, spanLabel } from "@/lib/finance-period";
-import { PayGroup, PayRow, Payroll, PayrollPayment, hoursOf, hoursText, payrollError, rateText } from "@/lib/payroll";
+import { PayGroup, PayRow, Payroll, PayrollPayment, hoursOf, hoursText, payrollError, payrollPdf, rateText } from "@/lib/payroll";
 import { WORKER_LABEL } from "@/lib/operations";
 import SelectMenu from "@/components/ui/SelectMenu";
 import DatePicker from "@/components/ui/DatePicker";
 import ExportModal from "@/components/customers/ExportModal";
 import { TechDot } from "@/components/jobs/EventBar";
-import { Chevron, ExportIcon, Kpi, PeriodBar, card, ghostBtn, tealBtn } from "@/components/finances/FinBits";
+import PdfViewer from "@/components/ui/PdfViewer";
+import type { PdfDoc } from "@/lib/report-pdf";
+import { Chevron, ExportIcon, Kpi, PeriodBar, PrintIcon, card, ghostBtn, tealBtn } from "@/components/finances/FinBits";
 
 const COLS = "lg:grid-cols-[minmax(0,2.1fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.7fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.5fr)_1.25rem]";
 const inputClass = "w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-[15px] placeholder:text-slate-400 focus:border-[#0f766e] focus:bg-white focus:outline-none focus:ring-4 focus:ring-[#14a39a]/15";
@@ -22,14 +24,15 @@ const shortDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateStrin
 
 // Finances → Payroll (Paso 5.10c): una fila por persona con lo que ganó en el periodo y lo que ya se le pagó.
 // "Mark as paid" guarda el pago y crea solo el gasto en Expenses. Dueño y manager.
-export default function PayrollWorkspace({ companyId, isOwner, range, today, payroll, needsSql, error, timeReady }: {
-  companyId: string; isOwner: boolean; range: FinRange; today: string; payroll: Payroll | null; needsSql: boolean; error: string; timeReady: boolean;
+export default function PayrollWorkspace({ companyId, isOwner, range, today, payroll, needsSql, error, timeReady, companyName = "", preparedBy = "" }: {
+  companyName?: string; preparedBy?: string; companyId: string; isOwner: boolean; range: FinRange; today: string; payroll: Payroll | null; needsSql: boolean; error: string; timeReady: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [openIds, setOpenIds] = useState<string[]>([]);
   const [pay, setPay] = useState<PayRow | "all" | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [pdf, setPdf] = useState<PdfDoc | null>(null);
   const [note, setNote] = useState("");
   const [fail, setFail] = useState("");
 
@@ -171,6 +174,7 @@ export default function PayrollWorkspace({ companyId, isOwner, range, today, pay
           <p className="text-[13px] text-slate-500">What each person earned in the period and what you already paid. Marking it as paid adds the expense for you.</p>
         </div>
         <button type="button" onClick={() => setExportOpen(true)} className={ghostBtn}><ExportIcon />Export</button>
+        <button type="button" disabled={!payroll} onClick={() => payroll && setPdf(payrollPdf(payroll, { company: companyName, range: range.label, by: preparedBy || "the manager" }))} className={ghostBtn}><PrintIcon />Print / PDF</button>
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <PeriodBar periods={PAYROLL_PERIODS} range={range} today={today} onGo={go} />
@@ -215,6 +219,7 @@ export default function PayrollWorkspace({ companyId, isOwner, range, today, pay
       )}
 
       {pay && <PayDialog companyId={companyId} range={range} today={today} target={pay === "all" ? unpaid : [pay]} all={pay === "all"} onClose={() => setPay(null)} onDone={refresh} />}
+      {pdf && <PdfViewer doc={pdf} onClose={() => setPdf(null)} />}
       <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} initialModule="Payroll" defaultScope="view"
         view={{ module: "Payroll", label: range.title, ids: rows.map((r) => r.user_id), columns: [], range: { from: range.from, to: range.to } }} />
     </div>
