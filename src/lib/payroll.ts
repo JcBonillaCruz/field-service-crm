@@ -4,12 +4,14 @@ import type { RawReport } from "@/lib/job-reports";
 import { TimeEntry, byDay, isStale } from "@/lib/timesheets";
 import { FinPeriod, money, r2, spanLabel, weekStartIso } from "@/lib/finance-period";
 import { PdfBlock, PdfDoc, PdfRow, pdfFileName } from "@/lib/report-pdf";
+import { TypePay, ruleFinder, typeCost, typeRuleText } from "@/lib/type-pay";
 
 // =====================================================================
 // Payroll por trabajador (Paso 5.10c) — Finances → Payroll, dueño y manager
 //   Empleado directo (hourly)   = horas marcadas en Timesheets × tarifa por hora (+ overtime si tiene tarifa de overtime)
 //   Subcontratista (per_job)    = trabajos terminados × tarifa por trabajo
 //   Subcontratista (percent)    = su % del precio de cada trabajo terminado
+//   Por tipo de trabajo (5.10f) = si tiene una regla para el tipo de ese trabajo (fijo o %), esa manda; si no, su tarifa general
 //   Salary                      = salario anual repartido en el periodo
 // "Mark as paid" guarda el pago y crea solo el gasto en Expenses. Aquí solo se calcula; el mismo cálculo
 // sirve para la pantalla, la exportación y el reporte de la compañía.
@@ -22,14 +24,19 @@ export type PayrollPayment = {
   expense_id: string | null; created_by_name: string | null; created_at: string;
 };
 export type PayrollData = { rates: PayRate[]; payments: PayrollPayment[] };
-export type PayJob = { job_id: string; number: string; customer: string; when: string | null; revenue: number; cost: number; estimated: boolean };
+export type PayJob = {
+  job_id: string; number: string; customer: string; when: string | null; revenue: number; cost: number; estimated: boolean;
+  type: string | null; materials: number;
+  how: string;       // cómo se pagó este trabajo: "$400.00 fixed", "30% of the job"… (vacío si no cobra por trabajo)
+  byType: boolean;   // se pagó con una regla de su tipo de trabajo
+};
 export type PayDay = { key: string; minutes: number };
 export type PayStatus = "paid" | "partial" | "unpaid" | "none";
 export type PayRow = {
   user_id: string; name: string; member: TeamMember | null; workerType: "employee" | "subcontractor";
   payType: PayType | null; rate: number | null; overtimeRate: number | null;
   minutes: number; regMinutes: number; otMinutes: number; overMinutes: number; days: PayDay[];
-  jobs: PayJob[]; jobCount: number; jobRevenue: number;
+  jobs: PayJob[]; jobCount: number; jobRevenue: number; typeRules: number;
   calculated: number; basis: string;
   paid: number; payments: PayrollPayment[]; otherPayments: PayrollPayment[]; balance: number; status: PayStatus;
   flags: string[];
@@ -48,11 +55,15 @@ const SALARY_PART: Partial<Record<FinPeriod, number>> = { week: 52, "2weeks": 26
 export function buildPayroll(o: {
   team: TeamMember[]; rates: PayRate[]; payments: PayrollPayment[]; entries: TimeEntry[]; raw: RawReport | null;
   from: string; to: string; period: FinPeriod; weekStartsOn: number; dayKey: (iso: string) => string; now: number;
+  typePay?: TypePay | null;
 }): Payroll {
   const members = new Map(o.team.map((m) => [m.user_id, m]));
   const rates = new Map(o.rates.map((r) => [r.user_id, r]));
   const inRange = (k: string) => k >= o.from && k <= o.to;
   const jobsReady = Boolean(o.raw && o.raw.money);
+  const findRule = ruleFinder(o.typePay ?? null);
+  const rulesOf = new Map<string, number>();
+  for (const t of o.typePay?.rates ?? []) rulesOf.set(t.user_id, (rulesOf.get(t.user_id) ?? 0) + 1);
 
   // Horas por persona y por día (mismas reglas que Timesheets: un olvido de salida no suma)
   const entriesBy = new Map<string, TimeEntry[]>();
@@ -63,7 +74,8 @@ export function buildPayroll(o: {
   const jobsBy = new Map<string, PayJob[]>();
   done.forEach((j) => {
     for (const uid of j.tech_ids ?? []) {
-      jobsBy.set(uid, [...(jobsBy.get(uid) ?? []), { job_id: j.job_id, number: j.number, customer: j.customer_name, when: j.completed_at, revenue: n(j.revenue), cost: 0, estimated: !j.invoice_number }]);
+      jobsBy.set(uid, [...(jobsBy.get(uid) ?? []), { job_id: j.job_id, number: j.number, customer: j.customer_name, when: j.completed_at, revenue: n(j.revenue), cost: 0, estimated: !j.invoice_number,
+        type: j.type_name ?? null, materials: n(j.materials), how: "", byType: false }]);
     }
   });
 
@@ -86,8 +98,21 @@ export function buildPayroll(o: {
     const over = Array.from(perWeek.values()).reduce((a, v) => a + Math.max(0, v - WEEK_MIN), 0);
 
     const payType = rate?.pay_type ?? null, r = rate ? n(rate.rate) : null, ot = rate?.overtime_rate != null && n(rate.overtime_rate) > 0 ? n(rate.overtime_rate) : null;
-    const jobs = (jobsBy.get(uid) ?? []).map((j) => ({ ...j, cost: payType === "per_job" ? r2(n(r)) : payType === "percent" ? r2(j.revenue * (n(r) / 100)) : 0 }))
-      .sort((a, b) => (a.when ?? "").localeCompare(b.when ?? ""));
+    const perJob = payType === "per_job" || payType === "percent";
+    const jobs = (jobsBy.get(uid) ?? []).map((j): PayJob => {
+      const rule = perJob ? findRule(uid, j.job_id) : null;
+      if (rule) return { ...j, cost: typeCost(rule, j.revenue, j.materials), how: typeRuleText(rule), byType: true };
+      return payType === "per_job" ? { ...j, cost: r2(n(r)), how: `${money(r)} per job` }
+        : payType === "percent" ? { ...j, cost: r2(j.revenue * (n(r) / 100)), how: `${n(r)}% of the job` } : j;
+    }).sort((a, b) => (a.when ?? "").localeCompare(b.when ?? ""));
+    const someByType = jobs.some((j) => j.byType);
+    // "2 Installation ($400.00 fixed) + 3 Service call (30% of the job) + 1 at $80.00 per job"
+    const mixBasis = () => {
+      const groups = new Map<string, number>();
+      jobs.forEach((j) => { const k = j.byType ? `${j.type ?? "Job"} (${j.how})` : `at ${j.how}`; groups.set(k, (groups.get(k) ?? 0) + 1); });
+      return Array.from(groups, ([k, c]) => `${c} ${k}`).join(" + ");
+    };
+    const pctEstimated = jobs.some((j) => j.estimated && j.revenue > 0 && j.how.includes("%"));
     const jobRevenue = r2(jobs.reduce((a, j) => a + j.revenue, 0));
     const flags: string[] = [];
     let calculated = 0, basis = "", regMinutes = minutes, otMinutes = 0, overMinutes = 0;
@@ -103,11 +128,12 @@ export function buildPayroll(o: {
       if (minutes <= 0) flags.push("No hours clocked in this period.");
     } else if (payType === "per_job") {
       calculated = r2(jobs.reduce((a, j) => a + j.cost, 0));
-      basis = `${jobs.length} job${jobs.length === 1 ? "" : "s"} × ${money(r)}`;
+      basis = someByType ? mixBasis() : `${jobs.length} job${jobs.length === 1 ? "" : "s"} × ${money(r)}`;
+      if (pctEstimated) flags.push("Some jobs have no invoice yet: their % uses the estimated price.");
     } else if (payType === "percent") {
       calculated = r2(jobs.reduce((a, j) => a + j.cost, 0));
-      basis = `${n(r)}% of ${money(jobRevenue)} (${jobs.length} job${jobs.length === 1 ? "" : "s"})`;
-      if (jobs.some((j) => j.estimated && j.revenue > 0)) flags.push("Some jobs have no invoice yet: their % uses the estimated price.");
+      basis = someByType ? mixBasis() : `${n(r)}% of ${money(jobRevenue)} (${jobs.length} job${jobs.length === 1 ? "" : "s"})`;
+      if (pctEstimated) flags.push("Some jobs have no invoice yet: their % uses the estimated price.");
     } else {
       const part = SALARY_PART[o.period] ?? 12;
       calculated = r2(n(r) / part);
@@ -130,6 +156,7 @@ export function buildPayroll(o: {
     rows.push({
       user_id: uid, name: m?.full_name ?? pays[0]?.person_name ?? "Former team member", member: m, workerType,
       payType, rate: r, overtimeRate: ot, minutes, regMinutes, otMinutes, overMinutes, days, jobs, jobCount: jobs.length, jobRevenue,
+      typeRules: perJob ? rulesOf.get(uid) ?? 0 : 0,
       calculated, basis, paid, payments, otherPayments, balance, status, flags,
     });
   });
@@ -148,9 +175,10 @@ export function buildPayroll(o: {
   };
 }
 
-export const rateText = (r: Pick<PayRow, "payType" | "rate" | "overtimeRate">) =>
-  !r.payType ? "No pay rate" : r.payType === "hourly" ? `${money(r.rate)}/h${r.overtimeRate ? ` · OT ${money(r.overtimeRate)}/h` : ""}`
-    : r.payType === "per_job" ? `${money(r.rate)} per job` : r.payType === "percent" ? `${n(r.rate)}% of the job` : `${money(r.rate)} per year`;
+export const rateText = (r: Pick<PayRow, "payType" | "rate" | "overtimeRate"> & { typeRules?: number }) =>
+  (!r.payType ? "No pay rate" : r.payType === "hourly" ? `${money(r.rate)}/h${r.overtimeRate ? ` · OT ${money(r.overtimeRate)}/h` : ""}`
+    : r.payType === "per_job" ? `${money(r.rate)} per job` : r.payType === "percent" ? `${n(r.rate)}% of the job` : `${money(r.rate)} per year`)
+  + (r.typeRules ? ` · ${r.typeRules} by job type` : "");
 
 // La nómina del periodo como PDF real (para imprimir, firmar o mandar al contador)
 export function payrollPdf(p: Payroll, o: { company: string; range: string; by: string }): PdfDoc {
@@ -168,7 +196,7 @@ export function payrollPdf(p: Payroll, o: { company: string; range: string; by: 
   if (emp.length) blocks.push({ type: "heading", text: `Direct employees (${emp.length})` }, { type: "table", columns: cols, rows: [...emp.map(line), total("Total direct employees", t.employees)] });
   if (subs.length) blocks.push({ type: "heading", text: `Subcontractors (${subs.length})` }, { type: "table", columns: cols, rows: [...subs.map(line), total("Total subcontractors", t.subs)] });
   if (!p.rows.length) blocks.push({ type: "bullets", items: ["Nothing to pay in this period."] });
-  blocks.push({ type: "note", text: "Hours come from Timesheets (clock in to clock out). Subcontractors are paid per finished job or by their percent of each job. Taxes and deductions are not calculated in this report." });
+  blocks.push({ type: "note", text: "Hours come from Timesheets (clock in to clock out). Subcontractors are paid per finished job or by their percent of each job; when a job type has its own pay, that one is used. Taxes and deductions are not calculated in this report." });
   return { title: "Payroll", subtitle: `${o.range} · prepared by ${o.by}`, company: o.company, blocks, footer: o.range, fileName: pdfFileName("payroll", o.company, o.range) };
 }
 

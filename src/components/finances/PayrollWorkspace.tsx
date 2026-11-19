@@ -24,7 +24,7 @@ const shortDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateStrin
 
 // Finances → Payroll (Paso 5.10c): una fila por persona con lo que ganó en el periodo y lo que ya se le pagó.
 // "Mark as paid" guarda el pago y crea solo el gasto en Expenses. Dueño y manager.
-export default function PayrollWorkspace({ companyId, isOwner, range, today, payroll, needsSql, error, timeReady, companyName = "", preparedBy = "" }: {
+export default function PayrollWorkspace({ companyId, range, today, payroll, needsSql, error, timeReady, companyName = "", preparedBy = "" }: {
   companyName?: string; preparedBy?: string; companyId: string; isOwner: boolean; range: FinRange; today: string; payroll: Payroll | null; needsSql: boolean; error: string; timeReady: boolean;
 }) {
   const router = useRouter();
@@ -100,9 +100,9 @@ export default function PayrollWorkspace({ companyId, isOwner, range, today, pay
           <div className="animate-[bp-fade_0.2s_ease-out] bg-[#f8fafb] px-3.5 py-3.5 lg:px-5">
             <p className="text-[13px] text-slate-600"><span className="font-semibold text-[#0b1f3a]">How it&apos;s calculated:</span> {r.basis}{r.calculated > 0 ? ` = ${money(r.calculated)}` : ""}</p>
             {r.flags.map((f) => <p key={f} className="mt-1.5 rounded-lg border border-[#fcd38d] bg-[#fffbf3] px-3 py-1.5 text-[12.5px] text-[#92400e]">{f}</p>)}
-            {!r.payType && (isOwner
-              ? <Link prefetch={false} href={`/dashboard/team/${r.user_id}/edit`} className="mt-2 inline-block text-[13px] font-semibold text-[#0f766e] hover:underline">Set the pay rate in Team →</Link>
-              : <p className="mt-2 text-[12.5px] text-slate-500">Only the owner can save pay rates (Team → Edit).</p>)}
+            {/* Paso 5.10f: dueño y manager guardan las tarifas (y el pago por tipo de trabajo) en Team → Edit */}
+            <Link prefetch={false} href={`/dashboard/team/${r.user_id}/edit`} className="mt-2 inline-block text-[13px] font-semibold text-[#0f766e] hover:underline">
+              {!r.payType ? "Set the pay rate in Team →" : r.payType === "per_job" || r.payType === "percent" ? "Change the pay rate or the pay by job type →" : "Change the pay rate →"}</Link>
 
             <div className="mt-3 grid gap-3 lg:grid-cols-2">
               {r.days.length > 0 && (
@@ -121,7 +121,11 @@ export default function PayrollWorkspace({ companyId, isOwner, range, today, pay
                     {r.jobs.map((j) => (
                       <li key={j.job_id}>
                         <Link prefetch={false} href={`/dashboard/jobs/${j.job_id}`} className="flex items-center justify-between gap-3 px-3.5 py-1.5 text-[13px] hover:bg-[#f6fbfa]">
-                          <span className="min-w-0 truncate text-slate-600">{shortDate(j.when)} · {j.number} · {j.customer || "No customer"}{j.estimated ? " · no invoice yet" : ""}</span>
+                          <span className="min-w-0">
+                            <span className="block truncate text-slate-600">{shortDate(j.when)} · {j.number} · {j.customer || "No customer"}{j.estimated ? " · no invoice yet" : ""}</span>
+                            {/* Paso 5.10f: tipo de trabajo y cómo se pagó (fijo, % o su tarifa general) */}
+                            {j.how && <span className="block truncate text-[11.5px] text-slate-400">{j.type ?? "No job type"} · {j.how}{j.byType ? "" : " (general rate)"}</span>}
+                          </span>
                           {(r.payType === "per_job" || r.payType === "percent") && <span className="shrink-0 font-semibold tabular-nums text-[#0b1f3a]">{money(j.cost)}</span>}
                         </Link>
                       </li>
@@ -200,7 +204,7 @@ export default function PayrollWorkspace({ companyId, isOwner, range, today, pay
           </div>
           {!timeReady && <p className="mt-4 rounded-xl border border-[#fcd38d] bg-[#fffbf3] px-4 py-3 text-[13px] text-[#92400e]">The hours couldn&apos;t be read from Timesheets, so hourly pay shows $0. Run <b>paso-5.7-timesheets.sql</b> in Supabase.</p>}
           {!payroll.jobsReady && <p className="mt-4 rounded-xl border border-[#fcd38d] bg-[#fffbf3] px-4 py-3 text-[13px] text-[#92400e]">The finished jobs couldn&apos;t be read, so pay per job shows $0. Run <b>paso-5.10b-reports-manager.sql</b> in Supabase.</p>}
-          {t.noRate > 0 && <p className="mt-4 rounded-xl border border-[#fcd38d] bg-[#fffbf3] px-4 py-3 text-[13px] text-[#92400e]">{t.noRate} {t.noRate === 1 ? "person worked but has" : "people worked but have"} no pay rate, so the amount is $0. {isOwner ? "Save the rate in Team → Edit." : "The owner saves pay rates in Team → Edit."}</p>}
+          {t.noRate > 0 && <p className="mt-4 rounded-xl border border-[#fcd38d] bg-[#fffbf3] px-4 py-3 text-[13px] text-[#92400e]">{t.noRate} {t.noRate === 1 ? "person worked but has" : "people worked but have"} no pay rate, so the amount is $0. Save the rate in Team → Edit.</p>}
 
           {rows.length === 0 ? (
             <div className={`${card} mt-4 px-5 py-12 text-center`}>

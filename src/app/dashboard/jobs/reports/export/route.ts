@@ -1,3 +1,4 @@
+import { withTypePay } from "@/lib/type-pay";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSession } from "@/lib/session";
 import { canManageJobs, TeamMember } from "@/lib/jobs";
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
     supabase.rpc("job_team", { p_company: current.id }),
   ]);
   if (rep.error) return NextResponse.json({ error: needsReportSql(rep.error) ? "Run paso-5.10-reports.sql in Supabase first." : "The export failed. Please try again." }, { status: 500 });
-  const raw = rep.data as RawReport;
+  const raw = await withTypePay(supabase, current.id, rep.data as RawReport);
   const members = (team.data ?? []) as TeamMember[];
   const only = body.scope === "view" && body.ids?.length ? new Set(body.ids) : null;
   const roleOf = (m: TeamMember | null) => (m ? `${m.job_title || m.role}${m.worker_type === "subcontractor" ? " (subcontractor)" : ""}` : "");

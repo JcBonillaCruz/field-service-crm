@@ -5,6 +5,7 @@ import { FinRange, addDaysIso, finRange, r2, spanLabel, tzMidnight } from "@/lib
 import { CompanyReport, RepBucket, RepDoc, RepExpense, RepExtras, RepIncome, RepPayment, RepSource, buildBuckets, buildCompanyReport } from "@/lib/company-report";
 import { loadPayroll } from "@/lib/payroll-server";
 import { Financed, financingTotals } from "@/lib/financing";
+import { withTypePay } from "@/lib/type-pay";
 
 // Supabase entrega máximo 1000 filas por consulta: se pide por páginas hasta traer todo el periodo
 type Page = PromiseLike<{ data: unknown[] | null; error: { message?: string } | null }>;
@@ -82,7 +83,7 @@ export async function loadCompanyReport(supabase: SupabaseClient, companyId: str
 
   const report = buildCompanyReport(src, range.from, range.to);
   const owed = open.rows.map((d) => r2(Number(d.total) - Number(d.amount_paid) - Number(d.written_off))).filter((v) => v > 0.005);
-  const raw = payroll ? payroll.raw : rep && !rep.error ? (rep.data as RawReport) : null;
+  const raw = payroll ? payroll.raw : rep && !rep.error ? await withTypePay(supabase, companyId, rep.data as RawReport) : null;
   const members = payroll ? payroll.team : ((team?.data ?? []) as TeamMember[]);
   const extras: RepExtras = {
     prev: buildCompanyReport(src, prev.from, prev.to), prevLabel: prev.title,

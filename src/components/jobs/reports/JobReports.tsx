@@ -1,5 +1,6 @@
 "use client";
 
+import { withTypePay } from "@/lib/type-pay";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -57,10 +58,12 @@ export default function JobReports({ companyId, team, weekStartsOn, initialTab =
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data, error: e } = await createClient().rpc("job_reports", { p_company: companyId, p_from: from.toISOString(), p_to: to.toISOString() });
-    setLoading(false);
-    if (e) { setNeedSql(needsReportSql(e)); setError(reportError(e)); return; }
-    setNeedSql(false); setError(""); setRaw(data as RawReport);
+    const sb = createClient();
+    const { data, error: e } = await sb.rpc("job_reports", { p_company: companyId, p_from: from.toISOString(), p_to: to.toISOString() });
+    if (e) { setLoading(false); setNeedSql(needsReportSql(e)); setError(reportError(e)); return; }
+    // Paso 5.10f: la mano de obra con el pago por tipo de trabajo aplicado (si hay reglas)
+    const withPay = await withTypePay(sb, companyId, data as RawReport).catch(() => data as RawReport);
+    setLoading(false); setNeedSql(false); setError(""); setRaw(withPay);
   }, [companyId, from, to]);
   useEffect(() => { load(); }, [load]);
 

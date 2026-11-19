@@ -390,7 +390,7 @@ export type JobProfitData = {
   revenue: number; revenue_source: "invoice" | "lines" | "estimate" | "none"; tax: number;
   invoice_number: string | null; invoice_status: string | null; collected: number;
   materials: number; labor: number; missing_rates: number; salaried: number; expenses: number; expenses_count: number; profit: number; status: string;
-  people: { user_id: string; name: string; hours: number; travel: number; pay_type: string | null; rate: number | null; cost: number }[];
+  people: { user_id: string; name: string; hours: number; travel: number; pay_type: string | null; rate: number | null; cost: number; by_type?: string }[];
 };
 export const PAY_LABEL: Record<string, string> = { hourly: "Hourly", per_job: "Per job", percent: "% of the job", salary: "Salary" };
 

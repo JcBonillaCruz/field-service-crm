@@ -4,7 +4,7 @@ import { Invite, Member, canManageTeam } from "@/lib/team";
 import NoAccess from "@/components/customers/NoAccess";
 import TeamView, { WorkInfo } from "@/components/team/TeamView";
 import InviteForm from "@/components/team/InviteForm";
-import MemberForm, { PayRate, WorkProfile } from "@/components/team/MemberForm";
+import MemberForm, { MemberTypeRate, PayRate, WorkProfile } from "@/components/team/MemberForm";
 
 // =====================================================================
 // Team es el mismo en todas las apps; solo cambia la dirección para que el menú
@@ -48,19 +48,21 @@ export async function TeamMemberEditPage({ params }: { params: { userId: string 
   const { supabase, current, user } = await getSession();
   if (!current) redirect("/dashboard");
   if (!canManageTeam(current.role)) return <NoAccess />;
-  const isOwner = current.role === "owner";
-  // La tarifa se pide SOLO si eres el dueño (y la base de datos tampoco se la da a nadie más)
-  const [{ data }, work, pay] = await Promise.all([
+  // Tarifas (Paso 5.10f): dueño y manager. La base de datos no se las da a nadie más.
+  // Si falta el SQL 5.10f, el manager no recibe la tarifa general y todo queda como antes (solo el dueño).
+  const [{ data }, work, pay, types, typeRates] = await Promise.all([
     supabase.rpc("team_members", { p_company: current.id }),
     supabase.from("member_work_profiles").select("worker_type, can_receive_jobs, business_name").eq("company_id", current.id).eq("user_id", params.userId).maybeSingle(),
-    isOwner
-      ? supabase.from("member_pay_rates").select("pay_type, rate, overtime_rate, notes, updated_at, updated_by_name").eq("company_id", current.id).eq("user_id", params.userId).maybeSingle()
-      : Promise.resolve({ data: null, error: null }),
+    supabase.from("member_pay_rates").select("pay_type, rate, overtime_rate, notes, updated_at, updated_by_name").eq("company_id", current.id).eq("user_id", params.userId).maybeSingle(),
+    supabase.from("job_types").select("id, name, is_active, position").eq("company_id", current.id).order("position").order("name"),
+    supabase.from("member_job_rates").select("job_type_id, pay_kind, amount, percent_base").eq("company_id", current.id).eq("user_id", params.userId),
   ]);
   const member = ((data ?? []) as Member[]).find((m) => m.user_id === params.userId);
   if (!member) notFound();
   const p = pay.data as PayRate;
   return <MemberForm companyId={current.id} member={member} myRole={current.role} isMe={member.user_id === user.id}
     work={(work.data as WorkProfile) ?? null} pay={p ? { ...p, rate: Number(p.rate), overtime_rate: p.overtime_rate == null ? null : Number(p.overtime_rate) } : null}
-    workReady={!work.error} />;
+    workReady={!work.error} typeReady={!typeRates.error}
+    jobTypes={((types.data ?? []) as { id: string; name: string; is_active: boolean | null }[]).map((t) => ({ id: t.id, name: t.name, active: t.is_active !== false }))}
+    typeRates={((typeRates.error ? [] : typeRates.data) ?? []) as MemberTypeRate[]} />;
 }

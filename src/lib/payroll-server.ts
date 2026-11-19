@@ -1,3 +1,4 @@
+import { applyTypePay, loadTypePay } from "@/lib/type-pay";
 import { headers } from "next/headers";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSession } from "@/lib/session";
@@ -49,12 +50,15 @@ export async function loadPayroll(supabase: SupabaseClient, companyId: string, r
     supabase.rpc("job_reports", { p_company: companyId, p_from: fromIso, p_to: toIso }),
   ]);
   const members = (team.data ?? []) as TeamMember[];
-  const raw = rep.error ? null : (rep.data as RawReport);
+  // Paso 5.10f: pago por tipo de trabajo (si hay reglas guardadas). La mano de obra del reporte queda con ese pago aplicado.
+  const raw0 = rep.error ? null : (rep.data as RawReport);
+  const typePay = raw0 ? await loadTypePay(supabase, companyId, (raw0.jobs ?? []).filter((j) => j.is_done).map((j) => j.job_id)).catch(() => null) : null;
+  const raw = raw0 ? applyTypePay(raw0, typePay) : null;
   if (data.error) return { payroll: null, team: members, raw, needsSql: needsPayrollSql(data.error), error: payrollError(data.error), timeReady: time.ok };
   const d = (data.data ?? { rates: [], payments: [] }) as PayrollData;
   const payroll = buildPayroll({
     team: members, rates: d.rates ?? [], payments: d.payments ?? [], entries: time.entries, raw,
-    from: range.from, to: range.to, period: range.period, weekStartsOn, dayKey: dayKeyIn(tz), now: Date.now(),
+    from: range.from, to: range.to, period: range.period, weekStartsOn, dayKey: dayKeyIn(tz), now: Date.now(), typePay,
   });
   return { payroll, team: members, raw, needsSql: false, error: "", timeReady: time.ok };
 }

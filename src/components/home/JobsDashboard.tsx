@@ -123,7 +123,7 @@ type JobAlert = { id: string; cat: JobCat; title: string; number: string; sub: s
 export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePrice, revenue, monthReport, alerts, header, sample, samplePresence, variant = "home", canDelete = false }: {
   companyId: string; team: TeamMember[]; weekStartsOn: number;
   canSeePrice: boolean;          // dueño y manager
-  revenue: RevenueData | null;   // solo el dueño
+  revenue: RevenueData | null;   // dueño y manager (Paso 5.10f)
   monthReport?: React.ReactNode; // Paso 5.10e: tarjeta "This month's report" (dueño y manager)
   alerts: HomeAlert[];           // avisos guardados: seguimiento de trabajos + inventario
   header?: React.ReactNode;
@@ -375,7 +375,7 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
           {canSeePrice && <InvoicesSection items={invoices} />}
         </div>
 
-        {/* ======= 4. Ingresos (solo el dueño) ======= */}
+        {/* ======= 4. Ingresos (dueño y manager) ======= */}
         {revenue && <div className="mt-6"><RevenueCard data={revenue} /></div>}
 
         {/* ======= 5. Lista de trabajos ======= */}
@@ -851,7 +851,7 @@ function RevenueCard({ data }: { data: RevenueData }) {
           <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-[17px] font-semibold text-[#0f766e]">$</span>
           <div>
             <h2 className="text-[17px] font-semibold leading-tight text-[#0b1f3a] lg:text-[18px]">Revenue overview</h2>
-            <p className="text-[12px] text-slate-500">Only you can see this</p>
+            <p className="text-[12px] text-slate-500">Owner &amp; manager only</p>
           </div>
         </div>
         <Pick value={range} options={REV_OPTS} onChange={(v) => setRange(v as RevenueRange)} ariaLabel="Revenue period" />

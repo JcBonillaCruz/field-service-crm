@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { usd } from "@/lib/jobs";
 import { JobProfitData, PAY_LABEL, needsReportSql } from "@/lib/job-reports";
 import ReportArt from "@/components/jobs/reports/ReportArt";
+import { jobProfitWithTypePay } from "@/lib/type-pay";
 
 // Ganancia de este trabajo (Paso 5.10). Dueño y manager: la base de datos no le entrega estos números a nadie más.
 // Facturado (sin impuesto) − materiales al costo − mano de obra (horas en sitio × tarifa) − gastos ligados a la factura.
@@ -15,10 +16,14 @@ export default function JobProfit({ jobId, refreshKey = 0 }: { jobId: string; re
 
   useEffect(() => {
     let alive = true;
-    createClient().rpc("job_profit", { p_job: jobId }).then(({ data, error }) => {
+    const sb = createClient();
+    sb.rpc("job_profit", { p_job: jobId }).then(async ({ data, error }) => {
       if (!alive) return;
       if (error) return setState(needsReportSql(error) ? "sql" : "error");
-      setP(data as JobProfitData); setState("ok");
+      // Paso 5.10f: si alguien tiene un pago propio para este tipo de trabajo, ese manda
+      const d = await jobProfitWithTypePay(sb, jobId, data as JobProfitData).catch(() => data as JobProfitData);
+      if (!alive) return;
+      setP(d); setState("ok");
     });
     return () => { alive = false; };
   }, [jobId, refreshKey]);
@@ -66,7 +71,7 @@ export default function JobProfit({ jobId, refreshKey = 0 }: { jobId: string; re
               <span className="flex items-center gap-1 text-[13.5px] text-slate-600">− Labor
                 <svg viewBox="0 0 20 20" className={`h-3.5 w-3.5 text-slate-400 transition-transform duration-200 ${open ? "rotate-90" : ""}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7.5 5l5 5-5 5" /></svg>
               </span>
-              <span className="block text-[11.5px] text-slate-400">On-site hours × pay rate</span>
+              <span className="block text-[11.5px] text-slate-400">On-site hours × pay rate, or the pay per job</span>
             </span>
             <span className="shrink-0 text-[13.5px] tabular-nums text-slate-700">{usd(Number(p.labor))}</span>
           </button>
@@ -79,6 +84,7 @@ export default function JobProfit({ jobId, refreshKey = 0 }: { jobId: string; re
                     <span className="block text-slate-400">
                       {Number(x.hours)}h on site{Number(x.travel) > 0 ? ` · ${Number(x.travel)}h travel` : ""} ·{" "}
                       {!x.pay_type ? <span className="text-[#b45309]">no pay rate</span>
+                        : x.by_type ? `${x.by_type} for this job type`
                         : x.pay_type === "hourly" ? `${usd(Number(x.rate))}/h` : x.pay_type === "percent" ? `${Number(x.rate)}% of the job` : x.pay_type === "per_job" ? `${usd(Number(x.rate))} per job` : PAY_LABEL[x.pay_type] ?? x.pay_type}
                     </span>
                   </span>
