@@ -1,5 +1,6 @@
 "use client";
 
+import type { AutoFlags } from "@/lib/financing-server";
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -23,8 +24,9 @@ const catOf = (name: string) => CATEGORIES.find((c) => c.name === name) ?? CATEG
 
 // Finances → Financing (Paso 5.10d): compras a pagos. Siempre a la vista: total, pagado, lo que se debe, cuotas que faltan y la próxima fecha.
 // Cada pago registrado entra solo a Expenses. Dueño y manager.
-export default function FinancingWorkspace({ companyId, today, list, needsSql, error }: {
+export default function FinancingWorkspace({ companyId, today, list, needsSql, error, auto = null }: {
   companyId: string; today: string; list: Financed[]; needsSql: boolean; error: string;
+  auto?: AutoFlags | null; // Paso 5.12: qué compras anotan sola su cuota (null = falta el SQL)
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -42,6 +44,11 @@ export default function FinancingWorkspace({ companyId, today, list, needsSql, e
     const { error: e } = await createClient().rpc("financing_unpay", { p_payment: p.id });
     if (e) return setFail(financingError(e));
     refresh("Payment removed.");
+  }
+  async function setAuto(f: Financed, on: boolean) {
+    const { error: e } = await createClient().rpc("financing_set_auto", { p_purchase: f.id, p_on: on });
+    if (e) return setFail(financingError(e));
+    refresh(on ? "On. The next payments go to Expenses by themselves on their date." : "Off. Record each payment yourself.");
   }
   async function remove(f: Financed) {
     if (!(await confirmDelete({ title: `Delete "${f.name}" from Financing?`, message: "The payments already recorded stay in Expenses, because that money was really spent.", download: { filename: `financing-${f.name}`, data: f } }))) return;
@@ -105,6 +112,16 @@ export default function FinancingWorkspace({ companyId, today, list, needsSql, e
             </button>
             {f.owed > 0.004 && <span className="ml-auto hidden text-[12px] text-slate-400 sm:inline">Paid on {payDayText(f.first_due)}</span>}
           </div>
+          {/* Paso 5.12: la cuota entra sola a Expenses en su fecha */}
+          {auto && f.owed > 0.004 && (
+            <label className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-xl bg-slate-50 px-3 py-2.5">
+              <input type="checkbox" checked={Boolean(auto[f.id]?.on)} onChange={(e) => setAuto(f, e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#0f766e]" />
+              <span className="min-w-0 text-[13px] text-slate-600"><b className="font-semibold text-[#0b1f3a]">Add each monthly payment to Expenses by itself</b> on its date.
+                {auto[f.id]?.on && f.next_due && f.next_due < (auto[f.id]?.since ?? "") && f.next_due <= today ? <span className="block font-medium text-[#be123c]">The payment of {dayLong(f.next_due)} is from before this was turned on: record it with the button above and the next ones go in by themselves.</span>
+                  : <span className="block text-[12px] text-slate-400">{auto[f.id]?.on ? "You can still undo a payment or change it in Expenses." : "Off: record each payment yourself with the button above."}</span>}
+              </span>
+            </label>
+          )}
         </div>
 
         {open && (

@@ -1,5 +1,6 @@
 "use client";
 
+import type { FinBrief } from "@/lib/financing-server";
 import { confirmDelete, askConfirm } from "@/lib/confirm";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
@@ -166,9 +167,10 @@ function PeriodPicker({ range, onPick }: { range: { key: RangeKey; from: string;
   );
 }
 
-export default function ExpensesWorkspace({ kind = "expense", companyId, actor, rows, needsSql, range, customers = [], linkReady = false, filterCustomer = null, profit = null }: {
+export default function ExpensesWorkspace({ kind = "expense", companyId, actor, rows, needsSql, range, customers = [], linkReady = false, filterCustomer = null, profit = null, financing = [], today: todayIso = "" }: {
   kind?: LedgerKind; companyId: string; actor: string; rows: Entry[]; needsSql: boolean; range: { key: RangeKey; from: string; to: string; label: string };
   customers?: PayerOption[]; linkReady?: boolean; filterCustomer?: PayerOption | null; profit?: Profit | null;
+  financing?: FinBrief[]; today?: string; // Paso 5.12: compras a pagos abiertas (solo en Expenses, dueño y manager)
 }) {
   const cfg = LEDGER[kind];
   const cats = cfg.cats;
@@ -262,9 +264,9 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-[#f6f8f9]">
-      <div className="mx-auto max-w-[1100px] px-4 py-5 sm:px-6 sm:py-7">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
+      <div className="px-3 pb-10 pt-4 lg:px-6 lg:pt-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
             <h1 className="text-2xl font-semibold tracking-tight text-[#0b1f3a]">{cfg.title}</h1>
             <p className="text-[14px] text-slate-500">{cfg.subtitle}</p>
           </div>
@@ -326,13 +328,13 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
           </div>
 
           {/* Escritorio: tracker con barritas + resumen rápido */}
-          <div className="mt-4 hidden gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="mt-4 hidden gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_420px]">
             <LedgerTracker kind={kind} rows={list} range={range} total={shownTotal} realTotal={total} color={cfg.color} sign={cfg.sign} verb={cfg.verb} title={kind === "income" ? "Money In tracker" : "Spending tracker"} />
             <LedgerGlance kind={kind} rows={list} />
           </div>
 
-          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_420px]">
+            <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white">
               {list.length === 0 ? (
                 <div className="px-6 py-16 text-center">
                   <p className="text-lg font-semibold text-[#0b1f3a]">{q ? `No ${cfg.many} match your search` : `No ${cfg.many} for ${range.label.toLowerCase()}`}</p>
@@ -383,6 +385,8 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
                 </div>
               )}
             </div>
+            <div className="grid h-fit min-w-0 gap-4">
+            {kind === "expense" && financing.length > 0 && <FinancingPanel list={financing} today={todayIso} />}
             {byCat.length > 0 && (
               <div className="h-fit rounded-2xl border border-slate-200 bg-white p-4 lg:p-5">
                 <div className="mb-3 flex items-center justify-between">
@@ -413,6 +417,7 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
                 </ul>
               </div>
             )}
+            </div>
           </div>
         </div>
       </div>
@@ -427,20 +432,63 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
 }
 
 // Botón "New Money In / New Expense": degradado, brillo que lo recorre, el "+" gira y late
+// Botón "New": ícono ilustrado redondo con su nombre abajo (igual en computadora y celular)
 function NewButton({ label, kind, onClick }: { label: string; kind: LedgerKind; onClick: () => void }) {
-  const grad = kind === "income" ? "from-[#14a39a] via-[#0f8f84] to-[#0f766e]" : "from-[#0f8f84] via-[#0f766e] to-[#0b5f59]";
+  const income = kind === "income";
   return (
-    <button type="button" onClick={onClick}
-      className={`group relative isolate flex h-11 items-center gap-2.5 overflow-hidden rounded-full bg-gradient-to-r ${grad} py-1.5 pl-1.5 pr-5 text-[15px] font-semibold text-white shadow-[0_8px_20px_rgba(15,118,110,0.32)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(15,118,110,0.42)] active:translate-y-0 active:scale-95`}>
-      {/* brillo que pasa solito cada pocos segundos */}
-      <span className="pointer-events-none absolute inset-y-0 -left-16 w-12 -skew-x-12 bg-white/30 blur-[2px] animate-[bp-shine_3.6s_ease-in-out_infinite]" />
-      <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#0f766e] shadow-sm">
-        <span className="absolute inset-0 rounded-full ring-2 ring-white/70 animate-[bp-share-ring_2s_ease-out_infinite]" />
-        <svg viewBox="0 0 20 20" className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90 group-active:rotate-180" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>
+    <button type="button" onClick={onClick} aria-label={label} className="group flex shrink-0 flex-col items-center gap-1 rounded-2xl px-1 transition-transform duration-150 active:scale-95 focus:outline-none">
+      <span className="relative flex h-[52px] w-[52px] items-center justify-center rounded-full bg-white shadow-[0_6px_16px_rgba(15,118,110,0.22)] ring-1 ring-[#bfe7de] transition-all duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_10px_22px_rgba(15,118,110,0.3)] group-focus-visible:ring-2 group-focus-visible:ring-[#0f766e]">
+        <svg viewBox="0 0 48 48" className="h-9 w-9 transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110" aria-hidden="true">
+          {income ? (<>
+            {/* monedas apiladas */}
+            <ellipse cx="20" cy="34" rx="12" ry="5" fill="#f4b740" /><path d="M8 29v5c0 2.8 5.4 5 12 5s12-2.2 12-5v-5" fill="#e09a1f" />
+            <ellipse cx="20" cy="29" rx="12" ry="5" fill="#fcd669" /><path d="M8 23v6c0 2.8 5.4 5 12 5s12-2.2 12-5v-6" fill="#f4b740" />
+            <ellipse cx="20" cy="23" rx="12" ry="5" fill="#ffe08a" stroke="#e09a1f" strokeWidth="1" />
+            <path d="M20 20.5v5M17.8 24.6c.5.6 1.3.9 2.2.9 1.3 0 2.2-.6 2.2-1.4 0-1.9-4.3-.9-4.3-2.7 0-.8.9-1.4 2.1-1.4.8 0 1.5.3 2 .8" fill="none" stroke="#b7791f" strokeWidth="1.2" strokeLinecap="round" />
+          </>) : (<>
+            {/* recibo */}
+            <path d="M10 7h20a2 2 0 0 1 2 2v30l-4-2.6-4 2.6-4-2.6-4 2.6-4-2.600L8 39V9a2 2 0 0 1 2-2z" fill="#fff" stroke="#0f766e" strokeWidth="2" strokeLinejoin="round" />
+            <path d="M13 14h14M13 20h14M13 26h8" stroke="#9fd8cf" strokeWidth="2.4" strokeLinecap="round" />
+            <path d="M24.5 26h2.5" stroke="#f43f5e" strokeWidth="2.4" strokeLinecap="round" />
+          </>)}
+          <circle cx="35" cy="14" r="9.5" fill={income ? "#0f9f6e" : "#0f766e"} stroke="#fff" strokeWidth="2.5" />
+          <path d="M35 10v8M31 14h8" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" />
+        </svg>
       </span>
-      <span className="relative">{label}</span>
-      <svg viewBox="0 0 20 20" className="relative -ml-1 h-4 w-4 -translate-x-1 opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100" fill="currentColor"><path d="M7.3 5.3a1 1 0 0 1 1.4 0l4 4a1 1 0 0 1 0 1.4l-4 4a1 1 0 0 1-1.4-1.4L10.6 10 7.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
+      <span className="whitespace-nowrap text-[11.5px] font-semibold leading-none text-[#0f766e]">{label}</span>
     </button>
+  );
+}
+
+// Paso 5.12 · Compras a pagos dentro de Expenses: qué cuota viene y si entra sola
+function FinancingPanel({ list, today }: { list: FinBrief[]; today: string }) {
+  const d = (iso: string | null) => (iso ? fmtD(iso) : "—");
+  return (
+    <div className="h-fit rounded-2xl border border-slate-200 bg-white p-4 lg:p-5">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-500">Financed purchases</p>
+        <Link prefetch={false} href="/dashboard/financing" className="text-[12.5px] font-semibold text-[#0f766e] hover:underline">Open Financing</Link>
+      </div>
+      <ul className="space-y-3">
+        {list.map((f) => (
+          <li key={f.id} className="flex items-start gap-2.5">
+            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#eef4ff] text-[#2563eb]">
+              <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7zM7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM17.5 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" /></svg>
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="flex items-baseline gap-2"><span className="min-w-0 flex-1 truncate text-[14px] font-medium text-[#0b1f3a]">{f.name}</span><span className="shrink-0 text-[14px] font-semibold tabular-nums text-[#0b1f3a]">{money(f.monthly)}</span></span>
+              {f.needsManual ? (
+                <Link prefetch={false} href="/dashboard/financing" className="mt-0.5 block text-[12.5px] font-semibold text-[#be123c] hover:underline">{f.next_due && f.next_due < today ? `Payment of ${d(f.next_due)} is not recorded` : "Payment due today"} · Record it →</Link>
+              ) : (
+                <span className="mt-0.5 block text-[12.5px] text-slate-500">Next payment {d(f.next_due)} · {f.auto ? "added here by itself" : "record it in Financing"}</span>
+              )}
+              <span className="block text-[12px] text-slate-400">Still owed {money(f.owed)}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 border-t border-slate-100 pt-3 text-[12px] leading-relaxed text-slate-500">Each monthly payment shows up in this list on its date, in the category of the purchase. The total owed is debt, so it is not counted as an expense until it is paid.</p>
+    </div>
   );
 }
 

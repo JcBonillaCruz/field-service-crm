@@ -5,6 +5,7 @@ import { canManageSales } from "@/lib/sales";
 import { resolveRange, todayIn } from "@/lib/expense-range";
 import type { Entry, LedgerKind, PayerOption } from "@/components/expenses/ExpensesWorkspace";
 import { Profit, loadProfit } from "@/lib/job-costing";
+import { FinBrief, loadFinancingBrief, runFinancingAuto } from "@/lib/financing-server";
 
 const SRC = {
   expense: { table: "expenses", date: "expense_date", party: "vendor" },
@@ -20,6 +21,10 @@ export async function loadLedger(kind: LedgerKind, sp?: { range?: string; from?:
   const range = resolveRange(sp?.range, todayIn(headers().get("x-vercel-ip-timezone")), sp?.from, sp?.to);
   // Paso 5.10d: antes de listar, crea los gastos que se repiten y ya tocan (renta, seguro…). Sin el SQL nuevo no pasa nada.
   if (kind === "expense") await supabase.rpc("recurring_expenses_run", { p_company: current.id, p_today: todayIn(headers().get("x-vercel-ip-timezone")) }).then(() => null, () => null);
+  // Paso 5.12: las cuotas de las compras a pagos que ya tocan entran solas, y Expenses muestra las que vienen
+  const todayIso = todayIn(headers().get("x-vercel-ip-timezone"));
+  let financing: FinBrief[] = [];
+  if (kind === "expense") { await runFinancingAuto(supabase, current.id, todayIso); financing = await loadFinancingBrief(supabase, current.id, todayIso).catch(() => []); }
   const base = `id, company_id, ${s.date}, category, ${s.party}, amount, payment_mode, reference, notes, receipt_path, receipt_name, created_by_name, created_at`;
   // Columnas de "a qué cliente / trabajo pertenece" (SQL nuevo). Si aún no se corrió, todo sigue funcionando como antes.
   const linkCols = kind === "income" ? "customer_id" : "customer_id, doc_id, cost_type";
@@ -43,5 +48,5 @@ export async function loadLedger(kind: LedgerKind, sp?: { range?: string; from?:
   // Filtrado por un cliente: resumen de rentabilidad de ese cliente en el mismo periodo
   const filterCustomer = customerId && linkReady ? customers.find((c) => c.id === customerId) ?? null : null;
   const profit: Profit | null = filterCustomer ? await loadProfit(supabase, current.id, filterCustomer.id, range) : null;
-  return { denied: false as const, companyId: current.id, actor: user.fullName || user.email, rows, needsSql: Boolean(error), range, customers, linkReady, filterCustomer, profit };
+  return { denied: false as const, companyId: current.id, actor: user.fullName || user.email, rows, needsSql: Boolean(error), range, customers, linkReady, filterCustomer, profit, financing, today: todayIso };
 }

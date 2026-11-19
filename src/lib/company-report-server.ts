@@ -31,6 +31,8 @@ type SourceLoad = { src: RepSource; purchases: Financed[]; expensesError: boolea
 async function loadReportSource(supabase: SupabaseClient, companyId: string, lo: string, hi: string, today: string): Promise<SourceLoad> {
   // Antes de sumar: crea en Expenses los gastos que se repiten y ya tocan (renta, seguro…). Si falta el SQL 5.10d, no pasa nada.
   await supabase.rpc("recurring_expenses_run", { p_company: companyId, p_today: today }).then(() => null, () => null);
+  // Paso 5.12: y las cuotas de las compras a pagos que ya tocan
+  await supabase.rpc("financing_auto_run", { p_company: companyId, p_today: today }).then(() => null, () => null);
   const expenses = async () => {
     const full = await fetchAll<RepExpense>((a, b) => supabase.from("expenses").select("id, amount, expense_date, category, cost_type, doc_id, customer_id")
       .eq("company_id", companyId).gte("expense_date", lo).lte("expense_date", hi).order("expense_date").order("id").range(a, b));

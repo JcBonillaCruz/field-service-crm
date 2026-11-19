@@ -219,7 +219,7 @@ export function LedgerMobileHero({ kind, rows, range, total, realTotal, color, s
             <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d={th.icon} /></svg>
           </span>
         </div>
-        <p className="mt-1 text-[40px] font-bold leading-none tracking-tight tabular-nums" style={{ color }}>{sign}{money(total)}</p>
+        <p className="mt-1.5 text-[34px] font-bold leading-none tracking-tight tabular-nums" style={{ color }}>{sign}{money(total)}</p>
 
         {/* Lo que tocaste (o la mejor semana) */}
         <div key={hi} className="mt-3 inline-flex max-w-full items-center gap-2 rounded-full bg-[#0b1f3a] py-1 pl-1 pr-3 text-[12.5px] text-white shadow-md animate-[bp-pop-in_0.25s_ease-out]">
@@ -228,26 +228,23 @@ export function LedgerMobileHero({ kind, rows, range, total, realTotal, color, s
           {sel === null && b?.value ? <span className="truncate text-white/60">{b.long}</span> : <span className="shrink-0 text-white/60">{b?.count ?? 0} {(b?.count ?? 0) === 1 ? "entry" : "entries"}</span>}
         </div>
 
-        {/* Paletas que se tocan */}
-        <div className="relative mt-3 h-[132px]">
-          <div className="absolute inset-x-0 bottom-[34px] top-0 flex items-end justify-between gap-1">
-            {buckets.map((x, i) => {
-              const on = i === hi;
-              const h = x.value > 0 ? Math.max(12, (x.value / max) * 100) : 5;
-              return (
-                <button key={x.from} type="button" onClick={() => setSel(sel === i ? null : i)} aria-label={`${x.long}: ${money(x.value)}`}
-                  className="relative flex h-full min-w-0 flex-1 flex-col items-center justify-end active:scale-95">
-                  <span className={`absolute -bottom-[34px] top-0 w-full max-w-[40px] rounded-full transition-all duration-200 ${on ? "bg-gradient-to-b from-transparent to-slate-100 opacity-100" : "opacity-0"}`} />
-                  <span className="relative flex w-full flex-col items-center transition-[height] duration-700 ease-[cubic-bezier(.2,.8,.2,1)]" style={{ height: `${grown ? h : 0}%`, transitionDelay: `${i * 40}ms` }}>
-                    <span className={`h-3 w-3 shrink-0 rounded-full transition-transform duration-200 ${on ? "scale-125" : ""}`}
-                      style={{ background: x.value > 0 ? (on ? color : th.dot) : "#cbd5e1", boxShadow: on ? `0 0 0 4px ${th.soft}, 0 4px 12px ${color}55` : undefined }} />
-                    <span className="mt-1 w-[2px] flex-1 rounded-full" style={{ background: on ? color : x.value > 0 ? th.stick : "#e2e8f0" }} />
-                  </span>
-                  <span className={`absolute -bottom-[32px] flex items-center justify-center rounded-full font-semibold transition-all duration-200 ${tight ? "h-6 w-6 text-[9.5px]" : "h-7 w-7 text-[11px]"} ${on ? "bg-[#0b1f3a] text-white shadow-md" : "bg-slate-100 text-slate-500"}`}>{x.label}</span>
-                </button>
-              );
-            })}
-          </div>
+        {/* Barras que se tocan: una por semana (o día / mes), con su fecha abajo */}
+        <div className="mt-4 flex h-[120px] items-end gap-1.5">
+          {buckets.map((x, i) => {
+            const on = i === hi;
+            const h = x.value > 0 ? Math.max(10, (x.value / max) * 100) : 0;
+            const lab = unit === "week" ? x.long.replace(/[A-Za-z]+\s/g, "").replace(/\s/g, "") : x.label;
+            return (
+              <button key={x.from} type="button" onClick={() => setSel(sel === i ? null : i)} aria-label={`${x.long}: ${money(x.value)}`} aria-pressed={on}
+                className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1.5 active:scale-95">
+                <span className="flex w-full flex-1 items-end justify-center">
+                  <span className="w-full max-w-[34px] rounded-lg transition-[height,background-color] duration-700 ease-[cubic-bezier(.2,.8,.2,1)]"
+                    style={{ height: x.value > 0 ? `${grown ? h : 0}%` : "4px", background: x.value > 0 ? (on ? color : th.stick) : "#e8edf2", transitionDelay: `${i * 40}ms` }} />
+                </span>
+                <span className={`w-full truncate text-center leading-none ${tight ? "text-[9.5px]" : "text-[11px]"} ${on ? "font-bold text-[#0b1f3a]" : "font-medium text-slate-400"}`}>{lab}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 

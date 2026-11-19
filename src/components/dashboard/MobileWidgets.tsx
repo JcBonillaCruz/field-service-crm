@@ -39,24 +39,33 @@ export function MobileHero({ st }: { st: MobileStats }) {
     ["spent", "Spent", st.ytdExpenses, "M12 5v14M5 12l7 7 7-7", "text-[#e11d48]"],
     ["profit", "Profit", profit, "M3 17l6-6 4 4 8-8M15 7h6v6", profit >= 0 ? "text-[#0f766e]" : "text-[#e11d48]"],
   ];
+  // Una cifra por renglón, completa (sin "K"), con su barra: así se lee de un vistazo
+  const top = Math.max(1, st.ytdReceived, st.ytdExpenses, Math.abs(profit));
+  const bars: Record<Exclude<Detail, null>, string> = { earned: "#10b981", spent: "#f43f5e", profit: profit >= 0 ? "#0f766e" : "#f43f5e" };
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white px-5 pb-5 pt-5 shadow-[0_6px_20px_rgba(15,40,60,0.05)]">
-      <p className="flex items-center gap-2 text-[14px] font-medium text-slate-500">
-        <span className="inline-flex h-2 w-2 rounded-full bg-[#10b981]" />
-        Received in {year}
-      </p>
-      <p className="mt-1 text-[44px] font-bold leading-none tracking-tight tabular-nums text-[#0b1f3a]">{$(st.ytdReceived)}</p>
-      <div className="mt-5 grid grid-cols-3 gap-2">
+    <div className="rounded-3xl border border-slate-200 bg-white px-4 pb-4 pt-4 shadow-[0_6px_20px_rgba(15,40,60,0.05)]">
+      <div className="flex items-center justify-between px-1">
+        <p className="text-[15px] font-semibold text-[#0b1f3a]">This year</p>
+        <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[12px] font-semibold text-slate-500">{year}</span>
+      </div>
+      <div className="mt-2 divide-y divide-slate-100">
         {tiles.map(([k, l, v, d, tone]) => {
           const active = detail === k;
+          const neg = k === "spent" || v < 0;
           return (
             <button key={k} type="button" onClick={() => pick(k)} aria-expanded={active}
-              className={`rounded-2xl border px-3 py-3 text-left transition-all duration-200 active:scale-95 ${active ? "border-[#0f766e] bg-[#f3fbf8] shadow-[0_4px_14px_rgba(15,118,110,0.12)]" : "border-slate-200 bg-white"}`}>
-              <p className="flex items-center justify-between text-[12.5px] font-semibold text-slate-500">
-                <span className="flex items-center gap-1"><svg viewBox="0 0 24 24" className={`h-4 w-4 ${tone}`} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>{l}</span>
-                <svg viewBox="0 0 20 20" className={`h-3.5 w-3.5 transition-transform duration-300 ${active ? "rotate-180 text-[#0f766e]" : "text-slate-300"}`} fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
-              </p>
-              <p className={`mt-1 text-[20px] font-bold tabular-nums ${k === "spent" || v < 0 ? "text-[#e11d48]" : "text-[#0b1f3a]"}`}>{k === "spent" ? "-" : v < 0 ? "-" : ""}{short(Math.abs(v))}</p>
+              className={`block w-full rounded-xl px-1 py-3 text-left transition-colors duration-200 active:bg-slate-50 ${active ? "bg-[#f6fbfa]" : ""}`}>
+              <span className="flex items-center gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: `${bars[k]}14` }}>
+                  <svg viewBox="0 0 24 24" className={`h-[18px] w-[18px] ${tone}`} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
+                </span>
+                <span className="min-w-0 flex-1 text-[14px] font-medium text-slate-600">{k === "earned" ? "Money in" : l}</span>
+                <span className={`shrink-0 tabular-nums ${k === "profit" ? "text-[19px] font-bold" : "text-[16px] font-semibold"} ${neg ? "text-[#e11d48]" : k === "profit" ? "text-[#0f766e]" : "text-[#0b1f3a]"}`}>{neg ? "−" : ""}{$(Math.abs(v))}</span>
+                <svg viewBox="0 0 20 20" className={`h-4 w-4 shrink-0 transition-transform duration-300 ${active ? "rotate-180 text-[#0f766e]" : "text-slate-300"}`} fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
+              </span>
+              <span className="ml-12 mr-7 mt-2 block h-1.5 overflow-hidden rounded-full bg-slate-100">
+                <span className="block h-full origin-left animate-[bp-grow-x_0.7s_ease-out] rounded-full" style={{ width: `${Math.max(v ? 3 : 0, (Math.abs(v) / top) * 100)}%`, background: bars[k] }} />
+              </span>
             </button>
           );
         })}
@@ -168,17 +177,21 @@ export function ReceivablesCard({ st, mounted }: { st: MobileStats; mounted: boo
   const max = Math.max(1, ...st.aging);
   const i = sel ?? (st.aging.findIndex((v) => v > 0) >= 0 ? st.aging.findIndex((v) => v > 0) : 0);
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white px-5 py-4">
+    <div className="rounded-3xl border border-slate-200 bg-white px-4 py-4">
       <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between text-left">
         <div>
-          <p className="text-[13px] font-medium text-slate-500">Receivables · what customers owe you</p>
-          <p className="mt-0.5 text-[24px] font-bold tabular-nums text-[#0b1f3a]">{$(st.total)}</p>
+          <p className="text-[15px] font-semibold text-[#0b1f3a]">Customers owe you</p>
+          <p className="mt-0.5 text-[22px] font-bold tabular-nums text-[#0b1f3a]">{$(st.total)}</p>
         </div>
         <svg viewBox="0 0 20 20" className={`h-5 w-5 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
       </button>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <div className="rounded-2xl bg-[#e9f7f4] px-3 py-2"><p className="text-[11px] font-semibold text-[#0f766e]">Current (not due yet)</p><p className="text-[16px] font-bold tabular-nums text-[#0b1f3a]">{$(st.current)}</p></div>
-        <Link prefetch={false} href="/dashboard/invoices?view=overdue" className="rounded-2xl bg-[#f43f5e] px-3 py-2 text-white shadow-[0_4px_12px_rgba(244,63,94,0.25)] active:scale-[0.98]"><p className="text-[11px] font-semibold text-white/90">Overdue →</p><p className="text-[16px] font-bold tabular-nums">{$(st.overdue)}</p></Link>
+      <div className="mt-3 divide-y divide-slate-100 rounded-2xl border border-slate-100">
+        <div className="flex items-center gap-2 px-3 py-2.5"><span className="h-2 w-2 rounded-full bg-[#10b981]" /><span className="flex-1 text-[13.5px] text-slate-600">Not due yet</span><span className="text-[15px] font-semibold tabular-nums text-[#0b1f3a]">{$(st.current)}</span></div>
+        <Link prefetch={false} href="/dashboard/invoices?view=overdue" className="flex items-center gap-2 px-3 py-2.5 active:bg-[#fff1f2]">
+          <span className={`h-2 w-2 rounded-full ${st.overdue > 0 ? "bg-[#f43f5e]" : "bg-slate-300"}`} /><span className="flex-1 text-[13.5px] text-slate-600">Overdue</span>
+          <span className={`text-[15px] font-semibold tabular-nums ${st.overdue > 0 ? "text-[#e11d48]" : "text-[#0b1f3a]"}`}>{$(st.overdue)}</span>
+          <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7.5 4.5 13 10l-5.5 5.5" /></svg>
+        </Link>
       </div>
       {open && (
         <div className="mt-4 animate-[bp-fade_0.2s_ease-out]">
