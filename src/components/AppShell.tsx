@@ -60,9 +60,11 @@ const FINANCE_NAV: NavItem[] = [
     children: [
       { label: "Money In", href: "/dashboard/income", icon: "" },
       { label: "Expenses", href: "/dashboard/expenses", icon: "" },
+      // Paso 5.10c: nómina por persona y el reporte de toda la compañía (dueño y manager)
+      { label: "Payroll", href: "/dashboard/payroll", icon: "", roles: ["owner", "manager"] },
+      { label: "Reports", href: "/dashboard/reports", icon: "", roles: ["owner", "manager"] },
     ] },
   { label: "Payments", icon: "M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 10h18M7 15h3", roles: ["owner", "manager"] },
-  { label: "Reports", icon: "M4 4v16h16M8.5 16v-4M12.5 16V8M16.5 16v-6", roles: ["owner", "manager"] },
   { label: "Team", href: "/dashboard/team", addHref: "/dashboard/team/invite", addLabel: "Member", icon: "M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6", roles: ["owner", "manager"] },
   SETTINGS,
 ];
@@ -172,7 +174,9 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
   const pathname = usePathname();
   const app = appOf(pathname);
   const NAV = NAV_BY_APP[app];
-  const items = NAV.filter((i) => !i.roles || (role && i.roles.includes(role)));
+  const allowed = (i: NavItem) => !i.roles || Boolean(role && i.roles.includes(role));
+  // Los hijos de un grupo también respetan "roles" (Payroll y Reports de Finances: dueño y manager)
+  const items = NAV.filter(allowed).map((i) => (i.children ? { ...i, children: i.children.filter(allowed) } : i));
   const excludes = new Map(NAV.filter((n) => n.exclude && n.href).map((n) => [n.href as string, n.exclude as string[]]));
   const isActive = (href?: string) => Boolean(href && (href === "/dashboard" ? pathname === "/dashboard"
     : pathname.startsWith(href) && !(excludes.get(href) ?? []).some((x) => pathname.startsWith(x))));

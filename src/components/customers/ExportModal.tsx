@@ -9,6 +9,7 @@ const MODULE_GROUPS: { group: string; items: string[] }[] = [
   { group: "Contacts", items: ["Customers", "Contact persons", "Contact's addresses"] },
   { group: "Sales", items: ["Quotes", "Invoices", "Invoice payments", "Subscriptions", "Credit notes", "Credit notes applied to invoices", "Refunds"] },
   { group: "Purchases", items: ["Expenses", "Recurring expenses"] },
+  { group: "Finances", items: ["Company report", "Payroll"] },
   { group: "Projects", items: ["Projects", "Tasks", "Timesheets", "Team performance", "Unscanned parts", "Profit and loss"] },
   { group: "Items & other", items: ["Items", "Coupons", "Inventory", "Price lists", "Exchange rates", "Taxes", "Users", "Documents"] },
 ];
@@ -17,9 +18,10 @@ const ENDPOINTS: Record<string, string> = {
   Quotes: "/dashboard/quotes/export", Invoices: "/dashboard/invoices/export", Subscriptions: "/dashboard/subscriptions/export",
   Inventory: "/dashboard/inventory/export", Timesheets: "/dashboard/jobs/timesheets/export",
   "Team performance": "/dashboard/jobs/reports/export?kind=team", "Unscanned parts": "/dashboard/jobs/reports/export?kind=parts", "Profit and loss": "/dashboard/jobs/reports/export?kind=pnl",
+  "Company report": "/dashboard/reports/export?kind=company", Payroll: "/dashboard/reports/export?kind=payroll",
 };
 const ENABLED = new Set(Object.keys(ENDPOINTS));
-export type ExportModule = "Customers" | "Items" | "Coupons" | "Quotes" | "Invoices" | "Subscriptions" | "Inventory" | "Timesheets" | "Team performance" | "Unscanned parts" | "Profit and loss";
+export type ExportModule = "Customers" | "Items" | "Coupons" | "Quotes" | "Invoices" | "Subscriptions" | "Inventory" | "Timesheets" | "Team performance" | "Unscanned parts" | "Profit and loss" | "Company report" | "Payroll";
 // range: fechas de la vista (Timesheets exporta el periodo que tienes en pantalla)
 export type ExportView = { module: ExportModule; label: string; ids: string[]; columns: string[]; range?: { from: string; to: string } };
 
@@ -193,12 +195,12 @@ export default function ExportModal({ open, onClose, initialModule = "Customers"
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="radio" name="records" checked={records === "all"} onChange={() => setRecords("all")} className="h-4 w-4 accent-[#0f766e]" />
-                All {module.toLowerCase()}
+                {module === "Company report" || module === "Payroll" ? "This month" : `All ${module.toLowerCase()}`}
               </label>
               {view && view.module === module && (
                 <label className="flex items-center gap-2 text-sm text-slate-700">
                   <input type="radio" name="records" checked={records === "view"} onChange={() => setRecords("view")} className="h-4 w-4 accent-[#0f766e]" />
-                  Current view <span className="text-slate-400">({view.label} · {view.ids.length} {view.range ? (view.ids.length === 1 ? "person" : "people") : `${view.ids.length === 1 ? "record" : "records"}, same columns`})</span>
+                  Current view <span className="text-slate-400">({view.module === "Company report" ? view.label : <>{view.label} · {view.ids.length} {view.range ? (view.ids.length === 1 ? "person" : "people") : `${view.ids.length === 1 ? "record" : "records"}, same columns`}</>})</span>
                 </label>
               )}
               <label className="flex items-center gap-2 text-sm text-slate-700">

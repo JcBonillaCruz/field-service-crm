@@ -463,6 +463,7 @@ function PnlView({ pnl, oldSql, kpi }: { pnl: import("@/lib/job-reports").Pnl; o
       </div>
       <p className="mt-3 text-[12.5px] text-slate-500">
         Revenue is the invoice before tax; without an invoice, the price on the job. Labor is on-site hours × the pay rate in Team. Materials are the parts on the job at cost. Expenses are the ones linked to the job&apos;s invoice in Finances.
+        {" "}This is the profit of the jobs only. Rent, fuel, insurance and what was really paid in payroll are in <Link prefetch={false} href="/dashboard/reports" className="font-semibold text-[#0f766e] hover:underline">Finances → Reports</Link>.
         Use <b>This week</b> or <b>This month</b> above, then <b>Print / PDF</b> to hand it to the owner. Only the owner and the manager see this tab.
       </p>
     </>
