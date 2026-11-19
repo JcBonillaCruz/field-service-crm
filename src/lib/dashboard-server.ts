@@ -10,6 +10,8 @@ export type MobileStats = {
   months: string[]; income: number[]; receipts: number[]; expenses: number[];
   ytdReceived: number; ytdExpenses: number; ytdInvoiced: number;
   revenue12: number; income12: number; receipts12: number; invoiceReceipts12: number; mrr: number; activeSubs: number; arpu: number;
+  // Paso 5.13: lo que la compañía todavía debe de sus compras a pagos (solo dueño y manager; si no, null)
+  owe?: { total: number; monthly: number; count: number; nextDue: string | null } | null;
 };
 
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
@@ -98,9 +100,15 @@ export async function loadDashboard(supabase: SupabaseClient, companyId: string)
     sent: q.filter((x) => x.status !== "draft").length, accepted: q.filter((x) => ["accepted", "invoiced"].includes(x.status)).length,
     declined: q.filter((x) => x.status === "declined").length, open: openQ.length, openValue: openQ.reduce((a, x) => a + Number(x.total), 0),
   };
+  // Compras a pagos abiertas (Financing). Sin permiso o sin el SQL: null y la tarjeta no lo muestra.
+  const fin = await supabase.rpc("financing_list", { p_company: companyId }).then((r) => (r.error || !Array.isArray(r.data) ? null : (r.data as { owed: number; monthly_payment: number; next_due: string | null }[])), () => null);
+  const openFin = (fin ?? []).filter((f) => Number(f.owed) > 0.004);
+  const owe = fin ? { total: openFin.reduce((a, f) => a + Number(f.owed), 0), monthly: openFin.reduce((a, f) => a + Math.min(Number(f.owed), Number(f.monthly_payment)), 0), count: openFin.length,
+    nextDue: openFin.map((f) => f.next_due).filter(Boolean).sort()[0] ?? null } : null;
   return {
     data,
     mobile: {
+      owe,
       agingCount, expenseByCat, quoteStats,
       recentPayments: payments.slice(0, 25).map((p) => {
         const inv = invoices.find((d) => d.id === (p as { invoice_id?: string }).invoice_id);

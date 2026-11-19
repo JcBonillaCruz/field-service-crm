@@ -14,7 +14,9 @@ export type PdfBlock =
   | { type: "heading"; text: string }
   | { type: "bullets"; items: string[] }
   | { type: "table"; columns: PdfColumn[]; rows: PdfRow[]; hideHeader?: boolean }
-  | { type: "note"; text: string };
+  | { type: "note"; text: string }
+  // Paso 5.13: fotos (JPG) en dos columnas, con su pie. Las usa el reporte de servicio.
+  | { type: "photos"; items: { jpg: Uint8Array; caption?: string }[] };
 export type PdfDoc = { title: string; subtitle: string; company: string; blocks: PdfBlock[]; footer?: string; fileName: string };
 
 // Las fuentes estándar del PDF no traen flechas ni el signo menos tipográfico: se cambian por su equivalente
@@ -88,6 +90,24 @@ export async function buildReportPdf(doc: PdfDoc): Promise<Uint8Array> {
         y -= lines.length * 13 + 3;
       }
       y -= 6;
+    } else if (b.type === "photos") {
+      const gap = 12, cw2 = (CW - gap) / 2, maxH = 190;
+      for (let i = 0; i < b.items.length; i += 2) {
+        const pair = b.items.slice(i, i + 2);
+        const imgs: (import("pdf-lib").PDFImage | null)[] = [];
+        for (const it of pair) { try { imgs.push(await pdf.embedJpg(it.jpg)); } catch { imgs.push(null); } }
+        const dims = imgs.map((im) => { if (!im) return { w: 0, h: 0 }; const k = Math.min(cw2 / im.width, maxH / im.height); return { w: im.width * k, h: im.height * k }; });
+        const rowH = Math.max(...dims.map((d) => d.h), 20) + 16;
+        need(rowH + 6);
+        pair.forEach((it, k) => {
+          const im = imgs[k]; if (!im) return;
+          const x = M + k * (cw2 + gap);
+          page.drawImage(im, { x, y: y - dims[k].h, width: dims[k].w, height: dims[k].h });
+          if (it.caption) text(fit(it.caption, 8, cw2), x, y - dims[k].h - 11, 8, font, C.gray);
+        });
+        y -= rowH + 6;
+      }
+      y -= 4;
     } else if (b.type === "note") {
       for (const l of wrap(b.text, 8, CW)) { need(11); text(l, M, y - 8, 8, font, C.light); y -= 11; }
       y -= 6;

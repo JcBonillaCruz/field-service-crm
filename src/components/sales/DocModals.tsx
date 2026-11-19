@@ -1,5 +1,7 @@
 "use client";
 
+import PdfViewer from "@/components/ui/PdfViewer";
+import { ServiceReport, jobOfInvoice, loadServiceReport, serviceReportAttachment } from "@/lib/service-report";
 import { confirmDelete, askConfirm } from "@/lib/confirm";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -96,6 +98,28 @@ export function SendEmailModal({ open, onClose, doc, companyName, actor, reminde
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [attachPdf, setAttachPdf] = useState(true);
+  // Paso 5.13: reporte de servicio (solo facturas que salieron de un trabajo). Opcional en cada envío.
+  const [job, setJob] = useState<{ id: string; number: string } | null>(null);
+  const [withReport, setWithReport] = useState(false);
+  const [report, setReport] = useState<ServiceReport | null>(null);
+  const [reportBusy, setReportBusy] = useState(false);
+  const [preview, setPreview] = useState(false);
+  useEffect(() => {
+    setJob(null); setWithReport(false); setReport(null); setPreview(false);
+    if (!open || doc.kind !== "invoice" || reminder) return;
+    let alive = true;
+    jobOfInvoice(doc.id).then((j) => { if (alive) setJob(j); }, () => undefined);
+    return () => { alive = false; };
+  }, [open, doc.id, doc.kind, reminder]);
+  async function getReport(): Promise<ServiceReport | null> {
+    if (report) return report;
+    if (!job) return null;
+    setReportBusy(true);
+    const r = await loadServiceReport(job.id, companyName);
+    setReportBusy(false);
+    if ("error" in r) { setError(r.error); return null; }
+    setReport(r); return r;
+  }
   const [fileIds, setFileIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -141,8 +165,14 @@ export function SendEmailModal({ open, onClose, doc, companyName, actor, reminde
     if (!to.length) return setError("Add at least one email address.");
     if ([...to, ...cc, ...bcc].some((e) => !/^\S+@\S+\.\S+$/.test(e))) return setError("One of the email addresses isn't valid.");
     setBusy(true); setError(""); setFallback(false);
+    let extra: { filename: string; content: string }[] | undefined;
+    if (withReport && job) {
+      const r = await getReport();
+      if (!r) { setBusy(false); return setError("The service report couldn't be created. Uncheck it to send only the invoice, or try again."); }
+      try { extra = [await serviceReportAttachment(r)]; } catch { setBusy(false); return setError("The service report couldn't be created. Uncheck it to send only the invoice, or try again."); }
+    }
     const res = await fetch("/api/sales/send", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: doc.id, to, cc, bcc, subject, body, attachPdf, fileIds, reminder }) });
+      body: JSON.stringify({ id: doc.id, to, cc, bcc, subject, body, attachPdf, fileIds, reminder, extra }) });
     const j = await res.json().catch(() => ({}));
     setBusy(false);
     if (!res.ok) { setError(j.error || "The email couldn't be sent."); if (j.code === "not_configured") setFallback(true); return; }
@@ -199,6 +229,20 @@ export function SendEmailModal({ open, onClose, doc, companyName, actor, reminde
         Attach {noun} PDF
         <span className="ml-auto flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm"><Ico d={I.pdf} className="h-4 w-4 text-red-500" />{doc.number}</span>
       </label>
+      {job && (
+        <div className="mt-2 flex flex-wrap items-center gap-3 rounded-xl bg-[#e9f7f4] px-4 py-3 text-[15px] text-slate-700">
+          <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
+            <input type="checkbox" checked={withReport} onChange={(e) => { setWithReport(e.target.checked); if (e.target.checked) getReport(); }} className="mt-1 h-4 w-4 accent-[#0f766e]" />
+            <span className="min-w-0">Include the service report
+              <span className="block text-[12.5px] text-slate-500">{reportBusy ? "Preparing the report…" : report && withReport
+                ? `PDF with the work done${report.hasForm ? ", the readings" : ""} and ${report.photos} photo${report.photos === 1 ? "" : "s"} of job #${job.number}.${report.photosLeftOut ? ` ${report.photosLeftOut} more photo${report.photosLeftOut === 1 ? " is" : "s are"} left out (limit of 12).` : ""} No prices or internal notes.`
+                : `A PDF for the customer with what was done on job #${job.number} and its photos.`}</span>
+            </span>
+          </label>
+          <button type="button" disabled={reportBusy} onClick={async () => { if (await getReport()) setPreview(true); }} className="rounded-lg border border-[#0f766e]/30 bg-white px-3 py-1.5 text-sm font-semibold text-[#0f766e] hover:border-[#0f766e] disabled:opacity-50">Preview</button>
+        </div>
+      )}
+      {preview && report && <PdfViewer doc={report.doc} onClose={() => setPreview(false)} />}
       {files.length > 0 && (
         <div className="mt-2 rounded-xl border border-dashed border-slate-200 px-4 py-3">
           <p className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-[#2563eb]"><Ico d={I.clip} className="h-4 w-4" />Attachments</p>

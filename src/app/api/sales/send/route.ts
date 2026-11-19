@@ -8,7 +8,9 @@ import { emailHtml, ensureToken, loadPhotos, pdfInputFrom } from "@/lib/sales-ma
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type Body = { id: string; to: string[]; cc?: string[]; bcc?: string[]; subject: string; body: string; attachPdf?: boolean; fileIds?: string[]; reminder?: boolean };
+type Body = { id: string; to: string[]; cc?: string[]; bcc?: string[]; subject: string; body: string; attachPdf?: boolean; fileIds?: string[]; reminder?: boolean;
+  extra?: { filename: string; content: string }[]; // Paso 5.13: reporte de servicio (PDF armado en el navegador de la oficina)
+};
 const okEmail = (e: string) => /^\S+@\S+\.\S+$/.test(e);
 
 // Manda el correo de verdad (Resend) con el PDF adjunto y el pixel para saber si lo abrió
@@ -45,6 +47,10 @@ export async function POST(request: NextRequest) {
     const { data: blob } = await supabase.storage.from("sales-attachments").download(f.path);
     if (blob) attachments.push({ filename: f.name, content: Buffer.from(await blob.arrayBuffer()).toString("base64") });
   }
+  // Paso 5.13: reporte de servicio. Solo PDFs de verdad, máximo 2 y 3.5 MB entre todos
+  const extra = (Array.isArray(b.extra) ? b.extra : []).slice(0, 2).filter((x) => typeof x?.content === "string" && x.content.startsWith("JVBER") && /^[A-Za-z0-9+/=]+$/.test(x.content));
+  if (extra.reduce((a, x) => a + x.content.length, 0) > 4_700_000) return NextResponse.json({ error: "The service report is too large to email. Remove some photos from the job and try again." }, { status: 413 });
+  extra.forEach((x) => attachments.push({ filename: `${String(x.filename || "service-report").replace(/[^A-Za-z0-9._-]+/g, "-").replace(/\.pdf$/i, "").slice(0, 80)}.pdf`, content: x.content }));
   const accent = pdfOf(d.prefs.pdf_settings).accent === "#2f3437" ? "#0f766e" : pdfOf(d.prefs.pdf_settings).accent;
   const html = emailHtml({ body: b.body, link, pixel: `${origin}/api/track/${token}.gif`, doc: d.doc, companyName: d.companyName, logoUrl: d.prefs.logo_url, accent, whiteLabel: d.prefs.white_label });
   // Sale como "BrightPro"; con marca blanca (plan pagado) sale con el nombre de la compañía

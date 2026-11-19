@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSwipe } from "@/components/ui/useSwipe";
 import type { MobileStats } from "@/lib/dashboard-server";
 import { Insight, buildInsights, tipOfTheDay } from "@/lib/insights";
 
@@ -20,66 +21,114 @@ export function useCountUp(value: number, ms = 900) {
 }
 
 type Detail = "earned" | "spent" | "profit" | null;
-const ORDER: Exclude<Detail, null>[] = ["earned", "spent", "profit"];
-// Tarjeta principal (fondo blanco, sin animaciones): lo recibido en el año.
-// Earned / Spent / Profit se abren AQUÍ MISMO hacia abajo; al cambiar de una a otra, el contenido se desliza.
+type HeroTab = "earned" | "spent" | "pending";
+const HERO_TABS: { id: HeroTab; label: string; color: string; soft: string; icon: string }[] = [
+  { id: "earned", label: "Earned", color: "#059669", soft: "#ecfdf5", icon: "M12 19V5M5 12l7-7 7 7" },
+  { id: "spent", label: "Spent", color: "#e11d48", soft: "#fff1f2", icon: "M12 5v14M5 12l7 7 7-7" },
+  { id: "pending", label: "Pending", color: "#b45309", soft: "#fff7e8", icon: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7.5V12l3 2" },
+];
+// Tarjeta principal del inicio de Finances (celular) · Paso 5.13
+// Tres pestañas que también se deslizan con el dedo: lo ganado en el año, lo gastado en el año y lo pendiente
+// (lo que te deben los clientes y lo que tú debes de compras a pagos). Abajo, siempre, la ganancia del año.
 export function MobileHero({ st }: { st: MobileStats }) {
   const profit = st.ytdReceived - st.ytdExpenses;
   const year = new Date().getFullYear();
+  const [tab, setTab] = useState<HeroTab>("earned");
   const [detail, setDetail] = useState<Detail>(null);
-  const [shown, setShown] = useState<Detail>(null);
-  const [dir, setDir] = useState<1 | -1>(1);
-  const pick = (k: Exclude<Detail, null>) => {
-    if (detail === k) { setDetail(null); return; }
-    if (detail) setDir(ORDER.indexOf(k) > ORDER.indexOf(detail) ? 1 : -1);
-    setDetail(k); setShown(k);
-  };
-  const tiles: [Exclude<Detail, null>, string, number, string, string][] = [
-    ["earned", "Earned", st.ytdReceived, "M12 19V5M5 12l7-7 7 7", "text-[#059669]"],
-    ["spent", "Spent", st.ytdExpenses, "M12 5v14M5 12l7 7 7-7", "text-[#e11d48]"],
-    ["profit", "Profit", profit, "M3 17l6-6 4 4 8-8M15 7h6v6", profit >= 0 ? "text-[#0f766e]" : "text-[#e11d48]"],
-  ];
-  // Una cifra por renglón, completa (sin "K"), con su barra: así se lee de un vistazo
-  const top = Math.max(1, st.ytdReceived, st.ytdExpenses, Math.abs(profit));
-  const bars: Record<Exclude<Detail, null>, string> = { earned: "#10b981", spent: "#f43f5e", profit: profit >= 0 ? "#0f766e" : "#f43f5e" };
+  const [pick, setPick] = useState<number | null>(null);
+  const [grown, setGrown] = useState(false);
+  useEffect(() => { setGrown(false); setPick(null); setDetail(null); const t = setTimeout(() => setGrown(true), 80); return () => clearTimeout(t); }, [tab]);
+  const ti = HERO_TABS.findIndex((t) => t.id === tab);
+  const swipe = useSwipe(() => ti > 0 && setTab(HERO_TABS[ti - 1].id), () => ti < HERO_TABS.length - 1 && setTab(HERO_TABS[ti + 1].id));
+  const T = HERO_TABS[ti];
+  const series = tab === "spent" ? st.expenses : st.receipts;
+  const max = Math.max(1, ...series);
+  const best = series.reduce((p, v, i) => (v > series[p] ? i : p), 0);
+  const sel = pick ?? best;
+  const withData = series.filter((v) => v > 0).length;
+  const avg = withData ? series.reduce((a, v) => a + v, 0) / withData : 0;
+  const total = tab === "spent" ? st.ytdExpenses : st.ytdReceived;
+  const owe = st.owe && st.owe.count > 0 ? st.owe : null;
+  const stat = (label: string, value: string, sub?: string) => (
+    <div className="min-w-0 rounded-2xl bg-slate-50 px-3 py-2.5"><p className="truncate text-[11.5px] font-medium text-slate-500">{label}</p><p className="truncate text-[15px] font-semibold tabular-nums text-[#0b1f3a]">{value}</p>{sub && <p className="truncate text-[11.5px] text-slate-400">{sub}</p>}</div>
+  );
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white px-4 pb-4 pt-4 shadow-[0_6px_20px_rgba(15,40,60,0.05)]">
-      <div className="flex items-center justify-between px-1">
-        <p className="text-[15px] font-semibold text-[#0b1f3a]">This year</p>
-        <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[12px] font-semibold text-slate-500">{year}</span>
+    <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_6px_20px_rgba(15,40,60,0.05)]"
+      onTouchStart={(e) => { e.stopPropagation(); swipe.onTouchStart(e); }} onTouchEnd={(e) => { e.stopPropagation(); swipe.onTouchEnd(e); }}>
+      {/* Pestañas */}
+      <div className="grid grid-cols-3 gap-1 border-b border-slate-100 bg-slate-50/70 p-1.5" role="tablist">
+        {HERO_TABS.map((t) => { const on = t.id === tab; return (
+          <button key={t.id} type="button" role="tab" aria-selected={on} onClick={() => setTab(t.id)}
+            className={`flex items-center justify-center gap-1.5 rounded-2xl py-2 text-[13.5px] font-semibold transition-all duration-200 active:scale-95 ${on ? "bg-white shadow-[0_2px_8px_rgba(15,40,60,0.10)]" : "text-slate-500"}`} style={on ? { color: t.color } : undefined}>
+            <span className="flex h-6 w-6 items-center justify-center rounded-full" style={{ background: on ? t.soft : "transparent" }}>
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d={t.icon} /></svg>
+            </span>{t.label}
+          </button>
+        ); })}
       </div>
-      <div className="mt-2 divide-y divide-slate-100">
-        {tiles.map(([k, l, v, d, tone]) => {
-          const active = detail === k;
-          const neg = k === "spent" || v < 0;
-          return (
-            <button key={k} type="button" onClick={() => pick(k)} aria-expanded={active}
-              className={`block w-full rounded-xl px-1 py-3 text-left transition-colors duration-200 active:bg-slate-50 ${active ? "bg-[#f6fbfa]" : ""}`}>
-              <span className="flex items-center gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: `${bars[k]}14` }}>
-                  <svg viewBox="0 0 24 24" className={`h-[18px] w-[18px] ${tone}`} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
-                </span>
-                <span className="min-w-0 flex-1 text-[14px] font-medium text-slate-600">{k === "earned" ? "Money in" : l}</span>
-                <span className={`shrink-0 tabular-nums ${k === "profit" ? "text-[19px] font-bold" : "text-[16px] font-semibold"} ${neg ? "text-[#e11d48]" : k === "profit" ? "text-[#0f766e]" : "text-[#0b1f3a]"}`}>{neg ? "−" : ""}{$(Math.abs(v))}</span>
-                <svg viewBox="0 0 20 20" className={`h-4 w-4 shrink-0 transition-transform duration-300 ${active ? "rotate-180 text-[#0f766e]" : "text-slate-300"}`} fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
-              </span>
-              <span className="ml-12 mr-7 mt-2 block h-1.5 overflow-hidden rounded-full bg-slate-100">
-                <span className="block h-full origin-left animate-[bp-grow-x_0.7s_ease-out] rounded-full" style={{ width: `${Math.max(v ? 3 : 0, (Math.abs(v) / top) * 100)}%`, background: bars[k] }} />
-              </span>
-            </button>
-          );
-        })}
-      </div>
-      {/* Se abre hacia abajo dentro de la misma tarjeta */}
-      <div className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${detail ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
-        <div className="min-h-0 overflow-hidden">
-          {shown && (
-            <div key={shown} className={detail ? (dir === 1 ? "animate-[bp-in-left_0.28s_ease-out]" : "animate-[bp-in-right_0.28s_ease-out]") : ""}>
-              <HeroDetail st={st} detail={shown} onClose={() => setDetail(null)} />
+
+      <div key={tab} className="px-4 pb-4 pt-4 animate-[bp-fade_0.25s_ease-out]">
+        {tab !== "pending" ? (
+          <>
+            <p className="text-[13px] font-medium text-slate-500">{tab === "earned" ? "Total earned" : "Total spent"} in {year}</p>
+            <p className="mt-0.5 text-[34px] font-bold leading-none tracking-tight tabular-nums" style={{ color: T.color }}>{tab === "spent" && total > 0 ? "−" : ""}{$(total)}</p>
+            {/* Por mes: se toca una barra para ver ese mes */}
+            <div className="mt-4 flex items-center justify-between text-[12px]">
+              <span className="font-semibold text-[#0b1f3a]">{st.months[sel]}: {$(series[sel] ?? 0)}</span>
+              <span className="text-slate-400">{pick === null ? (series[best] > 0 ? "Best month" : "By month") : "Tap again to clear"}</span>
             </div>
-          )}
-        </div>
+            <div className="mt-2 flex h-24 items-end gap-1" data-noswipe>
+              {series.map((v, i) => (
+                <button key={i} type="button" onClick={() => setPick(pick === i ? null : i)} aria-label={`${st.months[i]}: ${$(v)}`} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
+                  <span className="w-full rounded-md transition-[height] duration-700 ease-out" style={{ height: v > 0 ? `${grown ? Math.max(8, (v / max) * 100) : 0}%` : "3px", background: v > 0 ? (i === sel ? T.color : `${T.color}40`) : "#e8edf2", transitionDelay: `${i * 25}ms` }} />
+                  <span className={`text-[8.5px] leading-none ${i === sel ? "font-bold text-[#0b1f3a]" : "text-slate-400"}`}>{(st.months[i] ?? "").slice(0, 3)}</span>
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {stat("Average per month", $(avg), withData ? `In ${withData} month${withData === 1 ? "" : "s"} with activity` : "No activity yet")}
+              {tab === "earned" ? stat("Invoiced this year", $(st.ytdInvoiced), "Sent to customers")
+                : stat("Biggest category", st.expenseByCat[0] ? $(st.expenseByCat[0][1]) : "—", st.expenseByCat[0]?.[0] ?? "Nothing yet")}
+            </div>
+            <button type="button" onClick={() => setDetail(detail === tab ? null : tab)} aria-expanded={detail === tab} className="mt-3 flex w-full items-center justify-center gap-1 rounded-xl border border-slate-200 py-2 text-[13px] font-semibold text-[#0f766e] active:bg-[#f6fbfa]">
+              {detail === tab ? "Hide" : tab === "earned" ? "See the payments" : "See where it went"}
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-[13px] font-medium text-slate-500">Customers owe you</p>
+            <p className="mt-0.5 text-[34px] font-bold leading-none tracking-tight tabular-nums text-[#0b1f3a]">{$(st.total)}</p>
+            <div className="mt-3 divide-y divide-slate-100 rounded-2xl border border-slate-100">
+              <div className="flex items-center gap-2 px-3 py-2.5"><span className="h-2 w-2 rounded-full bg-[#10b981]" /><span className="flex-1 text-[13.5px] text-slate-600">Not due yet</span><span className="text-[15px] font-semibold tabular-nums text-[#0b1f3a]">{$(st.current)}</span></div>
+              <Link prefetch={false} href="/dashboard/invoices?view=overdue" className="flex items-center gap-2 px-3 py-2.5 active:bg-[#fff1f2]">
+                <span className={`h-2 w-2 rounded-full ${st.overdue > 0 ? "bg-[#f43f5e]" : "bg-slate-300"}`} /><span className="flex-1 text-[13.5px] text-slate-600">Overdue{st.overdue > 0 ? " · collect these first" : ""}</span>
+                <span className={`text-[15px] font-semibold tabular-nums ${st.overdue > 0 ? "text-[#e11d48]" : "text-[#0b1f3a]"}`}>{$(st.overdue)}</span>
+                <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7.5 4.5 13 10l-5.5 5.5" /></svg>
+              </Link>
+              <div className="flex items-center gap-2 px-3 py-2.5"><span className="h-2 w-2 rounded-full bg-[#60a5fa]" /><span className="flex-1 text-[13.5px] text-slate-600">Quotes waiting for an answer</span><span className="text-[15px] font-semibold tabular-nums text-[#0b1f3a]">{$(st.quoteStats.openValue)}</span></div>
+            </div>
+            {owe && (
+              <>
+                <p className="mt-4 text-[13px] font-medium text-slate-500">You still owe · financed purchases</p>
+                <Link prefetch={false} href="/dashboard/financing" className="mt-1.5 flex items-center gap-3 rounded-2xl border border-slate-100 px-3 py-2.5 active:bg-slate-50">
+                  <span className="min-w-0 flex-1"><span className="block text-[20px] font-bold leading-tight tabular-nums text-[#0b1f3a]">{$(owe.total)}</span>
+                    <span className="block truncate text-[12px] text-slate-500">{$(owe.monthly)} a month · {owe.count} purchase{owe.count === 1 ? "" : "s"}{owe.nextDue ? ` · next ${new Date(`${owe.nextDue}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}</span></span>
+                  <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7.5 4.5 13 10l-5.5 5.5" /></svg>
+                </Link>
+              </>
+            )}
+          </>
+        )}
+        {detail && detail !== "profit" && <HeroDetail st={st} detail={detail} onClose={() => setDetail(null)} />}
       </div>
+
+      {/* Siempre a la vista: lo que quedó en el año */}
+      <button type="button" onClick={() => setDetail(detail === "profit" ? null : "profit")} aria-expanded={detail === "profit"} className="flex w-full items-center gap-2 border-t border-slate-100 bg-slate-50/70 px-4 py-3 text-left active:bg-slate-100">
+        <span className="flex-1 text-[13.5px] font-medium text-slate-600">{profit >= 0 ? "Profit" : "Loss"} in {year} <span className="text-slate-400">· earned minus spent</span></span>
+        <span className={`text-[17px] font-bold tabular-nums ${profit >= 0 ? "text-[#0f766e]" : "text-[#e11d48]"}`}>{profit < 0 ? "−" : ""}{$(Math.abs(profit))}</span>
+        <svg viewBox="0 0 20 20" className={`h-4 w-4 shrink-0 transition-transform duration-300 ${detail === "profit" ? "rotate-180 text-[#0f766e]" : "text-slate-300"}`} fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
+      </button>
+      {detail === "profit" && <div className="px-4 pb-4"><HeroDetail st={st} detail="profit" onClose={() => setDetail(null)} /></div>}
     </div>
   );
 }

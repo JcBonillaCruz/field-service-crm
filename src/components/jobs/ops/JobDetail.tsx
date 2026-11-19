@@ -1,5 +1,8 @@
 "use client";
 
+import PdfViewer from "@/components/ui/PdfViewer";
+import type { PdfDoc } from "@/lib/report-pdf";
+import { loadServiceReport } from "@/lib/service-report";
 import { PlanTag } from "@/components/jobs/plans/PlanArt";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -92,6 +95,17 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
   }, [j.id, companyId, router]);
 
   const cv = useMemo(() => currentVisit(data.visits), [data.visits]);
+  // Paso 5.13: vista previa del reporte de servicio para el cliente
+  const [sr, setSr] = useState<PdfDoc | null>(null);
+  const [srBusy, setSrBusy] = useState(false);
+  async function openReport() {
+    setSrBusy(true);
+    const { data: co } = await createClient().from("companies").select("name").eq("id", companyId).maybeSingle();
+    const r = await loadServiceReport(j.id, (co?.name as string | undefined) ?? "");
+    setSrBusy(false);
+    if ("error" in r) return flash(r.error, true);
+    setSr(r.doc);
+  }
   // Paso 5.8: avisos al cliente (se vuelve a leer cuando cambia el historial, la fecha o el estado)
   const notices = useCustomerNotices(j.id, `${data.events.length}-${cv?.starts_at ?? ""}-${j.status}`);
   const ops: OpsJob = useMemo(() => ({
@@ -193,6 +207,13 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
             {j.title && j.customer_name && <p className="truncate text-[14px] text-slate-500">{j.title}</p>}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[12.5px] font-semibold ring-1 ${STATUS_META[j.status].badge}`}>{STATUS_META[j.status].label}</span>
+              {!cancelled && (
+                <button type="button" disabled={srBusy} onClick={openReport} title="The PDF the customer can receive with the invoice: work done, readings and photos. No prices or internal notes."
+                  className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[12.5px] font-semibold text-[#0f766e] transition-colors hover:border-[#0f766e] disabled:opacity-50">
+                  <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 2.5h7l3.5 3.5V17a.5.5 0 0 1-.5.5H5a.5.5 0 0 1-.5-.5V3a.5.5 0 0 1 .5-.5zM11.5 2.5v4h4M7.5 10.5h5M7.5 13.5h5" /></svg>
+                  {srBusy ? "Preparing…" : "Service report"}
+                </button>
+              )}
               <DelayTag job={ops} now={now} />
               {j.status === "on_hold" && j.hold_reason && <span className="rounded-full bg-[#fff1f2] px-2.5 py-0.5 text-[12px] font-semibold text-[#be123c]">{holdLabel(j.hold_reason)}</span>}
               {afterHours && <AfterHoursMoon withText size={20} />}
@@ -437,6 +458,7 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
         </div>
       )}
       {serviceOpen && <AddServiceSheet companyId={companyId} jobId={j.id} onClose={() => setServiceOpen(false)} onDone={(m) => { setServiceOpen(false); flash(m); setInvKey((k) => k + 1); router.refresh(); }} />}
+      {sr && <PdfViewer doc={sr} onClose={() => setSr(null)} />}
       <JobChat jobId={j.id} companyId={companyId} title={`${j.customer_name || "Job"} · ${j.number}`} />
       {toast && <div role="status" className={`fixed bottom-5 left-1/2 z-[95] max-w-[92vw] -translate-x-1/2 rounded-xl px-4 py-2.5 text-[13.5px] font-medium text-white shadow-lg animate-[bp-pop-in_0.2s_ease-out] ${toast.err ? "bg-[#be123c]" : "bg-[#0b1f3a]"}`}>{toast.m}</div>}
     </div>

@@ -3,7 +3,7 @@
 import { useSwipe } from "@/components/ui/useSwipe";
 
 import type { MobileStats } from "@/lib/dashboard-server";
-import { InsightsCard, MobileHero, MoneyChart, ReceivablesCard } from "@/components/dashboard/MobileWidgets";
+import { InsightsCard, MobileHero, MoneyChart } from "@/components/dashboard/MobileWidgets";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -60,7 +60,6 @@ export default function Dashboard({ firstName, companyName, industry, role, coun
             {st ? <MobileHero st={st}/> : (
               <div className="rounded-3xl border border-slate-200 bg-white px-6 py-6"><p className="text-sm text-slate-500">Received this year</p><p className="mt-1 text-[38px] font-bold text-[#0b1f3a]">$0.00</p></div>
             )}
-            {st && <ReceivablesCard st={st} mounted={m}/>}
           </div>
 
           {/* ══════ 2. Consejos de finanzas (en vez de accesos directos) ══════ */}
