@@ -120,10 +120,11 @@ const JOB_CATS: { id: JobCat; label: string; hint: string; level: "red" | "orang
 ];
 type JobAlert = { id: string; cat: JobCat; title: string; number: string; sub: string; tag: React.ReactNode; href: string; sort: number; job?: OpsJob };
 
-export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePrice, revenue, alerts, header, sample, samplePresence, variant = "home", canDelete = false }: {
+export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePrice, revenue, monthReport, alerts, header, sample, samplePresence, variant = "home", canDelete = false }: {
   companyId: string; team: TeamMember[]; weekStartsOn: number;
   canSeePrice: boolean;          // dueño y manager
   revenue: RevenueData | null;   // solo el dueño
+  monthReport?: React.ReactNode; // Paso 5.10e: tarjeta "This month's report" (dueño y manager)
   alerts: HomeAlert[];           // avisos guardados: seguimiento de trabajos + inventario
   header?: React.ReactNode;
   sample?: OpsJob[];             // datos de ejemplo (vista previa): no consulta la base
@@ -358,6 +359,9 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
           <Kpi label="Technician availability" value={freeNow} suffix={people.length ? ` / ${people.length}` : ""} art={<TeamArt size={46} />} loading={loading || !members} href="/dashboard/jobs/assign"
             hint={people.length ? (freeNow ? "Online and free to take a job" : "Nobody free right now") : "No collaborators yet"} tone={freeNow ? "green" : undefined} action="Assign jobs" />
         </div>
+
+        {/* ======= Reporte del mes (Paso 5.10e · dueño y manager): ingreso, gastos y ganancia real ======= */}
+        {monthReport && <div className="mt-7 lg:mt-6">{monthReport}</div>}
 
         {/* ======= 2. Trabajos (lo principal) + Equipo ======= */}
         <div className="mt-7 grid grid-cols-[minmax(0,1fr)] gap-6 lg:mt-6 lg:gap-4 xl:grid-cols-[minmax(0,1.75fr)_minmax(20rem,1fr)]">

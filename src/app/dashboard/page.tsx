@@ -9,6 +9,10 @@ import { loadDashboard } from "@/lib/dashboard-server";
 import { loadJobBasics } from "@/lib/jobs-server";
 import { buildRevenue, loadHomeAlerts } from "@/lib/home-dashboard";
 import { canManageSales } from "@/lib/sales";
+import MonthReportCard from "@/components/home/MonthReportCard";
+import { loadMonthCard } from "@/lib/company-report-server";
+import { dayKeyIn, safeTz } from "@/lib/finance-period";
+import { headers } from "next/headers";
 
 export const dynamic = "force-dynamic";
 const TRIAL_DAYS = 14;
@@ -17,6 +21,7 @@ const TRIAL_DAYS = 14;
 //   · Dashboard → dueño, manager y oficina
 //   · Finances  → solo dueño y manager (el dashboard de finanzas de antes, tal cual)
 //   · Ingresos dentro del Dashboard → solo el dueño
+//   · "This month's report" dentro del Dashboard → dueño y manager (Paso 5.10e)
 export default async function DashboardPage({ searchParams }: { searchParams?: { demo?: string } }) {
   const { supabase, current, firstName, companies } = await getSession();
 
@@ -32,11 +37,19 @@ export default async function DashboardPage({ searchParams }: { searchParams?: {
   const owner = current.role === "owner";
   const canFinance = owner || current.role === "manager";
 
-  const [basics, alerts, dash, typeRows] = await Promise.all([
-    loadJobBasics(supabase, current.id),
+  // Los trabajos y, a la vez, el día de inicio de semana y la zona horaria de la compañía (para saber qué mes es "este mes")
+  const basicsP = loadJobBasics(supabase, current.id);
+  const ipTz = headers().get("x-vercel-ip-timezone");
+  const monthP = canFinance
+    ? basicsP.then((b) => loadMonthCard(supabase, current.id, b.settings.week_starts_on,
+        dayKeyIn(safeTz(b.settings.timezone, ipTz))(new Date()))).catch(() => null)
+    : Promise.resolve(null);
+  const [basics, alerts, dash, typeRows, month] = await Promise.all([
+    basicsP,
     loadHomeAlerts(supabase, current.id, { finances: canFinance, inventory: true }).catch(() => []),
     canFinance ? loadDashboard(supabase, current.id).catch(() => null) : Promise.resolve(null),
     canFinance ? supabase.from("customers").select("customer_type").eq("company_id", current.id).eq("is_archived", false) : Promise.resolve({ data: [] }),
+    monthP,
   ]);
   const rows = (typeRows.data ?? []) as { customer_type: string | null }[];
   const counts = {
@@ -63,6 +76,7 @@ export default async function DashboardPage({ searchParams }: { searchParams?: {
           weekStartsOn={weekStartsOn}
           canSeePrice={canFinance}
           revenue={owner && dash ? buildRevenue(dash.data, weekStartsOn) : null}
+          monthReport={month ? <MonthReportCard data={month} /> : null}
           alerts={alerts}
         />
       }
