@@ -18,6 +18,8 @@ import { ItemsArt, LowArt, OutArt, ValueArt } from "@/components/inventory/KpiAr
 import {
   InvCategory, InvItem, InvLocation, InvPhoto, InvStock, STATUS_META, StockStatus, qtyFmt, statusOf, usd,
 } from "@/lib/inventory";
+import { useTranslations } from "next-intl";
+import { useInvTx } from "@/i18n/useInvTx";
 
 type Props = {
   companyId: string; needsSql: boolean; children: React.ReactNode; barcodes?: Record<string, string>;
@@ -29,9 +31,6 @@ type Row = InvItem & { rows: InvStock[]; total: number; status: StockStatus; val
 const BASE = "/dashboard/inventory";
 // Pantallas propias (solo menú + esa pantalla): no son productos
 const RESERVED = new Set(["new", "team", "scan", "settings", "locations", "transfers", "movements", "counts", "reports", "van", "usage", "labels"]);
-const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
-  { value: "all", label: "All" }, { value: "in", label: "In Stock" }, { value: "low", label: "Low Stock" }, { value: "out", label: "Out of Stock" },
-];
 const ICON = {
   box: "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9",
   value: "M12 2.5v19M16.6 6.6c-.6-1.6-2.4-2.6-4.6-2.6-2.6 0-4.6 1.3-4.6 3.4 0 4.8 9.4 2.5 9.4 7.4 0 2.1-2.1 3.5-4.8 3.5-2.4 0-4.4-1.1-5-2.9",
@@ -54,6 +53,12 @@ const plus = (
 //   · Producto abierto → 3 paneles: menú lateral | lista compacta | ficha.
 //   · Nuevo / Editar / Scan / Settings → solo el menú lateral y esa pantalla.
 export default function InventoryWorkspace({ companyId, needsSql, items, stock, locations, categories, photos, children, barcodes = {} }: Props) {
+  const t = useTranslations("invList");
+  const ix = useInvTx();
+  const usd = ix.money;
+  const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
+    { value: "all", label: t("all") }, { value: "in", label: ix.status("in") }, { value: "low", label: ix.status("low") }, { value: "out", label: ix.status("out") },
+  ];
   const router = useRouter();
   const pathname = usePathname();
   const [q, setQ] = useState("");
@@ -113,7 +118,7 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
       const blob = `${r.name} ${r.sku ?? ""} ${r.description ?? ""}`.toLowerCase();
       // También encuentra el producto por cualquiera de sus códigos extra
       if (barcodes[q.trim().toLowerCase()] === r.id) return true;
-      return terms.every((t) => blob.includes(t));
+      return terms.every((w) => blob.includes(w));
     });
   }, [rows, q, cat, status, barcodes]);
 
@@ -124,31 +129,31 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
   const filtersOn = cat !== "all" || status !== "all" || q.trim() !== "" || where !== "all";
   const clearFilters = () => { setQ(""); setCat("all"); setStatus("all"); setWhere("all"); };
   const whereOptions = [
-    { value: "all", label: "All locations" },
-    ...(locations.some((l) => l.kind === "warehouse") ? [{ value: "warehouses", label: "All warehouses" }] : []),
-    ...(locations.some((l) => l.kind === "van") ? [{ value: "vans", label: "All vans" }] : []),
+    { value: "all", label: t("allLocations") },
+    ...(locations.some((l) => l.kind === "warehouse") ? [{ value: "warehouses", label: t("allWarehouses") }] : []),
+    ...(locations.some((l) => l.kind === "van") ? [{ value: "vans", label: t("allVans") }] : []),
     ...locations.map((l) => ({ value: l.id, label: `${l.kind === "van" ? "🚚 " : "🏬 "}${l.name}` })),
   ];
-  const catOptions = [{ value: "all", label: "All categories" }, ...categories.map((c) => ({ value: c.id, label: c.name })), { value: "none", label: "No category" }];
+  const catOptions = [{ value: "all", label: t("allCats") }, ...categories.map((c) => ({ value: c.id, label: c.name })), { value: "none", label: t("noCat") }];
   const open = (id: string) => router.push(`${BASE}/${id}`);
   async function removeItem(r: Row) {
-    if (!(await confirmDelete({ title: `Delete "${r.name}"?`, message: "The product, its stock in every location, its photos and its movement history will be deleted.", download: { filename: r.name, data: { item: r } } }))) return;
+    if (!(await confirmDelete({ title: t("delQ", { name: r.name }), message: t("delMsg"), download: { filename: r.name, data: { item: r } } }))) return;
     const sb = createClient();
     const { error } = await sb.from("items").delete().eq("id", r.id);
-    if (error) return say("It couldn't be deleted. It may be used in a quote or invoice.");
+    if (error) return say(t("eDel"));
     const paths = photos.filter((p) => p.item_id === r.id).map((p) => p.path);
     if (paths.length) await sb.storage.from("item-images").remove(paths);
     await bustCache("catalog");
-    say(`"${r.name}" deleted`); router.refresh();
+    say(t("deleted", { name: r.name })); router.refresh();
   }
 
   const searchBox = (
     <div className="relative min-w-0 flex-1 basis-60">
       <span className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-slate-400"><Svg d={ICON.search} className="h-[18px] w-[18px]" /></span>
-      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or SKU" aria-label="Search inventory"
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("searchPh")} aria-label={t("search")}
         className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-10 text-[15px] placeholder:text-slate-400 focus:border-[#0f766e] focus:outline-none focus:ring-4 focus:ring-[#14a39a]/15" />
       {q && (
-        <button type="button" onClick={() => setQ("")} aria-label="Clear search"
+        <button type="button" onClick={() => setQ("")} aria-label={t("clearSearch")}
           className="absolute inset-y-0 right-2 my-auto flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600">
           <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
         </button>
@@ -164,18 +169,18 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
           <>
             {/* Lista compacta (como Items / Customers) */}
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
-              <h1 className="text-lg font-semibold tracking-tight text-[#0b1f3a]">Inventory</h1>
+              <h1 className="text-lg font-semibold tracking-tight text-[#0b1f3a]">{t("title")}</h1>
               <div className="flex items-center gap-2">
-                <Link prefetch={false} href={`${BASE}/scan`} aria-label="Scan barcode" title="Scan barcode"
+                <Link prefetch={false} href={`${BASE}/scan`} aria-label={t("scanBarcode")} title={t("scanBarcode")}
                   className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-[#0f766e] transition-colors hover:border-[#14a39a] hover:bg-[#e9f7f4]"><Svg d={ICON.scan} /></Link>
-                <Link prefetch={false} href={`${BASE}/new`} aria-label="New Item" title="New Item"
+                <Link prefetch={false} href={`${BASE}/new`} aria-label={t("newItem")} title={t("newItem")}
                   className="group/n flex h-10 w-10 items-center justify-center rounded-lg bg-[#0f766e] text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59]">{plus}</Link>
               </div>
             </div>
             <div className="shrink-0 border-b border-slate-100 px-3 py-2.5">{searchBox}</div>
             <ul className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto">
               {shown.map((r) => <CompactRow key={r.id} r={r} active={r.id === selectedId} />)}
-              {shown.length === 0 && <li className="px-5 py-10 text-center text-sm text-slate-500">No items match.</li>}
+              {shown.length === 0 && <li className="px-5 py-10 text-center text-sm text-slate-500">{t("noMatch")}.</li>}
             </ul>
           </>
         ) : (
@@ -183,43 +188,43 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
             {/* Encabezado */}
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <h1 className="text-[22px] font-semibold tracking-tight text-[#0b1f3a] lg:text-2xl">Inventory</h1>
-                <p className="mt-0.5 text-[13.5px] text-slate-500 lg:text-sm">Parts and products in your warehouse and vans, tracked by their barcode.</p>
+                <h1 className="text-[22px] font-semibold tracking-tight text-[#0b1f3a] lg:text-2xl">{t("title")}</h1>
+                <p className="mt-0.5 text-[13.5px] text-slate-500 lg:text-sm">{t("subtitle")}</p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <button type="button" onClick={() => setExportOpen(true)}
                   className="hidden h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[14px] font-medium text-slate-600 transition-colors hover:border-[#14a39a] hover:text-[#0f766e] lg:flex">
-                  <Svg d={ICON.export} className="h-[18px] w-[18px]" /> Export
+                  <Svg d={ICON.export} className="h-[18px] w-[18px]" /> {t("export")}
                 </button>
-                <Link prefetch={false} href={`${BASE}/labels?items=${shown.slice(0, 200).map((r) => r.id).join(",")}`} title="Print barcode labels"
+                <Link prefetch={false} href={`${BASE}/labels?items=${shown.slice(0, 200).map((r) => r.id).join(",")}`} title={t("printLabels")}
                   className="hidden h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[14px] font-medium text-slate-600 transition-colors hover:border-[#14a39a] hover:text-[#0f766e] sm:flex">
-                  <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M7 8V3h10v5M6 17H4V9h16v8h-2M7 14h10v7H7z" /></svg> Labels
+                  <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M7 8V3h10v5M6 17H4V9h16v8h-2M7 14h10v7H7z" /></svg> {t("labels")}
                 </Link>
-                <Link prefetch={false} href={`${BASE}/scan`} aria-label="Scan barcode" title="Scan barcode"
+                <Link prefetch={false} href={`${BASE}/scan`} aria-label={t("scanBarcode")} title={t("scanBarcode")}
                   className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[14px] font-medium text-[#0f766e] transition-colors hover:border-[#14a39a] hover:bg-[#e9f7f4]">
-                  <Svg d={ICON.scan} /><span className="hidden sm:inline">Scan</span>
+                  <Svg d={ICON.scan} /><span className="hidden sm:inline">{t("scan")}</span>
                 </Link>
                 <Link prefetch={false} href={`${BASE}/new`}
-                  className="group/n hidden h-10 items-center gap-1.5 rounded-lg bg-[#0f766e] px-4 text-[15px] font-semibold text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59] sm:inline-flex">{plus}New</Link>
+                  className="group/n hidden h-10 items-center gap-1.5 rounded-lg bg-[#0f766e] px-4 text-[15px] font-semibold text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59] sm:inline-flex">{plus}{t("new")}</Link>
               </div>
             </div>
 
             {needsSql && (
               <div role="alert" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                The inventory tables aren&apos;t ready. Run <b>paso-4.1-inventory.sql</b> in Supabase → SQL Editor, then reload this page.
+                {t.rich("needsSql", { b: (c) => <b>{c}</b> })}
               </div>
             )}
 
             {/* KPIs: tarjetas blancas; al pasar el mouse se elevan, el ícono se anima y (si aplica) filtran al hacer clic */}
             <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
-              <Kpi label="Total Items" value={kpi.total.toLocaleString("en-US")} Art={ItemsArt}
-                hint={`${qtyFmt(kpi.units)} units on hand`} action="Show all" active={status === "all" && !filtersOn} onClick={clearFilters} />
-              <Kpi label="Inventory Value" value={usd(kpi.value)} Art={ValueArt}
-                hint={`At cost · ${usd(kpi.retail)} at selling price`} />
-              <Kpi label="Low Stock" value={String(kpi.low)} Art={LowArt} warn={kpi.low > 0 ? "amber" : undefined} hint={kpi.low ? "Need restocking soon" : "Nothing running low"}
-                action={kpi.low ? "Show them" : undefined} active={status === "low"} onClick={kpi.low ? () => setStatus(status === "low" ? "all" : "low") : undefined} />
-              <Kpi label="Out of Stock" value={String(kpi.out)} Art={OutArt} warn={kpi.out > 0 ? "red" : undefined} hint={kpi.out ? "None left in any location" : "Everything in stock"}
-                action={kpi.out ? "Show them" : undefined} active={status === "out"} onClick={kpi.out ? () => setStatus(status === "out" ? "all" : "out") : undefined} />
+              <Kpi label={t("kTotal")} value={kpi.total.toLocaleString(ix.tag)} Art={ItemsArt}
+                hint={t("kUnits", { n: qtyFmt(kpi.units) })} action={t("showAll")} active={status === "all" && !filtersOn} onClick={clearFilters} />
+              <Kpi label={t("kValue")} value={usd(kpi.value)} Art={ValueArt}
+                hint={t("kValueHint", { x: usd(kpi.retail) })} />
+              <Kpi label={ix.status("low")} value={String(kpi.low)} Art={LowArt} warn={kpi.low > 0 ? "amber" : undefined} hint={kpi.low ? t("kLowHint") : t("kLowNone")}
+                action={kpi.low ? t("showThem") : undefined} active={status === "low"} onClick={kpi.low ? () => setStatus(status === "low" ? "all" : "low") : undefined} />
+              <Kpi label={ix.status("out")} value={String(kpi.out)} Art={OutArt} warn={kpi.out > 0 ? "red" : undefined} hint={kpi.out ? t("kOutHint") : t("kOutNone")}
+                action={kpi.out ? t("showThem") : undefined} active={status === "out"} onClick={kpi.out ? () => setStatus(status === "out" ? "all" : "out") : undefined} />
             </div>
 
             {/* Filtros */}
@@ -229,32 +234,32 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
                 <div className="hidden gap-2.5 lg:flex">
                   <FilterSelect value={where} onChange={setWhere} options={whereOptions} width="w-52" />
                   <FilterSelect value={cat} onChange={setCat} options={catOptions} width="w-52" />
-                  <FilterSelect value={status} onChange={(v) => setStatus(v as StatusFilter)} options={STATUS_OPTIONS} width="w-44" prefix="Status:" />
+                  <FilterSelect value={status} onChange={(v) => setStatus(v as StatusFilter)} options={STATUS_OPTIONS} width="w-44" prefix={t("statusP")} />
                 </div>
-                <button type="button" onClick={() => setFilterSheet(true)} aria-label="Filters"
+                <button type="button" onClick={() => setFilterSheet(true)} aria-label={t("filters")}
                   className={`relative flex h-11 w-11 items-center justify-center rounded-xl border bg-white lg:hidden ${cat !== "all" || status !== "all" || where !== "all" ? "border-[#0f766e] text-[#0f766e]" : "border-slate-200 text-slate-500"}`}>
                   <Svg d={ICON.filter} />
                   {(cat !== "all" || status !== "all" || where !== "all") && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#e8713a]" />}
                 </button>
-                {filtersOn && <button type="button" onClick={clearFilters} className="hidden text-sm font-medium text-[#0f766e] hover:underline lg:block">Clear</button>}
+                {filtersOn && <button type="button" onClick={clearFilters} className="hidden text-sm font-medium text-[#0f766e] hover:underline lg:block">{t("clear")}</button>}
               </div>
             )}
 
             {/* Lista */}
             {rows.length === 0 ? (
-              <Empty icon={ICON.box} title="Your inventory is empty"
-                text="Scan the barcode that comes on a product's box, or add it by hand. That factory code becomes its SKU."
+              <Empty icon={ICON.box} title={t("emptyTitle")}
+                text={t("emptyText")}
                 actions={(
                   <>
                     <Link prefetch={false} href={`${BASE}/scan`} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-[15px] font-medium text-[#0f766e] transition-colors hover:border-[#14a39a] hover:bg-[#e9f7f4]">
-                      <Svg d={ICON.scan} /> Scan a barcode
+                      <Svg d={ICON.scan} /> {t("scanOne")}
                     </Link>
-                    <Link prefetch={false} href={`${BASE}/new`} className="rounded-lg bg-[#0f766e] px-4 py-2.5 text-[15px] font-semibold text-white transition-colors hover:bg-[#0c5f59]">+ New Item</Link>
+                    <Link prefetch={false} href={`${BASE}/new`} className="rounded-lg bg-[#0f766e] px-4 py-2.5 text-[15px] font-semibold text-white transition-colors hover:bg-[#0c5f59]">{t("plusNew")}</Link>
                   </>
                 )} />
             ) : shown.length === 0 ? (
-              <Empty icon={ICON.search} title="No items match" text="Try another name or SKU, or clear the filters."
-                actions={<button type="button" onClick={clearFilters} className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-[15px] font-medium text-slate-700 hover:bg-slate-50">Clear filters</button>} />
+              <Empty icon={ICON.search} title={t("noMatch")} text={t("noMatchText")}
+                actions={<button type="button" onClick={clearFilters} className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-[15px] font-medium text-slate-700 hover:bg-slate-50">{t("clearFilters")}</button>} />
             ) : (
               <>
                 {/* Computadora: tabla */}
@@ -263,8 +268,8 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
                     <table className="w-full min-w-[920px] text-left text-[14px]">
                       <thead>
                         <tr className="border-b border-slate-200 bg-[#fafbfc] text-[12px] font-semibold uppercase tracking-wide text-slate-500">
-                          <th className="px-4 py-3">Item</th><th className="px-3 py-3">Category</th><th className="px-3 py-3">Location</th>
-                          <th className="px-3 py-3">Quantity</th><th className="px-3 py-3 text-right">Cost / Price</th><th className="px-4 py-3 text-right">Actions</th>
+                          <th className="px-4 py-3">{t("cItem")}</th><th className="px-3 py-3">{t("cCat")}</th><th className="px-3 py-3">{t("cLoc")}</th>
+                          <th className="px-3 py-3">{t("cQty")}</th><th className="px-3 py-3 text-right">{t("cCost")}</th><th className="px-4 py-3 text-right">{t("cActions")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -296,7 +301,7 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
                     </table>
                   </div>
                   <div className="border-t border-slate-100 bg-[#fafbfc] px-4 py-2.5 text-[12.5px] text-slate-500">
-                    {shown.length === rows.length ? `${rows.length} items` : `${shown.length} of ${rows.length} items`}
+                    {shown.length === rows.length ? t("nItems", { n: rows.length }) : t("nOfItems", { n: shown.length, total: rows.length })}
                   </div>
                 </div>
 
@@ -312,13 +317,13 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
                             <p className="truncate text-[15.5px] font-semibold text-[#0b1f3a]">{r.name}</p>
                             <p className="truncate font-mono text-[12.5px] text-slate-400">{r.sku}</p>
                             <p className="mt-1 truncate text-[12.5px] text-slate-500">
-                              {[catName(r.category_id), r.places.length === 1 ? r.places[0].name : r.places.length > 1 ? `${r.places.length} locations` : null].filter(Boolean).join(" · ") || "No category"}
+                              {[catName(r.category_id), r.places.length === 1 ? r.places[0].name : r.places.length > 1 ? t("nLocations", { n: r.places.length }) : null].filter(Boolean).join(" · ") || t("noCat")}
                             </p>
                           </div>
                           <QtyBadge row={r} />
                         </div>
                         <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3">
-                          <p className="text-[13px] tabular-nums text-slate-500">{usd(r.selling_price)} <span className="text-slate-300">·</span> cost {usd(r.cost_price)}</p>
+                          <p className="text-[13px] tabular-nums text-slate-500">{usd(r.selling_price)} <span className="text-slate-300">·</span> {t("cost", { x: usd(r.cost_price) })}</p>
                           <QuickAdjust companyId={companyId} item={r} locations={locations} rows={r.rows} onDone={changed} size="lg" />
                         </div>
                       </div>
@@ -338,23 +343,23 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
 
       {/* Celular: botón flotante + (como Customers / Items) */}
       {!selectedId && (
-        <Link prefetch={false} href={`${BASE}/new`} aria-label="New Item"
+        <Link prefetch={false} href={`${BASE}/new`} aria-label={t("newItem")}
           className="fixed bottom-6 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#0f766e] text-white shadow-lg shadow-[#0f766e]/30 active:scale-95 lg:hidden">
           <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
         </Link>
       )}
 
       {/* Celular: filtros en hoja de abajo */}
-      <BottomSheet open={filterSheet} onClose={() => setFilterSheet(false)} title="Filter"
+      <BottomSheet open={filterSheet} onClose={() => setFilterSheet(false)} title={t("filter")}
         footer={(
           <div className="flex gap-3">
-            <button type="button" onClick={() => { setCat("all"); setStatus("all"); setWhere("all"); }} className="flex-1 rounded-xl border border-slate-200 py-3 text-[15px] font-medium text-slate-700">Reset</button>
-            <button type="button" onClick={() => setFilterSheet(false)} className="flex-1 rounded-xl bg-[#0f766e] py-3 text-[15px] font-semibold text-white">Show {shown.length}</button>
+            <button type="button" onClick={() => { setCat("all"); setStatus("all"); setWhere("all"); }} className="flex-1 rounded-xl border border-slate-200 py-3 text-[15px] font-medium text-slate-700">{t("reset")}</button>
+            <button type="button" onClick={() => setFilterSheet(false)} className="flex-1 rounded-xl bg-[#0f766e] py-3 text-[15px] font-semibold text-white">{t("showN", { n: shown.length })}</button>
           </div>
         )}>
         <div className="space-y-5 px-4 py-4">
           <div>
-            <p className="mb-2 px-1 text-[12px] font-semibold uppercase tracking-wide text-slate-400">Location</p>
+            <p className="mb-2 px-1 text-[12px] font-semibold uppercase tracking-wide text-slate-400">{t("cLoc")}</p>
             <div className="space-y-1">
               {whereOptions.map((o) => (
                 <button key={o.value} type="button" onClick={() => setWhere(o.value)} className={sheetItem(where === o.value)}>
@@ -364,7 +369,7 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
             </div>
           </div>
           <div>
-            <p className="mb-2 px-1 text-[12px] font-semibold uppercase tracking-wide text-slate-400">Stock status</p>
+            <p className="mb-2 px-1 text-[12px] font-semibold uppercase tracking-wide text-slate-400">{t("stockStatus")}</p>
             <div className="space-y-1">
               {STATUS_OPTIONS.map((o) => (
                 <button key={o.value} type="button" onClick={() => setStatus(o.value)} className={sheetItem(status === o.value)}>
@@ -375,7 +380,7 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
             </div>
           </div>
           <div>
-            <p className="mb-2 px-1 text-[12px] font-semibold uppercase tracking-wide text-slate-400">Category</p>
+            <p className="mb-2 px-1 text-[12px] font-semibold uppercase tracking-wide text-slate-400">{t("cCat")}</p>
             <div className="space-y-1">
               {catOptions.map((o) => (
                 <button key={o.value} type="button" onClick={() => setCat(o.value)} className={sheetItem(cat === o.value)}>
@@ -388,7 +393,7 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
       </BottomSheet>
 
       <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} initialModule="Inventory"
-        view={filtersOn ? { module: "Inventory", label: "Current filters", ids: shown.map((r) => r.id), columns: [] } : undefined}
+        view={filtersOn ? { module: "Inventory", label: t("currentFilters"), ids: shown.map((r) => r.id), columns: [] } : undefined}
         defaultScope={filtersOn ? "view" : "all"} />
       <Toast text={toast} />
     </div>
@@ -436,7 +441,8 @@ function CompactRow({ r, active }: { r: Row; active: boolean }) {
 }
 
 function QtyBadge({ row }: { row: Row }) {
-  const m = STATUS_META[row.status];
+  const ix = useInvTx();
+  const m = { ...STATUS_META[row.status], label: ix.status(row.status) };
   return (
     <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[13px] font-semibold tabular-nums ring-1 ${m.badge}`} title={m.label}>
       <span className={`h-1.5 w-1.5 rounded-full ${m.dot}`} />
@@ -446,10 +452,11 @@ function QtyBadge({ row }: { row: Row }) {
 }
 
 function Places({ places, rows }: { places: InvLocation[]; rows: InvStock[] }) {
+  const t = useTranslations("invList");
   if (!places.length) return <span className="text-slate-300">—</span>;
   if (places.length === 1) return <span>{places[0].name}</span>;
   const title = places.map((p) => `${p.name}: ${qtyFmt(Number(rows.find((r) => r.location_id === p.id)?.qty ?? 0))}`).join("\n");
-  return <span title={title} className="cursor-help border-b border-dotted border-slate-300">{places.length} locations</span>;
+  return <span title={title} className="cursor-help border-b border-dotted border-slate-300">{t("nLocations", { n: places.length })}</span>;
 }
 
 function Thumb({ src, size = "sm" }: { src: string | null; size?: "sm" | "lg" }) {

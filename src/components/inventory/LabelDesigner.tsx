@@ -9,6 +9,7 @@ import ItemPicker from "@/components/inventory/ItemPicker";
 import { BarcodeSvg, QrSvg } from "@/components/inventory/Barcode";
 import { LabelItem, PAPERS, Paper, TEMPLATES, TemplateId, perPage } from "@/lib/labels";
 import { InvItem, usd } from "@/lib/inventory";
+import { useTranslations } from "next-intl";
 
 type Line = { item: LabelItem; qty: number };
 type Opts = { template: TemplateId; showPrice: boolean; showCompany: boolean };
@@ -17,6 +18,8 @@ type Opts = { template: TemplateId; showPrice: boolean; showCompany: boolean };
 export default function LabelDesigner({ companyName, items, initial, stock, barcodes = {} }: {
   barcodes?: Record<string, string>; companyName: string; items: LabelItem[]; initial: { id: string; qty: number }[]; stock: Record<string, number>;
 }) {
+  const t = useTranslations("invLabels");
+  const tc = useTranslations("common");
   const [lines, setLines] = useState<Line[]>(() => initial.map((x) => ({ item: items.find((i) => i.id === x.id)!, qty: x.qty })).filter((l) => l.item));
   const [template, setTemplate] = useState<TemplateId>("basic");
   const [fav, setFav] = useState<TemplateId | null>(null);
@@ -50,46 +53,46 @@ export default function LabelDesigner({ companyName, items, initial, stock, barc
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] flex-col bg-white">
-      <FormHeader title="Print Labels" closeHref="/dashboard/inventory" />
+      <FormHeader title={t("title")} closeHref="/dashboard/inventory" />
       <div className="flex-1 lg:grid lg:grid-cols-[420px_minmax(0,1fr)]">
         {/* Ajustes */}
         <div className="space-y-6 border-b border-slate-200 bg-[#fafbfc] px-5 py-6 lg:border-b-0 lg:border-r">
           <section className="space-y-3">
-            <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Paper</p>
-            <SelectMenu ariaLabel="Paper" value={paperId} onChange={(v) => { setPaperId(v); setStart(1); }} options={PAPERS.map((p) => ({ value: p.id, label: p.name }))} />
-            <p className="text-[12.5px] text-slate-500">{paper.hint}</p>
+            <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">{t("paper")}</p>
+            <SelectMenu ariaLabel={t("paper")} value={paperId} onChange={(v) => { setPaperId(v); setStart(1); }} options={PAPERS.map((p) => ({ value: p.id, label: t.has(`pp.${p.id}` as never) ? t(`pp.${p.id}` as never) : p.name }))} />
+            <p className="text-[12.5px] text-slate-500">{t.has(`ph.${paper.id}` as never) ? t(`ph.${paper.id}` as never) : paper.hint}</p>
             {paper.kind === "sheet" && (
               <label className="flex items-center justify-between gap-3 text-[14px] text-slate-700">
-                <span>Start at label # <span className="text-[12px] text-slate-400">(reuse a half-used sheet)</span></span>
+                <span>{t("startAt")} <span className="text-[12px] text-slate-400">{t("reuse")}</span></span>
                 <input type="number" min={1} max={perPage(paper)} value={start} onChange={(e) => setStart(Math.max(1, Math.min(perPage(paper), Number(e.target.value) || 1)))}
                   className="h-9 w-20 rounded-lg border border-slate-200 bg-white px-2 text-center tabular-nums focus:border-[#0f766e] focus:outline-none" />
               </label>
             )}
-            <Toggle on={showPrice} set={setShowPrice} label="Show price" />
-            <Toggle on={showCompany} set={setShowCompany} label={`Show “${companyName}”`} />
+            <Toggle on={showPrice} set={setShowPrice} label={t("showPrice")} />
+            <Toggle on={showCompany} set={setShowCompany} label={t("showCompany", { name: companyName })} />
           </section>
 
           <section className="space-y-3">
-            <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Products</p>
-            <ItemPicker barcodes={barcodes} items={pickable.filter((i) => !lines.some((l) => l.item.id === i.id))} onPick={add} placeholder="Add a product: search or scan" />
-            {lines.length === 0 ? <p className="rounded-xl border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500">Add the products you want labels for.</p> : (
+            <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">{t("products")}</p>
+            <ItemPicker barcodes={barcodes} items={pickable.filter((i) => !lines.some((l) => l.item.id === i.id))} onPick={add} placeholder={t("addPh")} />
+            {lines.length === 0 ? <p className="rounded-xl border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500">{t("addHint")}</p> : (
               <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
                 {lines.map((l) => (
                   <li key={l.item.id} className="px-3 py-2.5"><div className="flex items-center gap-2">
                     <span className="min-w-0 flex-1"><span className="block truncate text-[14px] font-medium text-[#0b1f3a]">{l.item.name}</span>
-                      <span className="block truncate font-mono text-[11.5px] text-slate-400">{l.item.sku}{stock[l.item.id] ? <span className="font-sans"> · {stock[l.item.id]} on hand</span> : null}</span></span>
+                      <span className="block truncate font-mono text-[11.5px] text-slate-400">{l.item.sku}{stock[l.item.id] ? <span className="font-sans"> · {t("onHand", { n: stock[l.item.id] })}</span> : null}</span></span>
                     <button type="button" onClick={() => setQty(l.item.id, l.qty - 1)} className="h-8 w-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">−</button>
-                    <input value={l.qty} inputMode="numeric" aria-label="Copies" onChange={(e) => setQty(l.item.id, Number(e.target.value.replace(/\D/g, "")) || 0)}
+                    <input value={l.qty} inputMode="numeric" aria-label={t("copies")} onChange={(e) => setQty(l.item.id, Number(e.target.value.replace(/\D/g, "")) || 0)}
                       className="h-8 w-12 rounded-lg border border-slate-200 text-center text-[14px] tabular-nums focus:border-[#0f766e] focus:outline-none" />
                     <button type="button" onClick={() => setQty(l.item.id, l.qty + 1)} className="h-8 w-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">+</button>
-                    <button type="button" onClick={() => setLines((x) => x.filter((y) => y.item.id !== l.item.id))} aria-label="Remove" className="ml-1 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-600">
+                    <button type="button" onClick={() => setLines((x) => x.filter((y) => y.item.id !== l.item.id))} aria-label={t("remove")} className="ml-1 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-600">
                       <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
                     </button>
                   </div>
                     {paper.kind === "sheet" && (
                       <div className="mt-2 flex flex-wrap gap-1.5">
-                        <button type="button" onClick={() => fillRow(l.item.id, l.qty)} className="rounded-md border border-slate-200 px-2 py-1 text-[12px] font-medium text-slate-600 hover:border-[#14a39a] hover:text-[#0f766e]">Fill row ({cols})</button>
-                        <button type="button" onClick={() => fillSheet(l.item.id)} className="rounded-md border border-slate-200 px-2 py-1 text-[12px] font-medium text-slate-600 hover:border-[#14a39a] hover:text-[#0f766e]">Fill the whole sheet ({lines.length === 1 ? perPage(paper) - (Math.min(start, perPage(paper)) - 1) : perPage(paper)})</button>
+                        <button type="button" onClick={() => fillRow(l.item.id, l.qty)} className="rounded-md border border-slate-200 px-2 py-1 text-[12px] font-medium text-slate-600 hover:border-[#14a39a] hover:text-[#0f766e]">{t("fillRow", { n: cols })}</button>
+                        <button type="button" onClick={() => fillSheet(l.item.id)} className="rounded-md border border-slate-200 px-2 py-1 text-[12px] font-medium text-slate-600 hover:border-[#14a39a] hover:text-[#0f766e]">{t("fillSheet", { n: lines.length === 1 ? perPage(paper) - (Math.min(start, perPage(paper)) - 1) : perPage(paper) })}</button>
                       </div>
                     )}
                   </li>
@@ -98,7 +101,7 @@ export default function LabelDesigner({ companyName, items, initial, stock, barc
             )}
             {lines.length > 0 && (
               <button type="button" onClick={() => setLines((ls) => ls.map((l) => ({ ...l, qty: Math.max(1, Math.round(stock[l.item.id] || 1)) })))} className="text-[13px] font-medium text-[#0f766e] hover:underline">
-                One label per unit on hand
+                {t("perUnit")}
               </button>
             )}
           </section>
@@ -111,49 +114,49 @@ export default function LabelDesigner({ companyName, items, initial, stock, barc
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="flex items-center gap-2 text-[15px] font-semibold text-[#0b1f3a]">
                 <svg viewBox="0 0 24 24" className="h-5 w-5 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 6h16v12H4zM7 9v6M9.5 9v6M12 9v6M15 9v6M17 9v6" /></svg>
-                Label designs
+                {t("designs")}
               </p>
-              <p className="text-[12.5px] text-slate-500">★ = your default design</p>
+              <p className="text-[12.5px] text-slate-500">{t("favHint")}</p>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-5">
-              {TEMPLATES.map((t) => (
-                <div key={t.id} role="button" tabIndex={0} onClick={() => setTemplate(t.id)} onKeyDown={(e) => { if (e.key === "Enter") setTemplate(t.id); }} aria-pressed={template === t.id}
-                  className={`group relative cursor-pointer rounded-xl border p-2.5 transition-all duration-150 ${template === t.id ? "border-[#0f766e] bg-[#f3fbf8] ring-1 ring-[#0f766e]" : "border-slate-200 bg-[#fafbfc] hover:-translate-y-0.5 hover:border-[#14a39a] hover:shadow-md"}`}>
+              {TEMPLATES.map((tp) => (
+                <div key={tp.id} role="button" tabIndex={0} onClick={() => setTemplate(tp.id)} onKeyDown={(e) => { if (e.key === "Enter") setTemplate(tp.id); }} aria-pressed={template === tp.id}
+                  className={`group relative cursor-pointer rounded-xl border p-2.5 transition-all duration-150 ${template === tp.id ? "border-[#0f766e] bg-[#f3fbf8] ring-1 ring-[#0f766e]" : "border-slate-200 bg-[#fafbfc] hover:-translate-y-0.5 hover:border-[#14a39a] hover:shadow-md"}`}>
                   <div className="flex items-center justify-between gap-1">
                     <p className="flex min-w-0 items-center gap-1 text-[13px] font-semibold text-[#0b1f3a]">
-                      <button type="button" onClick={(e) => { e.stopPropagation(); setFav(fav === t.id ? null : t.id); }} aria-label={fav === t.id ? "Remove default" : "Make default"} title={fav === t.id ? "Default design" : "Make it my default"}
-                        className={`shrink-0 text-[15px] leading-none transition-transform hover:scale-125 ${fav === t.id ? "text-[#f59e0b]" : "text-slate-300 hover:text-[#f59e0b]"}`}>★</button>
-                      <span className="truncate">{t.name}</span>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setFav(fav === tp.id ? null : tp.id); }} aria-label={fav === tp.id ? t("rmDefault") : t("mkDefault")} title={fav === tp.id ? t("isDefault") : t("mkDefaultT")}
+                        className={`shrink-0 text-[15px] leading-none transition-transform hover:scale-125 ${fav === tp.id ? "text-[#f59e0b]" : "text-slate-300 hover:text-[#f59e0b]"}`}>★</button>
+                      <span className="truncate">{t.has(`tn.${tp.id}` as never) ? t(`tn.${tp.id}` as never) : tp.name}</span>
                     </p>
-                    {t.tag && <span className="shrink-0 rounded-full bg-[#eef6ff] px-1.5 py-0.5 text-[10px] font-semibold text-[#2563eb]">{t.tag}</span>}
+                    {tp.tag && <span className="shrink-0 rounded-full bg-[#eef6ff] px-1.5 py-0.5 text-[10px] font-semibold text-[#2563eb]">{t("recommended")}</span>}
                   </div>
                   <div className="mt-2 flex h-[74px] items-center justify-center overflow-hidden rounded-lg bg-white shadow-[inset_0_0_0_1px_#eef1f4]">
-                    <div style={{ transform: "scale(0.7)" }}><Label item={lines[0]?.item ?? SAMPLE} paper={PAPERS[0]} opts={{ ...opts, template: t.id }} company={companyName} outline /></div>
+                    <div style={{ transform: "scale(0.7)" }}><Label item={lines[0]?.item ?? SAMPLE} paper={PAPERS[0]} opts={{ ...opts, template: tp.id }} company={companyName} outline /></div>
                   </div>
-                  <p className="mt-1.5 truncate text-[11.5px] text-slate-500">{t.text}</p>
+                  <p className="mt-1.5 truncate text-[11.5px] text-slate-500">{t.has(`tt.${tp.id}` as never) ? t(`tt.${tp.id}` as never) : tp.text}</p>
                 </div>
               ))}
             </div>
           </section>
 
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-[14px] text-slate-600"><b className="text-[#0b1f3a]">{labels.length}</b> label{labels.length === 1 ? "" : "s"} · {pages.length} {paper.kind === "sheet" ? `sheet${pages.length === 1 ? "" : "s"}` : "on the roll"}</p>
+            <p className="text-[14px] text-slate-600">{t.rich("count", { n: labels.length, b: (c) => <b className="text-[#0b1f3a]">{c}</b> })} · {paper.kind === "sheet" ? t("sheets", { n: pages.length }) : t("roll", { n: pages.length })}</p>
             <div className="flex gap-2">
-              <Link prefetch={false} href="/dashboard/inventory" className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-[14.5px] font-medium text-slate-700 hover:bg-slate-50">Cancel</Link>
+              <Link prefetch={false} href="/dashboard/inventory" className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-[14.5px] font-medium text-slate-700 hover:bg-slate-50">{tc("cancel")}</Link>
               <button type="button" disabled={!labels.length} onClick={() => window.print()}
                 className="inline-flex items-center gap-2 rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-[#0c5f59] disabled:opacity-50">
                 <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M7 8V3h10v5M6 17H4V9h16v8h-2M7 14h10v7H7z" /></svg>
-                Print labels
+                {t("print")}
               </button>
             </div>
           </div>
-          {labels.length === 0 ? <p className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center text-slate-500">The preview shows here.</p> : (
+          {labels.length === 0 ? <p className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center text-slate-500">{t("previewHere")}</p> : (
             <div className="space-y-5 overflow-x-auto pb-4">
               {pages.slice(0, 6).map((pg, i) => <Page key={i} paper={paper} slots={pg} opts={opts} company={companyName} preview />)}
-              {pages.length > 6 && <p className="text-center text-[13px] text-slate-500">+ {pages.length - 6} more page{pages.length - 6 === 1 ? "" : "s"} in the print</p>}
+              {pages.length > 6 && <p className="text-center text-[13px] text-slate-500">{t("morePages", { n: pages.length - 6 })}</p>}
             </div>
           )}
-          <p className="mt-3 text-[12.5px] text-slate-500">Tip: in the print window choose <b>Scale 100%</b> (or “Actual size”) and <b>Margins: None</b> so the labels line up with the stickers.</p>
+          <p className="mt-3 text-[12.5px] text-slate-500">{t.rich("tip", { b: (c) => <b>{c}</b> })}</p>
         </div>
       </div>
 

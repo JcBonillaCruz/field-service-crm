@@ -4,6 +4,7 @@ import { bustCache } from "@/lib/cache-client";
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
 import { SalesPrefs, pdfOf } from "@/lib/sales";
 import { tplOf } from "@/lib/pdf-templates";
@@ -14,7 +15,9 @@ const SWATCHES = ["#1a2744", "#e8713a", "#0f766e", "#2563eb", "#7c3aed", "#be123
 
 // Branding: logo, datos de la compañía y color de los documentos
 export default function BrandingForm({ companyId, prefs, company }: { companyId: string; prefs: SalesPrefs; company: string }) {
+  const t = useTranslations("branding");
   const router = useRouter();
+  const [ok, setOk] = useState(false);
   const [logo, setLogo] = useState(prefs.logo_url);
   const [org, setOrg] = useState(prefs.org_info ?? {});
   const pdf = pdfOf(prefs.pdf_settings);
@@ -27,80 +30,80 @@ export default function BrandingForm({ companyId, prefs, company }: { companyId:
 
   async function upload(f?: File) {
     if (!f) return;
-    if (!["image/png", "image/jpeg"].includes(f.type)) return setMsg("Use a PNG or JPG logo so it also shows in the PDF.");
-    if (f.size > 2 * 1024 * 1024) return setMsg("The logo must be smaller than 2 MB.");
+    if (!["image/png", "image/jpeg"].includes(f.type)) return setMsg(t("eType"));
+    if (f.size > 2 * 1024 * 1024) return setMsg(t("eSize"));
     setBusy(true);
     const s = createClient();
     const path = `${companyId}/logo-${Date.now()}.${f.type === "image/png" ? "png" : "jpg"}`;
     const { error } = await s.storage.from("org-logos").upload(path, f, { upsert: true });
     setBusy(false);
-    if (error) return setMsg("The logo couldn't be uploaded. Did you run the SQL for Paso 3.30?");
+    if (error) return setMsg(t("eUpload"));
     setLogo(s.storage.from("org-logos").getPublicUrl(path).data.publicUrl); setMsg("");
   }
   async function save() {
-    if (accent && !/^#[0-9a-f]{6}$/i.test(accent)) return setMsg("Enter a color like #1a2744.");
-    setBusy(true); setMsg("");
+    if (accent && !/^#[0-9a-f]{6}$/i.test(accent)) return setMsg(t("eColor"));
+    setBusy(true); setMsg(""); setOk(false);
     const { error } = await createClient().from("sales_prefs").upsert({
       company_id: companyId, logo_url: logo, org_info: org, pdf_settings: { ...prefs.pdf_settings, accent, footer_text: footer }, updated_at: new Date().toISOString(),
     });
     setBusy(false);
-    if (error) return setMsg("It couldn't be saved. Did you run the SQL for Paso 3.31?");
-    setMsg("Saved ✓"); await bustCache("prefs"); router.refresh();
+    if (error) return setMsg(t("eSave"));
+    setOk(true); setMsg(t("saved")); await bustCache("prefs"); router.refresh();
   }
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-[#f6f8f9] px-4 py-6 sm:px-6">
       <div className="mx-auto max-w-[1100px]">
-        <Link prefetch={false} href="/dashboard/settings" className="text-[13px] font-medium text-[#0f766e] hover:underline">← All Settings</Link>
-        <h1 className="mb-1 mt-1 text-2xl font-semibold text-[#0b1f3a]">Branding</h1>
-        <p className="mb-6 text-[15px] text-slate-500">Your logo, contact details and brand color on every quote, invoice, PDF and email.</p>
+        <Link prefetch={false} href="/dashboard/settings" className="text-[13px] font-medium text-[#0f766e] hover:underline">← {t("all")}</Link>
+        <h1 className="mb-1 mt-1 text-2xl font-semibold text-[#0b1f3a]">{t("title")}</h1>
+        <p className="mb-6 text-[15px] text-slate-500">{t("subtitle")}</p>
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
           <div className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6">
             <div>
-              <p className="mb-2 font-semibold text-[#0b1f3a]">Logo</p>
+              <p className="mb-2 font-semibold text-[#0b1f3a]">{t("logo")}</p>
               <div className="flex flex-wrap items-center gap-5">
                 <div className="flex h-28 w-56 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-slate-300 bg-slate-50">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  {logo ? <img src={logo} alt="Logo" className="max-h-full max-w-full object-contain p-2" /> : <span className="text-sm text-slate-400">No logo yet</span>}
+                  {logo ? <img src={logo} alt="Logo" className="max-h-full max-w-full object-contain p-2" /> : <span className="text-sm text-slate-400">{t("noLogo")}</span>}
                 </div>
                 <div className="space-y-1.5">
                   <input ref={file} type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ""; }} />
-                  <button type="button" onClick={() => file.current?.click()} disabled={busy} className={btnGhost}>{logo ? "Change logo" : "Upload logo"}</button>
-                  {logo && <button type="button" onClick={() => setLogo(null)} className="block text-sm text-red-600 hover:underline">Remove</button>}
-                  <p className="text-[12px] text-slate-500">PNG or JPG, up to 2 MB. A wide logo with transparent background looks best.</p>
+                  <button type="button" onClick={() => file.current?.click()} disabled={busy} className={btnGhost}>{logo ? t("change") : t("upload")}</button>
+                  {logo && <button type="button" onClick={() => setLogo(null)} className="block text-sm text-red-600 hover:underline">{t("remove")}</button>}
+                  <p className="text-[12px] text-slate-500">{t("logoHint")}</p>
                 </div>
               </div>
             </div>
             <div>
-              <p className="mb-2 font-semibold text-[#0b1f3a]">Address & contact on documents</p>
-              <textarea rows={2} value={org.address ?? ""} onChange={(e) => setOrg({ ...org, address: e.target.value })} placeholder="Street, City, State ZIP" className={inputClass} />
+              <p className="mb-2 font-semibold text-[#0b1f3a]">{t("address")}</p>
+              <textarea rows={2} value={org.address ?? ""} onChange={(e) => setOrg({ ...org, address: e.target.value })} placeholder={t("addrPh")} className={inputClass} />
               <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                <input value={org.phone ?? ""} onChange={(e) => setOrg({ ...org, phone: e.target.value })} placeholder="Phone" className={inputClass} />
-                <input value={org.email ?? ""} onChange={(e) => setOrg({ ...org, email: e.target.value })} placeholder="Email (customers reply here)" className={inputClass} />
-                <input value={org.website ?? ""} onChange={(e) => setOrg({ ...org, website: e.target.value })} placeholder="Website" className={inputClass} />
+                <input value={org.phone ?? ""} onChange={(e) => setOrg({ ...org, phone: e.target.value })} placeholder={t("phone")} className={inputClass} />
+                <input value={org.email ?? ""} onChange={(e) => setOrg({ ...org, email: e.target.value })} placeholder={t("emailPh")} className={inputClass} />
+                <input value={org.website ?? ""} onChange={(e) => setOrg({ ...org, website: e.target.value })} placeholder={t("web")} className={inputClass} />
               </div>
             </div>
             <div>
-              <p className="mb-2 font-semibold text-[#0b1f3a]">Brand color</p>
+              <p className="mb-2 font-semibold text-[#0b1f3a]">{t("color")}</p>
               <div className="flex flex-wrap items-center gap-2">
-                <button type="button" onClick={() => setAccent("")} className={`rounded-full border px-3 py-1.5 text-sm ${!accent ? "border-[#0f766e] bg-[#e9f7f4] text-[#0f766e]" : "border-slate-200 text-slate-600"}`}>Template color</button>
+                <button type="button" onClick={() => setAccent("")} className={`rounded-full border px-3 py-1.5 text-sm ${!accent ? "border-[#0f766e] bg-[#e9f7f4] text-[#0f766e]" : "border-slate-200 text-slate-600"}`}>{t("tplColor")}</button>
                 {SWATCHES.map((c) => <button key={c} type="button" onClick={() => setAccent(c)} aria-label={c} className={`h-8 w-8 rounded-full border-2 transition-transform hover:scale-110 ${accent.toLowerCase() === c ? "border-[#0b1f3a] ring-2 ring-white ring-offset-2 ring-offset-[#0b1f3a]" : "border-white shadow"}`} style={{ background: c }} />)}
                 <input value={accent} onChange={(e) => setAccent(e.target.value.slice(0, 7))} placeholder="#1a2744" className={`${inputClass} !w-28`} />
               </div>
             </div>
             <div>
-              <p className="mb-2 font-semibold text-[#0b1f3a]">Footer text</p>
-              <input value={footer} onChange={(e) => setFooter(e.target.value.slice(0, 140))} placeholder="e.g. Licensed & insured · TACLA00000C" className={inputClass} />
-              {!prefs.white_label && <p className="mt-1 text-[12px] text-slate-500">&quot;Powered by BrightPro&quot; shows on free plans. Paid plans can remove it (white label).</p>}
+              <p className="mb-2 font-semibold text-[#0b1f3a]">{t("footer")}</p>
+              <input value={footer} onChange={(e) => setFooter(e.target.value.slice(0, 140))} placeholder={t("footerPh")} className={inputClass} />
+              {!prefs.white_label && <p className="mt-1 text-[12px] text-slate-500">{t("powered")}</p>}
             </div>
             <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-5">
-              <button type="button" onClick={save} disabled={busy} className={btnPrimary}>{busy ? "Saving..." : "Save"}</button>
-              <Link prefetch={false} href="/dashboard/settings/pdf-templates" className="text-sm font-medium text-[#2563eb] hover:underline">Choose a PDF template →</Link>
-              {msg && <p className={`text-sm ${msg.startsWith("Saved") ? "text-[#0f766e]" : "text-red-600"}`}>{msg}</p>}
+              <button type="button" onClick={save} disabled={busy} className={btnPrimary}>{busy ? t("saving") : t("save")}</button>
+              <Link prefetch={false} href="/dashboard/settings/pdf-templates" className="text-sm font-medium text-[#2563eb] hover:underline">{t("choose")} →</Link>
+              {msg && <p className={`text-sm ${ok ? "text-[#0f766e]" : "text-red-600"}`}>{msg}</p>}
             </div>
           </div>
           <div className="h-fit rounded-2xl border border-slate-200 bg-white p-5">
-            <p className="mb-3 text-[12px] font-semibold uppercase tracking-wide text-slate-500">Preview</p>
+            <p className="mb-3 text-[12px] font-semibold uppercase tracking-wide text-slate-500">{t("preview")}</p>
             <div className="rounded-lg border border-slate-200 p-4">
               <div className="flex items-start justify-between gap-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 
 type Entry = { label: string; href?: string };
 type Card = { title: string; icon: string; tone: string; items: Entry[] };
@@ -56,10 +57,12 @@ const SECTIONS: Section[] = [
 ];
 
 export default function SettingsHub({ companyName }: { companyName: string }) {
+  const t = useTranslations("settingsHub");
+  const L = (s: string) => t(`l.${s.replace(/[^A-Za-z0-9]/g, "")}`);
   const [q, setQ] = useState("");
   const term = q.trim().toLowerCase();
   const sections = SECTIONS.map((s) => ({
-    ...s, cards: s.cards.map((c) => ({ ...c, items: c.items.filter((i) => !term || `${c.title} ${i.label}`.toLowerCase().includes(term)) })).filter((c) => c.items.length),
+    ...s, name: L(s.title), cards: s.cards.map((c) => ({ ...c, name: L(c.title), items: c.items.map((i) => ({ ...i, name: L(i.label) })).filter((i) => !term || `${L(c.title)} ${i.name}`.toLowerCase().includes(term)) })).filter((c) => c.items.length),
   })).filter((s) => s.cards.length);
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-[#f6f8f9]">
@@ -68,38 +71,38 @@ export default function SettingsHub({ companyName }: { companyName: string }) {
           <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#e9f7f4] text-[#0f766e]">
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3" /><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" strokeLinecap="round" /></svg>
           </span>
-          <div className="min-w-0"><h1 className="text-xl font-semibold text-[#0b1f3a]">All Settings</h1><p className="text-[13px] text-slate-500">{companyName}</p></div>
+          <div className="min-w-0"><h1 className="text-xl font-semibold text-[#0b1f3a]">{t("title")}</h1><p className="text-[13px] text-slate-500">{companyName}</p></div>
           <div className="order-last flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 focus-within:border-[#0f766e] focus-within:bg-white sm:order-none sm:mx-auto sm:w-80">
             <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search settings" className="w-full bg-transparent py-2.5 text-[15px] focus:outline-none" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("search")} className="w-full bg-transparent py-2.5 text-[15px] focus:outline-none" />
           </div>
           <Link prefetch={false} href="/dashboard" className="ml-auto flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:ml-0">
-            Close Settings<svg viewBox="0 0 20 20" className="h-4 w-4 text-red-500" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
+            {t("close")}<svg viewBox="0 0 20 20" className="h-4 w-4 text-red-500" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
           </Link>
         </div>
       </div>
       <div className="mx-auto max-w-[1240px] space-y-6 px-4 py-6 sm:px-5 sm:py-8">
-        {sections.length === 0 && <p className="py-16 text-center text-slate-500">No settings match “{q}”.</p>}
+        {sections.length === 0 && <p className="py-16 text-center text-slate-500">{t("none", { q })}</p>}
         {sections.map((sec) => (
           <section key={sec.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_3px_rgba(15,40,60,0.04)] sm:p-7">
-            <h2 className="mb-5 text-[18px] font-semibold text-[#0b1f3a]">{sec.title}</h2>
+            <h2 className="mb-5 text-[18px] font-semibold text-[#0b1f3a]">{sec.name}</h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {sec.cards.map((c) => (
                 <div key={c.title} className="rounded-xl border border-slate-100 p-2 transition-shadow hover:shadow-[0_6px_24px_rgba(15,40,60,0.08)]">
                   <div className={`mb-1 flex items-center gap-2.5 rounded-lg px-3 py-2.5 ${c.tone.split(" ")[0]}`}>
                     <svg viewBox="0 0 24 24" className={`h-[18px] w-[18px] ${c.tone.split(" ")[1]}`} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={c.icon} /></svg>
-                    <p className="font-semibold text-[#0b1f3a]">{c.title}</p>
+                    <p className="font-semibold text-[#0b1f3a]">{c.name}</p>
                   </div>
                   <ul>
                     {c.items.map((i) => (
                       <li key={i.label}>
                         {i.href ? (
                           <Link prefetch={false} href={i.href} className="group flex items-center justify-between rounded-lg px-3 py-2 text-[15px] text-slate-700 transition-colors hover:bg-[#e9f7f4] hover:text-[#0f766e]">
-                            {i.label}<svg viewBox="0 0 20 20" className="h-4 w-4 -translate-x-1 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100" fill="currentColor"><path d="M7.3 5.3a1 1 0 0 1 1.4 0l4 4a1 1 0 0 1 0 1.4l-4 4a1 1 0 0 1-1.4-1.4L10.6 10 7.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
+                            {i.name}<svg viewBox="0 0 20 20" className="h-4 w-4 -translate-x-1 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100" fill="currentColor"><path d="M7.3 5.3a1 1 0 0 1 1.4 0l4 4a1 1 0 0 1 0 1.4l-4 4a1 1 0 0 1-1.4-1.4L10.6 10 7.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
                           </Link>
                         ) : (
                           <span className="flex items-center justify-between rounded-lg px-3 py-2 text-[15px] text-slate-400">
-                            {i.label}<span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">Soon</span>
+                            {i.name}<span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">{t("soon")}</span>
                           </span>
                         )}
                       </li>

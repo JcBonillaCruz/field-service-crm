@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { useIndustry } from "@/i18n/useIndustry";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -37,6 +38,7 @@ export default function OrganizationList({ companies, currentId, userId, onOpen,
   const t = useTranslations("orgs");
   const tc = useTranslations("common");
   const tr = useTranslations("roles");
+  const ind = useIndustry();
   const router = useRouter();
   const [confirm, setConfirm] = useState<{ id: string; name: string; kind: "delete" | "leave" } | null>(null);
   const [text, setText] = useState("");
@@ -101,7 +103,7 @@ export default function OrganizationList({ companies, currentId, userId, onOpen,
                     <span className="truncate text-sm font-semibold text-slate-800">{c.name}</span>
                     {isCurrent && <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-[#0f766e]" fill="currentColor"><path d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0z" /></svg>}
                   </span>
-                  <span className="block truncate text-xs text-slate-500">{compact ? (c.industry ?? t("business")) : `ID ${c.id.slice(0, 8)}`} · {tr(c.role)}</span>
+                  <span className="block truncate text-xs text-slate-500">{compact ? (c.industry ? ind(c.industry) : t("business")) : `ID ${c.id.slice(0, 8)}`} · {tr(c.role)}</span>
                 </span>
               </button>
               <div className="flex shrink-0 items-center gap-0.5">

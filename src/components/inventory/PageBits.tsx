@@ -1,13 +1,18 @@
+"use client";
+
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
+import { intlTag } from "@/i18n/config";
 import { LOCATION_ICON } from "@/lib/inventory";
 
 // Piezas comunes de las pantallas de Inventory (mismo estilo que la lista de Items)
 export function PageHead({ title, subtitle, children, back }: { title: string; subtitle?: string; children?: React.ReactNode; back?: string }) {
+  const t = useTranslations("invBits");
   return (
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div className="flex min-w-0 items-start gap-2">
         {back && (
-          <Link prefetch={false} href={back} aria-label="Back" className="-ml-2 mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800">
+          <Link prefetch={false} href={back} aria-label={t("back")} className="-ml-2 mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800">
             <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor"><path d="M12.7 4.3a1 1 0 0 1 0 1.4L8.4 10l4.3 4.3a1 1 0 1 1-1.4 1.4l-5-5a1 1 0 0 1 0-1.4l5-5a1 1 0 0 1 1.4 0z" /></svg>
           </Link>
         )}
@@ -22,7 +27,9 @@ export function PageHead({ title, subtitle, children, back }: { title: string; s
 }
 
 const plus = <svg viewBox="0 0 20 20" className="h-5 w-5 transition-transform duration-200 group-hover/n:rotate-90" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11" /></svg>;
-export function NewButton({ href, label = "New" }: { href: string; label?: string }) {
+export function NewButton({ href, label: labelIn }: { href: string; label?: string }) {
+  const t = useTranslations("invBits");
+  const label = labelIn ?? t("new");
   return (
     <Link prefetch={false} href={href} className="group/n inline-flex h-10 items-center gap-1.5 rounded-lg bg-[#0f766e] px-4 text-[15px] font-semibold text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59]">{plus}{label}</Link>
   );
@@ -60,5 +67,10 @@ export function EmptyBox({ title, text, children }: { title: string; text: strin
 
 export const card = "rounded-2xl border border-slate-200 bg-white";
 export const pageWrap = "px-4 pb-24 pt-5 lg:px-8 lg:pb-10 lg:pt-7";
-export const fmtWhen = (iso: string) => new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-export const fmtDay = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+export const fmtWhen = (iso: string, tag = "en-US") => new Date(iso).toLocaleString(tag, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+export const fmtDay = (iso: string, tag = "en-US") => new Date(iso).toLocaleDateString(tag, { month: "short", day: "numeric", year: "numeric" });
+// Las mismas fechas en el idioma de quien lo ve
+export function useFmt() {
+  const tag = intlTag(useLocale());
+  return { fmtWhen: (iso: string) => fmtWhen(iso, tag), fmtDay: (iso: string) => fmtDay(iso, tag), tag };
+}

@@ -16,6 +16,8 @@ import {
   InvCategory, InvItem, InvLocation, InvMovement, InvPhoto, InvStock, MOVE_LABEL, STATUS_META,
   invError, pingAlerts, qtyFmt, statusOf, usd,
 } from "@/lib/inventory";
+import { useTranslations } from "next-intl";
+import { useInvTx } from "@/i18n/useInvTx";
 
 const TABS = ["Overview", "History"];
 
@@ -24,6 +26,10 @@ export default function InventoryItemDetail({ companyId, item, stock, locations,
   barcodes?: { id: string; code: string; label: string | null }[]; buying?: { purchase_unit: string | null; units_per_purchase: number };
   justCreated?: boolean; companyId: string; item: InvItem; stock: InvStock[]; locations: InvLocation[]; categories: InvCategory[]; photos: InvPhoto[];
 }) {
+  const t = useTranslations("invDetail");
+  const tc = useTranslations("common");
+  const ix = useInvTx();
+  const usd = ix.money;
   const router = useRouter();
   const pics = photos;
   const rows = stock;
@@ -40,7 +46,7 @@ export default function InventoryItemDetail({ companyId, item, stock, locations,
   const [version, setVersion] = useState(0);
   const total = rows.reduce((s, r) => s + Number(r.qty), 0);
   const status = statusOf(rows);
-  const meta = STATUS_META[status];
+  const meta = { ...STATUS_META[status], label: ix.status(status) };
   const locName = (id: string | null) => locations.find((l) => l.id === id)?.name ?? "—";
   const qtyAt = (id: string) => Number(rows.find((r) => r.location_id === id)?.qty ?? 0);
   const minAt = (id: string) => Number(rows.find((r) => r.location_id === id)?.min_qty ?? 0);
@@ -62,22 +68,22 @@ export default function InventoryItemDetail({ companyId, item, stock, locations,
 
   async function saveMin(loc: string) {
     const v = Number(minVal || 0);
-    if (Number.isNaN(v) || v < 0) return setMsg("Enter a positive number.");
+    if (Number.isNaN(v) || v < 0) return setMsg(t("ePositive"));
     const { error } = await createClient().rpc("inv_set_min", { p_company: companyId, p_item: item.id, p_location: loc, p_min: v });
-    if (error) return setMsg(invError(error));
+    if (error) return setMsg(ix.err(invError(error)));
     setEditMin(null); setMsg(""); pingAlerts();
-    onChanged("Low stock alert updated", true);
+    onChanged(t("minUpdated"), true);
   }
 
   async function remove() {
     if (!(await confirmDelete({
-      title: `Delete "${item.name}"?`,
-      message: "The product, its stock in every location, its photos and its movement history will be deleted. This can't be undone.",
+      title: t("delQ", { name: item.name }),
+      message: t("delMsg"),
       download: { filename: item.name, data: { item, stock: rows, photos: pics, movements: moves } },
     }))) return;
     const supabase = createClient();
     const { error } = await supabase.from("items").delete().eq("id", item.id);
-    if (error) return setMsg("It couldn't be deleted. It may be used in a quote or invoice — mark it inactive in Finances instead.");
+    if (error) return setMsg(t("eDel"));
     if (pics.length) await supabase.storage.from("item-images").remove(pics.map((p) => p.path));
     await bustCache("catalog");
     router.replace("/dashboard/inventory");
@@ -102,17 +108,17 @@ export default function InventoryItemDetail({ companyId, item, stock, locations,
           <p className="truncate font-mono text-[12.5px] text-slate-400">{item.sku}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <PencilButton href={`/dashboard/inventory/${item.id}/edit`} label="Edit item" />
+          <PencilButton href={`/dashboard/inventory/${item.id}/edit`} label={t("editItem")} />
           <MoreMenu dots actions={[
-            { label: "Edit", href: `/dashboard/inventory/${item.id}/edit`, icon: "M13.5 3.5l3 3L7 16H4v-3z" },
-            { label: "Delete", onClick: remove, danger: true, icon: ICONS.trash },
+            { label: tc("edit"), href: `/dashboard/inventory/${item.id}/edit`, icon: "M13.5 3.5l3 3L7 16H4v-3z" },
+            { label: tc("delete"), onClick: remove, danger: true, icon: ICONS.trash },
           ]} />
           <CloseButton href="/dashboard/inventory" />
         </div>
       </div>
       {msg && <p role="alert" className="mx-5 mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 sm:mx-7">{msg}</p>}
 
-      <Tabs tabs={TABS} active={tab} onChange={setTab} />
+      <Tabs tabs={TABS} active={tab} onChange={setTab} label={(x) => t(`tab.${x}` as never)} />
 
       <div className="flex-1 pb-10" {...swipe}>
         {tab === "Overview" ? (
@@ -130,7 +136,7 @@ export default function InventoryItemDetail({ companyId, item, stock, locations,
               {pics.length > 1 && (
                 <div className="mt-3 flex gap-2">
                   {pics.map((p, i) => (
-                    <button key={p.id} type="button" onClick={() => setMain(i)} aria-label={`Photo ${i + 1}`}
+                    <button key={p.id} type="button" onClick={() => setMain(i)} aria-label={t("photoN", { n: i + 1 })}
                       className={`h-14 w-14 overflow-hidden rounded-lg border-2 transition-all ${i === main ? "border-[#0f766e]" : "border-transparent opacity-70 hover:opacity-100"}`}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={p.url} alt="" className="h-full w-full object-cover" />
@@ -140,9 +146,9 @@ export default function InventoryItemDetail({ companyId, item, stock, locations,
               )}
               <div className="flex flex-wrap items-center gap-2 py-4">
                 <button type="button" onClick={() => { navigator.clipboard?.writeText(item.sku ?? ""); setCopied(true); setTimeout(() => setCopied(false), 1400); }}
-                  title="Copy SKU" className="flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1 font-mono text-[13px] text-slate-600 transition-colors hover:bg-[#e9f7f4] hover:text-[#0f766e]">
+                  title={t("copySku")} className="flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1 font-mono text-[13px] text-slate-600 transition-colors hover:bg-[#e9f7f4] hover:text-[#0f766e]">
                   {item.sku}
-                  <span className="font-sans text-[11px] font-semibold">{copied ? "Copied" : "Copy"}</span>
+                  <span className="font-sans text-[11px] font-semibold">{copied ? t("copied") : t("copy")}</span>
                 </button>
                 {item.category_id && <span className="rounded-lg bg-[#eef6ff] px-2.5 py-1 text-[13px] text-[#2563eb]">{categories.find((c) => c.id === item.category_id)?.name}</span>}
                 <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold ring-1 ${meta.badge}`}><span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />{meta.label}</span>
@@ -152,8 +158,8 @@ export default function InventoryItemDetail({ companyId, item, stock, locations,
             {/* Recién creado: imprimir su etiqueta */}
             {justCreated && item.sku && (
               <div className="mx-5 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#bfe6da] bg-[#f3fbf8] px-4 py-3">
-                <p className="text-[14.5px] text-[#0b3d38]"><b>Item created.</b> Print its barcode labels now?</p>
-                <Link prefetch={false} href={`/dashboard/inventory/labels?items=${item.id}&qty=stock`} className="rounded-lg bg-[#0f766e] px-4 py-2 text-[14px] font-semibold text-white hover:bg-[#0c5f59]">Print labels</Link>
+                <p className="text-[14.5px] text-[#0b3d38]">{t.rich("created", { b: (c) => <b>{c}</b> })}</p>
+                <Link prefetch={false} href={`/dashboard/inventory/labels?items=${item.id}&qty=stock`} className="rounded-lg bg-[#0f766e] px-4 py-2 text-[14px] font-semibold text-white hover:bg-[#0c5f59]">{t("printLabels")}</Link>
               </div>
             )}
 
@@ -167,9 +173,9 @@ export default function InventoryItemDetail({ companyId, item, stock, locations,
                 <div className="h-16 w-16 shrink-0"><QrSvg value={item.sku} className="h-full w-full" /></div>
                 <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:flex-col">
                   <Link prefetch={false} href={`/dashboard/inventory/labels?items=${item.id}`} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0f766e] px-3.5 py-2 text-[14px] font-semibold text-white hover:bg-[#0c5f59]">
-                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M7 8V3h10v5M6 17H4V9h16v8h-2M7 14h10v7H7z" /></svg>Print labels
+                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M7 8V3h10v5M6 17H4V9h16v8h-2M7 14h10v7H7z" /></svg>{t("printLabels")}
                   </Link>
-                  <button type="button" onClick={() => downloadBarcodePng(item.sku as string, item.name)} className="rounded-lg border border-slate-200 px-3.5 py-2 text-[14px] font-medium text-slate-700 hover:border-[#14a39a] hover:text-[#0f766e]">Download image</button>
+                  <button type="button" onClick={() => downloadBarcodePng(item.sku as string, item.name)} className="rounded-lg border border-slate-200 px-3.5 py-2 text-[14px] font-medium text-slate-700 hover:border-[#14a39a] hover:text-[#0f766e]">{t("downloadImg")}</button>
                 </div>
               </div>
             )}
@@ -177,12 +183,12 @@ export default function InventoryItemDetail({ companyId, item, stock, locations,
             {/* Otros códigos del mismo producto (otras marcas, código de la caja) */}
             <ExtraCodes companyId={companyId} itemId={item.id} initial={barcodes} />
             {buying && buying.units_per_purchase > 1 && (
-              <p className="mx-5 mt-3 rounded-xl bg-slate-50 px-4 py-2.5 text-[13.5px] text-slate-600">Bought by <b>{buying.purchase_unit || "box"}</b> of <b>{buying.units_per_purchase}</b> {item.unit ?? "units"} — receiving 1 {buying.purchase_unit || "box"} adds {buying.units_per_purchase} to stock.</p>
+              <p className="mx-5 mt-3 rounded-xl bg-slate-50 px-4 py-2.5 text-[13.5px] text-slate-600">{t.rich("boughtBy", { pu: buying.purchase_unit || t("box"), n: buying.units_per_purchase, unit: item.unit ?? t("units"), b: (c) => <b>{c}</b> })}</p>
             )}
 
             {/* Números */}
             <div className="grid grid-cols-2 gap-3 px-5 py-4 sm:grid-cols-4">
-              {[["On hand", `${qtyFmt(total)} ${item.unit ?? ""}`], ["Value", usd(total * item.cost_price)], ["Unit cost", usd(item.cost_price)], ["Price", usd(item.selling_price)]].map(([k, v]) => (
+              {[[t("onHand"), `${qtyFmt(total)} ${item.unit ?? ""}`], [t("value"), usd(total * item.cost_price)], [t("unitCost"), usd(item.cost_price)], [t("price"), usd(item.selling_price)]].map(([k, v]) => (
                 <div key={k} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
                   <p className="text-[11.5px] font-medium uppercase tracking-wide text-slate-400">{k}</p>
                   <p className="mt-0.5 truncate text-[15px] font-semibold tabular-nums text-[#0b1f3a]">{v}</p>
@@ -191,7 +197,7 @@ export default function InventoryItemDetail({ companyId, item, stock, locations,
             </div>
 
             <div className="flex items-center justify-between gap-3 px-5 pb-2">
-              <p className="text-[15px] font-semibold text-[#0b1f3a]">Stock by location</p>
+              <p className="text-[15px] font-semibold text-[#0b1f3a]">{t("byLocation")}</p>
               <QuickAdjust companyId={companyId} item={item} locations={locations} rows={rows} onDone={onChanged} />
             </div>
             <ul className="mx-5 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white">
@@ -208,17 +214,17 @@ export default function InventoryItemDetail({ companyId, item, stock, locations,
                       <p className="truncate text-[14.5px] font-medium text-slate-800">{l.name}</p>
                       {editMin === l.id ? (
                         <div className="mt-1 flex items-center gap-1.5">
-                          <span className="text-[12.5px] text-slate-500">Alert at</span>
+                          <span className="text-[12.5px] text-slate-500">{t("alertAt")}</span>
                           <input autoFocus value={minVal} inputMode="decimal" onChange={(e) => setMinVal(e.target.value.replace(/[^0-9.]/g, ""))}
                             onKeyDown={(e) => { if (e.key === "Enter") saveMin(l.id); if (e.key === "Escape") setEditMin(null); }}
                             className="h-7 w-16 rounded-md border border-slate-200 px-2 text-[13px] tabular-nums focus:border-[#0f766e] focus:outline-none" />
-                          <button type="button" onClick={() => saveMin(l.id)} className="rounded-md bg-[#0f766e] px-2 py-1 text-[12px] font-semibold text-white hover:bg-[#0c5f59]">Save</button>
-                          <button type="button" onClick={() => setEditMin(null)} className="px-1 text-[12px] text-slate-500 hover:text-slate-700">Cancel</button>
+                          <button type="button" onClick={() => saveMin(l.id)} className="rounded-md bg-[#0f766e] px-2 py-1 text-[12px] font-semibold text-white hover:bg-[#0c5f59]">{tc("save")}</button>
+                          <button type="button" onClick={() => setEditMin(null)} className="px-1 text-[12px] text-slate-500 hover:text-slate-700">{tc("cancel")}</button>
                         </div>
                       ) : (
                         <button type="button" onClick={() => { setEditMin(l.id); setMinVal(m ? String(m) : ""); }}
                           className="group/min mt-0.5 flex items-center gap-1 text-[12.5px] text-slate-500 hover:text-[#0f766e]">
-                          {m > 0 ? `Low stock alert at ${qtyFmt(m)}` : "Set low stock alert"}
+                          {m > 0 ? t("minAt", { n: qtyFmt(m) }) : t("setMin")}
                           <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 transition-transform group-hover/min:-rotate-12 group-hover/min:scale-110" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M13.5 3.5l3 3L7 16H4v-3z" /></svg>
                         </button>
                       )}
@@ -232,7 +238,7 @@ export default function InventoryItemDetail({ companyId, item, stock, locations,
 
             {item.description && (
               <div className="px-5 pt-5">
-                <p className="text-[15px] font-semibold text-[#0b1f3a]">Description</p>
+                <p className="text-[15px] font-semibold text-[#0b1f3a]">{t("desc")}</p>
                 <p className="mt-1 whitespace-pre-line text-[14.5px] text-slate-600">{item.description}</p>
               </div>
             )}
@@ -243,7 +249,7 @@ export default function InventoryItemDetail({ companyId, item, stock, locations,
         {moves === null ? (
           <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-12 animate-pulse rounded-xl bg-slate-100" />)}</div>
         ) : moves.length === 0 ? (
-          <p className="rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">No movements yet.</p>
+          <p className="rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">{t("noMoves")}</p>
         ) : (
           <ol className="relative space-y-1 before:absolute before:bottom-3 before:left-[17px] before:top-3 before:w-px before:bg-slate-200">
             {moves.map((m) => {
@@ -255,12 +261,12 @@ export default function InventoryItemDetail({ companyId, item, stock, locations,
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-[14px] text-slate-800">
-                      <b className="font-semibold">{MOVE_LABEL[m.kind]}</b>{" "}
+                      <b className="font-semibold">{ix.move(m.kind)}</b>{" "}
                       <span className="tabular-nums">{sign(m)}{qtyFmt(Number(m.qty))}</span>
                       <span className="text-slate-500"> · {m.kind === "transfer" || m.kind === "return" ? `${locName(m.from_location)} → ${locName(m.to_location)}` : locName(m.to_location ?? m.from_location)}</span>
                     </p>
                     <p className="truncate text-[12.5px] text-slate-500">
-                      {[m.reason, m.actor_name && `by ${m.actor_name}`, new Date(m.created_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })].filter(Boolean).join(" · ")}
+                      {[ix.reason(m.reason), m.actor_name && t("by", { who: m.actor_name }), ix.dateTime(m.created_at)].filter(Boolean).join(" · ")}
                     </p>
                   </div>
                 </li>

@@ -1,14 +1,15 @@
 "use client";
 
 import { Role } from "@/lib/types";
-import { ROLE_INFO } from "@/lib/team";
+import { useTeamTx } from "@/i18n/useTeamTx";
 
 // Elegir rol: cada tarjeta dice qué puede hacer esa persona
 export default function RoleCards({ value, onChange, roles, disabled }: { value: Role; onChange: (r: Role) => void; roles: Role[]; disabled?: boolean }) {
+  const tx = useTeamTx();
   return (
     <div className="grid max-w-[900px] gap-3 sm:grid-cols-2">
       {roles.map((r) => {
-        const info = ROLE_INFO[r], on = value === r;
+        const info = tx.role(r), on = value === r;
         return (
           <button key={r} type="button" disabled={disabled} onClick={() => onChange(r)} aria-pressed={on}
             className={`group rounded-xl border p-4 text-left transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-60 ${on ? "border-[#0f766e] bg-[#f3fbf8] ring-1 ring-[#0f766e]" : "border-slate-200 bg-white hover:border-[#14a39a] hover:shadow-sm"}`}>

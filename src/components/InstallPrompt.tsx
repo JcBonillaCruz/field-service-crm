@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 // =====================================================================
 // Instalar la app (PWA)
@@ -99,30 +100,32 @@ const AddIcon = () => (
 );
 
 function IosSheet({ browser, onClose }: { browser: Ios["browser"]; onClose: (remember: boolean) => void }) {
+  const t = useTranslations("install");
+  const r = { b: (c: React.ReactNode) => <b>{c}</b>, icon: () => <ShareIcon className="inline h-4 w-4 -translate-y-px text-[#2563eb]" /> };
   const steps: { icon: React.ReactNode; text: React.ReactNode }[] = browser === "chrome"
     ? [
-        { icon: <ShareIcon />, text: <>Tap <b>Share</b> <ShareIcon className="inline h-4 w-4 -translate-y-px text-[#2563eb]" /> next to the address bar (or inside the <b>•••</b> menu).</> },
-        { icon: <AddIcon />, text: <>Scroll and tap <b>Add to Home Screen</b>.</> },
-        { icon: <span className="text-[13px] font-bold">Add</span>, text: <>Tap <b>Add</b>. BrightPro appears on your Home Screen like any app.</> },
+        { icon: <ShareIcon />, text: t.rich("c1", r) },
+        { icon: <AddIcon />, text: t.rich("c2", r) },
+        { icon: <span className="text-[13px] font-bold">{t("add")}</span>, text: t.rich("c3", r) },
       ]
     : [
-        { icon: <ShareIcon />, text: <>Tap <b>Share</b> <ShareIcon className="inline h-4 w-4 -translate-y-px text-[#2563eb]" /> at the bottom of Safari. On newer iPhones, tap <b>•••</b> first, then Share{browser === "other" ? " (or open this page in Safari)" : ""}.</> },
-        { icon: <AddIcon />, text: <>Scroll down and tap <b>Add to Home Screen</b>.</> },
-        { icon: <span className="text-[13px] font-bold">Add</span>, text: <>Tap <b>Add</b> at the top right. Done: open BrightPro from your Home Screen.</> },
+        { icon: <ShareIcon />, text: <>{t.rich("s1", r)}{browser === "other" ? ` ${t("orSafari")}` : ""}.</> },
+        { icon: <AddIcon />, text: t.rich("s2", r) },
+        { icon: <span className="text-[13px] font-bold">{t("add")}</span>, text: t.rich("s3", r) },
       ];
   return (
-    <div className="fixed inset-0 z-[300] flex items-end justify-center lg:hidden" role="dialog" aria-modal="true" aria-label="Install BrightPro">
-      <button type="button" aria-label="Close" onClick={() => onClose(false)} className="absolute inset-0 bg-[#0b1f3a]/40 backdrop-blur-[2px] animate-[bp-splash-in_0.25s_ease-out]" />
+    <div className="fixed inset-0 z-[300] flex items-end justify-center lg:hidden" role="dialog" aria-modal="true" aria-label={t("title")}>
+      <button type="button" aria-label={t("close")} onClick={() => onClose(false)} className="absolute inset-0 bg-[#0b1f3a]/40 backdrop-blur-[2px] animate-[bp-splash-in_0.25s_ease-out]" />
       <div className="relative w-full max-w-md rounded-t-[28px] bg-white px-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-3 shadow-[0_-12px_40px_rgba(11,31,58,0.25)] animate-[bp-sheet_0.35s_cubic-bezier(.2,.8,.2,1)]">
         <span className="mx-auto mb-4 block h-1.5 w-10 rounded-full bg-slate-200" />
         <div className="flex items-center gap-3.5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/apple-touch-icon.png" alt="" className="h-14 w-14 rounded-2xl shadow-[0_6px_18px_rgba(15,40,60,0.18)]" />
           <div className="min-w-0 flex-1">
-            <p className="text-[17px] font-bold text-[#0b1f3a]">Install BrightPro</p>
-            <p className="text-[13px] text-slate-500">Full screen, faster, with alerts on your iPhone.</p>
+            <p className="text-[17px] font-bold text-[#0b1f3a]">{t("title")}</p>
+            <p className="text-[13px] text-slate-500">{t("sub")}</p>
           </div>
-          <button type="button" onClick={() => onClose(true)} aria-label="Close"
+          <button type="button" onClick={() => onClose(true)} aria-label={t("close")}
             className="group flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition-all hover:bg-[#fff1f2] hover:text-[#e11d48] active:scale-90">
             <svg viewBox="0 0 20 20" className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M5 5l10 10M15 5 5 15" /></svg>
           </button>
@@ -138,11 +141,11 @@ function IosSheet({ browser, onClose }: { browser: Ios["browser"]; onClose: (rem
         </ol>
         {browser === "safari" && (
           <div className="pointer-events-none mt-4 flex flex-col items-center text-[#2563eb]">
-            <span className="text-[12px] font-semibold">The Share button is down here</span>
+            <span className="text-[12px] font-semibold">{t("here")}</span>
             <svg viewBox="0 0 24 24" className="mt-0.5 h-6 w-6 animate-bounce" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M6 13l6 6 6-6" /></svg>
           </div>
         )}
-        <button type="button" onClick={() => onClose(true)} className="mt-4 w-full rounded-xl py-2.5 text-[14px] font-semibold text-slate-500 hover:bg-slate-50">Not now</button>
+        <button type="button" onClick={() => onClose(true)} className="mt-4 w-full rounded-xl py-2.5 text-[14px] font-semibold text-slate-500 hover:bg-slate-50">{t("notNow")}</button>
       </div>
     </div>
   );

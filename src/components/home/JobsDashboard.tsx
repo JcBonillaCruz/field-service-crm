@@ -21,7 +21,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { intlTag } from "@/i18n/config";
 import { useJobError } from "@/i18n/useFmt";
 import { useOpsTx } from "@/i18n/useOpsTx";
-import { Member, presenceOf } from "@/lib/team";
+import { Member } from "@/lib/team";
+import { useTeamTx } from "@/i18n/useTeamTx";
 import type { HomeAlert, RevenueData, RevenueRange } from "@/lib/home-dashboard";
 
 // =====================================================================
@@ -148,6 +149,7 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
   canDelete?: boolean;           // dueño y manager: papelera en la lista de trabajos
 }) {
   const D = useDash();
+  const presenceOf = useTeamTx().presence;
   const jobError = useJobError();
   const { PERIODS, LIST_WHEN, STATUS_OPTS, statusOf, PERSON_STATE, JOB_CATS, usd0, usd2, whenText, agoText, fmtTime } = D;
   const [jobs, setJobs] = useState<OpsJob[]>([]);
