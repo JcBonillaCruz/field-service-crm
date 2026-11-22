@@ -6,6 +6,7 @@ import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { initials, softColor } from "@/lib/types";
 import type { CustomerOption } from "@/lib/sales-server";
 import { Chevron } from "@/components/ui/SearchSelect";
+import { useTranslations } from "next-intl";
 
 const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
@@ -21,6 +22,7 @@ export function Initials({ name, seed, size = 28 }: { name: string; seed: string
 
 // Selector de cliente: botón con iniciales + panel con buscador arriba y "+ New Customer" abajo (mint, no azul)
 export default function CustomerSelect({ id, value, customers, onChange }: { id?: string; value: string; customers: CustomerOption[]; onChange: (v: string) => void }) {
+  const t = useTranslations("custSelect");
   const [query, setQuery] = useState("");
   const [hi, setHi] = useState(0);
   const current = customers.find((c) => c.id === value);
@@ -32,10 +34,10 @@ export default function CustomerSelect({ id, value, customers, onChange }: { id?
     <Popover className="relative">
       {({ close }) => (
         <>
-          <PopoverButton id={id} aria-label="Customer"
+          <PopoverButton id={id} aria-label={t("customer")}
             className="group flex w-full items-center gap-2.5 rounded-lg border border-slate-200 bg-slate-50 py-2 pl-2.5 pr-3 text-left text-[15px] transition-colors hover:border-[#14a39a] focus:outline-none data-[open]:border-[#0f766e] data-[open]:bg-white data-[open]:ring-4 data-[open]:ring-[#14a39a]/15">
             {current ? <Initials name={current.display_name} seed={current.id} /> : <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-400"><svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="10" cy="7" r="3" /><path d="M4 17a6 6 0 0 1 12 0" strokeLinecap="round" /></svg></span>}
-            <span className={`min-w-0 flex-1 truncate ${current ? "text-[#0b1f3a]" : "text-slate-400"}`}>{current?.display_name ?? "Select or add a customer"}</span>
+            <span className={`min-w-0 flex-1 truncate ${current ? "text-[#0b1f3a]" : "text-slate-400"}`}>{current?.display_name ?? t("ph")}</span>
             <Chevron />
           </PopoverButton>
           <PopoverPanel anchor="bottom start" transition
@@ -43,7 +45,7 @@ export default function CustomerSelect({ id, value, customers, onChange }: { id?
             <div className="border-b border-slate-100 p-2">
               <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 focus-within:border-[#0f766e] focus-within:bg-white">
                 <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
-                <input autoFocus value={query} placeholder="Search by name, company or email" autoComplete="off"
+                <input autoFocus value={query} placeholder={t("search")} autoComplete="off"
                   onChange={(e) => { setQuery(e.target.value); setHi(0); }}
                   onKeyDown={(e) => {
                     if (e.key === "ArrowDown") { e.preventDefault(); setHi((h) => Math.min(list.length - 1, h + 1)); }
@@ -54,7 +56,7 @@ export default function CustomerSelect({ id, value, customers, onChange }: { id?
               </div>
             </div>
             <div className="max-h-72 overflow-y-auto p-1.5">
-              {list.length === 0 && <div className="px-3 py-4 text-center text-sm text-slate-500">No customers found.</div>}
+              {list.length === 0 && <div className="px-3 py-4 text-center text-sm text-slate-500">{t("none")}</div>}
               {list.map((c, i) => {
                 const on = c.id === value;
                 return (
@@ -72,7 +74,7 @@ export default function CustomerSelect({ id, value, customers, onChange }: { id?
             </div>
             <Link prefetch={false} href="/dashboard/customers/new" target="_blank" className="flex items-center gap-2 border-t border-slate-100 px-4 py-3 text-sm font-medium text-[#0f766e] hover:bg-[#f3fbf8]">
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#0f766e] text-white"><svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M10 5v10M5 10h10" /></svg></span>
-              New Customer
+              {t("new")}
             </Link>
           </PopoverPanel>
         </>

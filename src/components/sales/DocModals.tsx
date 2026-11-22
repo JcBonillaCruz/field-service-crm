@@ -13,6 +13,8 @@ import { inputClass } from "@/components/customers/ui";
 import DatePicker from "@/components/ui/DatePicker";
 import SelectMenu from "@/components/ui/SelectMenu";
 import { I, Ico, Modal, SlideOver, btnGhost, btnPrimary } from "@/components/sales/SalesBits";
+import { useTranslations } from "next-intl";
+import { useSalesTx } from "@/i18n/useSalesTx";
 
 const Label = ({ children, req }: { children: React.ReactNode; req?: boolean }) => (
   <label className={`mb-1.5 block text-sm font-medium ${req ? "text-red-600" : "text-slate-700"}`}>{children}{req && "*"}</label>
@@ -39,7 +41,7 @@ function Chips({ value, onChange, placeholder }: { value: string[]; onChange: (v
       {value.map((e) => (
         <span key={e} className={`flex max-w-full items-center gap-1.5 rounded-md px-2 py-1 text-sm ${/^\S+@\S+\.\S+$/.test(e) ? "bg-[#e9f7f4] text-[#0b1f3a]" : "bg-red-50 text-red-600"}`}>
           <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-semibold uppercase text-[#0f766e]">{e[0]}</span><span className="min-w-0 truncate">{e}</span>
-          <button type="button" onClick={() => onChange(value.filter((x) => x !== e))} aria-label={`Remove ${e}`} className="text-slate-400 hover:text-red-600">×</button>
+          <button type="button" onClick={() => onChange(value.filter((x) => x !== e))} aria-label={`× ${e}`} className="text-slate-400 hover:text-red-600">×</button>
         </span>
       ))}
       <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={value.length ? "" : placeholder}
@@ -58,6 +60,7 @@ export function pickFor(kind: "quote" | "invoice", list: Contact[]) {
   return hit.length ? hit.map((c) => c.value) : null;
 }
 function ContactPills({ title, list, selected, onToggle, kind, multi = true }: { title: string; list: Contact[]; selected: string[]; onToggle: (v: string) => void; kind?: "quote" | "invoice"; multi?: boolean }) {
+  const t = useTranslations("docModals");
   if (list.length < 1) return null;
   return (
     <div className="mt-2 animate-[bp-fade_0.25s_ease-out]">
@@ -76,7 +79,7 @@ function ContactPills({ title, list, selected, onToggle, kind, multi = true }: {
                     ? <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M10 5v10M5 10h10" /></svg>
                     : <span className="h-2.5 w-2.5 rounded-full border-2 border-current" />)}
               </span>
-              <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide ${rec ? "bg-[#fff3e8] text-[#c2410c]" : "bg-slate-100 text-slate-500"}`}>{c.label || (c.is_primary ? "Main" : "Other")}</span>
+              <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide ${rec ? "bg-[#fff3e8] text-[#c2410c]" : "bg-slate-100 text-slate-500"}`}>{c.label || (c.is_primary ? t("main") : t("other"))}</span>
               <span className="min-w-0 truncate">{c.value}</span>
             </button>
           );
@@ -89,6 +92,9 @@ function ContactPills({ title, list, selected, onToggle, kind, multi = true }: {
 export function SendEmailModal({ open, onClose, doc, companyName, actor, reminder = false, files = [], whiteLabel = false }: {
   open: boolean; onClose: () => void; doc: SalesDoc; companyName: string; actor: string; reminder?: boolean; files?: SalesFile[]; whiteLabel?: boolean;
 }) {
+  const t = useTranslations("docModals");
+  const tc = useTranslations("common");
+  const sx = useSalesTx();
   const router = useRouter();
   const noun = doc.kind === "quote" ? "Quote" : "Invoice";
   const [to, setTo] = useState<string[]>([]);
@@ -162,20 +168,20 @@ export function SendEmailModal({ open, onClose, doc, companyName, actor, reminde
     setBody(body.slice(0, a) + mark + sel + mark + body.slice(b));
   }
   async function send() {
-    if (!to.length) return setError("Add at least one email address.");
-    if ([...to, ...cc, ...bcc].some((e) => !/^\S+@\S+\.\S+$/.test(e))) return setError("One of the email addresses isn't valid.");
+    if (!to.length) return setError(t("eTo"));
+    if ([...to, ...cc, ...bcc].some((e) => !/^\S+@\S+\.\S+$/.test(e))) return setError(t("eEmail"));
     setBusy(true); setError(""); setFallback(false);
     let extra: { filename: string; content: string }[] | undefined;
     if (withReport && job) {
       const r = await getReport();
-      if (!r) { setBusy(false); return setError("The service report couldn't be created. Uncheck it to send only the invoice, or try again."); }
-      try { extra = [await serviceReportAttachment(r)]; } catch { setBusy(false); return setError("The service report couldn't be created. Uncheck it to send only the invoice, or try again."); }
+      if (!r) { setBusy(false); return setError(t("eReport")); }
+      try { extra = [await serviceReportAttachment(r)]; } catch { setBusy(false); return setError(t("eReport")); }
     }
     const res = await fetch("/api/sales/send", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: doc.id, to, cc, bcc, subject, body, attachPdf, fileIds, reminder, extra }) });
     const j = await res.json().catch(() => ({}));
     setBusy(false);
-    if (!res.ok) { setError(j.error || "The email couldn't be sent."); if (j.code === "not_configured") setFallback(true); return; }
+    if (!res.ok) { setError(j.error || t("eSend")); if (j.code === "not_configured") setFallback(true); return; }
     router.refresh(); onClose();
   }
   async function openMailApp() {
@@ -189,63 +195,63 @@ export function SendEmailModal({ open, onClose, doc, companyName, actor, reminde
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={reminder ? "Send Payment Reminder" : `Email To ${doc.customer_name}`} width="max-w-3xl"
+    <Modal open={open} onClose={onClose} title={reminder ? t("reminderTitle") : t("emailTo", { name: doc.customer_name })} width="max-w-3xl"
       footer={<>
-        <button type="button" onClick={send} disabled={busy} className={btnPrimary}>{busy ? "Sending..." : "Send"}</button>
-        <button type="button" onClick={onClose} className={btnGhost}>Cancel</button>
-        {fallback && <button type="button" onClick={openMailApp} className="text-sm font-medium text-[#2563eb] hover:underline">Open in my email app instead</button>}
+        <button type="button" onClick={send} disabled={busy} className={btnPrimary}>{busy ? t("sending") : t("send")}</button>
+        <button type="button" onClick={onClose} className={btnGhost}>{tc("cancel")}</button>
+        {fallback && <button type="button" onClick={openMailApp} className="text-sm font-medium text-[#2563eb] hover:underline">{t("mailApp")}</button>}
       </>}>
       <div className="overflow-hidden rounded-xl border border-slate-200">
         <div className="grid grid-cols-1 gap-1 border-b border-slate-100 px-4 py-2.5 text-[15px] sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:items-center sm:gap-3">
-          <span className="text-slate-500">From</span><span className="truncate text-slate-700">{companyName} <span className="text-slate-400">· replies go to you</span></span>
+          <span className="text-slate-500">{t("from")}</span><span className="truncate text-slate-700">{companyName} <span className="text-slate-400">{t("replies")}</span></span>
         </div>
         <div className="grid grid-cols-1 gap-1 border-b border-slate-100 px-4 py-2.5 sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:items-start sm:gap-3">
-          <span className="text-[13px] font-medium text-slate-500 sm:pt-3 sm:text-[15px] sm:font-normal">Send To</span>
+          <span className="text-[13px] font-medium text-slate-500 sm:pt-3 sm:text-[15px] sm:font-normal">{t("sendTo")}</span>
           <div className="min-w-0">
             <Chips value={to} onChange={setTo} placeholder="name@example.com" />
-            <ContactPills title={`${doc.customer_name}'s emails · tap to add or remove`} list={book} selected={to} kind={doc.kind}
+            <ContactPills title={t("emailsOf", { name: doc.customer_name })} list={book} selected={to} kind={doc.kind}
               onToggle={(v) => setTo((t) => (t.includes(v) ? t.filter((x) => x !== v) : [...t, v]))} />
-            {!showCc && <button type="button" onClick={() => setShowCc(true)} className="mt-1.5 text-[13px] font-medium text-[#0f766e] hover:underline">+ Add Cc / Bcc</button>}
+            {!showCc && <button type="button" onClick={() => setShowCc(true)} className="mt-1.5 text-[13px] font-medium text-[#0f766e] hover:underline">{t("addCc")}</button>}
           </div>
         </div>
         {showCc && <>
-          <div className="grid grid-cols-1 gap-1 border-b border-slate-100 px-4 py-2.5 sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:items-start sm:gap-3"><span className="text-[13px] font-medium text-slate-500 sm:pt-3 sm:text-[15px] sm:font-normal">Cc <span className="font-normal text-slate-400">(copy)</span></span><Chips value={cc} onChange={setCc} placeholder="Copy someone" /></div>
-          <div className="grid grid-cols-1 gap-1 border-b border-slate-100 px-4 py-2.5 sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:items-start sm:gap-3"><span className="text-[13px] font-medium text-slate-500 sm:pt-3 sm:text-[15px] sm:font-normal">Bcc <span className="font-normal text-slate-400">(hidden copy)</span></span><Chips value={bcc} onChange={setBcc} placeholder="Hidden copy" /></div>
+          <div className="grid grid-cols-1 gap-1 border-b border-slate-100 px-4 py-2.5 sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:items-start sm:gap-3"><span className="text-[13px] font-medium text-slate-500 sm:pt-3 sm:text-[15px] sm:font-normal">Cc <span className="font-normal text-slate-400">{t("copy")}</span></span><Chips value={cc} onChange={setCc} placeholder={t("copyPh")} /></div>
+          <div className="grid grid-cols-1 gap-1 border-b border-slate-100 px-4 py-2.5 sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:items-start sm:gap-3"><span className="text-[13px] font-medium text-slate-500 sm:pt-3 sm:text-[15px] sm:font-normal">Bcc <span className="font-normal text-slate-400">{t("hidden")}</span></span><Chips value={bcc} onChange={setBcc} placeholder={t("hiddenPh")} /></div>
         </>}
         <div className="grid grid-cols-1 gap-1 border-b border-slate-100 px-4 py-2 sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:items-center sm:gap-3">
-          <span className="text-[13px] font-medium text-slate-500 sm:text-[15px] sm:font-normal">Subject</span>
+          <span className="text-[13px] font-medium text-slate-500 sm:text-[15px] sm:font-normal">{t("subject")}</span>
           <input value={subject} onChange={(e) => setSubject(e.target.value)} className="w-full bg-transparent py-1.5 text-[15px] text-slate-800 focus:outline-none" />
         </div>
         <div className="flex gap-1 border-b border-slate-100 bg-[#fafbfc] px-3 py-1.5">
           {([["**", "B", "font-bold"], ["*", "I", "italic"], ["__", "U", "underline"]] as const).map(([m, l, c]) => (
             <button key={l} type="button" onClick={() => wrap(m)} className={`h-8 w-8 rounded-md text-sm text-slate-600 hover:bg-white hover:text-[#0f766e] ${c}`}>{l}</button>
           ))}
-          <span className="ml-auto hidden self-center text-[12px] text-slate-400 sm:block">{"{link}"} becomes a &quot;View {noun}&quot; button</span>
+          <span className="ml-auto hidden self-center text-[12px] text-slate-400 sm:block">{t("linkHint", { kind: doc.kind, link: "{link}" })}</span>
         </div>
         <textarea ref={ref} rows={11} value={body} onChange={(e) => setBody(e.target.value)} className="w-full resize-y px-4 py-3 text-[15px] leading-relaxed text-slate-800 focus:outline-none" />
       </div>
       <label className="mt-3 flex cursor-pointer flex-wrap items-center gap-3 rounded-xl bg-[#eef6ff] px-4 py-3 text-[15px] text-slate-700">
         <input type="checkbox" checked={attachPdf} onChange={(e) => setAttachPdf(e.target.checked)} className="h-4 w-4 accent-[#2563eb]" />
-        Attach {noun} PDF
+        {t("attachPdf", { kind: doc.kind })}
         <span className="ml-auto flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm"><Ico d={I.pdf} className="h-4 w-4 text-red-500" />{doc.number}</span>
       </label>
       {job && (
         <div className="mt-2 flex flex-wrap items-center gap-3 rounded-xl bg-[#e9f7f4] px-4 py-3 text-[15px] text-slate-700">
           <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
             <input type="checkbox" checked={withReport} onChange={(e) => { setWithReport(e.target.checked); if (e.target.checked) getReport(); }} className="mt-1 h-4 w-4 accent-[#0f766e]" />
-            <span className="min-w-0">Include the service report
-              <span className="block text-[12.5px] text-slate-500">{reportBusy ? "Preparing the report…" : report && withReport
-                ? `PDF with the work done${report.hasForm ? ", the readings" : ""} and ${report.photos} photo${report.photos === 1 ? "" : "s"} of job #${job.number}.${report.photosLeftOut ? ` ${report.photosLeftOut} more photo${report.photosLeftOut === 1 ? " is" : "s are"} left out (limit of 12).` : ""} No prices or internal notes.`
-                : `A PDF for the customer with what was done on job #${job.number} and its photos.`}</span>
+            <span className="min-w-0">{t("report")}
+              <span className="block text-[12.5px] text-slate-500">{reportBusy ? t("reportBusy") : report && withReport
+                ? `${t("reportReady", { form: report.hasForm ? "yes" : "no", n: report.photos, job: job.number })}${report.photosLeftOut ? ` ${t("reportLeft", { n: report.photosLeftOut })}` : ""} ${t("reportNoPrices")}`
+                : t("reportHint", { job: job.number })}</span>
             </span>
           </label>
-          <button type="button" disabled={reportBusy} onClick={async () => { if (await getReport()) setPreview(true); }} className="rounded-lg border border-[#0f766e]/30 bg-white px-3 py-1.5 text-sm font-semibold text-[#0f766e] hover:border-[#0f766e] disabled:opacity-50">Preview</button>
+          <button type="button" disabled={reportBusy} onClick={async () => { if (await getReport()) setPreview(true); }} className="rounded-lg border border-[#0f766e]/30 bg-white px-3 py-1.5 text-sm font-semibold text-[#0f766e] hover:border-[#0f766e] disabled:opacity-50">{t("preview")}</button>
         </div>
       )}
       {preview && report && <PdfViewer doc={report.doc} onClose={() => setPreview(false)} />}
       {files.length > 0 && (
         <div className="mt-2 rounded-xl border border-dashed border-slate-200 px-4 py-3">
-          <p className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-[#2563eb]"><Ico d={I.clip} className="h-4 w-4" />Attachments</p>
+          <p className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-[#2563eb]"><Ico d={I.clip} className="h-4 w-4" />{t("attachments")}</p>
           {files.map((f) => (
             <label key={f.id} className="flex cursor-pointer items-center gap-2.5 py-1 text-sm text-slate-700">
               <input type="checkbox" checked={fileIds.includes(f.id)} onChange={() => setFileIds((l) => (l.includes(f.id) ? l.filter((x) => x !== f.id) : [...l, f.id]))} className="h-4 w-4 accent-[#2563eb]" />{f.name}
@@ -260,6 +266,9 @@ export function SendEmailModal({ open, onClose, doc, companyName, actor, reminde
 
 // ---------- Compartir enlace público ----------
 export function ShareModal({ open, onClose, doc, actor, companyName = "" }: { open: boolean; onClose: () => void; doc: SalesDoc; actor: string; companyName?: string }) {
+  const t = useTranslations("docModals");
+  const tc = useTranslations("common");
+  const sx = useSalesTx();
   const router = useRouter();
   const [token, setToken] = useState(doc.share_token);
   const [phone, setPhone] = useState("");
@@ -303,7 +312,7 @@ export function ShareModal({ open, onClose, doc, actor, companyName = "" }: { op
     setToken(t); setBusy(false); router.refresh();
   }
   async function disable() {
-    if (!(await askConfirm({ title: "Disable this link?", message: "Anyone who has it won't be able to open it anymore.", confirmLabel: "Disable link", tone: "danger" }))) return;
+    if (!(await askConfirm({ title: t("disableQ"), message: t("disableMsg"), confirmLabel: t("disable"), tone: "danger" }))) return;
     await db().from("sales_docs").update({ share_token: null }).eq("id", doc.id);
     setToken(null); router.refresh();
   }
@@ -313,16 +322,16 @@ export function ShareModal({ open, onClose, doc, actor, companyName = "" }: { op
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={`Share ${noun} Link`}>
+    <Modal open={open} onClose={onClose} title={t("shareTitle", { kind: doc.kind })}>
       <div className="space-y-4">
         {/* Por mensaje de texto o WhatsApp */}
         <div className="rounded-xl border border-slate-200 p-4">
-          <p className="mb-2 text-sm font-semibold text-[#0b1f3a]">Send by text or WhatsApp</p>
-          <input type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Customer phone, e.g. (214) 555-0123" className={inputClass} />
-          {phones.length > 1 && <ContactPills title={`${doc.customer_name}'s phones · tap one`} list={phones} selected={[phone]} multi={false} onToggle={setPhone} />}
+          <p className="mb-2 text-sm font-semibold text-[#0b1f3a]">{t("byText")}</p>
+          <input type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t("phonePh")} className={inputClass} />
+          {phones.length > 1 && <ContactPills title={t("phonesOf", { name: doc.customer_name })} list={phones} selected={[phone]} multi={false} onToggle={setPhone} />}
           {/* Solo íconos (profesionales, con animación al pasar el mouse) */}
           <div className="mt-4 flex items-center justify-center gap-5">
-            <button type="button" onClick={() => sendBy("sms")} aria-label="Send by text message" title="Text message"
+            <button type="button" onClick={() => sendBy("sms")} aria-label={t("bySms")} title={t("sms")}
               className="group/sh relative flex h-14 w-14 items-center justify-center rounded-full bg-[#0f766e] text-white shadow-[0_6px_16px_rgba(15,118,110,0.3)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_26px_rgba(15,118,110,0.4)] active:scale-90">
               <span className="absolute inset-0 rounded-full ring-2 ring-[#0f766e]/40 opacity-0 group-hover/sh:animate-[bp-share-ring_1.2s_ease-out_infinite]" />
               <svg viewBox="0 0 24 24" className="h-7 w-7 transition-transform duration-300 group-hover/sh:-rotate-6 group-hover/sh:scale-110" fill="none" aria-hidden="true">
@@ -332,7 +341,7 @@ export function ShareModal({ open, onClose, doc, actor, companyName = "" }: { op
                 <circle cx="15.5" cy="10" r="1.15" fill="#0f766e" className="group-hover/sh:animate-[bp-dot_1s_ease-in-out_0.3s_infinite]" />
               </svg>
             </button>
-            <button type="button" onClick={() => sendBy("whatsapp")} aria-label="Send by WhatsApp" title="WhatsApp"
+            <button type="button" onClick={() => sendBy("whatsapp")} aria-label={t("byWa")} title="WhatsApp"
               className="group/sh relative flex h-14 w-14 items-center justify-center rounded-full bg-[#25d366] text-white shadow-[0_6px_16px_rgba(37,211,102,0.35)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_26px_rgba(37,211,102,0.45)] active:scale-90">
               <span className="absolute inset-0 rounded-full ring-2 ring-[#25d366]/45 opacity-0 group-hover/sh:animate-[bp-share-ring_1.2s_ease-out_infinite]" />
               <svg viewBox="0 0 24 24" className="h-7 w-7 transition-transform duration-300 group-hover/sh:rotate-[8deg] group-hover/sh:scale-110" aria-hidden="true">
@@ -341,7 +350,7 @@ export function ShareModal({ open, onClose, doc, actor, companyName = "" }: { op
               </svg>
             </button>
             {typeof navigator !== "undefined" && "share" in navigator && (
-              <button type="button" onClick={() => sendBy("native")} aria-label="Share with other apps" title="More apps"
+              <button type="button" onClick={() => sendBy("native")} aria-label={t("otherApps")} title={t("moreApps")}
                 className="group/sh relative flex h-14 w-14 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-[#14a39a] hover:text-[#0f766e] hover:shadow-[0_10px_22px_rgba(15,40,60,0.12)] active:scale-90">
                 <svg viewBox="0 0 24 24" className="h-6 w-6 transition-transform duration-300 group-hover/sh:-translate-y-0.5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M12 15V3.5M7.5 8 12 3.5 16.5 8M5 12.5v6A2 2 0 0 0 7 20.5h10a2 2 0 0 0 2-2v-6" />
@@ -350,25 +359,25 @@ export function ShareModal({ open, onClose, doc, actor, companyName = "" }: { op
             )}
           </div>
         </div>
-        <p className="text-[15px] text-slate-600">Anyone with the link can view, print and download this {noun.toLowerCase()}. They can't see anything else in your account.</p>
+        <p className="text-[15px] text-slate-600">{t("anyone", { kind: doc.kind })}</p>
         <div>
-          <Label>Link Expiration Date</Label>
-          <div className="max-w-[220px]"><DatePicker value={expires} onChange={setExpires} minDate={today()} placeholder="Never expires" /></div>
+          <Label>{t("linkExp")}</Label>
+          <div className="max-w-[220px]"><DatePicker value={expires} onChange={setExpires} minDate={today()} placeholder={t("never")} /></div>
         </div>
         {token ? (
           <>
             <div className="flex items-stretch overflow-hidden rounded-lg border border-slate-200">
               <input readOnly value={shareUrl(token)} onFocus={(e) => e.currentTarget.select()} className="min-w-0 flex-1 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 focus:outline-none" />
-              <button type="button" onClick={copy} className="shrink-0 border-l border-slate-200 bg-white px-4 text-sm font-medium text-[#0f766e] hover:bg-[#e9f7f4]">{copied ? "Copied!" : "Copy Link"}</button>
+              <button type="button" onClick={copy} className="shrink-0 border-l border-slate-200 bg-white px-4 text-sm font-medium text-[#0f766e] hover:bg-[#e9f7f4]">{copied ? t("copied") : t("copyLink")}</button>
             </div>
             <div className="flex flex-wrap gap-3">
-              <button type="button" onClick={generate} disabled={busy} className={btnGhost}>Update expiration</button>
-              <a href={shareUrl(token)} target="_blank" rel="noreferrer" className={btnGhost}>Open link</a>
-              <button type="button" onClick={disable} className="text-sm font-medium text-red-600 hover:underline">Disable link</button>
+              <button type="button" onClick={generate} disabled={busy} className={btnGhost}>{t("updateExp")}</button>
+              <a href={shareUrl(token)} target="_blank" rel="noreferrer" className={btnGhost}>{t("openLink")}</a>
+              <button type="button" onClick={disable} className="text-sm font-medium text-red-600 hover:underline">{t("disable")}</button>
             </div>
           </>
         ) : (
-          <button type="button" onClick={generate} disabled={busy} className={btnPrimary}>{busy ? "Generating..." : "Generate Link"}</button>
+          <button type="button" onClick={generate} disabled={busy} className={btnPrimary}>{busy ? t("generating") : t("generate")}</button>
         )}
       </div>
     </Modal>
@@ -379,6 +388,9 @@ export function ShareModal({ open, onClose, doc, actor, companyName = "" }: { op
 export function PaymentModal({ open, onClose, doc, actor, mode, onDone }: {
   open: boolean; onClose: () => void; doc: SalesDoc; actor: string; mode: "payment" | "write_off"; onDone: () => void;
 }) {
+  const t = useTranslations("docModals");
+  const tc = useTranslations("common");
+  const sx = useSalesTx();
   const bal = balanceOf(doc);
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(today());
@@ -391,14 +403,14 @@ export function PaymentModal({ open, onClose, doc, actor, mode, onDone }: {
 
   async function save() {
     const a = round2(Number(amount.replace(/[^0-9.]/g, "")));
-    if (!a || a <= 0) return setError("Enter the amount.");
-    if (a > bal + 0.001) return setError(`The amount can't be more than the balance due (${money(bal)}).`);
+    if (!a || a <= 0) return setError(t("eAmount"));
+    if (a > bal + 0.001) return setError(t("eTooMuch", { amount: sx.money(bal) }));
     setBusy(true); setError("");
     const { error: e } = await db().from("sales_payments").insert({
       company_id: doc.company_id, invoice_id: doc.id, kind: mode, amount: a, paid_on: date, mode: mode === "payment" ? pm : null,
       reference: ref.trim() || null, notes: notes.trim() || null, created_by_name: actor,
     });
-    if (e) { setBusy(false); return setError("It couldn't be saved. Did you run the SQL for Paso 3.30?"); }
+    if (e) { setBusy(false); return setError(t("eSave")); }
     const { refreshInvoicePaid } = await import("@/lib/sales-client");
     await refreshInvoicePaid(doc);
     await logActivity(doc.company_id, "invoice", doc.id, mode === "payment" ? `Payment of ${money(a)} recorded (${pm})` : `${money(a)} written off`, actor, notes.trim() || undefined);
@@ -406,25 +418,25 @@ export function PaymentModal({ open, onClose, doc, actor, mode, onDone }: {
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={mode === "payment" ? `Payment for ${doc.number}` : `Write Off ${doc.number}`}
+    <Modal open={open} onClose={onClose} title={mode === "payment" ? t("payFor", { n: doc.number }) : t("writeOffN", { n: doc.number })}
       footer={<>
-        <button type="button" onClick={save} disabled={busy} className={btnPrimary}>{busy ? "Saving..." : mode === "payment" ? "Record Payment" : "Write Off"}</button>
-        <button type="button" onClick={onClose} className={btnGhost}>Cancel</button>
+        <button type="button" onClick={save} disabled={busy} className={btnPrimary}>{busy ? tc("saving") : mode === "payment" ? t("record") : t("writeOff")}</button>
+        <button type="button" onClick={onClose} className={btnGhost}>{tc("cancel")}</button>
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       </>}>
       <div className="space-y-4">
-        <p className="rounded-lg bg-[#f6fbfa] px-4 py-3 text-sm text-slate-600">Balance due: <b className="text-[#0b1f3a]">{money(bal)}</b> · {doc.customer_name}</p>
+        <p className="rounded-lg bg-[#f6fbfa] px-4 py-3 text-sm text-slate-600">{t.rich("balanceDue", { amount: sx.money(bal), b: (c) => <b className="text-[#0b1f3a]">{c}</b> })} · {doc.customer_name}</p>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <Label req>{mode === "payment" ? "Amount Received" : "Amount to Write Off"}</Label>
+            <Label req>{mode === "payment" ? t("received") : t("toWriteOff")}</Label>
             <div className="flex"><span className="flex items-center rounded-l-lg border border-r-0 border-slate-200 bg-slate-100 px-3 text-sm text-slate-600">USD</span>
               <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))} className={`${inputClass} rounded-l-none`} /></div>
           </div>
-          <div><Label req>{mode === "payment" ? "Payment Date" : "Date"}</Label><DatePicker value={date} onChange={setDate} /></div>
-          {mode === "payment" && <div><Label>Payment Mode</Label><SelectMenu value={pm} options={PAYMENT_MODES.map((m) => ({ value: m, label: m }))} onChange={setPm} ariaLabel="Payment mode" /></div>}
-          {mode === "payment" && <div><Label>Reference#</Label><input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Check # or transaction ID" className={inputClass} /></div>}
+          <div><Label req>{mode === "payment" ? t("payDate") : t("date")}</Label><DatePicker value={date} onChange={setDate} /></div>
+          {mode === "payment" && <div><Label>{t("payMode")}</Label><SelectMenu value={pm} options={PAYMENT_MODES.map((m) => ({ value: m, label: sx.pay(m) }))} onChange={setPm} ariaLabel={t("payMode")} /></div>}
+          {mode === "payment" && <div><Label>{t("reference")}</Label><input value={ref} onChange={(e) => setRef(e.target.value)} placeholder={t("refPh")} className={inputClass} /></div>}
         </div>
-        <div><Label>{mode === "payment" ? "Notes" : "Reason"}</Label><textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} /></div>
+        <div><Label>{mode === "payment" ? t("notes") : t("reason")}</Label><textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} /></div>
       </div>
     </Modal>
   );
@@ -432,6 +444,9 @@ export function PaymentModal({ open, onClose, doc, actor, mode, onDone }: {
 
 // ---------- Fecha esperada de pago ----------
 export function ExpectedDateModal({ open, onClose, doc, actor }: { open: boolean; onClose: () => void; doc: SalesDoc; actor: string }) {
+  const t = useTranslations("docModals");
+  const tc = useTranslations("common");
+  const sx = useSalesTx();
   const router = useRouter();
   const [date, setDate] = useState(doc.expected_payment_date ?? "");
   useEffect(() => { if (open) setDate(doc.expected_payment_date ?? ""); }, [open, doc]);
@@ -441,9 +456,9 @@ export function ExpectedDateModal({ open, onClose, doc, actor }: { open: boolean
     router.refresh(); onClose();
   }
   return (
-    <Modal open={open} onClose={onClose} title="Expected Payment Date"
-      footer={<><button type="button" onClick={save} className={btnPrimary}>Save</button><button type="button" onClick={onClose} className={btnGhost}>Cancel</button></>}>
-      <p className="mb-3 text-[15px] text-slate-600">When does the customer plan to pay {doc.number}? It shows on the invoice so your team can follow up.</p>
+    <Modal open={open} onClose={onClose} title={t("expected")}
+      footer={<><button type="button" onClick={save} className={btnPrimary}>{tc("save")}</button><button type="button" onClick={onClose} className={btnGhost}>{tc("cancel")}</button></>}>
+      <p className="mb-3 text-[15px] text-slate-600">{t("expectedText", { n: doc.number })}</p>
       <div className="max-w-[240px]"><DatePicker value={date} onChange={setDate} /></div>
     </Modal>
   );
@@ -462,6 +477,9 @@ function rich(text: string) {
 export function CommentsPanel({ open, onClose, entity, entityId, companyId, comments, actor }: {
   open: boolean; onClose: () => void; entity: string; entityId: string; companyId: string; comments: Comment[]; actor: string;
 }) {
+  const t = useTranslations("docModals");
+  const tc = useTranslations("common");
+  const sx = useSalesTx();
   const router = useRouter();
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -484,7 +502,7 @@ export function CommentsPanel({ open, onClose, entity, entityId, companyId, comm
     router.refresh();
   }
   return (
-    <SlideOver open={open} onClose={onClose} title="Comments">
+    <SlideOver open={open} onClose={onClose} title={t("comments")}>
       <div className="p-5">
         <div className="overflow-hidden rounded-xl border border-slate-200 focus-within:border-[#0f766e]">
           <div className="flex gap-1 border-b border-slate-100 bg-[#fafbfc] px-2 py-1.5">
@@ -492,18 +510,18 @@ export function CommentsPanel({ open, onClose, entity, entityId, companyId, comm
               <button key={l} type="button" onClick={() => wrap(m)} className={`h-8 w-8 rounded-md text-sm text-slate-600 hover:bg-white hover:text-[#0f766e] ${c}`}>{l}</button>
             ))}
           </div>
-          <textarea ref={ref} rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="Write a comment for your team" className="w-full resize-none px-3 py-2.5 text-[15px] focus:outline-none" />
+          <textarea ref={ref} rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder={t("commentPh")} className="w-full resize-none px-3 py-2.5 text-[15px] focus:outline-none" />
           <div className="border-t border-slate-100 px-3 py-2">
-            <button type="button" onClick={add} disabled={busy || !text.trim()} className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:border-[#14a39a] hover:text-[#0f766e] disabled:opacity-50">Add Comment</button>
+            <button type="button" onClick={add} disabled={busy || !text.trim()} className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:border-[#14a39a] hover:text-[#0f766e] disabled:opacity-50">{t("addComment")}</button>
           </div>
         </div>
-        <p className="mt-6 text-[12px] font-semibold uppercase tracking-wide text-slate-500">All Comments</p>
+        <p className="mt-6 text-[12px] font-semibold uppercase tracking-wide text-slate-500">{t("allComments")}</p>
         <div className="mt-2 border-t border-slate-100">
-          {comments.length === 0 ? <p className="py-6 text-center text-sm text-slate-400">No comments yet.</p> : comments.map((c) => (
+          {comments.length === 0 ? <p className="py-6 text-center text-sm text-slate-400">{t("noComments")}</p> : comments.map((c) => (
             <div key={c.id} className="group/c border-b border-slate-100 py-3">
               <div className="flex items-center justify-between gap-2 text-[13px] text-slate-500">
-                <span><b className="font-medium text-[#0b1f3a]">{c.author_name || "A team member"}</b> · {fmtDT(c.created_at)}</span>
-                <button type="button" onClick={() => remove(c.id)} className="text-xs text-red-500 opacity-0 transition-opacity hover:underline group-hover/c:opacity-100">Delete</button>
+                <span><b className="font-medium text-[#0b1f3a]">{c.author_name || t("someone")}</b> · {sx.fmtDT(c.created_at)}</span>
+                <button type="button" onClick={() => remove(c.id)} className="text-xs text-red-500 opacity-0 transition-opacity hover:underline group-hover/c:opacity-100">{tc("delete")}</button>
               </div>
               <p className="mt-1 whitespace-pre-line text-[15px] text-slate-700">{rich(c.body)}</p>
             </div>
@@ -516,6 +534,7 @@ export function CommentsPanel({ open, onClose, entity, entityId, companyId, comm
 
 // ---------- Archivos adjuntos (máx. 5, 10 MB cada uno) ----------
 export function AttachmentsButton({ entity, entityId, companyId, files }: { entity: string; entityId: string; companyId: string; files: SalesFile[] }) {
+  const t = useTranslations("docModals");
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -525,14 +544,14 @@ export function AttachmentsButton({ entity, entityId, companyId, files }: { enti
     setError("");
     const arr = Array.from(list);
     const max = entity === "invoice" ? 15 : 5;
-    if (files.length + arr.length > max) return setError(`You can upload a maximum of ${max} files.`);
-    if (arr.some((f) => f.size > 10 * 1024 * 1024)) return setError("Each file must be 10 MB or smaller.");
+    if (files.length + arr.length > max) return setError(t("eMaxFiles", { max }));
+    if (arr.some((f) => f.size > 10 * 1024 * 1024)) return setError(t("eFileSize"));
     setBusy(true);
     const supabase = db();
     for (const f of arr) {
       const path = `${companyId}/${entityId}/${Date.now()}-${f.name.replace(/[^\w.\-]+/g, "_")}`;
       const { error: e } = await supabase.storage.from("sales-attachments").upload(path, f);
-      if (e) { setError("A file couldn't be uploaded. Did you run the SQL for Paso 3.30?"); continue; }
+      if (e) { setError(t("eUpload")); continue; }
       await supabase.from("sales_files").insert({ company_id: companyId, entity, entity_id: entityId, name: f.name, path, size: f.size, mime: f.type });
     }
     setBusy(false); router.refresh();
@@ -542,7 +561,7 @@ export function AttachmentsButton({ entity, entityId, companyId, files }: { enti
     if (data?.signedUrl) window.open(data.signedUrl, "_blank");
   }
   async function remove(f: SalesFile) {
-    if (!(await confirmDelete({ title: `Remove "${f.name}"?`, message: "The attached file will be deleted and can't be recovered.", confirmLabel: "Remove" }))) return;
+    if (!(await confirmDelete({ title: t("removeQ", { name: f.name }), message: t("removeMsg"), confirmLabel: t("remove") }))) return;
     const supabase = db();
     await supabase.storage.from("sales-attachments").remove([f.path]);
     await supabase.from("sales_files").delete().eq("id", f.id);
@@ -550,28 +569,28 @@ export function AttachmentsButton({ entity, entityId, companyId, files }: { enti
   }
   return (
     <Popover className="relative">
-      <PopoverButton aria-label="Attachments" title="Attachments"
+      <PopoverButton aria-label={t("attachments")} title={t("attachments")}
         className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-all hover:-translate-y-0.5 hover:border-[#14a39a] hover:text-[#0f766e] data-[open]:border-[#14a39a] data-[open]:text-[#0f766e] focus:outline-none">
         <Ico d={I.clip} className="h-[18px] w-[18px]" />
         {files.length > 0 && <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#0f766e] px-1 text-[10px] font-semibold text-white">{files.length}</span>}
       </PopoverButton>
       <PopoverPanel anchor="bottom end" transition className="z-[80] mt-2 w-80 rounded-xl border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,40,60,0.16)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0">
-        <p className="border-b border-slate-100 px-4 py-3 font-semibold text-[#0b1f3a]">Attachments</p>
-        {files.length === 0 ? <p className="px-4 py-4 text-center text-sm text-slate-500">No Files Attached</p> : (
+        <p className="border-b border-slate-100 px-4 py-3 font-semibold text-[#0b1f3a]">{t("attachments")}</p>
+        {files.length === 0 ? <p className="px-4 py-4 text-center text-sm text-slate-500">{t("noFiles")}</p> : (
           <ul className="max-h-60 overflow-y-auto py-1">
             {files.map((f) => (
               <li key={f.id} className="group/f flex items-center gap-2 px-4 py-2 hover:bg-[#f6fbfa]">
                 <button type="button" onClick={() => open(f)} className="min-w-0 flex-1 truncate text-left text-sm text-[#0f766e] hover:underline">{f.name}</button>
                 <span className="shrink-0 text-xs text-slate-400">{f.size ? `${Math.max(1, Math.round(f.size / 1024))} KB` : ""}</span>
-                <button type="button" onClick={() => remove(f)} aria-label="Remove" className="text-slate-400 opacity-0 hover:text-red-600 group-hover/f:opacity-100"><Ico d={I.trash} /></button>
+                <button type="button" onClick={() => remove(f)} aria-label={t("remove")} className="text-slate-400 opacity-0 hover:text-red-600 group-hover/f:opacity-100"><Ico d={I.trash} /></button>
               </li>
             ))}
           </ul>
         )}
         <div className="p-3">
           <UploadChoices compact disabled={busy} onFiles={upload} />
-          {busy && <p className="mt-2 text-center text-[12px] font-medium text-[#0f766e]">Uploading…</p>}
-          <p className="mt-2 text-[11px] text-slate-400">{entity === "invoice" ? "Up to 15 files, 10MB each. JPG/PNG photos go inside the PDF (4 per page, up to 12)." : "You can upload a maximum of 5 files, 10MB each"}</p>
+          {busy && <p className="mt-2 text-center text-[12px] font-medium text-[#0f766e]">{t("uploading")}</p>}
+          <p className="mt-2 text-[11px] text-slate-400">{entity === "invoice" ? t("filesInvoice") : t("filesQuote")}</p>
           {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
         </div>
       </PopoverPanel>

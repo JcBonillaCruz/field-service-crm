@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   Combobox,
   ComboboxButton,
@@ -45,7 +46,7 @@ export default function SearchSelect({
   value,
   options,
   onChange,
-  placeholder = "Search or choose",
+  placeholder: phIn,
   ariaLabel,
   compact = false,
   panelWidth,
@@ -59,6 +60,8 @@ export default function SearchSelect({
   compact?: boolean;
   panelWidth?: string;
 }) {
+  const tu = useTranslations("ui");
+  const placeholder = phIn ?? tu("searchChoose");
   const [query, setQuery] = useState("");
   const byValue = useMemo(() => new Map(options.map((o) => [o.value, o])), [options]);
 
@@ -95,14 +98,14 @@ export default function SearchSelect({
           onChange={(e) => setQuery(e.target.value)}
           className={`w-full rounded-lg border border-slate-200 bg-slate-50 py-2.5 text-[15px] placeholder:text-slate-400 focus:border-[#0f766e] focus:bg-white focus:outline-none focus:ring-4 focus:ring-[#14a39a]/15 ${compact ? "pl-3 pr-7" : "pl-4 pr-10"}`}
         />
-        <ComboboxButton className={`absolute inset-y-0 right-0 flex items-center text-slate-400 hover:text-slate-600 ${compact ? "px-1.5" : "px-3"}`} aria-label="Show all options">
+        <ComboboxButton className={`absolute inset-y-0 right-0 flex items-center text-slate-400 hover:text-slate-600 ${compact ? "px-1.5" : "px-3"}`} aria-label={tu("showAll")}>
           <Chevron />
         </ComboboxButton>
       </div>
 
       <ComboboxOptions anchor="bottom start" transition
         className={`${panelClass} ${panelWidth ?? "w-[var(--input-width)]"}`}>
-        {filtered.length === 0 && <div className="px-4 py-3 text-sm text-slate-500">No results.</div>}
+        {filtered.length === 0 && <div className="px-4 py-3 text-sm text-slate-500">{tu("noResults")}</div>}
         {filtered.map((o, i) => (
           <div key={`${o.group ?? ""}-${o.value}-${i}`}>
             {o.group && o.group !== filtered[i - 1]?.group && (

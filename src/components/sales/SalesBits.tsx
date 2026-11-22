@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import { Status, TONE_FOLD, TONE_PILL, TONE_RIBBON, Tone } from "@/lib/sales";
+import { useTranslations } from "next-intl";
+import { useSalesTx } from "@/i18n/useSalesTx";
 
 export const I = {
   edit: "M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4zM12 20h9",
@@ -43,7 +45,8 @@ export const Chev = () => (
 );
 
 export function StatusPill({ s, small = false }: { s: Status; small?: boolean }) {
-  return <span className={`inline-flex items-center rounded-full font-semibold uppercase tracking-wide ${TONE_PILL[s.tone]} ${small ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-1 text-[11px]"}`}>{s.label}</span>;
+  const sx = useSalesTx();
+  return <span className={`inline-flex items-center rounded-full font-semibold uppercase tracking-wide ${TONE_PILL[s.tone]} ${small ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-1 text-[11px]"}`}>{sx.status(s)}</span>;
 }
 
 // Cinta diagonal que ENVUELVE la esquina del documento (con los dobleces por detrás, como Zoho)
@@ -69,10 +72,11 @@ export type ToolItem = { label: string; icon?: string; onClick?: () => void; hre
 
 // Botón con menú (Mails ▾, PDF/Print ▾, Record Payment ▾, ⋯)
 export function ToolMenu({ icon, label, items, dots = false, align = "start" }: { icon?: string; label?: string; items: ToolItem[]; dots?: boolean; align?: "start" | "end" }) {
+  const tb = useTranslations("salesBits");
   const list = items.filter((i) => !i.hidden);
   return (
     <Menu>
-      <MenuButton aria-label={label ?? "More"}
+      <MenuButton aria-label={label ?? tb("more")}
         className={`group group/tb flex h-11 shrink-0 items-center gap-2 rounded-xl text-[14px] font-medium text-slate-700 transition-colors hover:bg-[#f3fbf8] hover:text-[#0b3f3b] data-[open]:bg-[#f3fbf8] focus:outline-none ${dots ? "w-11 justify-center" : "px-2.5"}`}>
         {dots ? (
           <span className={tbIcon}><svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor" aria-hidden="true"><circle cx="4.5" cy="10" r="1.6" /><circle cx="10" cy="10" r="1.6" /><circle cx="15.5" cy="10" r="1.6" /></svg></span>
@@ -92,7 +96,7 @@ export function ToolMenu({ icon, label, items, dots = false, align = "start" }: 
                 <button type="button" onClick={a.onClick}
                   className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm data-[disabled]:cursor-not-allowed data-[disabled]:text-slate-300 ${a.danger ? "text-red-600 data-[focus]:bg-red-50" : "text-slate-700 data-[focus]:bg-[#e9f7f4] data-[focus]:text-[#0b1f3a]"}`}>
                   {a.icon && <Ico d={a.icon} />}<span className="flex-1">{a.label}</span>
-                  {a.soon && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">Soon</span>}
+                  {a.soon && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">{tb("soon")}</span>}
                 </button>
               )}
             </MenuItem>
@@ -119,8 +123,9 @@ function useEsc(open: boolean, onClose: () => void, lock = true) {
 }
 
 export function XButton({ onClick, className = "" }: { onClick: () => void; className?: string }) {
+  const tc = useTranslations("common");
   return (
-    <button type="button" onClick={onClick} aria-label="Close" title="Close"
+    <button type="button" onClick={onClick} aria-label={tc("close")} title={tc("close")}
       className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-400 transition-all duration-300 hover:rotate-90 hover:bg-red-50 hover:text-red-600 ${className}`}>
       <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor" aria-hidden="true"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
     </button>
@@ -157,10 +162,11 @@ export function SlideOver({ open, onClose, title, children, width = "max-w-[460p
   open: boolean; onClose: () => void; title?: string; children: React.ReactNode; width?: string; header?: React.ReactNode;
 }) {
   const shown = useEsc(open, onClose);
+  const tc = useTranslations("common");
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[85]">
-      <button type="button" aria-label="Close" onClick={onClose} className={`absolute inset-0 bg-slate-900/30 transition-opacity duration-200 ${shown ? "opacity-100" : "opacity-0"}`} />
+      <button type="button" aria-label={tc("close")} onClick={onClose} className={`absolute inset-0 bg-slate-900/30 transition-opacity duration-200 ${shown ? "opacity-100" : "opacity-0"}`} />
       <aside className={`absolute inset-y-0 right-0 flex w-full ${width} flex-col bg-white shadow-2xl transition-transform duration-300 ease-out ${shown ? "translate-x-0" : "translate-x-full"}`}>
         {header ?? (
           <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
@@ -195,6 +201,8 @@ function actIcon(m: string): [string, string] {
   return ["M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z", "bg-slate-100 text-slate-500"];
 }
 export function ActivityList({ rows }: { rows: { id: string; message: string; detail: string | null; actor_name: string | null; created_at: string }[] }) {
+  const sx = useSalesTx();
+  const tb = useTranslations("salesBits");
   return (
     <ul className="divide-y divide-slate-100">
       {rows.map((a) => {
@@ -202,12 +210,12 @@ export function ActivityList({ rows }: { rows: { id: string; message: string; de
         const when = new Date(a.created_at);
         return (
           <li key={a.id} className="grid grid-cols-[2.25rem_minmax(0,1fr)] gap-3 py-4 sm:grid-cols-[11rem_2.25rem_minmax(0,1fr)] sm:gap-5">
-            <p className="hidden pt-1.5 text-[13px] text-slate-500 sm:block">{when.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} {when.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</p>
+            <p className="hidden pt-1.5 text-[13px] text-slate-500 sm:block">{sx.fmtD(a.created_at)} {when.toLocaleTimeString(sx.tag, { hour: "2-digit", minute: "2-digit" })}</p>
             <span className={`flex h-9 w-9 items-center justify-center rounded-full ${tone}`}><Ico d={d} className="h-[18px] w-[18px]" /></span>
             <div className="min-w-0">
-              <p className="text-[15px] text-[#0b1f3a]">{a.message}</p>
+              <p className="text-[15px] text-[#0b1f3a]">{sx.act(a.message)}</p>
               {a.detail && <p className="text-[13px] text-slate-500">{a.detail}</p>}
-              <p className="text-[13px] text-slate-500">by <b className="font-medium text-slate-700">{a.actor_name || "a team member"}</b><span className="sm:hidden"> · {when.toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span></p>
+              <p className="text-[13px] text-slate-500">{tb.rich("by", { who: a.actor_name || tb("someone"), b: (c) => <b className="font-medium text-slate-700">{c}</b> })}<span className="sm:hidden"> · {when.toLocaleString(sx.locale === "es" ? "es-US" : "en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span></p>
             </div>
           </li>
         );

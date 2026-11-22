@@ -1,6 +1,7 @@
 "use client";
 
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from "@headlessui/react";
+import { useTranslations } from "next-intl";
 import { Check, Chevron, optionClass, panelClass } from "@/components/ui/SearchSelect";
 
 // Selector corto sin buscador (etiquetas, tipos, etc.)
@@ -10,7 +11,7 @@ export default function SelectMenu({
   options,
   onChange,
   ariaLabel,
-  placeholder = "Select…",
+  placeholder: phIn,
 }: {
   id?: string;
   value: string;
@@ -19,6 +20,8 @@ export default function SelectMenu({
   ariaLabel?: string;
   placeholder?: string;
 }) {
+  const tu = useTranslations("ui");
+  const placeholder = phIn ?? tu("select");
   const current = options.find((o) => o.value === value);
   return (
     <Listbox value={value} onChange={onChange}>

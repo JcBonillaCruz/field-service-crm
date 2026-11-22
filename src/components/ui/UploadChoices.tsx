@@ -1,15 +1,17 @@
 "use client";
 
 import { useRef } from "react";
+import { useTranslations } from "next-intl";
 
 // Tres botones grandes: cámara (toma la foto ahí mismo), galería de fotos y documentos (PDF, etc.)
 export default function UploadChoices({ onFiles, disabled, compact = false }: { onFiles: (files: FileList | null) => void; disabled?: boolean; compact?: boolean }) {
+  const tu = useTranslations("ui");
   const cam = useRef<HTMLInputElement>(null), pics = useRef<HTMLInputElement>(null), docs = useRef<HTMLInputElement>(null);
   const pick = (r: React.RefObject<HTMLInputElement>) => r.current?.click();
   const tiles: [string, string, string, React.RefObject<HTMLInputElement>, string][] = [
-    ["Take photo", "Opens the camera", "M4 8h3l2-3h6l2 3h3v11H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", cam, "bg-[#eef8f5] text-[#0f766e]"],
-    ["Photos", "From your gallery", "M4 5h16v14H4zM4 15l4-4 4 4 3-3 5 5M15 9h.01", pics, "bg-[#eef6ff] text-[#2563eb]"],
-    ["Document", "PDF or other file", "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 13h6M9 17h4", docs, "bg-[#fff4ec] text-[#ea580c]"],
+    [tu("takePhoto"), tu("takePhotoSub"), "M4 8h3l2-3h6l2 3h3v11H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", cam, "bg-[#eef8f5] text-[#0f766e]"],
+    [tu("photos"), tu("photosSub"), "M4 5h16v14H4zM4 15l4-4 4 4 3-3 5 5M15 9h.01", pics, "bg-[#eef6ff] text-[#2563eb]"],
+    [tu("document"), tu("documentSub"), "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 13h6M9 17h4", docs, "bg-[#fff4ec] text-[#ea580c]"],
   ];
   const change = (e: React.ChangeEvent<HTMLInputElement>) => { onFiles(e.target.files); e.target.value = ""; };
   return (

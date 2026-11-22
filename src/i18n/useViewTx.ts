@@ -4,6 +4,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { intlTag } from "@/i18n/config";
 import { CouponRow, Item, couponStatus } from "@/lib/catalog";
 import { CatalogModule, FIELDS, Row, ViewDef, displayValue, isSales, rawValue, shortViewName } from "@/lib/catalog-views";
+import { SalesDoc, Subscription, invoiceStatus, quoteStatus, subStatus } from "@/lib/sales";
+import { statusText } from "@/i18n/useSalesTx";
 
 // =====================================================================
 // Paso 6.2b2 — vistas, columnas, filtros y valores de Artículos / Cupones (y la parte común de Ventas)
@@ -13,6 +15,7 @@ const k = (s: string) => (s || "").replace(/[^A-Za-z0-9_]/g, "");
 
 export function useViewTx(m: CatalogModule) {
   const t = useTranslations("views");
+  const ts = useTranslations("salesLib");
   const locale = useLocale();
   const tag = intlTag(locale);
   const or = (key: string, fb: string) => (t.has(key as never) ? t(key as never) : fb);
@@ -43,8 +46,10 @@ export function useViewTx(m: CatalogModule) {
       if (raw == null || raw === "") return "";
       if (isSales(m)) {
         if (key === "amount" || key === "balance") return money(raw as number);
-        if (f?.type === "date") return date(String(raw));
-        return displayValue(m, row, key); // estados de Ventas: Paso 6.2b3
+        if (f?.type === "date") { const v = String(raw); return new Date(v.length === 10 ? `${v}T12:00:00` : v).toLocaleDateString(locale === "es" ? "es-US" : "en-GB", { day: "2-digit", month: "short", year: "numeric" }).replace(".", ""); }
+        if (key === "status") return statusText(ts, m === "subscriptions" ? subStatus(row as Subscription) : m === "quotes" ? quoteStatus(row as SalesDoc) : invoiceStatus(row as SalesDoc));
+        if (f?.choices) { const c = f.choices.find((ch) => ch.value === raw); return c ? choice(c.value, c.label) : String(raw); }
+        return displayValue(m, row, key);
       }
       if (m === "items") {
         const it = row as Item;
