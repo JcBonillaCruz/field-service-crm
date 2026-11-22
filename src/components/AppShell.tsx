@@ -126,60 +126,134 @@ const APP_TITLE: Record<AppId, { label: string; icon: string; color: string }> =
   jobs: { label: "Jobs", icon: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4", color: "#2563eb" },
 };
 
-// Computadora: el ícono de la app de arriba del menú abre "Apps" a la derecha (como en el celular),
-// sin tener que ir hasta los 9 puntos de la barra de arriba.
-function DesktopAppSwitch({ app, role }: { app: AppId; role: Role | null }) {
+// Paso 6.3 — Computadora: las apps viven en el menú izquierdo (como Ascora).
+// Cada app es una fila con su ícono a color; al pasar el mouse (o con el teclado) se abre a la derecha
+// un submenú flotante con todo el menú de esa app. Clic en la fila = ir al inicio de esa app.
+// Reemplaza la cuadrícula de apps y el ícono de 9 puntos de la barra de arriba.
+const APP_ORDER: AppId[] = ["finance", "jobs", "inventory", "qr"];
+const appArt = (id: AppId, size: number) =>
+  id === "finance" ? <FinanceArt size={size} /> : id === "inventory" ? <InventoryArt size={size} /> : id === "jobs" ? <JobsArt size={size} /> : <QrArt size={size} />;
+
+// Menú de una app según el rol (los hijos de un grupo también respetan "roles")
+function navFor(app: AppId, role: Role | null): NavItem[] {
+  const allowed = (i: NavItem) => !i.roles || Boolean(role && i.roles.includes(role));
+  return NAV_BY_APP[app].filter(allowed).map((i) => (i.children ? { ...i, children: i.children.filter(allowed) } : i));
+}
+function activeTest(app: AppId, pathname: string) {
+  const NAV = NAV_BY_APP[app];
+  const excludes = new Map(NAV.filter((n) => n.exclude && n.href).map((n) => [n.href as string, n.exclude as string[]]));
+  return (href?: string) => Boolean(href && (href === "/dashboard" ? pathname === "/dashboard"
+    : pathname.startsWith(href) && !(excludes.get(href) ?? []).some((x) => pathname.startsWith(x))));
+}
+// Inicio de cada app (el técnico va directo a lo suyo)
+const appHome = (id: AppId, role: Role | null) =>
+  role === "technician" ? (id === "inventory" ? "/dashboard/inventory/van" : "/dashboard/jobs/mine")
+    : id === "finance" ? "/dashboard" : id === "jobs" ? "/dashboard/jobs" : id === "inventory" ? "/dashboard/inventory" : "/dashboard/tools/qr";
+
+function SidebarApps({ app, role }: { app: AppId; role: Role | null }) {
   const t = useTranslations("shell");
+  const ta = useTranslations("apps");
   const tn = useTranslations("nav");
-  const tc = useTranslations("common");
-  const [open, setOpen] = useState(false);
+  const pathname = usePathname() || "";
+  const [fly, setFly] = useState<AppId | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
-  const btn = useRef<HTMLButtonElement>(null);
-  const pathname = usePathname();
-  useEffect(() => setOpen(false), [pathname]);
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => setFly(null), [pathname]);
   useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    if (!fly) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFly(null); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open]);
-  const toggle = () => {
-    const r = btn.current?.getBoundingClientRect();
-    const aside = btn.current?.closest("aside")?.getBoundingClientRect();
-    if (r) setPos({ top: Math.max(8, r.top - 6), left: (aside?.right ?? r.right) + 10 });
-    setOpen((o) => !o);
+  }, [fly]);
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  // El técnico solo ve Jobs e Inventory
+  const apps = APP_ORDER.filter((id) => role !== "technician" || id === "inventory" || id === "jobs");
+  const openFor = (id: AppId, el: HTMLElement) => {
+    clearTimeout(timer.current);
+    const r = el.getBoundingClientRect();
+    const aside = el.closest("aside")?.getBoundingClientRect();
+    // Si la fila está muy abajo, el submenú sube para que quepa en la pantalla
+    const top = Math.max(8, Math.min(r.top - 8, window.innerHeight - 440));
+    setPos({ top, left: (aside?.right ?? r.right) + 8 });
+    setFly(id);
   };
-  const art = app === "finance" ? <FinanceArt size={34} /> : app === "inventory" ? <InventoryArt size={34} /> : app === "jobs" ? <JobsArt size={34} /> : <QrArt size={34} />;
+  const closeSoon = () => { clearTimeout(timer.current); timer.current = setTimeout(() => setFly(null), 160); };
+  const keep = () => clearTimeout(timer.current);
+
+  const flyItems = fly ? navFor(fly, role) : [];
+  const isActive = fly ? activeTest(fly, pathname) : () => false;
+  const linkCls = (on: boolean) => `group/fl flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] transition-colors duration-100 ${
+    on ? "bg-[#dcf2ec] font-semibold text-[#0b5e57]" : "text-slate-700 hover:bg-[#eef7f4] hover:text-[#0b1f3a]"}`;
+  const ico = (d: string) => (
+    <svg viewBox="0 0 24 24" className="h-[17px] w-[17px] shrink-0 transition-transform duration-150 group-hover/fl:scale-110" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
+  );
+
   return (
-    <>
-      <button ref={btn} type="button" onClick={toggle} aria-expanded={open} aria-label={`${tn(navKey(APP_TITLE[app].label))} · ${t("switchApp")}`}
-        className={`group/app -ml-1 flex items-center gap-2 rounded-xl py-1 pl-1 pr-2 transition-colors ${open ? "bg-[#d7f1eb]" : "hover:bg-[#d7f1eb]"}`}>
-        <span className="flex transition-transform duration-300 group-hover/app:-rotate-3 group-hover/app:scale-105">{art}</span>
-        <span className="text-[14px] font-semibold text-[#0b1f3a]">{tn(navKey(APP_TITLE[app].label))}</span>
-        <svg viewBox="0 0 24 24" className={`h-4 w-4 text-[#0f766e] transition-transform duration-300 ${open ? "rotate-90" : "group-hover/app:rotate-45"}`} fill="currentColor" aria-hidden="true">
-          {[5, 12, 19].map((cy) => [5, 12, 19].map((cx) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="2" />))}
-        </svg>
-      </button>
-      {open && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[95]" onClick={() => setOpen(false)}>
-          <div onClick={(e) => e.stopPropagation()} style={{ top: pos.top, left: pos.left }}
-            className="fixed w-[34rem] max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_24px_60px_rgba(15,40,60,0.18)] animate-[bp-pop-in_0.18s_ease-out]">
-            <div className="mb-3 flex items-center justify-between px-1">
-              <div>
-                <p className="text-[16px] font-semibold text-[#0b1f3a]">{t("apps")}</p>
-                <p className="text-[12.5px] text-slate-500">{t("chooseApp")}</p>
-              </div>
-              <button type="button" onClick={() => setOpen(false)} aria-label={tc("close")}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
-                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
-              </button>
-            </div>
-            <AppsGrid role={role} layout="wide" onPick={() => setOpen(false)} />
-          </div>
+    <div className="mb-1">
+      <p className="px-2.5 pb-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-slate-400">{t("apps")}</p>
+      <ul className="space-y-0.5">
+        {apps.map((id) => {
+          const on = id === app;
+          const flying = fly === id;
+          return (
+            <li key={id}>
+              <Link prefetch={false} href={appHome(id, role)} aria-haspopup="menu" aria-expanded={flying}
+                onMouseEnter={(e) => openFor(id, e.currentTarget)} onMouseLeave={closeSoon}
+                onFocus={(e) => openFor(id, e.currentTarget)}
+                className={`group/app flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] transition-colors duration-150 ${
+                  on ? "bg-[#dcf2ec] font-semibold text-[#0b5e57]" : flying ? "bg-[#eef7f4] text-[#0b1f3a]" : "text-slate-700 hover:bg-[#eef7f4] hover:text-[#0b1f3a]"}`}>
+                <span className="-my-0.5 flex shrink-0 transition-transform duration-200 group-hover/app:-rotate-3 group-hover/app:scale-110">{appArt(id, 26)}</span>
+                <span className="min-w-0 flex-1 truncate">{ta(`${id}.label`)}</span>
+                <svg viewBox="0 0 20 20" className={`h-3.5 w-3.5 shrink-0 transition-all duration-150 ${flying ? "translate-x-0.5 text-[#0f766e]" : "text-slate-300 group-hover/app:text-slate-500"}`} fill="currentColor" aria-hidden="true">
+                  <path d="M7.3 5.3a1 1 0 0 1 1.4 0l4 4a1 1 0 0 1 0 1.4l-4 4a1 1 0 1 1-1.4-1.4L10.6 10 7.3 6.7a1 1 0 0 1 0-1.4z" />
+                </svg>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+      {fly && typeof document !== "undefined" && createPortal(
+        <div role="menu" onMouseEnter={keep} onMouseLeave={closeSoon} style={{ top: pos.top, left: pos.left, maxHeight: `calc(100vh - ${pos.top + 12}px)` }}
+          className="fixed z-[95] flex w-64 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_20px_50px_rgba(15,40,60,0.16)] animate-[bp-fly-in_0.14s_ease-out]">
+          <Link prefetch={false} href={appHome(fly, role)} onClick={() => setFly(null)}
+            className="group/hd flex items-center gap-3 border-b border-slate-100 px-4 py-3 transition-colors hover:bg-[#f6fbf9]">
+            <span className="flex shrink-0 transition-transform duration-200 group-hover/hd:scale-105">{appArt(fly, 34)}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-semibold text-[#0b1f3a]">{ta(`${fly}.label`)}</span>
+              <span className="block text-[11.5px] leading-snug text-slate-500">{ta(`${fly}.hint`)}</span>
+            </span>
+          </Link>
+          <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">
+            {flyItems.map((item) => item.children ? (
+              item.children.length > 0 && (
+                <li key={item.label} className="pt-1.5">
+                  <p className="flex items-center gap-2 px-2.5 pb-0.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-slate-400">{tn(navKey(item.label))}</p>
+                  <ul className="space-y-0.5">
+                    {item.children.filter((c) => c.href).map((c) => (
+                      <li key={c.label}>
+                        <Link prefetch={false} href={c.href as string} onClick={() => setFly(null)} className={`${linkCls(isActive(c.href))} pl-[2.2rem]`}>
+                          <span className="min-w-0 flex-1 truncate">{tn(navKey(c.label))}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              )
+            ) : item.href ? (
+              <li key={`${item.label}-${item.href}`}>
+                <Link prefetch={false} href={item.href} onClick={() => setFly(null)} className={linkCls(isActive(item.href))}>
+                  {item.art ? <span className="-my-1 flex shrink-0"><DashboardArt size={20} /></span> : ico(item.icon)}
+                  <span className="min-w-0 flex-1 truncate">{tn(navKey(item.label))}</span>
+                </Link>
+              </li>
+            ) : null)}
+          </ul>
         </div>,
         document.body,
       )}
-    </>
+      <div className="mx-2 mb-2 mt-2.5 border-t border-[#dfe7ee]" />
+    </div>
   );
 }
 
@@ -222,9 +296,8 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
 
   const mobile = Boolean(onNavigate); // el menú de hamburguesa (celular)
   const size = mobile ? "text-[15px] py-2.5" : "text-[13px] py-2";
-  const activeCls = mobile
-    ? "bg-[#dff3ee] font-semibold text-[#0f766e]"   // suavecito, como la app de Zoho
-    : "bg-[radial-gradient(120%_140%_at_50%_120%,#2bb3a4_0%,#1a8f84_45%,#167d74_100%)] font-semibold text-white shadow-[0_4px_14px_rgba(15,118,110,0.22)]";
+  // Paso 6.3: seleccionado = franja verde menta muy suave + texto/ícono verde oscuro (sin degradado)
+  const activeCls = "bg-[#dcf2ec] font-semibold text-[#0b5e57]";
 
   const icon = (d: string) => (
     <svg viewBox="0 0 24 24" className={`${mobile ? "h-5 w-5" : "h-[18px] w-[18px]"} shrink-0 group-hover:animate-[bp-nav-pop_0.5s_ease-out_forwards]`} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -248,7 +321,7 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
       <li key={`${item.label}-${item.href ?? item.roles?.join("")}`} className="group relative">
         {item.href ? (
           <Link prefetch={false} href={item.href} onClick={onNavigate}
-            className={`${base} ${active ? activeCls : "text-slate-700 hover:bg-[#d7f1eb] hover:text-[#0b1f3a] active:bg-[#c3eadf]"}`}>
+            className={`${base} ${active ? activeCls : "text-slate-700 hover:bg-[#eef7f4] hover:text-[#0b1f3a] active:bg-[#dcf2ec]"}`}>
             {content}
           </Link>
         ) : (
@@ -258,7 +331,7 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
           <Link prefetch={false} href={item.addHref} onClick={onNavigate} aria-label={addText} title={addText}
             className={`absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md transition-all duration-150 focus:opacity-100 ${
               active
-                ? "bg-white/25 text-white hover:scale-110 hover:bg-white hover:text-[#0f766e] hover:shadow-md"
+                ? "bg-white/80 text-[#0f766e] hover:scale-110 hover:bg-[#0f766e] hover:text-white hover:shadow-md"
                 : "bg-slate-200/80 text-slate-500 hover:scale-110 hover:bg-[#0f766e] hover:text-white hover:shadow-md hover:shadow-[#0f766e]/30 lg:opacity-0 lg:group-hover:opacity-100"
             }`}>
             <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 transition-transform duration-200 hover:rotate-90" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11" /></svg>
@@ -275,14 +348,14 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
       onMouseLeave={() => { leaveTimer.current = setTimeout(() => setOpen(insideGroups()), 700); }}>
       {/* Ícono de la app actual (sencillo, sin borde ni sombreado).
           Celular: al lado, "Apps" abre la pantalla completa para cambiar de app.
-          Computadora: solo el ícono (allá se cambia con los 9 puntos de arriba). */}
-      <div className="mb-2 flex items-center gap-2 px-2">
+          Computadora (paso 6.3): la lista de apps con su submenú flotante. */}
+      <div className={mobile ? "mb-2 flex items-center gap-2 px-2" : ""}>
         {mobile ? (
           <span title={tn(navKey(APP_TITLE[app].label))} aria-label={tn(navKey(APP_TITLE[app].label))} className="flex">
             {app === "finance" ? <FinanceArt size={40} /> : app === "inventory" ? <InventoryArt size={40} /> : app === "jobs" ? <JobsArt size={40} /> : <QrArt size={40} />}
           </span>
         ) : (
-          <DesktopAppSwitch app={app} role={role} />
+          <SidebarApps app={app} role={role} />
         )}
         {mobile && (
           <button type="button" onClick={() => setAppsOpen(true)}
@@ -320,7 +393,7 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
           return (
             <li key={item.label}>
               <button type="button" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [item.label]: !isOpen }))}
-                className={`group flex w-full items-center gap-2.5 rounded-lg px-2.5 text-left ${size} transition-colors hover:bg-[#d7f1eb] ${inside ? "bg-[#e9f7f4] font-semibold text-[#0f766e]" : "text-slate-700 hover:text-[#0b1f3a]"}`}>
+                className={`group flex w-full items-center gap-2.5 rounded-lg px-2.5 text-left ${size} transition-colors hover:bg-[#eef7f4] ${inside ? "font-semibold text-[#0b5e57]" : "text-slate-700 hover:text-[#0b1f3a]"}`}>
                 {caret(isOpen)}
                 {icon(item.icon)}
                 <span className="min-w-0 flex-1 truncate">{tn(navKey(item.label))}</span>

@@ -8,7 +8,6 @@ import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import Avatar from "@/components/Avatar";
 import CompanySwitcher from "@/components/CompanySwitcher";
 import TopSearch from "@/components/TopSearch";
-import AppsMenu from "@/components/AppsMenu";
 import QuickCreate from "@/components/QuickCreate";
 import NotificationsBell from "@/components/NotificationsBell";
 import RecentMenu from "@/components/RecentMenu";
@@ -88,7 +87,7 @@ export default function AppHeader({
               <span className="transition-transform duration-500 group-hover:rotate-90"><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.8 1.2V21a2 2 0 1 1-4 0a1.7 1.7 0 0 0-2.8-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.8H3a2 2 0 1 1 0-4a1.7 1.7 0 0 0 1.2-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.8-1.2V3a2 2 0 1 1 4 0a1.7 1.7 0 0 0 2.8 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-1.2 2.8H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg></span>
             </Link>
 
-            <AppsMenu role={current?.role ?? null} />
+            {/* Paso 6.3: se quitó el ícono de 9 puntos — las apps están en el menú izquierdo */}
             <button type="button" onClick={onOpenProfile} aria-label={t("openProfile")} className="shrink-0 rounded-full">
               <Avatar name={user.fullName || user.email} url={user.avatarUrl} seed={user.id} size={36} />
             </button>
