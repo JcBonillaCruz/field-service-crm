@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import Link from "next/link";
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
@@ -11,18 +12,19 @@ export function readRecent(): Recent[] {
 }
 
 export default function RecentMenu() {
+  const t = useTranslations("recent");
   const [items, setItems] = useState<Recent[]>([]);
   return (
     <Popover className="relative">
-      <PopoverButton aria-label="Recent" onClick={() => setItems(readRecent())}
+      <PopoverButton aria-label={t("aria")} onClick={() => setItems(readRecent())}
         className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus:outline-none data-[open]:bg-[#e9f7f4] data-[open]:text-[#0f766e]">
         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 2.6-6.3M3 4v4h4M12 7v5l3 2" /></svg>
       </PopoverButton>
       <PopoverPanel anchor="bottom start" transition
         className="z-50 mt-2 w-72 origin-top rounded-2xl border border-slate-200 bg-white shadow-[0_16px_50px_rgba(15,40,60,0.18)] transition duration-200 ease-out data-[closed]:scale-95 data-[closed]:opacity-0">
-        <div className="border-b border-slate-100 px-5 py-3"><p className="font-semibold text-[#0b1f3a]">Recently viewed</p></div>
+        <div className="border-b border-slate-100 px-5 py-3"><p className="font-semibold text-[#0b1f3a]">{t("title")}</p></div>
         {items.length === 0 ? (
-          <p className="px-5 py-6 text-center text-sm text-slate-500">Customers you open will appear here.</p>
+          <p className="px-5 py-6 text-center text-sm text-slate-500">{t("empty")}</p>
         ) : (
           <ul className="max-h-80 overflow-y-auto py-1">
             {items.map((r) => (

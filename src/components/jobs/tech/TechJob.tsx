@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+import { useFmt, useJobError } from "@/i18n/useFmt";
 import JobChat from "@/components/jobs/JobChat";
 import JobPhases from "@/components/jobs/JobPhases";
 import JobFiles from "@/components/jobs/JobFiles";
@@ -14,7 +16,7 @@ import { locCheck } from "@/lib/live-map";
 import BarcodeScanner from "@/components/catalog/BarcodeScanner";
 import { inputClass } from "@/components/customers/ui";
 import {
-  HOLD_REASONS, SiteAddress, TechChip, VISIT_LABEL, VisitStatus, addMinutes, addressLine, fmtDayShort, fmtTime, holdLabel, jobError, navLink, usd,
+  HOLD_REASONS, SiteAddress, TechChip, VisitStatus, addMinutes, addressLine, navLink,
 } from "@/lib/jobs";
 import { StatusArt, TechDot } from "@/components/jobs/EventBar";
 import { ETA_DEFAULT } from "@/lib/customer-notice-text";
@@ -44,6 +46,11 @@ async function gps(): Promise<GeolocationPosition | null> {
 
 // Técnico: el trabajo completo con los botones On my way · Start · Pause · Can't finish · Finish
 export default function TechJob({ jobId, companyId, userId }: { jobId: string; companyId: string; userId: string }) {
+  const t = useTranslations("techJob");
+  const ts = useTranslations("status");
+  const tc = useTranslations("common");
+  const fmt = useFmt();
+  const jobErr = useJobError();
   const [d, setD] = useState<Data | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
@@ -61,7 +68,7 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
 
   const load = useCallback(async () => {
     const { data, error: e } = await createClient().rpc("tech_job", { p_job: jobId });
-    if (e) { setError(jobError(e)); return; }
+    if (e) { setError(jobErr(e)); return; }
     setD(data as Data); setError("");
   }, [jobId]);
   useEffect(() => { load(); }, [load]);
@@ -88,9 +95,9 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
     if (!other) return false;
     const name = other.customer_name || other.number;
     const go = await askConfirm({
-      title: "You already have a job going",
-      message: `${other.visit_status === "on_my_way" ? "You're on your way to" : "You're working at"} ${name} (${other.number}). Finish or pause that job before you start another one.`,
-      confirmLabel: "Open that job", cancelLabel: "Stay here",
+      title: t("busyTitle"),
+      message: t(other.visit_status === "on_my_way" ? "busyOnWay" : "busyWorking", { name, number: other.number }),
+      confirmLabel: t("openThatJob"), cancelLabel: t("stayHere"),
     });
     if (go) window.location.assign(`/dashboard/jobs/mine/${other.job_id}`);
     return true;
@@ -100,7 +107,7 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
   async function act(action: "on_my_way" | "start" | "resume" | "pause" | "hold" | "finish", etaMin?: number) {
     if (!visit) return;
     if ((action === "on_my_way" || action === "start" || action === "resume") && (await busyElsewhere())) { setEtaOpen(false); return; }
-    if (action === "finish" && !(await askConfirm({ title: "Finish this job?", message: missing ? `There are still ${missing} required checklist task(s).` : tuneUpPending ? "The Tune-Up form isn't submitted yet. You can still finish and send it after." : "The office gets an alert right away so they can send the invoice.", confirmLabel: "Finish job", tone: "green" }))) return;
+    if (action === "finish" && !(await askConfirm({ title: t("finishQ"), message: missing ? t("finishMissing", { count: missing }) : tuneUpPending ? t("finishTuneUp") : t("finishOffice"), confirmLabel: t("finishJob"), tone: "green" }))) return;
     setBusy(action); setError("");
     const pos = action === "pause" ? null : await gps();
     const { error: e } = await createClient().rpc("tech_action", {
@@ -108,17 +115,17 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
       p_accuracy: pos?.coords.accuracy ?? null, p_reason: action === "hold" ? reason || null : null, p_note: action === "hold" ? holdNote.trim() || null : null,
     });
     setBusy("");
-    if (e) { setError(e.hint || jobError(e)); return; }
+    if (e) { setError(jobErr(e)); return; }
     locCheck(); // Paso 5.9: la oficina ve en el mapa dónde tocó el botón
     // Aviso a la oficina (campana + push): para que el dueño sepa al momento y pueda cobrar antes de que te vayas
     fetch("/api/jobs/tech-event", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ visitId: visit.id, action, etaMin }) })
       .then((r) => r.json()).then((r: { customer?: { ok: boolean } | null; eta?: string | null }) => {
         // Paso 5.8: solo se dice que el cliente fue avisado cuando el correo salió de verdad
-        if (action === "on_my_way" && r?.customer?.ok) flash(`The customer got an email${r.eta ? `: arriving around ${r.eta}` : ""}.`);
+        if (action === "on_my_way" && r?.customer?.ok) flash(r.eta ? t("customerEmailedEta", { eta: r.eta }) : t("customerEmailed"));
       }).catch(() => null);
     if (action === "hold") { setHoldOpen(false); setReason(""); setHoldNote(""); }
     if (action === "on_my_way") setEtaOpen(false);
-    flash({ on_my_way: "On your way. The office can see it.", start: "Job started", resume: "Work resumed", pause: "Paused", hold: "Sent to the office to schedule the next visit", finish: "Job finished. Great work!" }[action]);
+    flash(t(`toast.${action}`));
     load();
   }
   // Regresar a un trabajo que quedó a medias (ya llegó la pieza, etc.)
@@ -129,35 +136,35 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
     const pos = await gps();
     const { error: e } = await createClient().rpc("tech_resume_hold", { p_visit: visit.id, p_lat: pos?.coords.latitude ?? null, p_lng: pos?.coords.longitude ?? null, p_accuracy: pos?.coords.accuracy ?? null });
     setBusy("");
-    if (e) { setError(e.hint || jobError(e)); return; }
+    if (e) { setError(jobErr(e)); return; }
     fetch("/api/jobs/tech-event", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ visitId: visit.id, action: "resume" }) }).catch(() => null);
-    flash("Back on the job. Your time is running again.");
+    flash(t("backOnJob"));
     load();
   }
   async function toggle(c: Check) {
     setD((x) => x && ({ ...x, checklist: x.checklist.map((k) => (k.id === c.id ? { ...k, done: !k.done } : k)) }));
     const { error: e } = await createClient().rpc("tech_check", { p_item: c.id, p_done: !c.done, p_visit: visit?.id ?? null });
-    if (e) { setError(jobError(e)); load(); }
+    if (e) { setError(jobErr(e)); load(); }
   }
   // Quitar un servicio que el colaborador agregó en el sitio (Paso 5.6)
   async function removeLine(l: Line) {
-    if (!(await askConfirm({ title: `Remove ${l.name}?`, message: "It comes off this job and off the draft invoice.", confirmLabel: "Remove", tone: "danger" }))) return;
+    if (!(await askConfirm({ title: t("removeQ", { name: l.name }), message: t("removeBody"), confirmLabel: tc("remove"), tone: "danger" }))) return;
     setBusy(`line-${l.id}`);
     const { error: e } = await createClient().rpc("job_line_remove", { p_line: l.id });
     setBusy("");
-    if (e) return setError(e.hint || jobError(e));
-    flash("Service removed"); setInvKey((k) => k + 1); load();
+    if (e) return setError(jobErr(e));
+    flash(t("serviceRemoved")); setInvKey((k) => k + 1); load();
   }
   async function addNote() {
     if (!note.trim()) return;
     setBusy("note");
     const { error: e } = await createClient().rpc("tech_add_note", { p_job: jobId, p_text: note.trim(), p_visit: visit?.id ?? null });
     setBusy("");
-    if (e) return setError(jobError(e));
+    if (e) return setError(jobErr(e));
     setNote(""); load();
   }
 
-  if (error && !d) return <div className="mx-auto max-w-2xl px-4 py-10"><p className="rounded-xl bg-red-50 px-4 py-3 text-red-700">{error}</p><Link href="/dashboard/jobs/mine" className="mt-4 inline-block font-semibold text-[#0f766e]">← My jobs</Link></div>;
+  if (error && !d) return <div className="mx-auto max-w-2xl px-4 py-10"><p className="rounded-xl bg-red-50 px-4 py-3 text-red-700">{error}</p><Link href="/dashboard/jobs/mine" className="mt-4 inline-block font-semibold text-[#0f766e]">← {t("myJobs")}</Link></div>;
   if (!d) return <div className="mx-auto max-w-2xl space-y-3 px-4 py-6">{[0, 1, 2].map((i) => <div key={i} className="h-24 animate-pulse rounded-2xl bg-slate-100" />)}</div>;
 
   const j = d.job;
@@ -171,29 +178,29 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
   const doneAt = (visit as (Visit & { finished_at?: string | null }) | null)?.finished_at;
   const missing = d.checklist.filter((c) => c.is_required && !c.done).length;
   const notes = d.events.filter((x) => x.kind === "note").reverse();
-  const jobLabel = `${j.customer_name || "Job"} · ${j.number}`;
+  const jobLabel = `${j.customer_name || t("job")} · ${j.number}`;
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 pb-24 pt-3 lg:pt-6">
       <Link prefetch={false} href="/dashboard/jobs/mine" className="inline-flex items-center gap-1 rounded-lg py-1 text-[14px] font-semibold text-[#0f766e]">
-        <Icon d="m15 6-6 6 6 6" className="h-4 w-4" /> My jobs
+        <Icon d="m15 6-6 6 6 6" className="h-4 w-4" /> {t("myJobs")}
       </Link>
 
       <div className="mt-2 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[12.5px] font-semibold text-slate-500">#{j.number}{visit && d.visits.length > 1 ? ` · Visit ${visit.visit_no} of ${d.visits.length}` : ""}</p>
-          <h1 className="truncate text-[22px] font-semibold tracking-tight text-[#0b1f3a]">{j.customer_name || "Job"}</h1>
+          <p className="text-[12.5px] font-semibold text-slate-500">#{j.number}{visit && d.visits.length > 1 ? ` · ${t("visitOf", { n: visit.visit_no, total: d.visits.length })}` : ""}</p>
+          <h1 className="truncate text-[22px] font-semibold tracking-tight text-[#0b1f3a]">{j.customer_name || t("job")}</h1>
           <p className="text-[14px] text-slate-600">{[d.type?.name, j.title].filter(Boolean).join(" · ")}</p>
         </div>
-        <span className="mt-1 shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[12px] font-semibold text-slate-700">{VISIT_LABEL[st]}</span>
+        <span className="mt-1 shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[12px] font-semibold text-slate-700">{ts(st)}</span>
       </div>
 
       {error && <p className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-[14px] text-red-700">{error}</p>}
       {st === "completed" && (
         <div className="mt-3 flex items-center gap-3 rounded-2xl border border-[#bbf7d0] bg-[#f0fdf4] px-4 py-3">
           <StatusArt s="completed" size={36} />
-          <div><p className="text-[15px] font-semibold text-[#15803d]">Completed</p>
-            <p className="text-[13px] text-slate-600">{doneAt ? `Finished ${new Date(doneAt).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}. ` : ""}This job is closed and can&apos;t be changed.</p></div>
+          <div><p className="text-[15px] font-semibold text-[#15803d]">{ts("completed")}</p>
+            <p className="text-[13px] text-slate-600">{doneAt ? `${t("finishedAt", { when: new Date(doneAt).toLocaleString(fmt.tag, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) })} ` : ""}{t("closed")}</p></div>
         </div>
       )}
 
@@ -201,16 +208,16 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
       <div className={`${card} mt-4 divide-y divide-slate-100`}>
         {s && e && (
           <div className="flex gap-3 px-4 py-3"><span className="text-slate-400"><Icon d="M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" /></span>
-            <div><p className="font-semibold text-[#0b1f3a]">{fmtDayShort(s)} · {fmtTime(s)} – {fmtTime(e)}</p>
-              {visit && visit.arrival_window_min > 0 && <p className="text-[13px] text-slate-500">Customer expects you between {fmtTime(s)} and {fmtTime(addMinutes(s, visit.arrival_window_min))}</p>}</div></div>
+            <div><p className="font-semibold text-[#0b1f3a]">{fmt.dayShort(s)} · {fmt.time(s)} – {fmt.time(e)}</p>
+              {visit && visit.arrival_window_min > 0 && <p className="text-[13px] text-slate-500">{t("expects", { from: fmt.time(s), to: fmt.time(addMinutes(s, visit.arrival_window_min)) })}</p>}</div></div>
         )}
         {addr && (
-          <a href={maps ?? "#"} target="_blank" rel="noreferrer" aria-label="Navigate with Google Maps" className="group flex items-center gap-3 px-4 py-3 active:bg-slate-50">
+          <a href={maps ?? "#"} target="_blank" rel="noreferrer" aria-label={t("navigateAria")} className="group flex items-center gap-3 px-4 py-3 active:bg-slate-50">
             <span className="text-slate-400"><Icon d="M12 21s7-6.2 7-11.5a7 7 0 1 0-14 0C5 14.8 12 21 12 21zM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" /></span>
             <span className="min-w-0 flex-1 text-[14.5px] text-[#0b1f3a]">{addr}</span>
             <span className="flex shrink-0 flex-col items-center transition-transform duration-150 group-hover:scale-105 group-active:scale-95">
               <NavArt size={42} />
-              <span className="mt-0.5 text-[10.5px] font-semibold leading-none text-[#0f766e]">Navigate</span>
+              <span className="mt-0.5 text-[10.5px] font-semibold leading-none text-[#0f766e]">{t("navigate")}</span>
             </span>
           </a>
         )}
@@ -218,29 +225,29 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
           <div className="flex items-center gap-3 px-4 py-3">
             <span className="text-slate-400"><Icon d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2" /></span>
             <span className="flex-1 text-[14.5px] text-[#0b1f3a]">{j.customer_phone}</span>
-            <a href={`sms:${j.customer_phone.replace(/[^\d+]/g, "")}`} className="rounded-lg px-2.5 py-1.5 text-[13px] font-semibold text-[#0f766e] active:bg-[#f3fbf8]">Text</a>
-            <a href={`tel:${j.customer_phone.replace(/[^\d+]/g, "")}`} className="rounded-lg bg-[#e9f7f4] px-2.5 py-1.5 text-[13px] font-semibold text-[#0f766e]">Call</a>
+            <a href={`sms:${j.customer_phone.replace(/[^\d+]/g, "")}`} className="rounded-lg px-2.5 py-1.5 text-[13px] font-semibold text-[#0f766e] active:bg-[#f3fbf8]">{t("text")}</a>
+            <a href={`tel:${j.customer_phone.replace(/[^\d+]/g, "")}`} className="rounded-lg bg-[#e9f7f4] px-2.5 py-1.5 text-[13px] font-semibold text-[#0f766e]">{tc("call")}</a>
           </div>
         )}
         {visit && visit.techs.length > 1 && (
-          <div className="flex flex-wrap items-center gap-2 px-4 py-3 text-[13.5px] text-slate-600">With: {visit.techs.filter((t) => t.user_id !== userId).map((t) => <span key={t.user_id} className="flex items-center gap-1.5"><TechDot t={t} size={20} ring={false} />{t.name}</span>)}</div>
+          <div className="flex flex-wrap items-center gap-2 px-4 py-3 text-[13.5px] text-slate-600">{t("with")} {visit.techs.filter((t) => t.user_id !== userId).map((t) => <span key={t.user_id} className="flex items-center gap-1.5"><TechDot t={t} size={20} ring={false} />{t.name}</span>)}</div>
         )}
       </div>
 
       {j.tech_notes && (
         <div className="mt-3 rounded-2xl border border-[#fde3b4] bg-[#fffaf0] px-4 py-3">
-          <p className="text-[12.5px] font-semibold text-[#b45309]">Notes from the office</p>
+          <p className="text-[12.5px] font-semibold text-[#b45309]">{t("officeNotes")}</p>
           <p className="mt-0.5 whitespace-pre-line text-[14.5px] text-[#0b1f3a]">{j.tech_notes}</p>
         </div>
       )}
-      {j.description && <div className={`${card} mt-3 px-4 py-3`}><p className="text-[12.5px] font-semibold text-slate-500">Job details</p><p className="mt-0.5 whitespace-pre-line text-[14.5px] text-[#0b1f3a]">{j.description}</p></div>}
+      {j.description && <div className={`${card} mt-3 px-4 py-3`}><p className="text-[12.5px] font-semibold text-slate-500">{t("details")}</p><p className="mt-0.5 whitespace-pre-line text-[14.5px] text-[#0b1f3a]">{j.description}</p></div>}
       {st === "on_hold" && (
         <div className="mt-3 rounded-2xl border border-[#fecdd3] bg-[#fff1f2] px-4 py-3">
-          <p className="text-[14px] font-semibold text-[#be123c]">Left for follow-up: {holdLabel(j.hold_reason)}</p>
-          <p className="mt-0.5 text-[13px] text-[#be123c]/80">The office can schedule the next visit, or if you&apos;re back at the job now (the part arrived), continue it here.</p>
+          <p className="text-[14px] font-semibold text-[#be123c]">{t("leftFollowUp", { reason: t(`hold.${j.hold_reason && HOLD_REASONS.some((r) => r.value === j.hold_reason) ? j.hold_reason : "none"}`) })}</p>
+          <p className="mt-0.5 text-[13px] text-[#be123c]/80">{t("holdBody")}</p>
           <button type="button" onClick={resumeHold} disabled={busy === "back"}
             className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[#0f766e] py-3 text-[15px] font-semibold text-white shadow-[0_8px_20px_rgba(15,118,110,0.25)] active:scale-[0.98] disabled:opacity-60">
-            {busy === "back" ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <Icon d="M8 5v14l11-7z" />}I&apos;m back — continue this job
+            {busy === "back" ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <Icon d="M8 5v14l11-7z" />}{t("imBack")}
           </button>
         </div>
       )}
@@ -251,8 +258,8 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
       {/* Checklist */}
       {d.checklist.length > 0 && (
         <div className={`${card} mt-3 px-4 py-3`}>
-          <div className="flex items-center justify-between"><p className="text-[15px] font-semibold text-[#0b1f3a]">Checklist</p>
-            {missing > 0 ? <span className="text-[12px] font-semibold text-[#be123c]">{missing} required left</span> : <span className="text-[12px] font-semibold text-[#0f766e]">All done</span>}</div>
+          <div className="flex items-center justify-between"><p className="text-[15px] font-semibold text-[#0b1f3a]">{t("checklist")}</p>
+            {missing > 0 ? <span className="text-[12px] font-semibold text-[#be123c]">{t("requiredLeft", { count: missing })}</span> : <span className="text-[12px] font-semibold text-[#0f766e]">{t("allDone")}</span>}</div>
           <div className="mt-2 space-y-1">
             {d.checklist.map((c) => (
               <button key={c.id} type="button" onClick={() => !readOnly && toggle(c)} disabled={readOnly} className="flex w-full items-center gap-3 rounded-xl px-1 py-2 text-left active:bg-slate-50 disabled:cursor-default">
@@ -260,7 +267,7 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
                   {c.done && <Icon d="m5 12.5 4.5 4.5L19 7" className="h-4 w-4" />}
                 </span>
                 <span className={`flex-1 text-[15px] ${c.done ? "text-slate-400 line-through" : "text-[#0b1f3a]"}`}>{c.label}</span>
-                {c.is_required && !c.done && <span className="text-[11px] font-semibold text-[#be123c]">Required</span>}
+                {c.is_required && !c.done && <span className="text-[11px] font-semibold text-[#be123c]">{tc("required")}</span>}
               </button>
             ))}
           </div>
@@ -278,15 +285,15 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
       {/* Servicios y piezas */}
       <div className={`${card} mt-3 px-4 py-3`}>
         <div className="flex items-center justify-between">
-          <p className="text-[15px] font-semibold text-[#0b1f3a]">Services &amp; parts</p>
+          <p className="text-[15px] font-semibold text-[#0b1f3a]">{t("servicesParts")}</p>
           {canWork && <span className="flex shrink-0 items-center gap-1.5">
             <button type="button" onClick={() => setServiceOpen(true)} className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[13px] font-semibold text-[#0f766e] active:scale-95">
-              <Icon d="M12 5v14M5 12h14" className="h-4 w-4" />Service</button>
+              <Icon d="M12 5v14M5 12h14" className="h-4 w-4" />{t("service")}</button>
             <button type="button" onClick={() => setPartOpen(true)} className="flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-2.5 py-1.5 text-[13px] font-semibold text-white active:scale-95">
-              <Icon d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 8v8M11 8v8M14 8v8M17 8v8" className="h-4 w-4" />Use a part</button>
+              <Icon d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 8v8M11 8v8M14 8v8M17 8v8" className="h-4 w-4" />{t("usePart")}</button>
           </span>}
         </div>
-        {d.lines.length === 0 ? <p className="mt-2 text-[13.5px] text-slate-500">Nothing yet. Services you add and parts you use from your van show here.</p> : (
+        {d.lines.length === 0 ? <p className="mt-2 text-[13.5px] text-slate-500">{t("noLines")}</p> : (
           <div className="mt-2 divide-y divide-slate-100">
             {d.lines.map((l) => (
               <div key={l.id} className="flex items-center gap-3 py-2">
@@ -294,10 +301,10 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
                   <Icon d={l.kind === "material" ? "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9" : "M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-2.4z"} className="h-4 w-4" />
                 </span>
                 <span className="min-w-0 flex-1"><span className="block truncate text-[14.5px] text-[#0b1f3a]">{l.name}</span>
-                  <span className="text-[12px] text-slate-500">Qty {Number(l.quantity)}{l.unit ? ` ${l.unit}` : ""}{l.source === "scan" ? " · from your van" : ""}</span></span>
-                {d.prices_visible && l.amount != null && <span className="text-[14px] font-semibold text-[#0b1f3a]">{usd(l.amount)}</span>}
+                  <span className="text-[12px] text-slate-500">{t("qty")} {Number(l.quantity)}{l.unit ? ` ${l.unit}` : ""}{l.source === "scan" ? ` · ${t("fromVan")}` : ""}</span></span>
+                {d.prices_visible && l.amount != null && <span className="text-[14px] font-semibold text-[#0b1f3a]">{fmt.usd(l.amount)}</span>}
                 {canWork && l.source === "tech" && (
-                  <button type="button" onClick={() => removeLine(l)} disabled={busy === `line-${l.id}`} aria-label={`Remove ${l.name}`}
+                  <button type="button" onClick={() => removeLine(l)} disabled={busy === `line-${l.id}`} aria-label={t("removeQ", { name: l.name })}
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors active:bg-red-50 active:text-red-600 disabled:opacity-50">
                     <Icon d="M6 7h12M10 7V5h4v2M8 7l.7 12h6.6L16 7M10.5 10.5v5M13.5 10.5v5" className="h-4 w-4" /></button>
                 )}
@@ -312,15 +319,15 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
 
       {/* Notas */}
       <div className={`${card} mt-3 px-4 py-3`}>
-        <p className="text-[15px] font-semibold text-[#0b1f3a]">Notes</p>
+        <p className="text-[15px] font-semibold text-[#0b1f3a]">{tc("notes")}</p>
         {!readOnly && <div className="mt-2 flex gap-2">
-          <input value={note} onChange={(ev) => setNote(ev.target.value)} placeholder="What you found or did" className={inputClass} />
-          <button type="button" onClick={addNote} disabled={busy === "note"} className="shrink-0 rounded-lg border border-slate-200 px-4 text-[14px] font-semibold text-[#0f766e] disabled:opacity-60">Add</button>
+          <input value={note} onChange={(ev) => setNote(ev.target.value)} placeholder={t("notePh")} className={inputClass} />
+          <button type="button" onClick={addNote} disabled={busy === "note"} className="shrink-0 rounded-lg border border-slate-200 px-4 text-[14px] font-semibold text-[#0f766e] disabled:opacity-60">{tc("add")}</button>
         </div>}
-        {readOnly && notes.length === 0 && <p className="mt-1 text-[13.5px] text-slate-400">No notes.</p>}
+        {readOnly && notes.length === 0 && <p className="mt-1 text-[13.5px] text-slate-400">{t("noNotes")}</p>}
         {notes.map((n) => (
           <div key={n.id} className="mt-2 rounded-xl bg-slate-50 px-3 py-2"><p className="text-[14px] text-[#0b1f3a]">{n.detail}</p>
-            <p className="text-[11.5px] text-slate-400">{n.actor_name} · {new Date(n.created_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</p></div>
+            <p className="text-[11.5px] text-slate-400">{n.actor_name} · {fmt.dateTime(new Date(n.created_at))}</p></div>
         ))}
       </div>
 
@@ -328,30 +335,30 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
       {(() => { const hasActions = Boolean(visit) && !["completed", "cancelled", "on_hold", "unscheduled"].includes(st); return (
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur lg:left-64">
           {(st === "in_progress" || st === "paused") && missing > 0 && (
-            <p className="mx-auto mb-2 max-w-2xl text-center text-[12.5px] font-medium text-[#b45309]">{missing} required checklist task{missing === 1 ? "" : "s"} left</p>
+            <p className="mx-auto mb-2 max-w-2xl text-center text-[12.5px] font-medium text-[#b45309]">{t("checklistLeft", { count: missing })}</p>
           )}
           <div className={`mx-auto flex max-w-2xl items-stretch gap-1.5 ${hasActions ? "" : "justify-end"}`}>
             {/* Chat a la izquierda · botones del trabajo a la derecha, del ancho de su texto */}
             {/* Chat del trabajo: dentro de la barra, ya no flota encima del contenido */}
-            <JobChat jobId={jobId} companyId={j.company_id} title={`${j.customer_name || "Job"} · ${j.number}`} placement="bar" showLabel={!hasActions} startOpen={openChat} />
+            <JobChat jobId={jobId} companyId={j.company_id} title={`${j.customer_name || t("job")} · ${j.number}`} placement="bar" showLabel={!hasActions} startOpen={openChat} />
             {hasActions && <span className="flex-1" />}
             {hasActions && st === "scheduled" && <>
-              <Big onClick={openEta} busy={busy === "on_my_way"} tone="violet" icon="M3 12h11V6H3zM14 9h3l3 3v3h-6M7 18a1.6 1.6 0 1 0 0-3.2A1.6 1.6 0 0 0 7 18zM17 18a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2z">On my way</Big>
-              <Big onClick={() => act("start")} busy={busy === "start"} tone="light" icon="M8 5v14l11-7z">Start</Big>
+              <Big onClick={openEta} busy={busy === "on_my_way"} tone="violet" icon="M3 12h11V6H3zM14 9h3l3 3v3h-6M7 18a1.6 1.6 0 1 0 0-3.2A1.6 1.6 0 0 0 7 18zM17 18a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2z">{t("onMyWay")}</Big>
+              <Big onClick={() => act("start")} busy={busy === "start"} tone="light" icon="M8 5v14l11-7z">{t("start")}</Big>
             </>}
             {hasActions && st === "on_my_way" && <>
-              <Small onClick={() => setHoldOpen(true)} disabled={!!busy} danger icon="M12 8v5M12 16.5h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z">Can&apos;t finish</Small>
-              <Big onClick={() => act("start")} busy={busy === "start"} tone="teal" icon="M8 5v14l11-7z">Start job</Big>
+              <Small onClick={() => setHoldOpen(true)} disabled={!!busy} danger icon="M12 8v5M12 16.5h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z">{t("cantFinish")}</Small>
+              <Big onClick={() => act("start")} busy={busy === "start"} tone="teal" icon="M8 5v14l11-7z">{t("startJob")}</Big>
             </>}
             {hasActions && st === "in_progress" && <>
-              <Small onClick={() => act("pause")} disabled={!!busy} icon="M9 6v12M15 6v12">Pause</Small>
-              <Small onClick={() => setHoldOpen(true)} disabled={!!busy} danger icon="M12 8v5M12 16.5h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z">Can&apos;t finish</Small>
-              <Big onClick={() => act("finish")} busy={busy === "finish"} tone="teal" icon="M5 12.5 9.5 17 19 7">Finish</Big>
+              <Small onClick={() => act("pause")} disabled={!!busy} icon="M9 6v12M15 6v12">{t("pause")}</Small>
+              <Small onClick={() => setHoldOpen(true)} disabled={!!busy} danger icon="M12 8v5M12 16.5h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z">{t("cantFinish")}</Small>
+              <Big onClick={() => act("finish")} busy={busy === "finish"} tone="teal" icon="M5 12.5 9.5 17 19 7">{t("finish")}</Big>
             </>}
             {hasActions && st === "paused" && <>
-              <Small onClick={() => setHoldOpen(true)} disabled={!!busy} danger icon="M12 8v5M12 16.5h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z">Can&apos;t finish</Small>
-              <Small onClick={() => act("finish")} disabled={!!busy} icon="M5 12.5 9.5 17 19 7">Finish</Small>
-              <Big onClick={() => act("resume")} busy={busy === "resume"} tone="teal" icon="M8 5v14l11-7z">Resume</Big>
+              <Small onClick={() => setHoldOpen(true)} disabled={!!busy} danger icon="M12 8v5M12 16.5h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z">{t("cantFinish")}</Small>
+              <Small onClick={() => act("finish")} disabled={!!busy} icon="M5 12.5 9.5 17 19 7">{t("finish")}</Small>
+              <Big onClick={() => act("resume")} busy={busy === "resume"} tone="teal" icon="M8 5v14l11-7z">{t("resume")}</Big>
             </>}
           </div>
         </div>
@@ -359,14 +366,14 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
 
       {/* Paso 5.8: "On my way" pregunta en cuánto llega (un toque) para avisarle a la oficina y al cliente */}
       {etaOpen && (
-        <Sheet title="When will you get there?" onClose={() => setEtaOpen(false)}>
-          <p className="text-[13.5px] text-slate-500">Slide to pick the time, counting stops on the way. The office sees it, and the customer too if your company turned it on.</p>
+        <Sheet title={t("etaTitle")} onClose={() => setEtaOpen(false)}>
+          <p className="text-[13.5px] text-slate-500">{t("etaBody")}</p>
           <div className="mt-2"><EtaWheel value={eta} onChange={setEta} /></div>
-          <p className="mt-3 text-center text-[13.5px] text-slate-600">Arriving around <b className="text-[#0b1f3a]">{fmtTime(addMinutes(new Date(), eta))}</b></p>
+          <p className="mt-3 text-center text-[13.5px] text-slate-600">{t.rich("arrivingAround", { time: fmt.time(addMinutes(new Date(), eta)), b: (c) => <b className="text-[#0b1f3a]">{c}</b> })}</p>
           <div className="mt-4 flex justify-end">
             <button type="button" disabled={busy === "on_my_way"} onClick={() => act("on_my_way", eta)}
               className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-[#6d28d9] px-5 text-[14px] font-semibold text-white transition-transform active:scale-[0.98] disabled:opacity-60">
-              {busy === "on_my_way" ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : null}I&apos;m on my way
+              {busy === "on_my_way" ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : null}{t("imOnMyWay")}
             </button>
           </div>
         </Sheet>
@@ -374,16 +381,16 @@ export default function TechJob({ jobId, companyId, userId }: { jobId: string; c
 
       {/* Dejar a medias: motivo + nota */}
       {holdOpen && (
-        <Sheet title="Can't finish today?" onClose={() => setHoldOpen(false)}>
-          <p className="text-[13.5px] text-slate-500">Your time stops and the office gets an alert to schedule the next visit. Everything you did and the parts you used stay on the job.</p>
+        <Sheet title={t("holdTitle")} onClose={() => setHoldOpen(false)}>
+          <p className="text-[13.5px] text-slate-500">{t("holdSheetBody")}</p>
           <div className="mt-3 grid gap-2">
             {HOLD_REASONS.map((r) => (
               <button key={r.value} type="button" onClick={() => setReason(r.value)}
-                className={`rounded-xl border px-4 py-3 text-left text-[15px] font-medium ${reason === r.value ? "border-[#be123c] bg-[#fff1f2] text-[#be123c]" : "border-slate-200 text-[#0b1f3a]"}`}>{r.label}</button>
+                className={`rounded-xl border px-4 py-3 text-left text-[15px] font-medium ${reason === r.value ? "border-[#be123c] bg-[#fff1f2] text-[#be123c]" : "border-slate-200 text-[#0b1f3a]"}`}>{t(`hold.${r.value}`)}</button>
             ))}
           </div>
-          <textarea value={holdNote} onChange={(ev) => setHoldNote(ev.target.value)} rows={3} placeholder={reason === "waiting_part" ? "Which part is needed? (model, size)" : "Note for the office"} className={`${inputClass} mt-3 resize-none`} />
-          <button type="button" onClick={() => act("hold")} disabled={!reason || busy === "hold"} className="mt-3 w-full rounded-xl bg-[#be123c] py-3 text-[15px] font-semibold text-white disabled:opacity-50">{busy === "hold" ? "Sending..." : "Leave for follow-up"}</button>
+          <textarea value={holdNote} onChange={(ev) => setHoldNote(ev.target.value)} rows={3} placeholder={reason === "waiting_part" ? t("whichPart") : t("noteOffice")} className={`${inputClass} mt-3 resize-none`} />
+          <button type="button" onClick={() => act("hold")} disabled={!reason || busy === "hold"} className="mt-3 w-full rounded-xl bg-[#be123c] py-3 text-[15px] font-semibold text-white disabled:opacity-50">{busy === "hold" ? t("sending") : t("leaveFollowUp")}</button>
         </Sheet>
       )}
 
@@ -414,12 +421,13 @@ function Small({ children, onClick, disabled, icon, danger = false }: { children
 }
 
 function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  const tc = useTranslations("common");
   return (
     <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-900/40 sm:items-center" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="max-h-[88dvh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] animate-[bp-sheet_0.22s_ease-out] sm:rounded-3xl">
         <div className="mb-3 flex items-center justify-between">
           <p className="text-[18px] font-semibold text-[#0b1f3a]">{title}</p>
-          <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
+          <button type="button" onClick={onClose} aria-label={tc("close")} className="flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
             <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
           </button>
         </div>
@@ -431,6 +439,9 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
 
 // Usar una pieza: se escanea o se busca en MI van; se descuenta y queda amarrada a este trabajo y su dirección
 function PartPicker({ companyId, visitId, onClose, onDone }: { companyId: string; visitId: string; onClose: () => void; onDone: (msg: string) => void }) {
+  const t = useTranslations("techJob");
+  const tc = useTranslations("common");
+  const jobErr = useJobError();
   const [stock, setStock] = useState<Stock[] | null>(null);
   const [q, setQ] = useState("");
   const [pick, setPick] = useState<Stock | null>(null);
@@ -440,7 +451,7 @@ function PartPicker({ companyId, visitId, onClose, onDone }: { companyId: string
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     createClient().rpc("inv_tech_stock", { p_company: companyId }).then(({ data, error }) => {
-      if (error) { setErr("Your van inventory couldn't be loaded."); setStock([]); return; }
+      if (error) { setErr(t("vanLoadErr")); setStock([]); return; }
       setStock(((data as { stock: Stock[] })?.stock ?? []).map((s) => ({ ...s, qty: Number(s.qty) })).filter((s) => s.qty > 0));
     });
   }, [companyId]);
@@ -448,26 +459,26 @@ function PartPicker({ companyId, visitId, onClose, onDone }: { companyId: string
   function onCode(code: string) {
     setScan(false);
     const hit = (stock ?? []).find((s) => (s.sku ?? "").trim().toLowerCase() === code.trim().toLowerCase());
-    if (hit) { setPick(hit); setErr(""); } else { setQ(code); setErr("That barcode isn't in your van. Search by name or ask the office."); }
+    if (hit) { setPick(hit); setErr(""); } else { setQ(code); setErr(t("barcodeNotInVan")); }
   }
   async function use() {
     if (!pick) return;
     const n = Number(qty);
-    if (!n || n <= 0) return setErr("Enter how many you used.");
-    if (n > pick.qty) return setErr(`You only have ${pick.qty} in your van.`);
+    if (!n || n <= 0) return setErr(t("howManyUsed"));
+    if (n > pick.qty) return setErr(t("onlyHave", { qty: pick.qty }));
     setBusy(true);
     const { error } = await createClient().rpc("tech_use_part", { p_visit: visitId, p_item: pick.item_id, p_qty: n, p_note: null, p_from: pick.location_id });
     setBusy(false);
-    if (error) return setErr(error.hint || jobError(error));
-    onDone(`Used ${n} × ${pick.name}`);
+    if (error) return setErr(jobErr(error));
+    onDone(t("usedPart", { n, name: pick.name }));
   }
   return (
-    <Sheet title={pick ? "How many did you use?" : "Use a part from your van"} onClose={onClose}>
+    <Sheet title={pick ? t("howManyTitle") : t("usePartTitle")} onClose={onClose}>
       {pick ? (
         <>
           <div className="flex items-center gap-3 rounded-xl bg-slate-50 p-3">
             {pick.image_url ? <img src={pick.image_url} alt="" className="h-12 w-12 rounded-lg object-cover" /> : <span className="h-12 w-12 rounded-lg bg-[#fff7e6]" />}
-            <span className="min-w-0"><span className="block truncate text-[15px] font-semibold text-[#0b1f3a]">{pick.name}</span><span className="text-[12.5px] text-slate-500">{pick.qty} in your van{pick.sku ? ` · ${pick.sku}` : ""}</span></span>
+            <span className="min-w-0"><span className="block truncate text-[15px] font-semibold text-[#0b1f3a]">{pick.name}</span><span className="text-[12.5px] text-slate-500">{t("inVan", { qty: pick.qty })}{pick.sku ? ` · ${pick.sku}` : ""}</span></span>
           </div>
           <div className="mt-4 flex items-center justify-center gap-4">
             <button type="button" onClick={() => setQty(String(Math.max(1, Number(qty) - 1)))} className="h-12 w-12 rounded-full border border-slate-200 text-[22px] text-slate-600">−</button>
@@ -475,25 +486,25 @@ function PartPicker({ companyId, visitId, onClose, onDone }: { companyId: string
             <button type="button" onClick={() => setQty(String(Number(qty) + 1))} className="h-12 w-12 rounded-full border border-slate-200 text-[22px] text-slate-600">+</button>
           </div>
           {err && <p className="mt-3 text-[13.5px] text-red-600">{err}</p>}
-          <button type="button" onClick={use} disabled={busy} className="mt-4 w-full rounded-xl bg-[#0f766e] py-3 text-[15px] font-semibold text-white disabled:opacity-60">{busy ? "Saving..." : "Use on this job"}</button>
-          <button type="button" onClick={() => setPick(null)} className="mt-2 w-full py-2 text-[14px] font-medium text-slate-500">Choose another part</button>
+          <button type="button" onClick={use} disabled={busy} className="mt-4 w-full rounded-xl bg-[#0f766e] py-3 text-[15px] font-semibold text-white disabled:opacity-60">{busy ? tc("saving") : t("useOnJob")}</button>
+          <button type="button" onClick={() => setPick(null)} className="mt-2 w-full py-2 text-[14px] font-medium text-slate-500">{t("chooseAnother")}</button>
         </>
       ) : (
         <>
           <div className="flex gap-2">
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search your van" className={inputClass} />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("searchVan")} className={inputClass} />
             <button type="button" onClick={() => setScan(true)} className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[#0f766e] px-3 text-[14px] font-semibold text-white">
-              <Icon d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 8v8M11 8v8M14 8v8M17 8v8" className="h-4 w-4" />Scan
+              <Icon d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 8v8M11 8v8M14 8v8M17 8v8" className="h-4 w-4" />{t("scan")}
             </button>
           </div>
           {err && <p className="mt-2 text-[13.5px] text-red-600">{err}</p>}
           <div className="mt-3 max-h-[50dvh] divide-y divide-slate-100 overflow-y-auto">
-            {stock === null && <p className="py-6 text-center text-[14px] text-slate-400">Loading your van…</p>}
-            {stock && list.length === 0 && <p className="py-6 text-center text-[14px] text-slate-500">{stock.length ? "No parts match." : "Your van is empty or you don't have a van assigned."}</p>}
+            {stock === null && <p className="py-6 text-center text-[14px] text-slate-400">{t("loadingVan")}</p>}
+            {stock && list.length === 0 && <p className="py-6 text-center text-[14px] text-slate-500">{stock.length ? t("noMatch") : t("vanEmpty")}</p>}
             {list.map((sItem) => (
               <button key={`${sItem.item_id}-${sItem.location_id}`} type="button" onClick={() => { setPick(sItem); setQty("1"); setErr(""); }} className="flex w-full items-center gap-3 py-2.5 text-left active:bg-slate-50">
                 {sItem.image_url ? <img src={sItem.image_url} alt="" className="h-10 w-10 rounded-lg object-cover" /> : <span className="h-10 w-10 rounded-lg bg-[#fff7e6]" />}
-                <span className="min-w-0 flex-1"><span className="block truncate text-[15px] text-[#0b1f3a]">{sItem.name}</span><span className="text-[12px] text-slate-500">{sItem.sku ?? "No SKU"}</span></span>
+                <span className="min-w-0 flex-1"><span className="block truncate text-[15px] text-[#0b1f3a]">{sItem.name}</span><span className="text-[12px] text-slate-500">{sItem.sku ?? t("noSku")}</span></span>
                 <span className="text-[13px] font-semibold text-slate-600">{sItem.qty}</span>
               </button>
             ))}

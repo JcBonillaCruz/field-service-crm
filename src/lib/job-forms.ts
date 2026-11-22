@@ -67,14 +67,41 @@ export function mergeRanges(custom: unknown): Ranges {
   }
   return out;
 }
-export const rangeText = (r: Range | undefined, unit = "") => {
+export const rangeText = (r: Range | undefined, unit = "", words?: { orMore: string; orLess: string }) => {
   if (!r) return "";
   const u = unit ? ` ${unit}` : "";
   if (isNum(r.min) && isNum(r.max)) return `${r.min}–${r.max}${u}`;
-  if (isNum(r.min)) return `${r.min}${u} or more`;
-  if (isNum(r.max)) return `${r.max}${u} or less`;
+  if (isNum(r.min)) return `${r.min}${u} ${words?.orMore ?? "or more"}`;
+  if (isNum(r.max)) return `${r.max}${u} ${words?.orLess ?? "or less"}`;
   return "";
 };
+
+// =====================================================================
+// Paso 6.1 — Textos del formulario en el idioma de la persona.
+// Solo cambia lo que se VE (nombres de campos, opciones, avisos en rojo). Las alertas que se guardan
+// para la oficina (p_alerts) siguen en inglés hasta el Paso 6.2.
+// =====================================================================
+export type FormTx = {
+  section: (kind: FormKind, s: Section) => string;
+  label: (kind: FormKind, f: Field) => string;
+  option: (kind: FormKind, f: Field, o: Choice) => string;
+  placeholder: (kind: FormKind, f: Field) => string | undefined;
+  words: { orMore: string; orLess: string };
+  attention: string;
+  outOfRange: (range: string) => string;
+  above: (tag: string, value: string) => string;
+  capOff: (off: string, tol: string) => string;
+  deltaT: string;
+  tempRise: string;
+};
+// Copia de las secciones con los textos traducidos (los "when" y llaves no cambian)
+export function localizeSections<T extends Section>(kind: FormKind, list: T[], tx?: FormTx): T[] {
+  if (!tx) return list;
+  return list.map((s) => ({
+    ...s, title: s.title ? tx.section(kind, s) : s.title,
+    fields: s.fields.map((f) => ({ ...f, label: tx.label(kind, f), placeholder: tx.placeholder(kind, f), options: f.options?.map((o) => ({ ...o, label: tx.option(kind, f, o) })) })),
+  }));
+}
 
 // ---------- Campos ----------
 const cooling = (d: FormData) => d.mode !== "heating";
@@ -192,22 +219,24 @@ export type Review = {
 };
 
 // Revisa el formulario: campos en rojo, alertas para la oficina y lo que falta para enviarlo
-export function reviewForm(kind: FormKind, raw: FormData, ranges: Ranges): Review {
+// tx (Paso 6.1): traduce los avisos en rojo y la lista de lo que falta; las alertas para la oficina quedan en inglés
+export function reviewForm(kind: FormKind, raw: FormData, ranges: Ranges, tx?: FormTx): Review {
   const d = cleanForm(kind, raw); // lo escondido (otro modo) no cuenta
   const bad: Record<string, string> = {}, alerts: string[] = [], missing: string[] = [];
   const sections = visibleSections(kind, d);
   const flag = (key: string, why: string, alert: string) => { bad[key] = why; alerts.push(alert); };
+  const oor = (r: Range | undefined, unit?: string) => (tx ? tx.outOfRange(rangeText(r, unit, tx.words)) : `Out of range · ${rangeText(r, unit)}`);
 
   for (const s of sections) for (const f of s.fields) {
     const v = d[f.key];
-    if (f.required && (v === undefined || v === null || v === "")) missing.push(f.label);
+    if (f.required && (v === undefined || v === null || v === "")) missing.push(tx ? tx.label(kind, f) : f.label);
     if (f.type === "choice") {
       const o = f.options?.find((x) => x.value === v);
-      if (o?.bad) flag(f.key, "Needs attention", `${f.label}: ${o.label}`);
+      if (o?.bad) flag(f.key, tx ? tx.attention : "Needs attention", `${f.label}: ${o.label}`);
     }
     if (f.type === "number" && f.range) {
       const n = num(v), r = ranges[f.range];
-      if (n !== null && outOf(n, r)) flag(f.key, `Out of range · ${rangeText(r, f.unit)}`, `${f.label} ${fmt(n)} ${f.unit ?? ""} (${rangeText(r)})`.replace(/\s+/g, " "));
+      if (n !== null && outOf(n, r)) flag(f.key, oor(r, f.unit), `${f.label} ${fmt(n)} ${f.unit ?? ""} (${rangeText(r)})`.replace(/\s+/g, " "));
     }
   }
   if (kind !== "tune_up") return { bad, alerts, delta: null, missing };
@@ -218,14 +247,14 @@ export function reviewForm(kind: FormKind, raw: FormData, ranges: Ranges): Revie
   if (ret !== null && sup !== null) {
     const heat = d.mode === "heating", value = Math.round((heat ? sup - ret : ret - sup) * 10) / 10;
     const key = heat ? "temp_rise" : "delta_t", r = ranges[key], label = heat ? "Temperature rise" : "Delta T";
-    const why = outOf(value, r) ? `Out of range · ${rangeText(r, "°F")}` : null;
-    delta = { label, value, bad: why };
+    const why = outOf(value, r) ? oor(r, "°F") : null;
+    delta = { label: tx ? (heat ? tx.tempRise : tx.deltaT) : label, value, bad: why };
     if (why) alerts.push(`${label} ${fmt(value)} °F (${rangeText(r)})`);
   }
   // Amperaje contra la etiqueta
   ([["comp_amps", "comp_rla", "Compressor amps", "RLA"], ["fan_amps", "fan_fla", "Condenser fan amps", "FLA"], ["blower_amps", "blower_fla", "Blower amps", "FLA"]] as const).forEach(([a, b, label, tag]) => {
     const x = num(d[a]), y = num(d[b]);
-    if (x !== null && y !== null && y > 0 && x > y) flag(a, `Above the ${tag} (${fmt(y)} A)`, `${label} ${fmt(x)} A (${tag} ${fmt(y)})`);
+    if (x !== null && y !== null && y > 0 && x > y) flag(a, tx ? tx.above(tag, `${fmt(y)} A`) : `Above the ${tag} (${fmt(y)} A)`, `${label} ${fmt(x)} A (${tag} ${fmt(y)})`);
   });
   // Capacitores: lectura contra el valor de la etiqueta
   const tol = isNum(ranges.cap_tolerance?.max) ? (ranges.cap_tolerance!.max as number) : 6;
@@ -233,13 +262,13 @@ export function reviewForm(kind: FormKind, raw: FormData, ranges: Ranges): Revie
     const rated = num(d[a]), actual = num(d[b]);
     if (rated === null || actual === null || rated <= 0) return;
     const off = ((actual - rated) / rated) * 100;
-    if (Math.abs(off) > tol) flag(b, `${off > 0 ? "+" : "−"}${fmt(Math.abs(off))}% from rated · max ±${tol}%`, `${label} ${fmt(actual)} µF (rated ${fmt(rated)}, ${off > 0 ? "+" : "−"}${fmt(Math.abs(off))}%)`);
+    if (Math.abs(off) > tol) flag(b, tx ? tx.capOff(`${off > 0 ? "+" : "−"}${fmt(Math.abs(off))}%`, `±${tol}%`) : `${off > 0 ? "+" : "−"}${fmt(Math.abs(off))}% from rated · max ±${tol}%`, `${label} ${fmt(actual)} µF (rated ${fmt(rated)}, ${off > 0 ? "+" : "−"}${fmt(Math.abs(off))}%)`);
   });
   // Presión de gas según el tipo de gas
   const gp = num(d.gas_pressure);
   if (gp !== null && d.mode === "heating" && d.heat_type === "gas") {
     const r = ranges[d.gas_type === "lp" ? "gas_pressure_lp" : "gas_pressure_nat"];
-    if (outOf(gp, r)) flag("gas_pressure", `Out of range · ${rangeText(r, "in. w.c.")}`, `Gas pressure ${fmt(gp)} in. w.c. (${rangeText(r)})`);
+    if (outOf(gp, r)) flag("gas_pressure", oor(r, "in. w.c."), `Gas pressure ${fmt(gp)} in. w.c. (${rangeText(r)})`);
   }
   return { bad, alerts, delta, missing };
 }
@@ -256,9 +285,9 @@ export function cleanForm(kind: FormKind, d: FormData): FormData {
 }
 
 // Valor listo para mostrar en la ficha de oficina
-export function displayValue(f: Field, v: unknown): string {
+export function displayValue(f: Field, v: unknown, yes = "Yes"): string {
   if (v === undefined || v === null || v === "") return "";
-  if (f.type === "check") return v ? "Yes" : "";
+  if (f.type === "check") return v ? yes : "";
   if (f.type === "choice") return f.options?.find((o) => o.value === v)?.label ?? String(v);
   if (f.type === "number") return `${v}${f.unit ? ` ${f.unit}` : ""}`;
   return String(v);

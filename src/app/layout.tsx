@@ -4,6 +4,8 @@ import "./globals.css";
 import SplashScreen from "@/components/SplashScreen";
 import ConfirmHost from "@/components/ConfirmHost";
 import InstallPrompt from "@/components/InstallPrompt";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale } from "next-intl/server";
 
 // Plus Jakarta Sans guardada dentro del proyecto (src/app/fonts). Antes se descargaba de Google Fonts en cada
 // deploy, y si Google fallaba o cambiaba algo, el build de Vercel se caía. Ahora no depende de internet.
@@ -30,14 +32,19 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Paso 6.1: idioma de la persona (cookie / navegador). Los textos llegan a los componentes del navegador
+  // por NextIntlClientProvider (hereda las traducciones del servidor).
+  const locale = await getLocale();
   return (
-    <html lang="en">
+    <html lang={locale}>
       <body className={`${jakarta.className} bg-white text-slate-900 antialiased`}>
-        <SplashScreen />
-        <ConfirmHost />
-        <InstallPrompt />
-        {children}
+        <NextIntlClientProvider>
+          <SplashScreen />
+          <ConfirmHost />
+          <InstallPrompt />
+          {children}
+        </NextIntlClientProvider>
       </body>
     </html>
   );

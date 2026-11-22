@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect, useSyncExternalStore } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { LOC_EVENT, needsMapSql } from "@/lib/live-map";
@@ -61,12 +62,13 @@ export default function LocationPinger({ companyId }: { companyId: string }) {
 
 // Aviso discreto para el colaborador: su ubicación se está compartiendo con la oficina
 export function SharingBadge({ className = "" }: { className?: string }) {
+  const t = useTranslations("eta");
   const on = useSharing();
   if (!on) return null;
   return (
-    <span className={`inline-flex items-center gap-1.5 text-[12px] font-medium text-[#15803d] ${className}`} title="The office can see where you are while your day is started and BrightPro is open.">
+    <span className={`inline-flex items-center gap-1.5 text-[12px] font-medium text-[#15803d] ${className}`} title={t("sharingHint")}>
       <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#22c55e] opacity-60" /><span className="relative inline-flex h-2 w-2 rounded-full bg-[#16a34a]" /></span>
-      Sharing location
+      {t("sharing")}
     </span>
   );
 }

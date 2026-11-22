@@ -97,7 +97,7 @@ export const hm = (min: number, empty = "—") => {
 };
 // Horas en decimal para Excel / nómina (7.75)
 export const hoursDec = (min: number) => Math.round((min / 60) * 100) / 100;
-export const fmtClock = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "—");
+export const fmtClock = (iso: string | null | undefined, tag = "en-US") => (iso ? new Date(iso).toLocaleTimeString(tag, { hour: "numeric", minute: "2-digit" }) : "—");
 
 // ---------- Periodos ----------
 export type Period = "week" | "2weeks" | "month";
@@ -111,11 +111,15 @@ export function rangeOf(period: Period, anchor: Date, weekStartsOn: number): { f
 }
 export const moveAnchor = (period: Period, anchor: Date, dir: -1 | 1) =>
   period === "month" ? new Date(anchor.getFullYear(), anchor.getMonth() + dir, 1) : addDays(dayStart(anchor), dir * (period === "2weeks" ? 14 : 7));
-export function rangeLabel(period: Period, from: Date, to: Date): string {
-  if (period === "month") return from.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+export function rangeLabel(period: Period, from: Date, to: Date, tag = "en-US"): string {
+  if (period === "month") return from.toLocaleDateString(tag, { month: "long", year: "numeric" });
   const last = addDays(to, -1);
-  const a = from.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  const b = last.toLocaleDateString("en-US", from.getMonth() === last.getMonth() ? { day: "numeric" } : { month: "short", day: "numeric" });
+  const a = from.toLocaleDateString(tag, { month: "short", day: "numeric" });
+  const b = last.toLocaleDateString(tag, from.getMonth() === last.getMonth() ? { day: "numeric" } : { month: "short", day: "numeric" });
+  // Español: "22 – 28 nov 2026" (el mes va después del día)
+  if (tag.startsWith("es")) return from.getMonth() === last.getMonth()
+    ? `${from.getDate()} – ${last.toLocaleDateString(tag, { day: "numeric", month: "short" })} ${last.getFullYear()}`
+    : `${a} – ${last.toLocaleDateString(tag, { day: "numeric", month: "short" })} ${last.getFullYear()}`;
   return `${a} – ${b}, ${last.getFullYear()}`;
 }
 

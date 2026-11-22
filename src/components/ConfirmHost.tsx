@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "next-intl";
 import { AskConfirm, DeleteAsk, downloadJson, onAskConfirm, onDeleteAsk } from "@/lib/confirm";
 
 type Pending = DeleteAsk & { resolve: (ok: boolean) => void };
@@ -9,6 +10,7 @@ type Pending = DeleteAsk & { resolve: (ok: boolean) => void };
 // Ventana de advertencia para borrar (una sola para toda la app, siempre por encima de todo)
 // Pregunta Sí / No con el diseño de BrightPro (en vez del cuadro del navegador con la URL)
 function AskHost() {
+  const t = useTranslations("common");
   const [ask, setAsk] = useState<(AskConfirm & { resolve: (ok: boolean) => void }) | null>(null);
   useEffect(() => { onAskConfirm((p) => setAsk(p)); return () => onAskConfirm(null); }, []);
   useEffect(() => {
@@ -27,8 +29,8 @@ function AskHost() {
         <h2 id="bp-ask-title" className="text-[19px] font-semibold text-[#0b1f3a]">{ask.title}</h2>
         {ask.message && <p className="mt-2 text-[14.5px] leading-relaxed text-slate-600">{ask.message}</p>}
         <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <button type="button" onClick={() => done(false)} className="rounded-xl px-5 py-3 text-[15px] font-semibold text-slate-600 hover:bg-slate-100 sm:py-2.5">{ask.cancelLabel ?? "Cancel"}</button>
-          <button type="button" autoFocus onClick={() => done(true)} className={`rounded-xl px-5 py-3 text-[15px] font-semibold text-white transition-colors sm:py-2.5 ${tone}`}>{ask.confirmLabel ?? "Yes"}</button>
+          <button type="button" onClick={() => done(false)} className="rounded-xl px-5 py-3 text-[15px] font-semibold text-slate-600 hover:bg-slate-100 sm:py-2.5">{ask.cancelLabel ?? t("cancel")}</button>
+          <button type="button" autoFocus onClick={() => done(true)} className={`rounded-xl px-5 py-3 text-[15px] font-semibold text-white transition-colors sm:py-2.5 ${tone}`}>{ask.confirmLabel ?? t("yes")}</button>
         </div>
       </div>
     </div>,
@@ -37,6 +39,8 @@ function AskHost() {
 }
 
 function DeleteHost() {
+  const t = useTranslations("confirm");
+  const tc = useTranslations("common");
   const [ask, setAsk] = useState<Pending | null>(null);
   const [agree, setAgree] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -68,7 +72,7 @@ function DeleteHost() {
   if (!ask || typeof document === "undefined") return null;
   return createPortal(
     <div className="fixed inset-0 z-[500] flex items-end justify-center p-0 sm:items-center sm:p-4">
-      <button type="button" aria-label="Cancel" onClick={() => done(false)} className="absolute inset-0 bg-slate-900/45 animate-[bp-fade_0.2s_ease-out]" />
+      <button type="button" aria-label={tc("cancel")} onClick={() => done(false)} className="absolute inset-0 bg-slate-900/45 animate-[bp-fade_0.2s_ease-out]" />
       <div role="alertdialog" aria-modal="true" className="relative w-full max-w-md rounded-t-3xl bg-white p-6 shadow-2xl animate-[bp-sheet-up_0.25s_ease-out] sm:rounded-3xl">
         <div className="flex items-start gap-4">
           <span className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#fff1f2] text-[#e11d48]">
@@ -80,7 +84,7 @@ function DeleteHost() {
           </span>
           <div className="min-w-0">
             <h2 className="text-[17px] font-semibold text-[#0b1f3a]">{ask.title}</h2>
-            <p className="mt-1 text-[14px] leading-relaxed text-slate-600">{ask.message ?? "Once it's deleted, this information can't be recovered."}</p>
+            <p className="mt-1 text-[14px] leading-relaxed text-slate-600">{ask.message ?? t("cantRecover")}</p>
           </div>
         </div>
 
@@ -92,21 +96,21 @@ function DeleteHost() {
                 ? <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor"><path d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0z" /></svg>
                 : <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 3v10m0 0-3.5-3.5M10 13l3.5-3.5M4 16h12" strokeLinecap="round" strokeLinejoin="round" /></svg>}
             </span>
-            <span><span className="block text-[14px] font-semibold text-[#0b1f3a]">{saved ? "Copy downloaded" : downloading ? "Preparing copy…" : "Download a copy first"}</span>
-              <span className="block text-[12px] text-slate-500">Keep a backup file before deleting (optional)</span></span>
+            <span><span className="block text-[14px] font-semibold text-[#0b1f3a]">{saved ? t("copyDownloaded") : downloading ? t("preparingCopy") : t("downloadFirst")}</span>
+              <span className="block text-[12px] text-slate-500">{t("backupHint")}</span></span>
           </button>
         )}
 
         <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl bg-[#fff7f7] px-4 py-3">
           <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-[#e11d48]" />
-          <span className="text-[13px] text-slate-700">I understand this is permanent and I&apos;m deleting it under my own responsibility.</span>
+          <span className="text-[13px] text-slate-700">{t("understand")}</span>
         </label>
 
         <div className="mt-5 grid grid-cols-2 gap-3">
-          <button type="button" onClick={() => done(false)} className="rounded-xl border border-slate-200 py-3 text-[15px] font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+          <button type="button" onClick={() => done(false)} className="rounded-xl border border-slate-200 py-3 text-[15px] font-semibold text-slate-700 hover:bg-slate-50">{tc("cancel")}</button>
           <button type="button" disabled={!agree} onClick={() => done(true)}
             className="rounded-xl bg-[#e11d48] py-3 text-[15px] font-semibold text-white shadow-[0_6px_16px_rgba(225,29,72,0.3)] transition-all hover:bg-[#be123c] active:scale-95 disabled:opacity-40 disabled:shadow-none">
-            {ask.confirmLabel ?? "Delete"}
+            {ask.confirmLabel ?? tc("delete")}
           </button>
         </div>
       </div>

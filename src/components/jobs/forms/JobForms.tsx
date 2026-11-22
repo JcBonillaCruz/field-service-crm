@@ -1,11 +1,13 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+import { useEquipText, useFormTitle, useFormTx } from "@/i18n/useFormTx";
+import { useFmt, useJobError } from "@/i18n/useFmt";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import SelectMenu from "@/components/ui/SelectMenu";
-import { jobError } from "@/lib/jobs";
 import {
-  Field, FormData, FormKind, JobFormRow, Ranges, cleanForm, displayValue, equipmentName, formTitle, mergeRanges, rangeText, reviewForm, visibleSections,
+  Field, FormData, FormKind, JobFormRow, Ranges, cleanForm, displayValue, localizeSections, mergeRanges, rangeText, reviewForm, visibleSections,
 } from "@/lib/job-forms";
 import { TuneUpArt, WorkFormArt } from "@/components/jobs/forms/FormArt";
 
@@ -19,13 +21,17 @@ type Equip = { id: string; kind: string; brand: string | null; model: string | n
 export type Editing = { id: string | null; kind: FormKind; data: FormData; equipmentId: string; submitted: boolean; dirty: boolean };
 export type FormsState = { tuneUpSubmitted: boolean; workSubmitted: boolean };
 
-const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "");
 const X = "M5 5l10 10M15 5 5 15";
 
 export default function JobForms({ jobId, companyId, addressId, formKind, visitId = null, variant = "office", readOnly = false, jobLabel = "", onToast, onState }: {
   jobId: string; companyId: string; addressId: string | null; formKind: string | null; visitId?: string | null;
   variant?: "tech" | "office"; readOnly?: boolean; jobLabel?: string; onToast?: (m: string, err?: boolean) => void; onState?: (s: FormsState) => void;
 }) {
+  const t = useTranslations("forms");
+  const fmt = useFmt();
+  const formTitle = useFormTitle();
+  const when = (iso: string | null) => (iso ? fmt.dateTime(new Date(iso)) : "");
+  const eq = useEquipText();
   const [forms, setForms] = useState<JobFormRow[] | null>(null);
   const [off, setOff] = useState(false);
   const [ranges, setRanges] = useState<Ranges>(() => mergeRanges(null));
@@ -85,7 +91,7 @@ export default function JobForms({ jobId, companyId, addressId, formKind, visitI
     const only = equip.filter((e) => e.is_active);
     setEd({ id: f?.id ?? null, kind, data: { ...(f?.data ?? (kind === "tune_up" ? { mode: "cooling" } : {})) }, equipmentId: f?.equipment_id ?? (kind === "tune_up" && !f && only.length === 1 ? only[0].id : ""), submitted: Boolean(f?.submitted_at), dirty: false });
   };
-  const eqName = (id: string | null) => { const e = equip.find((x) => x.id === id); return e ? equipmentName(e) : ""; };
+  const eqName = (id: string | null) => { const e = equip.find((x) => x.id === id); return e ? eq.equipmentName(e) : ""; };
 
   const box = tech ? "mt-3 rounded-2xl border border-slate-200 bg-white px-4 py-3" : "rounded-2xl border border-slate-200 bg-white p-5";
   const title = tech ? "text-[15px] font-semibold text-[#0b1f3a]" : "text-[16px] font-semibold text-[#0b1f3a]";
@@ -93,16 +99,16 @@ export default function JobForms({ jobId, companyId, addressId, formKind, visitI
   return (
     <section className={box}>
       <div className="flex items-center justify-between gap-3">
-        <h2 className={title}>Forms</h2>
+        <h2 className={title}>{t("heading")}</h2>
         {wantsTuneUp && tuneUps.length > 0 && !readOnly && (
-          <button type="button" onClick={() => start("tune_up", null)} className="rounded-lg px-2 py-1 text-[12.5px] font-semibold text-[#0f766e] transition-colors hover:bg-[#e9f7f4]">+ Another system</button>
+          <button type="button" onClick={() => start("tune_up", null)} className="rounded-lg px-2 py-1 text-[12.5px] font-semibold text-[#0f766e] transition-colors hover:bg-[#e9f7f4]">+ {t("anotherSystem")}</button>
         )}
       </div>
       <div className="mt-2 space-y-2">
         {rows.map(({ key, kind, form }) => {
           const n = form?.alerts.length ?? 0, shown = open[key] ?? !tech;
-          const status = !form ? (kind === "tune_up" ? "Not started · readings for this visit" : "Not started · what you found and did")
-            : form.submitted_at ? `Submitted by ${form.submitted_by_name ?? "team member"} · ${when(form.submitted_at)}` : `Draft · saved ${when(form.updated_at ?? form.created_at)}`;
+          const status = !form ? (kind === "tune_up" ? t("notStartedTune") : t("notStartedWork"))
+            : form.submitted_at ? t("submittedBy", { name: form.submitted_by_name ?? t("member"), when: when(form.submitted_at) }) : t("draftSaved", { when: when(form.updated_at ?? form.created_at) });
           return (
             <div key={key} className="rounded-xl border border-slate-100">
               <div className="flex items-center gap-1 pr-2">
@@ -112,16 +118,16 @@ export default function JobForms({ jobId, companyId, addressId, formKind, visitI
                     <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                       <span className="text-[14.5px] font-semibold text-[#0b1f3a]">{formTitle(kind)}</span>
                       {form?.equipment_id && eqName(form.equipment_id) && <span className="truncate text-[12.5px] text-slate-500">{eqName(form.equipment_id)}</span>}
-                      {form && !form.submitted_at && <span className="rounded-full bg-[#fff6e6] px-2 py-0.5 text-[11px] font-semibold text-[#b45309]">Draft</span>}
-                      {n > 0 && <span className="rounded-full bg-[#fff1f2] px-2 py-0.5 text-[11px] font-semibold text-[#be123c]">{n} to review</span>}
-                      {form?.submitted_at && n === 0 && <span className="rounded-full bg-[#e7f6f1] px-2 py-0.5 text-[11px] font-semibold text-[#0f766e]">All good</span>}
+                      {form && !form.submitted_at && <span className="rounded-full bg-[#fff6e6] px-2 py-0.5 text-[11px] font-semibold text-[#b45309]">{t("draft")}</span>}
+                      {n > 0 && <span className="rounded-full bg-[#fff1f2] px-2 py-0.5 text-[11px] font-semibold text-[#be123c]">{t("toReview", { count: n })}</span>}
+                      {form?.submitted_at && n === 0 && <span className="rounded-full bg-[#e7f6f1] px-2 py-0.5 text-[11px] font-semibold text-[#0f766e]">{t("allGood")}</span>}
                     </span>
                     <span className="block truncate text-[12.5px] text-slate-500">{status}</span>
                   </span>
-                  {!form && <span className="shrink-0 rounded-lg bg-[#0f766e] px-3 py-1.5 text-[12.5px] font-semibold text-white transition-colors group-hover:bg-[#0c5f59]">Start</span>}
+                  {!form && <span className="shrink-0 rounded-lg bg-[#0f766e] px-3 py-1.5 text-[12.5px] font-semibold text-white transition-colors group-hover:bg-[#0c5f59]">{t("start")}</span>}
                 </button>
                 {form && (
-                  <button type="button" onClick={() => setOpen((o) => ({ ...o, [key]: !shown }))} aria-label={shown ? "Hide details" : "Show details"} aria-expanded={shown}
+                  <button type="button" onClick={() => setOpen((o) => ({ ...o, [key]: !shown }))} aria-label={shown ? t("hideDetails") : t("showDetails")} aria-expanded={shown}
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600">
                     <svg viewBox="0 0 20 20" className={`h-4 w-4 transition-transform duration-150 ${shown ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 8 5 5 5-5" /></svg>
                   </button>
@@ -143,10 +149,13 @@ export default function JobForms({ jobId, companyId, addressId, formKind, visitI
 
 // ---------- Lecturas a la vista (ficha de oficina, o al abrir la flecha en el teléfono) ----------
 export function Readings({ form, ranges }: { form: JobFormRow; ranges: Ranges }) {
-  const rv = useMemo(() => reviewForm(form.kind, form.data, ranges), [form, ranges]);
-  const sections = visibleSections(form.kind, form.data).map((s) => ({ ...s, fields: s.fields.filter((f) => displayValue(f, form.data[f.key]) !== "") })).filter((s) => s.fields.length);
+  const t = useTranslations("forms");
+  const tc = useTranslations("common");
+  const tx = useFormTx();
+  const rv = useMemo(() => reviewForm(form.kind, form.data, ranges, tx), [form, ranges, tx]);
+  const sections = localizeSections(form.kind, visibleSections(form.kind, form.data), tx).map((s) => ({ ...s, fields: s.fields.filter((f) => displayValue(f, form.data[f.key]) !== "") })).filter((s) => s.fields.length);
   const alerts = form.alerts.length ? form.alerts : rv.alerts;
-  if (!sections.length) return <p className="border-t border-slate-100 px-3.5 py-3 text-[13px] text-slate-400">Nothing filled in yet.</p>;
+  if (!sections.length) return <p className="border-t border-slate-100 px-3.5 py-3 text-[13px] text-slate-400">{t("nothingYet")}</p>;
   return (
     <div className="border-t border-slate-100 px-3.5 pb-3 pt-2.5">
       {alerts.length > 0 && <div className="mb-2 flex flex-wrap gap-1.5">{alerts.map((a) => <span key={a} className="rounded-full bg-[#fff1f2] px-2 py-0.5 text-[12px] font-semibold text-[#be123c]">{a}</span>)}</div>}
@@ -160,7 +169,7 @@ export function Readings({ form, ranges }: { form: JobFormRow; ranges: Ranges })
                 {short.map((f) => (
                   <div key={f.key} className="flex items-baseline justify-between gap-3 border-b border-slate-50 py-1">
                     <dt className="text-slate-500">{f.label}</dt>
-                    <dd className={`text-right font-semibold ${rv.bad[f.key] ? "text-[#be123c]" : "text-[#0b1f3a]"}`}>{displayValue(f, form.data[f.key])}</dd>
+                    <dd className={`text-right font-semibold ${rv.bad[f.key] ? "text-[#be123c]" : "text-[#0b1f3a]"}`}>{displayValue(f, form.data[f.key], tc("yes"))}</dd>
                   </div>
                 ))}
                 {s.id === "air" && rv.delta && (
@@ -184,11 +193,17 @@ export function Readings({ form, ranges }: { form: JobFormRow; ranges: Ranges })
 export function FormEditor({ ed, setEd, jobId, visitId, ranges, equip, readOnly, jobLabel, onSaved }: {
   ed: Editing; setEd: (e: Editing | null) => void; jobId: string; visitId: string | null; ranges: Ranges; equip: Equip[]; readOnly: boolean; jobLabel: string; onSaved: (msg: string) => void;
 }) {
+  const t = useTranslations("forms");
+  const tc = useTranslations("common");
+  const tx = useFormTx();
+  const formTitle = useFormTitle();
+  const jobErr = useJobError();
+  const eq = useEquipText();
   const [busy, setBusy] = useState<"" | "draft" | "submit">("");
   const [err, setErr] = useState("");
   const [showMissing, setShowMissing] = useState(false);
-  const rv = useMemo(() => reviewForm(ed.kind, ed.data, ranges), [ed.kind, ed.data, ranges]);
-  const sections = visibleSections(ed.kind, ed.data);
+  const rv = useMemo(() => reviewForm(ed.kind, ed.data, ranges, tx), [ed.kind, ed.data, ranges, tx]);
+  const sections = localizeSections(ed.kind, visibleSections(ed.kind, ed.data), tx);
   const set = (key: string, v: string | boolean) => { setErr(""); setEd({ ...ed, data: { ...ed.data, [key]: v }, dirty: true }); };
   const empty = Object.keys(cleanForm(ed.kind, ed.data)).filter((k) => k !== "mode").length === 0;
 
@@ -197,15 +212,15 @@ export function FormEditor({ ed, setEd, jobId, visitId, ranges, equip, readOnly,
 
   async function save(submit: boolean) {
     if (busy) return false;
-    if (submit && rv.missing.length) { setShowMissing(true); setErr(`Still missing: ${rv.missing.join(", ")}`); return false; }
+    if (submit && rv.missing.length) { setShowMissing(true); setErr(t("stillMissing", { list: rv.missing.join(", ") })); return false; }
     setBusy(submit ? "submit" : "draft"); setErr("");
     const { error } = await createClient().rpc("tech_save_form", {
       p_job: jobId, p_kind: ed.kind, p_data: cleanForm(ed.kind, ed.data), p_alerts: rv.alerts, p_visit: visitId, p_equipment: ed.equipmentId || null, p_form: ed.id, p_submit: submit,
     });
     setBusy("");
-    if (error) { setErr(error.hint || jobError(error)); return false; }
+    if (error) { setErr(jobErr(error)); return false; }
     const n = rv.alerts.length;
-    onSaved(!submit ? "Draft saved" : ed.submitted ? "Changes saved" : n ? `${formTitle(ed.kind)} submitted. The office can see ${n} item${n === 1 ? "" : "s"} to review.` : `${formTitle(ed.kind)} submitted`);
+    onSaved(!submit ? t("draftSavedToast") : ed.submitted ? t("changesSaved") : n ? t("submittedReview", { form: formTitle(ed.kind), count: n }) : t("submitted", { form: formTitle(ed.kind) }));
     setEd(null);
     return true;
   }
@@ -222,7 +237,7 @@ export function FormEditor({ ed, setEd, jobId, visitId, ranges, equip, readOnly,
   const field = (f: Field) => {
     const v = ed.data[f.key], bad = rv.bad[f.key], miss = isMissing(f);
     if (f.type === "number") {
-      const r = f.range ? rangeText(ranges[f.range], f.unit) : "";
+      const r = f.range ? rangeText(ranges[f.range], f.unit, tx.words) : "";
       return (
         <label key={f.key} className="block">
           <span className={lab}><span>{f.label}{f.required && req}</span></span>
@@ -274,7 +289,7 @@ export function FormEditor({ ed, setEd, jobId, visitId, ranges, equip, readOnly,
       <div className="flex h-full w-full flex-col bg-white animate-[bp-fade_0.15s_ease-out] lg:h-auto lg:max-h-[92vh] lg:max-w-3xl lg:overflow-hidden lg:rounded-3xl lg:shadow-[0_30px_80px_rgba(15,40,60,0.3)]">
         {/* Encabezado */}
         <div className="flex items-center gap-2 border-b border-slate-200 px-3 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))]">
-          <button type="button" onClick={close} disabled={Boolean(busy)} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-500 transition-all duration-200 hover:rotate-90 hover:bg-red-50 hover:text-red-600">
+          <button type="button" onClick={close} disabled={Boolean(busy)} aria-label={tc("close")} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-500 transition-all duration-200 hover:rotate-90 hover:bg-red-50 hover:text-red-600">
             <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d={X} /></svg>
           </button>
           {ed.kind === "tune_up" ? <TuneUpArt size={34} className="shrink-0" /> : <WorkFormArt size={34} className="shrink-0" />}
@@ -282,17 +297,17 @@ export function FormEditor({ ed, setEd, jobId, visitId, ranges, equip, readOnly,
             <p className="truncate text-[16px] font-semibold leading-tight text-[#0b1f3a]">{formTitle(ed.kind)}</p>
             {jobLabel && <p className="truncate text-[12.5px] text-slate-500">{jobLabel}</p>}
           </div>
-          {rv.alerts.length > 0 && <span className="shrink-0 rounded-full bg-[#fff1f2] px-2.5 py-1 text-[12px] font-semibold text-[#be123c]">{rv.alerts.length} to review</span>}
+          {rv.alerts.length > 0 && <span className="shrink-0 rounded-full bg-[#fff1f2] px-2.5 py-1 text-[12px] font-semibold text-[#be123c]">{t("toReview", { count: rv.alerts.length })}</span>}
         </div>
 
         {/* Campos */}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6 pt-3">
           {ed.kind === "tune_up" && active.length > 0 && (
             <div className="mb-4 sm:max-w-sm">
-              <span className="mb-1 block text-[12px] font-medium text-slate-500">Equipment</span>
+              <span className="mb-1 block text-[12px] font-medium text-slate-500">{t("equipment")}</span>
               <div className={readOnly ? "pointer-events-none opacity-80" : ""}>
-                <SelectMenu value={ed.equipmentId} ariaLabel="Equipment" placeholder="Choose the equipment"
-                  options={[{ value: "", label: "Whole system" }, ...active.map((e) => ({ value: e.id, label: `${equipmentName(e)}${e.serial ? ` · S/N ${e.serial}` : ""}` }))]}
+                <SelectMenu value={ed.equipmentId} ariaLabel={t("equipment")} placeholder={t("chooseEquipment")}
+                  options={[{ value: "", label: t("wholeSystem") }, ...active.map((e) => ({ value: e.id, label: `${eq.equipmentName(e)}${e.serial ? ` · S/N ${e.serial}` : ""}` }))]}
                   onChange={(v) => setEd({ ...ed, equipmentId: v, dirty: true })} />
               </div>
             </div>
@@ -304,7 +319,7 @@ export function FormEditor({ ed, setEd, jobId, visitId, ranges, equip, readOnly,
                 {s.fields.map(field)}
                 {s.id === "air" && rv.delta && (
                   <p className={`col-span-full flex items-center justify-between rounded-lg px-3 py-2 text-[13.5px] font-semibold ${rv.delta.bad ? "bg-[#fff1f2] text-[#be123c]" : "bg-[#e9f7f4] text-[#0f766e]"}`}>
-                    <span>{rv.delta.label}{rv.delta.bad ? ` · ${rv.delta.bad}` : " · in range"}</span><span className="text-[16px]">{rv.delta.value} °F</span>
+                    <span>{rv.delta.label}{rv.delta.bad ? ` · ${rv.delta.bad}` : ` · ${t("inRange")}`}</span><span className="text-[16px]">{rv.delta.value} °F</span>
                   </p>
                 )}
               </div>
@@ -312,7 +327,7 @@ export function FormEditor({ ed, setEd, jobId, visitId, ranges, equip, readOnly,
           ))}
           {rv.alerts.length > 0 && (
             <div className="mt-5 rounded-xl border border-[#fecdd3] bg-[#fff1f2] px-3.5 py-3">
-              <p className="text-[13px] font-semibold text-[#9f1239]">The office will see this to review</p>
+              <p className="text-[13px] font-semibold text-[#9f1239]">{t("officeWillSee")}</p>
               <ul className="mt-1 space-y-0.5 text-[13px] text-[#be123c]">{rv.alerts.map((a) => <li key={a}>• {a}</li>)}</ul>
             </div>
           )}
@@ -322,15 +337,15 @@ export function FormEditor({ ed, setEd, jobId, visitId, ranges, equip, readOnly,
         <div className="border-t border-slate-200 bg-white px-3 pb-[max(0.625rem,env(safe-area-inset-bottom))] pt-2.5">
           {err && <p role="alert" className="mb-2 rounded-lg bg-[#fff1f2] px-3 py-2 text-[13px] font-medium text-[#be123c]">{err}</p>}
           <div className="flex items-center gap-2">
-            <span className="min-w-0 flex-1 truncate text-[12px] text-slate-400">{readOnly ? "This job is closed." : ed.submitted ? "Already submitted" : rv.missing.length ? `${rv.missing.length} required left` : "Ready to submit"}</span>
+            <span className="min-w-0 flex-1 truncate text-[12px] text-slate-400">{readOnly ? t("jobClosed") : ed.submitted ? t("alreadySubmitted") : rv.missing.length ? t("requiredLeft", { count: rv.missing.length }) : t("ready")}</span>
             {readOnly ? (
-              <button type="button" onClick={() => setEd(null)} className="h-10 rounded-xl border border-slate-200 px-4 text-[13.5px] font-semibold text-slate-700 transition-colors hover:bg-slate-50">Close</button>
+              <button type="button" onClick={() => setEd(null)} className="h-10 rounded-xl border border-slate-200 px-4 text-[13.5px] font-semibold text-slate-700 transition-colors hover:bg-slate-50">{tc("close")}</button>
             ) : ed.submitted ? (
-              <button type="button" onClick={() => save(true)} disabled={Boolean(busy)} className="h-10 rounded-xl bg-[#0f766e] px-5 text-[14px] font-semibold text-white transition-all duration-150 hover:bg-[#0c5f59] active:scale-[0.98] disabled:opacity-60">{busy ? "Saving…" : "Save changes"}</button>
+              <button type="button" onClick={() => save(true)} disabled={Boolean(busy)} className="h-10 rounded-xl bg-[#0f766e] px-5 text-[14px] font-semibold text-white transition-all duration-150 hover:bg-[#0c5f59] active:scale-[0.98] disabled:opacity-60">{busy ? tc("saving") : tc("saveChanges")}</button>
             ) : (
               <>
-                <button type="button" onClick={() => save(false)} disabled={Boolean(busy) || empty} className="h-10 rounded-xl border border-slate-200 px-3.5 text-[13.5px] font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50">{busy === "draft" ? "Saving…" : "Save draft"}</button>
-                <button type="button" onClick={() => save(true)} disabled={Boolean(busy)} className="h-10 rounded-xl bg-[#0f766e] px-5 text-[14px] font-semibold text-white transition-all duration-150 hover:bg-[#0c5f59] active:scale-[0.98] disabled:opacity-60">{busy === "submit" ? "Sending…" : "Submit"}</button>
+                <button type="button" onClick={() => save(false)} disabled={Boolean(busy) || empty} className="h-10 rounded-xl border border-slate-200 px-3.5 text-[13.5px] font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50">{busy === "draft" ? tc("saving") : t("saveDraft")}</button>
+                <button type="button" onClick={() => save(true)} disabled={Boolean(busy)} className="h-10 rounded-xl bg-[#0f766e] px-5 text-[14px] font-semibold text-white transition-all duration-150 hover:bg-[#0c5f59] active:scale-[0.98] disabled:opacity-60">{busy === "submit" ? t("sending") : t("submit")}</button>
               </>
             )}
           </div>

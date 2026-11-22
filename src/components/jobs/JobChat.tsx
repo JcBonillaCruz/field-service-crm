@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+import { useFmt } from "@/i18n/useFmt";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
@@ -20,19 +22,24 @@ const ROLE: Record<string, string> = { owner: "Owner", manager: "Manager", offic
 const initialsOf = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "?";
 const colorOf = (id: string) => TECH_COLORS[Array.from(id).reduce((a, c) => a + c.charCodeAt(0), 0) % TECH_COLORS.length];
 const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-function dayLabel(d: Date) {
+// Paso 6.1: "Today" / "Yesterday" / fecha en el idioma de la persona
+function dayLabel(d: Date, words: { today: string; yesterday: string }, tag: string) {
   const now = new Date(), y = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-  if (dayKey(d) === dayKey(now)) return "Today";
-  if (dayKey(d) === dayKey(y)) return "Yesterday";
-  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  if (dayKey(d) === dayKey(now)) return words.today;
+  if (dayKey(d) === dayKey(y)) return words.yesterday;
+  return d.toLocaleDateString(tag, { weekday: "short", month: "short", day: "numeric" });
 }
-const timeOf = (d: Date) => d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
 // placement: "bar" = botón compacto dentro de la barra de abajo del trabajo (teléfono del colaborador);
 //            "float" = burbuja flotante en computadora y una barrita abajo en el celular (nunca encima del contenido).
 export default function JobChat({ jobId, title, companyId, placement = "float", showLabel = false, startOpen = false }: {
   jobId: string; title: string; raised?: boolean; companyId?: string; placement?: "float" | "bar"; showLabel?: boolean; startOpen?: boolean;
 }) {
+  const t = useTranslations("chat");
+  const tc = useTranslations("common");
+  const tr = useTranslations("roles");
+  const fmt = useFmt();
+  const timeOf = fmt.time;
   const [open, setOpen] = useState(startOpen); // startOpen: el técnico tocó "Chat" desde su pantalla de inicio
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [me, setMe] = useState<string | null>(null);
@@ -124,7 +131,7 @@ export default function JobChat({ jobId, title, companyId, placement = "float", 
     const body = text.trim();
     if (!body || sending || !me) return;
     setSending(true); setFailed("");
-    const temp: Msg = { id: `tmp-${Date.now()}`, user_id: me, body, created_at: new Date().toISOString(), name: "You", avatar_url: null, role: null, pending: true };
+    const temp: Msg = { id: `tmp-${Date.now()}`, user_id: me, body, created_at: new Date().toISOString(), name: t("you"), avatar_url: null, role: null, pending: true };
     setMsgs((m) => [...m, temp]);
     setText("");
     const { data: id, error } = await createClient().rpc("job_chat_send", { p_job: jobId, p_body: body });
@@ -132,7 +139,7 @@ export default function JobChat({ jobId, title, companyId, placement = "float", 
     if (error || !id) {
       setMsgs((m) => m.filter((x) => x.id !== temp.id));
       setText(body);
-      setFailed("The message couldn't be sent. Check your connection and try again.");
+      setFailed(t("msgFailed"));
       return;
     }
     load();
@@ -158,7 +165,7 @@ export default function JobChat({ jobId, title, companyId, placement = "float", 
       await load();
       fetch("/api/jobs/chat-notify", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messageId: id }) }).catch(() => undefined);
     } catch (e) {
-      setFailed(e instanceof Error && e.message === "sql" ? "Photos in the chat need paso-5.4b-files.sql in Supabase." : e instanceof Error && e.message.startsWith("up:") ? `The photo couldn't be sent: ${e.message.slice(3)}.` : "The photo couldn't be sent. Check your connection and try again.");
+      setFailed(e instanceof Error && e.message === "sql" ? "Photos in the chat need paso-5.4b-files.sql in Supabase." : e instanceof Error && e.message.startsWith("up:") ? t("photoFailedWhy", { why: e.message.slice(3) }) : t("photoFailed"));
     }
     setPhotoBusy(false);
   }
@@ -167,7 +174,7 @@ export default function JobChat({ jobId, title, companyId, placement = "float", 
     <>
       {/* Botón del chat con el contador de mensajes sin leer */}
       {(() => {
-        const label = unread ? `Job chat, ${unread} new message${unread === 1 ? "" : "s"}` : "Job chat";
+        const label = unread ? t("ariaUnread", { count: unread }) : t("title");
         const icon = (cls: string) => (
           <span className="relative flex">
             <svg viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
@@ -181,7 +188,7 @@ export default function JobChat({ jobId, title, companyId, placement = "float", 
         const compact = (withLabel: boolean) => (
           <button type="button" onClick={() => setOpen(true)} aria-label={label}
             className={`group flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-[#bfe5dd] bg-[#e9f7f4] text-[13.5px] font-semibold text-[#0f766e] transition-all duration-150 hover:border-[#14a39a] hover:bg-[#d9f1ec] active:scale-95 ${withLabel ? "px-3.5" : "w-10"}`}>
-            {icon("h-5 w-5 transition-transform duration-200 group-hover:-rotate-6 group-hover:scale-110")}{withLabel && "Chat"}
+            {icon("h-5 w-5 transition-transform duration-200 group-hover:-rotate-6 group-hover:scale-110")}{withLabel && t("chat")}
           </button>
         );
         if (placement === "bar") return compact(showLabel);
@@ -205,7 +212,7 @@ export default function JobChat({ jobId, title, companyId, placement = "float", 
 
       {/* El panel se dibuja directo en la página (portal): así ocupa TODA la pantalla del celular aunque el botón viva dentro de la barra de abajo */}
       {open && createPortal(
-        <div role="dialog" aria-label="Job chat"
+        <div role="dialog" aria-label={t("title")}
           className="fixed inset-0 z-[97] flex flex-col bg-white animate-[bp-sheet-up_0.22s_ease-out] lg:inset-auto lg:bottom-6 lg:right-8 lg:h-[min(36rem,calc(100dvh-7rem))] lg:w-[24rem] lg:overflow-hidden lg:rounded-2xl lg:border lg:border-slate-200 lg:shadow-[0_24px_60px_rgba(15,40,60,0.28)]">
           {/* Encabezado */}
           <div className="flex items-center gap-3 border-b border-slate-100 bg-[#f7fbfa] px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
@@ -213,10 +220,10 @@ export default function JobChat({ jobId, title, companyId, placement = "float", 
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-4.5 3.5V17H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" /><path d="M8 10h8M8 13h5" /></svg>
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-[16px] font-semibold leading-tight tracking-tight text-[#0b1f3a]">Job chat</p>
+              <p className="text-[16px] font-semibold leading-tight tracking-tight text-[#0b1f3a]">{t("title")}</p>
               <p className="truncate text-[12.5px] text-slate-500">{title}</p>
             </div>
-            <button type="button" onClick={() => setOpen(false)} aria-label="Close chat"
+            <button type="button" onClick={() => setOpen(false)} aria-label={t("close")}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-500 transition-all duration-200 hover:rotate-90 hover:bg-red-50 hover:text-red-600">
               <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 5l10 10M15 5 5 15" /></svg>
             </button>
@@ -228,16 +235,16 @@ export default function JobChat({ jobId, title, companyId, placement = "float", 
               <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className={`h-12 w-2/3 animate-pulse rounded-2xl bg-slate-100 ${i === 1 ? "ml-auto" : ""}`} />)}</div>
             ) : problem ? (
               <div className="px-4 py-10 text-center">
-                <p className="text-[15px] font-semibold text-[#0b1f3a]">{problem === "denied" ? "This chat is only for people on this job" : "The chat isn't set up yet"}</p>
-                <p className="mt-1 text-[13px] text-slate-500">{problem === "denied" ? "Ask the office to add you to the job to see its messages." : "Run the file paso-5.3k-job-chat.sql in Supabase and reload this page."}</p>
+                <p className="text-[15px] font-semibold text-[#0b1f3a]">{problem === "denied" ? t("deniedTitle") : t("notSetUp")}</p>
+                <p className="mt-1 text-[13px] text-slate-500">{problem === "denied" ? t("deniedBody") : "Run the file paso-5.3k-job-chat.sql in Supabase and reload this page."}</p>
               </div>
             ) : msgs.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center px-6 text-center">
                 <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#e9f7f4] text-[#0f766e]">
                   <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-4.5 3.5V17H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" /><path d="M8 10h8M8 13h5" /></svg>
                 </span>
-                <p className="mt-3 text-[15px] font-semibold text-[#0b1f3a]">No messages yet</p>
-                <p className="mt-1 text-[13px] leading-relaxed text-slate-500">Write the gate code, a change of plans or anything the team needs to know for this job.</p>
+                <p className="mt-3 text-[15px] font-semibold text-[#0b1f3a]">{t("noMessages")}</p>
+                <p className="mt-1 text-[13px] leading-relaxed text-slate-500">{t("noMessagesHint")}</p>
               </div>
             ) : (
               msgs.map((m, i) => {
@@ -246,23 +253,23 @@ export default function JobChat({ jobId, title, companyId, placement = "float", 
                 const head = newDay || !prev || prev.user_id !== m.user_id || d.getTime() - new Date(prev.created_at).getTime() > 5 * 60000;
                 return (
                   <div key={m.id}>
-                    {newDay && <p className="py-3 text-center text-[11.5px] font-semibold text-slate-400"><span className="rounded-full bg-white px-3 py-1 ring-1 ring-slate-200">{dayLabel(d)}</span></p>}
+                    {newDay && <p className="py-3 text-center text-[11.5px] font-semibold text-slate-400"><span className="rounded-full bg-white px-3 py-1 ring-1 ring-slate-200">{dayLabel(d, { today: tc("today"), yesterday: tc("yesterday") }, fmt.tag)}</span></p>}
                     <div className={`flex items-end gap-2 ${mine ? "justify-end" : ""} ${head ? "mt-3" : "mt-1"}`}>
                       {!mine && (head
                         ? <span className="mb-[1.35rem] flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full text-[12px] font-semibold text-white" style={{ background: colorOf(m.user_id) }}>
                             {m.avatar_url ? <img src={m.avatar_url} alt="" className="h-full w-full object-cover" /> : initialsOf(m.name)}</span>
                         : <span className="w-8 shrink-0" />)}
                       <div className={`max-w-[80%] ${mine ? "items-end" : "items-start"} flex flex-col`}>
-                        {head && !mine && <p className="mb-1 px-1 text-[12px] font-semibold text-[#0b1f3a]">{m.name}{m.role && ROLE[m.role] ? <span className="font-normal text-slate-400"> · {ROLE[m.role]}</span> : null}</p>}
+                        {head && !mine && <p className="mb-1 px-1 text-[12px] font-semibold text-[#0b1f3a]">{m.name}{m.role && ROLE[m.role] ? <span className="font-normal text-slate-400"> · {tr(m.role)}</span> : null}</p>}
                         <div className={`whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-[14.5px] leading-snug ${mine ? "rounded-br-md bg-[#0f766e] text-white" : "rounded-bl-md bg-white text-[#0b1f3a] ring-1 ring-slate-200"} ${m.pending ? "opacity-60" : ""}`}>
                           {photos[m.id] && (
                             <a href={photos[m.id]} target="_blank" rel="noreferrer" className="-mx-2 -mt-0.5 mb-1 block overflow-hidden rounded-xl">
-                              <img src={photos[m.id]} alt="Photo sent in the chat" loading="lazy" className="max-h-64 w-full min-w-[9rem] object-cover transition-opacity duration-150 hover:opacity-90" />
+                              <img src={photos[m.id]} alt={t("photoAlt")} loading="lazy" className="max-h-64 w-full min-w-[9rem] object-cover transition-opacity duration-150 hover:opacity-90" />
                             </a>
                           )}
                           {photos[m.id] && m.body === PHOTO_ONLY ? null : m.body}
                         </div>
-                        <p className="mt-1 px-1 text-[11px] text-slate-400">{m.pending ? "Sending…" : timeOf(d)}</p>
+                        <p className="mt-1 px-1 text-[11px] text-slate-400">{m.pending ? t("sending") : timeOf(d)}</p>
                       </div>
                     </div>
                   </div>
@@ -280,18 +287,18 @@ export default function JobChat({ jobId, title, companyId, placement = "float", 
                   <>
                     <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => sendPhoto(e.target.files)} />
                     {/* Ícono ilustrado (el mismo de la cámara en Photos, reports & files), no un botón */}
-                    <button type="button" onClick={() => fileRef.current?.click()} disabled={photoBusy || !ready} aria-label="Send a photo"
+                    <button type="button" onClick={() => fileRef.current?.click()} disabled={photoBusy || !ready} aria-label={t("sendPhoto")}
                       className="group relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-all duration-150 hover:-translate-y-0.5 hover:shadow-[0_6px_14px_rgba(15,40,60,0.16)] active:scale-95 disabled:translate-y-0 disabled:opacity-60 disabled:shadow-none">
                       <CameraArt size={44} />
                       {photoBusy && <span className="absolute inset-0 flex items-center justify-center rounded-full bg-white/75"><span className="h-4 w-4 animate-spin rounded-full border-2 border-[#0f766e] border-t-transparent" /></span>}
                     </button>
                   </>
                 )}
-                <textarea ref={inputRef} value={text} rows={1} maxLength={2000} placeholder="Write a message…" aria-label="Message"
+                <textarea ref={inputRef} value={text} rows={1} maxLength={2000} placeholder={t("placeholder")} aria-label={t("message")}
                   onChange={(e) => { setText(e.target.value); e.target.style.height = "auto"; e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`; }}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && window.innerWidth >= 1024) { e.preventDefault(); send(); } }}
                   className="max-h-[120px] min-h-[44px] flex-1 resize-none rounded-2xl border border-slate-200 bg-[#f8fafb] px-4 py-2.5 text-[15px] text-slate-800 placeholder:text-slate-400 focus:border-[#0f766e] focus:bg-white focus:outline-none focus:ring-4 focus:ring-[#14a39a]/15" />
-                <button type="button" onClick={send} disabled={!text.trim() || sending || !ready} aria-label="Send message"
+                <button type="button" onClick={send} disabled={!text.trim() || sending || !ready} aria-label={t("sendMessage")}
                   className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#0f766e] text-white shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:bg-[#0c5f59] hover:shadow-md active:scale-95 disabled:translate-y-0 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none">
                   <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 12 20 4.5 15.5 20l-3.2-6.3z" /><path d="m12.3 13.7 4-4.5" /></svg>
                 </button>

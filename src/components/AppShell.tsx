@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import AppHeader from "@/components/AppHeader";
 import ProfilePanel from "@/components/ProfilePanel";
 import Avatar from "@/components/Avatar";
@@ -35,6 +36,10 @@ type NavItem = {
 //   · Finances: clientes, ventas, catálogo y dinero (todo lo que hay hoy)
 //   · QR Studio: su propio menú
 // Cuando hagamos Trabajos/Seguimiento o Inventario, cada uno será otra app con su menú.
+// Paso 6.1: el texto de cada opción sale de messages/{en,es}.json → nav.<llave> (llave = la etiqueta en camelCase)
+export const navKey = (label: string) => label.replace(/&/g, " ").split(/\s+/).filter(Boolean)
+  .map((w, i) => (i === 0 ? w.toLowerCase() : w[0].toUpperCase() + w.slice(1).toLowerCase())).join("");
+
 export type AppId = "finance" | "qr" | "inventory" | "jobs";
 export const appOf = (path: string): AppId =>
   path.startsWith("/dashboard/tools/qr") ? "qr" : path.startsWith("/dashboard/inventory") ? "inventory" : path.startsWith("/dashboard/jobs") ? "jobs" : "finance";
@@ -124,6 +129,9 @@ const APP_TITLE: Record<AppId, { label: string; icon: string; color: string }> =
 // Computadora: el ícono de la app de arriba del menú abre "Apps" a la derecha (como en el celular),
 // sin tener que ir hasta los 9 puntos de la barra de arriba.
 function DesktopAppSwitch({ app, role }: { app: AppId; role: Role | null }) {
+  const t = useTranslations("shell");
+  const tn = useTranslations("nav");
+  const tc = useTranslations("common");
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const btn = useRef<HTMLButtonElement>(null);
@@ -144,10 +152,10 @@ function DesktopAppSwitch({ app, role }: { app: AppId; role: Role | null }) {
   const art = app === "finance" ? <FinanceArt size={34} /> : app === "inventory" ? <InventoryArt size={34} /> : app === "jobs" ? <JobsArt size={34} /> : <QrArt size={34} />;
   return (
     <>
-      <button ref={btn} type="button" onClick={toggle} aria-expanded={open} aria-label={`${APP_TITLE[app].label} · switch app`}
+      <button ref={btn} type="button" onClick={toggle} aria-expanded={open} aria-label={`${tn(navKey(APP_TITLE[app].label))} · ${t("switchApp")}`}
         className={`group/app -ml-1 flex items-center gap-2 rounded-xl py-1 pl-1 pr-2 transition-colors ${open ? "bg-[#d7f1eb]" : "hover:bg-[#d7f1eb]"}`}>
         <span className="flex transition-transform duration-300 group-hover/app:-rotate-3 group-hover/app:scale-105">{art}</span>
-        <span className="text-[14px] font-semibold text-[#0b1f3a]">{APP_TITLE[app].label}</span>
+        <span className="text-[14px] font-semibold text-[#0b1f3a]">{tn(navKey(APP_TITLE[app].label))}</span>
         <svg viewBox="0 0 24 24" className={`h-4 w-4 text-[#0f766e] transition-transform duration-300 ${open ? "rotate-90" : "group-hover/app:rotate-45"}`} fill="currentColor" aria-hidden="true">
           {[5, 12, 19].map((cy) => [5, 12, 19].map((cx) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="2" />))}
         </svg>
@@ -158,10 +166,10 @@ function DesktopAppSwitch({ app, role }: { app: AppId; role: Role | null }) {
             className="fixed w-[34rem] max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_24px_60px_rgba(15,40,60,0.18)] animate-[bp-pop-in_0.18s_ease-out]">
             <div className="mb-3 flex items-center justify-between px-1">
               <div>
-                <p className="text-[16px] font-semibold text-[#0b1f3a]">Apps</p>
-                <p className="text-[12.5px] text-slate-500">Choose where you want to work</p>
+                <p className="text-[16px] font-semibold text-[#0b1f3a]">{t("apps")}</p>
+                <p className="text-[12.5px] text-slate-500">{t("chooseApp")}</p>
               </div>
-              <button type="button" onClick={() => setOpen(false)} aria-label="Close"
+              <button type="button" onClick={() => setOpen(false)} aria-label={tc("close")}
                 className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
                 <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
               </button>
@@ -176,6 +184,10 @@ function DesktopAppSwitch({ app, role }: { app: AppId; role: Role | null }) {
 }
 
 function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => void }) {
+  const t = useTranslations("shell");
+  const tn = useTranslations("nav");
+  const ta = useTranslations("navAdd");
+  const tc = useTranslations("common");
   const pathname = usePathname();
   const app = appOf(pathname);
   const NAV = NAV_BY_APP[app];
@@ -226,12 +238,12 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
       <>
         {!child && caret()}
         {!child && (item.art ? <span className="-my-1 flex shrink-0 transition-transform duration-200 group-hover:scale-110"><DashboardArt size={mobile ? 26 : 24} /></span> : icon(item.icon))}
-        <span className="min-w-0 flex-1 truncate">{item.label}</span>
-        {!item.href && <span className="shrink-0 rounded-full bg-slate-200/70 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">Soon</span>}
+        <span className="min-w-0 flex-1 truncate">{tn(navKey(item.label))}</span>
+        {!item.href && <span className="shrink-0 rounded-full bg-slate-200/70 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">{tc("soon")}</span>}
       </>
     );
     const base = `flex items-center gap-2.5 rounded-lg transition-all duration-150 ${size} ${child ? (mobile ? "pl-[3.6rem] pr-2.5" : "pl-[3.35rem] pr-2.5") : "px-2.5"} ${showAdd ? "pr-10" : ""}`;
-    const singular = item.addLabel ?? item.label.replace(/s$/, "");
+    const addText = ta(navKey(item.addLabel ?? item.label));
     return (
       <li key={`${item.label}-${item.href ?? item.roles?.join("")}`} className="group relative">
         {item.href ? (
@@ -243,7 +255,7 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
           <span className={`${base} cursor-default text-slate-400`} aria-disabled="true">{content}</span>
         )}
         {showAdd && item.addHref && (
-          <Link prefetch={false} href={item.addHref} onClick={onNavigate} aria-label={`New ${singular}`} title={`New ${singular}`}
+          <Link prefetch={false} href={item.addHref} onClick={onNavigate} aria-label={addText} title={addText}
             className={`absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md transition-all duration-150 focus:opacity-100 ${
               active
                 ? "bg-white/25 text-white hover:scale-110 hover:bg-white hover:text-[#0f766e] hover:shadow-md"
@@ -266,7 +278,7 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
           Computadora: solo el ícono (allá se cambia con los 9 puntos de arriba). */}
       <div className="mb-2 flex items-center gap-2 px-2">
         {mobile ? (
-          <span title={APP_TITLE[app].label} aria-label={APP_TITLE[app].label} className="flex">
+          <span title={tn(navKey(APP_TITLE[app].label))} aria-label={tn(navKey(APP_TITLE[app].label))} className="flex">
             {app === "finance" ? <FinanceArt size={40} /> : app === "inventory" ? <InventoryArt size={40} /> : app === "jobs" ? <JobsArt size={40} /> : <QrArt size={40} />}
           </span>
         ) : (
@@ -278,7 +290,7 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
             <svg viewBox="0 0 24 24" className="h-5 w-5 transition-transform duration-300 group-active:scale-90" fill="currentColor" aria-hidden="true">
               {[5, 12, 19].map((cy) => [5, 12, 19].map((cx) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.9" />))}
             </svg>
-            Apps
+            {t("apps")}
           </button>
         )}
       </div>
@@ -286,10 +298,10 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
         <div className="fixed inset-0 z-[95] flex flex-col bg-white animate-[bp-sheet-up_0.25s_ease-out]">
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
             <div>
-              <p className="text-[19px] font-semibold text-[#0b1f3a]">Apps</p>
-              <p className="text-[13px] text-slate-500">Choose where you want to work</p>
+              <p className="text-[19px] font-semibold text-[#0b1f3a]">{t("apps")}</p>
+              <p className="text-[13px] text-slate-500">{t("chooseApp")}</p>
             </div>
-            <button type="button" onClick={() => setAppsOpen(false)} aria-label="Close"
+            <button type="button" onClick={() => setAppsOpen(false)} aria-label={tc("close")}
               className="flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
               <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
             </button>
@@ -311,7 +323,7 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
                 className={`group flex w-full items-center gap-2.5 rounded-lg px-2.5 text-left ${size} transition-colors hover:bg-[#d7f1eb] ${inside ? "bg-[#e9f7f4] font-semibold text-[#0f766e]" : "text-slate-700 hover:text-[#0b1f3a]"}`}>
                 {caret(isOpen)}
                 {icon(item.icon)}
-                <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                <span className="min-w-0 flex-1 truncate">{tn(navKey(item.label))}</span>
               </button>
               {isOpen && (
                 <ul className="mt-0.5 space-y-0.5 animate-[bp-fade_0.2s_ease-out]">
@@ -327,7 +339,7 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
         <button type="button" onClick={installApp.install}
           className="group mt-3 flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-left text-[15px] text-[#0f766e] transition-colors hover:bg-[#d7f1eb]">
           <svg viewBox="0 0 24 24" className="h-5 w-5 transition-transform duration-300 group-hover:translate-y-0.5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v11M7.5 9.5 12 14l4.5-4.5M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" /></svg>
-          Install BrightPro app
+          {t("installApp")}
         </button>
       )}
     </nav>
@@ -345,6 +357,7 @@ export default function AppShell({
   currentId: string | null;
   children: React.ReactNode;
 }) {
+  const t = useTranslations("shell");
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const pathname = usePathname();
@@ -395,13 +408,13 @@ export default function AppShell({
       {/* Menú deslizable en celular */}
       {menuOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
-          <button type="button" aria-label="Close menu" onClick={() => setMenuOpen(false)} className="absolute inset-0 bg-slate-900/30" />
+          <button type="button" aria-label={t("closeMenu")} onClick={() => setMenuOpen(false)} className="absolute inset-0 bg-slate-900/30" />
           <aside className="absolute inset-y-0 left-0 flex w-[74%] max-w-[290px] flex-col bg-[#f4f7fa] shadow-2xl">
             <div className="flex h-16 items-center justify-between border-b border-[#cde8e0] bg-[#e7f5f1] px-5">
               <Link prefetch={false} href={homeHref} onClick={() => setMenuOpen(false)} aria-label="BrightPro home">
                 <Image src="/logo-brightpro.png" alt="BrightPro" width={130} height={36} className="h-7 w-auto" />
               </Link>
-              <button type="button" onClick={() => setMenuOpen(false)} aria-label="Close menu" className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+              <button type="button" onClick={() => setMenuOpen(false)} aria-label={t("closeMenu")} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
                 <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor" aria-hidden="true">
                   <path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" />
                 </svg>
@@ -411,7 +424,7 @@ export default function AppShell({
               className="flex w-full items-center gap-3 border-b border-slate-100 px-5 py-4 text-left hover:bg-slate-50">
               <Avatar name={user.fullName || user.email} url={user.avatarUrl} seed={user.id} size={44} />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold text-[#0b1f3a]">{user.fullName || "Your name"}</p>
+                <p className="truncate font-semibold text-[#0b1f3a]">{user.fullName || t("yourName")}</p>
                 <p className="truncate text-sm text-slate-500">{user.email}</p>
               </div>
               <svg viewBox="0 0 20 20" className="h-5 w-5 shrink-0 text-slate-300" fill="currentColor"><path d="M7.5 5 12.5 10l-5 5" /></svg>

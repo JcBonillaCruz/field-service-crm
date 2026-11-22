@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { playBeep, primeBeep } from "@/lib/beep";
 
 import { useEffect, useRef, useState } from "react";
@@ -27,6 +28,7 @@ async function getDetector(): Promise<Detector> {
 // Escáner de código de barras con la cámara (celular; con "everywhere" también en computadora con cámara).
 // Lee UNA vez por apertura y entrega el código (el que lo usa decide si busca, crea o descuenta).
 export default function BarcodeScanner({ open, onClose, onCode, everywhere = false }: { open: boolean; onClose: () => void; onCode: (code: string) => void; everywhere?: boolean }) {
+  const t = useTranslations("scanner");
   const video = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState("");
   const [canRead, setCanRead] = useState(true);
@@ -63,7 +65,7 @@ export default function BarcodeScanner({ open, onClose, onCode, everywhere = fal
           reading = false;
         }, 300);
       } catch {
-        setError("We couldn't open the camera. Allow camera access for this site in your browser settings.");
+        setError(t("noCamera"));
       }
     })();
     return () => { stopped = true; clearInterval(timer); stream?.getTracks().forEach((t) => t.stop()); };
@@ -73,8 +75,8 @@ export default function BarcodeScanner({ open, onClose, onCode, everywhere = fal
   return (
     <div className={`fixed inset-0 z-[95] flex flex-col bg-black ${everywhere ? "" : "lg:hidden"}`}>
       <div className="flex items-center justify-between px-4 py-4 text-white">
-        <p className="text-lg font-semibold">Scan barcode</p>
-        <button type="button" onClick={onClose} aria-label="Close" className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 active:bg-white/25">
+        <p className="text-lg font-semibold">{t("title")}</p>
+        <button type="button" onClick={onClose} aria-label={t("close")} className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 active:bg-white/25">
           <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
         </button>
       </div>
@@ -92,13 +94,13 @@ export default function BarcodeScanner({ open, onClose, onCode, everywhere = fal
       </div>
       <div className="space-y-3 bg-black px-4 pb-8 pt-4 text-center text-sm text-white/80">
         {error ? <p className="text-red-300">{error}</p>
-          : canRead ? <p>Point the camera at the barcode on the box. Hold steady for a second.</p>
-            : <p>The camera reader couldn&apos;t start on this browser. Type the code below.</p>}
+          : canRead ? <p>{t("point")}</p>
+            : <p>{t("noReader")}</p>}
         <div className="flex gap-2">
-          <input value={manual} onChange={(e) => setManual(e.target.value)} placeholder="Or type the SKU / code" inputMode="text"
+          <input value={manual} onChange={(e) => setManual(e.target.value)} placeholder={t("typeCode")} inputMode="text"
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); if (manual.trim()) onCode(manual.trim()); } }}
             className="min-w-0 flex-1 rounded-lg border border-white/20 bg-white/10 px-3 py-2.5 text-[15px] text-white placeholder:text-white/50 focus:border-[#2dd4bf] focus:outline-none" />
-          <button type="button" disabled={!manual.trim()} onClick={() => onCode(manual.trim())} className="rounded-lg bg-[#0f9f6e] px-4 font-semibold text-white disabled:opacity-50">Search</button>
+          <button type="button" disabled={!manual.trim()} onClick={() => onCode(manual.trim())} className="rounded-lg bg-[#0f9f6e] px-4 font-semibold text-white disabled:opacity-50">{t("search")}</button>
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -10,6 +11,7 @@ import { LocIcon, card, pageWrap } from "@/components/inventory/PageBits";
 
 // Técnico: su van. Solo ve lo suyo; al usar una pieza se descuenta de su van y del total de la empresa.
 export default function VanView({ companyId }: { companyId: string }) {
+  const t = useTranslations("van");
   const [vans, setVans] = useState<{ id: string; name: string }[] | null>(null);
   const [stock, setStock] = useState<TechStock[]>([]);
   const [open, setOpen] = useState<string | null>(null);
@@ -27,7 +29,7 @@ export default function VanView({ companyId }: { companyId: string }) {
 
   const list = useMemo(() => stock.filter((s) => `${s.name} ${s.sku}`.toLowerCase().includes(q.trim().toLowerCase())), [stock, q]);
   const low = stock.filter((s) => s.min_qty > 0 && s.qty <= s.min_qty).length;
-  const say = (t: string) => { setToast(t); setTimeout(() => setToast(""), 2400); };
+  const say = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 2400); };
 
   if (vans === null) return <div className={pageWrap}><div className="h-40 animate-pulse rounded-2xl bg-white" /></div>;
   return (
@@ -35,26 +37,26 @@ export default function VanView({ companyId }: { companyId: string }) {
       <div className="flex items-center gap-3">
         <LocIcon kind="van" size="lg" />
         <div className="min-w-0">
-          <h1 className="truncate text-[22px] font-semibold tracking-tight text-[#0b1f3a]">{vans[0]?.name ?? "My Van"}</h1>
-          <p className="text-[13.5px] text-slate-500">{vans.length ? `${stock.filter((s) => s.qty > 0).length} parts on board${low ? ` · ${low} running low` : ""}` : "No van assigned yet"}</p>
+          <h1 className="truncate text-[22px] font-semibold tracking-tight text-[#0b1f3a]">{vans[0]?.name ?? t("myVan")}</h1>
+          <p className="text-[13.5px] text-slate-500">{vans.length ? `${t("onBoard", { count: stock.filter((s) => s.qty > 0).length })}${low ? ` · ${t("runningLow", { count: low })}` : ""}` : t("noVanYet")}</p>
         </div>
       </div>
       {err && <p role="alert" className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{err}</p>}
       {!vans.length ? (
         <div className={`${card} mt-6 px-6 py-12 text-center`}>
-          <p className="text-[16px] font-semibold text-[#0b1f3a]">Ask the office to assign you a van</p>
-          <p className="mt-1 text-[14px] text-slate-500">Once you have one, you&apos;ll see your parts here and scan them when you use them.</p>
+          <p className="text-[16px] font-semibold text-[#0b1f3a]">{t("askVan")}</p>
+          <p className="mt-1 text-[14px] text-slate-500">{t("askVanHint")}</p>
         </div>
       ) : (
         <>
           <Link prefetch={false} href="/dashboard/inventory/scan"
             className="mt-5 flex items-center justify-center gap-3 rounded-2xl bg-[radial-gradient(120%_140%_at_50%_120%,#2bb3a4_0%,#1a8f84_45%,#0f766e_100%)] px-5 py-5 text-[17px] font-semibold text-white shadow-[0_14px_32px_rgba(15,118,110,0.25)] transition-shadow hover:shadow-[0_18px_40px_rgba(15,118,110,0.32)] active:scale-[0.99]">
             <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 8v8M10 8v8M13 8v8M16.5 8v8" /></svg>
-            Scan a part I used
+            {t("scanUsed")}
           </Link>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search my van"
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("search")}
             className="mt-4 h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-[15px] focus:border-[#0f766e] focus:outline-none focus:ring-4 focus:ring-[#14a39a]/15" />
-          {list.length === 0 ? <p className={`${card} mt-3 px-4 py-10 text-center text-sm text-slate-500`}>{stock.length ? "Nothing matches." : "Your van is empty. The office restocks it with a transfer."}</p> : (
+          {list.length === 0 ? <p className={`${card} mt-3 px-4 py-10 text-center text-sm text-slate-500`}>{stock.length ? t("noMatch") : t("empty")}</p> : (
             <ul className={`${card} mt-3 divide-y divide-slate-100 overflow-hidden`}>
               {list.map((s) => {
                 const st = s.qty <= 0 ? "out" : s.min_qty > 0 && s.qty <= s.min_qty ? "low" : "in";

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { KEY_HEADER, USER_HEADER, internalKey } from "@/lib/auth-headers";
 import { TAG, cached, must } from "@/lib/data-cache";
+import { isLocale } from "@/i18n/config";
 import { COMPANY_COOKIE, CompanySummary, CurrentUser, Role } from "@/lib/types";
 
 // Usuario ya verificado por el middleware en esta misma petición (evita otro GET /auth/v1/user)
@@ -32,7 +33,7 @@ export const getSession = cache(async () => {
   const uid = user.id;
 
   // Perfil y logos: caché (casi no cambian; se borra al guardar). Membresías y roles: SIEMPRE en vivo (son permisos).
-  const [profile, { data: rows }, logos] = await Promise.all([
+  const [profile, { data: rows }, logos, language] = await Promise.all([
     cached(["profile", uid], [TAG.profile(uid)], 300, async () =>
       must(await supabase.from("profiles").select("full_name, avatar_url").eq("id", uid).maybeSingle()) as { full_name: string | null; avatar_url: string | null } | null)
       .catch(() => null),
@@ -40,6 +41,11 @@ export const getSession = cache(async () => {
     // RLS ya limita sales_prefs a las compañías de este usuario
     cached(["logos", uid], [TAG.logos(uid)], 300, async () =>
       must(await supabase.from("sales_prefs").select("company_id, logo_url").limit(200))).catch(() => null),
+    // Paso 6.1: idioma guardado en el perfil. Consulta aparte: si la columna aún no existe (falta el SQL), no rompe nada.
+    cached(["profile-lang", uid], [TAG.profile(uid)], 300, async () => {
+      const r = must(await supabase.from("profiles").select("language").eq("id", uid).maybeSingle()) as { language: string | null } | null;
+      return r?.language ?? null;
+    }).catch(() => null),
   ]);
 
   type Row = { role: Role; companies: { id: string; name: string; industry: string | null; created_at: string } | null };
@@ -59,6 +65,7 @@ export const getSession = cache(async () => {
     supabase,
     user: currentUser,
     firstName: (fullName || user.email || "").split(" ")[0],
+    language: isLocale(language) ? language : null,
     companies,
     current,
   };

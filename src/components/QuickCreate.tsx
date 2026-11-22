@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 
@@ -23,9 +24,10 @@ const COLUMNS: { group: string; icon: string; items: Item[] }[] = [
 ];
 
 export default function QuickCreate() {
+  const t = useTranslations("quickCreate");
   return (
     <Popover className="relative">
-      <PopoverButton aria-label="Quick create"
+      <PopoverButton aria-label={t("title")}
         className="group flex h-9 w-9 items-center justify-center rounded-lg bg-[#0f766e] text-white transition-transform hover:bg-[#0c5f58] focus:outline-none active:scale-95">
         <svg viewBox="0 0 24 24" className="h-5 w-5 transition-transform duration-300 group-data-[open]:rotate-90" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
       </PopoverButton>
@@ -38,7 +40,7 @@ export default function QuickCreate() {
                 <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#e9f7f4] text-[#0f766e]">
                   <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={col.icon} /></svg>
                 </span>
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{col.group}</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{t(col.group.toLowerCase())}</p>
               </div>
               <ul className="space-y-0.5">
                 {col.items.map((it) => (
@@ -46,13 +48,13 @@ export default function QuickCreate() {
                     {it.href ? (
                       <Link prefetch={false} href={it.href} className="flex items-center gap-2 whitespace-nowrap rounded-lg px-2 py-1.5 text-[13px] text-slate-700 hover:bg-[#f0faf7] hover:text-[#0b1f3a]">
                         <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-[#0f766e]" fill="currentColor"><path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm1 7h3v2h-3v3H9v-3H6V9h3V6h2z" /></svg>
-                        {it.label}
+                        {t(it.label)}
                       </Link>
                     ) : (
-                      <span title="Coming soon" className="flex items-center gap-2 whitespace-nowrap rounded-lg px-2 py-1.5 text-[13px] text-slate-400">
+                      <span title={t("comingSoon")} className="flex items-center gap-2 whitespace-nowrap rounded-lg px-2 py-1.5 text-[13px] text-slate-400">
                         <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate-300" fill="currentColor"><path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm1 7h3v2h-3v3H9v-3H6V9h3V6h2z" /></svg>
-                        {it.label}
-                        <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-medium">Soon</span>
+                        {t(it.label)}
+                        <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-medium">{t("soon")}</span>
                       </span>
                     )}
                   </li>

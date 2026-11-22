@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import CompanyBadge from "@/components/CompanyBadge";
@@ -17,6 +18,8 @@ export default function CompanySwitcher({
   onSwitch: (id: string) => void;
   onNewCompany: () => void;
 }) {
+  const t = useTranslations("orgs");
+  const tc = useTranslations("common");
   const [open, setOpen] = useState(false);
   const [shown, setShown] = useState(false);
   const current = companies.find((c) => c.id === currentId) ?? null;
@@ -44,17 +47,17 @@ export default function CompanySwitcher({
 
       {open && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[85]">
-          <button type="button" aria-label="Close" onClick={close}
+          <button type="button" aria-label={tc("close")} onClick={close}
             className={`absolute inset-0 bg-slate-900/40 transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0"}`} />
           <aside className={`absolute right-0 top-0 flex h-full w-full max-w-md flex-col bg-white shadow-2xl transition-transform duration-300 ease-out ${shown ? "translate-x-0" : "translate-x-full"}`}>
             <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-              <h2 className="text-xl font-semibold text-[#0b1f3a]">Organizations</h2>
-              <button type="button" onClick={close} aria-label="Close"
+              <h2 className="text-xl font-semibold text-[#0b1f3a]">{t("title")}</h2>
+              <button type="button" onClick={close} aria-label={tc("close")}
                 className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-all duration-200 hover:rotate-90 hover:bg-red-50 hover:text-red-600">
                 <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
               </button>
             </div>
-            <p className="px-6 pb-2 pt-4 text-sm font-semibold text-slate-700">My organizations</p>
+            <p className="px-6 pb-2 pt-4 text-sm font-semibold text-slate-700">{t("mine")}</p>
             <div className="min-h-0 flex-1 overflow-y-auto px-3">
               <OrganizationList companies={companies} currentId={currentId} userId={userId} onOpen={(id) => { onSwitch(id); close(); }} />
             </div>

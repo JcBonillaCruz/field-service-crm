@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { FinanceArt, InventoryArt, JobsArt, QrArt } from "@/components/AppIcons";
@@ -24,6 +25,7 @@ export const APPS: App[] = [
 ];
 
 export function AppsGrid({ role, onPick, layout = "grid" }: { role?: Role | null; onPick?: () => void; layout?: "grid" | "wide" | "stack" }) {
+  const t = useTranslations("apps");
   const stack = layout === "stack";
   const path = usePathname() || "";
   const current = path.startsWith("/dashboard/tools/qr") ? "qr" : path.startsWith("/dashboard/inventory") ? "inventory" : path.startsWith("/dashboard/jobs") ? "jobs" : "finance";
@@ -39,10 +41,10 @@ export function AppsGrid({ role, onPick, layout = "grid" }: { role?: Role | null
               {a.id === "finance" ? <FinanceArt size={stack ? 40 : 56} /> : a.id === "inventory" ? <InventoryArt size={stack ? 40 : 56} /> : a.id === "jobs" ? <JobsArt size={stack ? 40 : 56} /> : <QrArt size={stack ? 40 : 56} />}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="flex items-center gap-2 text-[15px] font-semibold text-[#0b1f3a]">{a.label}{on && <span className="rounded-full bg-[#0f766e] px-2 py-0.5 text-[10px] font-semibold text-white">Open</span>}</span>
-              <span className="mt-0.5 block text-[12.5px] leading-snug text-slate-500">{a.hint}</span>
+              <span className="flex items-center gap-2 text-[15px] font-semibold text-[#0b1f3a]">{t(`${a.id}.label`)}{on && <span className="rounded-full bg-[#0f766e] px-2 py-0.5 text-[10px] font-semibold text-white">{t("open")}</span>}</span>
+              <span className="mt-0.5 block text-[12.5px] leading-snug text-slate-500">{t(`${a.id}.hint`)}</span>
               <span className={`mt-2 flex-wrap gap-1 ${stack ? "hidden" : "flex"}`}>
-                {a.parts.map((p) => <span key={p} className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10.5px] font-medium text-slate-500">{p}</span>)}
+                {a.parts.map((p, pi) => <span key={p} className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10.5px] font-medium text-slate-500">{t(`${a.id}.parts.${pi}`)}</span>)}
               </span>
             </span>
           </Link>
@@ -54,9 +56,10 @@ export function AppsGrid({ role, onPick, layout = "grid" }: { role?: Role | null
 
 // Escritorio: botón de 9 puntos que abre un súper menú horizontal de lado a lado, debajo de la barra de arriba
 export default function AppsMenu({ role }: { role: Role | null }) {
+  const t = useTranslations("apps");
   return (
     <Popover>
-      <PopoverButton aria-label="All apps"
+      <PopoverButton aria-label={t("allApps")}
         className="group flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus:outline-none data-[open]:bg-[#e9f7f4] data-[open]:text-[#0f766e]">
         <svg viewBox="0 0 24 24" className="h-5 w-5 transition-transform duration-500 group-hover:rotate-45 group-data-[open]:rotate-90" fill="currentColor" aria-hidden="true">
           {[5, 12, 19].map((cy) => [5, 12, 19].map((cx) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.8" />))}
@@ -68,7 +71,7 @@ export default function AppsMenu({ role }: { role: Role | null }) {
         {({ close }) => (
           <>
             <div className="flex items-center justify-between px-1 pb-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">All apps</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t("allApps")}</p>
               <span className="text-[11px] text-slate-400">Bright<b className="text-[#e8713a]">Pro</b></span>
             </div>
             <AppsGrid role={role} layout="wide" onPick={() => close()} />

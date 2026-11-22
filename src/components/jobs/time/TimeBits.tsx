@@ -1,5 +1,7 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
+import { intlTag } from "@/i18n/config";
 import Link from "next/link";
 import { KIND_META, RemovedTime, TimeEntry, fmtClock, hm, isStale, minutesOf } from "@/lib/timesheets";
 
@@ -126,12 +128,15 @@ export function SplitBar({ site, travel, other, max, height = 6 }: { site: numbe
   );
 }
 export function Legend({ className = "" }: { className?: string }) {
+  const t = useTranslations("timesheet");
   const dot = (c: string, l: string) => <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: c }} />{l}</span>;
-  return <p className={`flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-slate-500 ${className}`}>{dot(KIND_META.on_site.color, "On site")}{dot(KIND_META.travel.color, "Travel")}{dot("#9ad9cd", "Other time")}</p>;
+  return <p className={`flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-slate-500 ${className}`}>{dot(KIND_META.on_site.color, t("onSite"))}{dot(KIND_META.travel.color, t("travel"))}{dot("#9ad9cd", t("other"))}</p>;
 }
 
 // Un registro: qué fue, de qué hora a qué hora, cuánto duró y si la oficina lo corrigió (con el motivo a la vista)
 export function EntryLine({ e, now, jobHref, onEdit }: { e: TimeEntry; now: number; jobHref?: (jobId: string) => string; onEdit?: (e: TimeEntry) => void }) {
+  const t = useTranslations("timesheet");
+  const tag = intlTag(useLocale());
   const meta = KIND_META[e.kind];
   const stale = isStale(e, now);
   const open = !e.ended_at;
@@ -141,27 +146,27 @@ export function EntryLine({ e, now, jobHref, onEdit }: { e: TimeEntry; now: numb
       <span className="mt-[5px] h-2.5 w-2.5 shrink-0 rounded-full ring-4" style={{ background: meta.color, ["--tw-ring-color" as string]: meta.soft }} />
       <div className="min-w-0 flex-1">
         <p className="flex flex-wrap items-center gap-x-2 text-[13.5px] leading-snug text-[#0b1f3a]">
-          <span className="font-semibold">{meta.label}</span>
+          <span className="font-semibold">{t(`kind.${e.kind}`)}</span>
           {job && (e.job_id && jobHref
             ? <Link prefetch={false} href={jobHref(e.job_id)} className="min-w-0 truncate text-slate-600 hover:text-[#0f766e] hover:underline">{job}</Link>
             : <span className="min-w-0 truncate text-slate-600">{job}</span>)}
-          {e.is_manual && <span className="rounded-full bg-[#eef4ff] px-1.5 py-0.5 text-[10.5px] font-semibold text-[#2563eb]">Added by office</span>}
-          {!e.is_manual && e.edited_at && <span className="rounded-full bg-[#fff6e6] px-1.5 py-0.5 text-[10.5px] font-semibold text-[#b45309]">Corrected</span>}
+          {e.is_manual && <span className="rounded-full bg-[#eef4ff] px-1.5 py-0.5 text-[10.5px] font-semibold text-[#2563eb]">{t("addedByOffice")}</span>}
+          {!e.is_manual && e.edited_at && <span className="rounded-full bg-[#fff6e6] px-1.5 py-0.5 text-[10.5px] font-semibold text-[#b45309]">{t("corrected")}</span>}
         </p>
         <p className="text-[12.5px] tabular-nums text-slate-500">
-          {fmtClock(e.started_at)} – {open ? (stale ? <span className="font-semibold text-[#be123c]">no clock-out</span> : <span className="font-semibold text-[#0f766e]">now</span>) : fmtClock(e.ended_at)}
+          {fmtClock(e.started_at, tag)} – {open ? (stale ? <span className="font-semibold text-[#be123c]">{t("noClockOut")}</span> : <span className="font-semibold text-[#0f766e]">{t("now")}</span>) : fmtClock(e.ended_at, tag)}
         </p>
         {(e.edited_at || e.is_manual) && (
           <p className="mt-0.5 text-[12px] leading-snug text-slate-500">
-            {e.is_manual ? "Added" : "Corrected"} by {e.edited_by_name || "the office"}{e.fix_reason ? <> — <span className="text-slate-700">{e.fix_reason}</span></> : null}
-            {!e.is_manual && e.orig_started_at && <span className="text-slate-400"> · was {fmtClock(e.orig_started_at)} – {e.orig_ended_at ? fmtClock(e.orig_ended_at) : "open"}</span>}
+            {t(e.is_manual ? "addedBy" : "correctedBy", { name: e.edited_by_name || t("theOffice") })}{e.fix_reason ? <> — <span className="text-slate-700">{e.fix_reason}</span></> : null}
+            {!e.is_manual && e.orig_started_at && <span className="text-slate-400"> · {t("was", { from: fmtClock(e.orig_started_at, tag), to: e.orig_ended_at ? fmtClock(e.orig_ended_at, tag) : t("open") })}</span>}
           </p>
         )}
-        {stale && <p className="mt-0.5 text-[12px] font-medium text-[#be123c]">Looks like the clock-out was missed. These hours don&apos;t count until the office fixes it.</p>}
+        {stale && <p className="mt-0.5 text-[12px] font-medium text-[#be123c]">{t("staleHint")}</p>}
       </div>
       <span className={`shrink-0 pt-0.5 text-[13px] font-semibold tabular-nums ${stale ? "text-[#be123c]" : "text-slate-700"}`}>{stale ? "?" : hm(minutesOf(e, now), "0m")}</span>
       {onEdit && (
-        <button type="button" onClick={() => onEdit(e)} aria-label="Correct this time" title="Correct this time"
+        <button type="button" onClick={() => onEdit(e)} aria-label={t("correct")} title={t("correct")}
           className="group/edit -my-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 transition-all duration-200 hover:scale-110 hover:border-[#14a39a] hover:bg-[#e9f7f4] hover:text-[#0f766e] lg:opacity-0 lg:group-hover:opacity-100 lg:focus:opacity-100">
           <svg viewBox="0 0 24 24" className="h-[15px] w-[15px] transition-transform duration-200 group-hover/edit:-rotate-12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>
         </button>
@@ -172,12 +177,14 @@ export function EntryLine({ e, now, jobHref, onEdit }: { e: TimeEntry; now: numb
 
 // Registro que el dueño/manager borró: sigue a la vista, tachado, con quién y por qué
 export function RemovedLine({ r }: { r: RemovedTime }) {
+  const t = useTranslations("timesheet");
+  const tag = intlTag(useLocale());
   return (
     <li className="flex items-start gap-2.5 py-2">
       <span className="mt-[5px] h-2.5 w-2.5 shrink-0 rounded-full bg-slate-300 ring-4 ring-slate-100" />
       <div className="min-w-0 flex-1">
-        <p className="text-[13.5px] leading-snug text-slate-400 line-through">{KIND_META[r.kind]?.label ?? "Time"} · {fmtClock(r.old_started_at)} – {r.old_ended_at ? fmtClock(r.old_ended_at) : "open"}</p>
-        <p className="text-[12px] leading-snug text-slate-500">Removed by {r.actor_name || "the office"} — <span className="text-slate-700">{r.reason}</span></p>
+        <p className="text-[13.5px] leading-snug text-slate-400 line-through">{KIND_META[r.kind] ? t(`kind.${r.kind}`) : t("time")} · {fmtClock(r.old_started_at, tag)} – {r.old_ended_at ? fmtClock(r.old_ended_at, tag) : t("open")}</p>
+        <p className="text-[12px] leading-snug text-slate-500">{t("removedBy", { name: r.actor_name || t("theOffice") })} — <span className="text-slate-700">{r.reason}</span></p>
       </div>
     </li>
   );

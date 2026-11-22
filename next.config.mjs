@@ -1,3 +1,8 @@
+import createNextIntlPlugin from "next-intl/plugin";
+
+// Paso 6.1: idioma inglés / español (sin /es en la URL; ver src/i18n/request.ts)
+const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async headers() {
@@ -12,4 +17,4 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);

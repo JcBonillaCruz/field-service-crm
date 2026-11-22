@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { CalVisit, TechChip, barColor, fmtTime, tint } from "@/lib/jobs";
 
 // Circulito con las iniciales del técnico en su color (con foto si tiene)
@@ -30,9 +31,10 @@ export function TechDots({ techs, size = 22, max = 2 }: { techs: TechChip[]; siz
 
 // Íconos ilustrados del estado (estilo de los íconos de las apps): camioneta en camino, llave trabajando, pausa y palomita de terminado
 export function StatusArt({ s, size = 30 }: { s: CalVisit["visit_status"]; size?: number }) {
+  const ts = useTranslations("status");
   if (s === "on_my_way") return (
-    <svg viewBox="0 0 48 48" width={size} height={size} aria-label="On my way" className="shrink-0 drop-shadow-sm">
-      <title>On my way</title>
+    <svg viewBox="0 0 48 48" width={size} height={size} aria-label={ts("on_my_way")} className="shrink-0 drop-shadow-sm">
+      <title>{ts("on_my_way")}</title>
       <circle cx="24" cy="24" r="23" fill="#f3efff" stroke="#c4b5fd" strokeWidth="1.5" />
       <g className="animate-[bp-drive_1s_ease-in-out_infinite] motion-reduce:animate-none">
         {/* líneas de velocidad */}
@@ -50,8 +52,8 @@ export function StatusArt({ s, size = 30 }: { s: CalVisit["visit_status"]; size?
     </svg>
   );
   if (s === "in_progress") return (
-    <svg viewBox="0 0 48 48" width={size} height={size} aria-label="Working" className="shrink-0 drop-shadow-sm">
-      <title>Working</title>
+    <svg viewBox="0 0 48 48" width={size} height={size} aria-label={ts("in_progress")} className="shrink-0 drop-shadow-sm">
+      <title>{ts("in_progress")}</title>
       <circle cx="24" cy="24" r="23" fill="#fff7e6" stroke="#fcd38d" strokeWidth="1.5" />
       <circle cx="24" cy="24" r="23" fill="none" stroke="#f59e0b" strokeWidth="2" strokeDasharray="10 134" className="origin-center animate-[spin_2.4s_linear_infinite] motion-reduce:animate-none" />
       <g className="origin-[24px_24px] animate-[bp-wrench_1.4s_ease-in-out_infinite] motion-reduce:animate-none">
@@ -61,15 +63,15 @@ export function StatusArt({ s, size = 30 }: { s: CalVisit["visit_status"]; size?
     </svg>
   );
   if (s === "paused" || s === "on_hold") return (
-    <svg viewBox="0 0 48 48" width={size} height={size} aria-label={s === "paused" ? "Paused" : "On hold"} className="shrink-0 drop-shadow-sm">
-      <title>{s === "paused" ? "Paused" : "Needs follow-up"}</title>
+    <svg viewBox="0 0 48 48" width={size} height={size} aria-label={ts(s === "paused" ? "paused" : "on_hold")} className="shrink-0 drop-shadow-sm">
+      <title>{ts(s === "paused" ? "paused" : "on_hold")}</title>
       <circle cx="24" cy="24" r="23" fill="#fff1f2" stroke="#fecdd3" strokeWidth="1.5" />
       <rect x="16.5" y="14" width="5.5" height="20" rx="2" fill="#e11d48" /><rect x="26" y="14" width="5.5" height="20" rx="2" fill="#e11d48" />
     </svg>
   );
   if (s === "completed") return (
-    <svg viewBox="0 0 48 48" width={size} height={size} aria-label="Completed" className="shrink-0 animate-[bp-pop-in_0.3s_ease-out] drop-shadow-sm">
-      <title>Completed</title>
+    <svg viewBox="0 0 48 48" width={size} height={size} aria-label={ts("completed")} className="shrink-0 animate-[bp-pop-in_0.3s_ease-out] drop-shadow-sm">
+      <title>{ts("completed")}</title>
       <circle cx="24" cy="24" r="23" fill="#16a34a" />
       <circle cx="24" cy="24" r="19" fill="none" stroke="#bbf7d0" strokeWidth="1.5" opacity=".6" />
       <path d="M14 24.5l6.5 6.5L34 17.5" fill="none" stroke="#fff" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" />
