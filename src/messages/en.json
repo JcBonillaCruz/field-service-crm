@@ -6025,7 +6025,10 @@
     "noFiles": "No Files Attached",
     "uploading": "Uploading…",
     "filesInvoice": "Up to 15 files, 10MB each. JPG/PNG photos go inside the PDF (4 per page, up to 12).",
-    "filesQuote": "You can upload a maximum of 5 files, 10MB each"
+    "filesQuote": "You can upload a maximum of 5 files, 10MB each",
+    "language": "Language",
+    "custLang": "Customer's language · the email, PDF and link go in this language",
+    "notCustLang": "Not the customer's language · the email, PDF and link go in this language"
   },
   "subForm": {
     "mode": {
@@ -7386,5 +7389,82 @@
     "sub": "Full screen, faster, with alerts on your iPhone.",
     "here": "The Share button is down here",
     "notNow": "Not now"
+  },
+  "auth": {
+    "language": "Language",
+    "signIn": "Sign in",
+    "signInSub": "to access BrightPro",
+    "email": "Email address",
+    "password": "Password",
+    "passwordNew": "Password (8+ characters)",
+    "hide": "Hide",
+    "show": "Show",
+    "forgot": "Forgot password?",
+    "signingIn": "Signing in...",
+    "noAccount": "Don't have a BrightPro account?",
+    "signUpNow": "Sign up now",
+    "eEmailSignIn": "Enter the email address you signed up with.",
+    "ePassword": "Enter your password.",
+    "eConfirm": "Confirm your email first. Check your inbox for the BrightPro link.",
+    "eWrong": "That email and password don't match. Try again.",
+    "eName": "Enter your full name.",
+    "eEmail": "Enter a valid email address.",
+    "ePwShort": "Use at least 8 characters for your password.",
+    "eTerms": "Accept the Terms of Service to continue.",
+    "eRate": "Too many sign-up emails were sent. Wait a few minutes and try again.",
+    "eExists": "There's already an account with this email. Sign in instead.",
+    "ePwWeak": "Choose a stronger password.",
+    "eSignUp": "The account couldn't be created. Try again.",
+    "checkEmail": "Check your email",
+    "sentTo": "We sent a confirmation link to <b>{email}</b>. Open it to activate your BrightPro account.",
+    "spam": "Can't find it? Look in your spam or promotions folder.",
+    "backSignIn": "Back to sign in",
+    "createTitle": "Create your account",
+    "createSub": "Start free. No credit card needed.",
+    "fullName": "Full name",
+    "agree": "I agree to the Terms of Service and Privacy Policy.",
+    "creating": "Creating account...",
+    "create": "Create account",
+    "haveAccount": "Already have an account?",
+    "eMin8": "Use at least 8 characters.",
+    "eTemp": "Choose a new password, not the temporary one.",
+    "eMatch": "The passwords don't match.",
+    "eDifferent": "Choose a password different from the temporary one.",
+    "eSave": "It couldn't be saved. Try again.",
+    "setTitle": "Create your password",
+    "setSub": "You signed in with a temporary password. Choose your own so only you can use your account.",
+    "newPw": "New password",
+    "repeatPw": "Repeat it",
+    "showPw": "Show password",
+    "saving": "Saving...",
+    "saveContinue": "Save and continue",
+    "soon": "{name} sign-in is coming soon. Use your email for now.",
+    "signInUsing": "Sign in using",
+    "with": "Sign in with {name}",
+    "nfLink": "This link is no longer available",
+    "nfLinkSub": "Ask the business to send you a new link.",
+    "nfPage": "This page is no longer available",
+    "nfHome": "Taking you home…",
+    "artLeft": "3 left",
+    "slideN": "Show slide {n}",
+    "rights": "© 2026 BrightPro. All rights reserved.",
+    "slide": {
+      "quotes": {
+        "title": "Quotes that turn into paid invoices",
+        "text": "Your customer signs the estimate on their phone, and BrightPro creates the job and the invoice for you."
+      },
+      "van": {
+        "title": "Know what's in every van",
+        "text": "Parts used on a job come off the van's stock automatically, and you get an alert before anything runs out."
+      },
+      "dispatch": {
+        "title": "Dispatch your crew in one tap",
+        "text": "Assign jobs on the calendar and follow each technician from on the way to job done."
+      }
+    }
+  },
+  "printBar": {
+    "print": "Print / Save as PDF",
+    "close": "Close"
   }
 }

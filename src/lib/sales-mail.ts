@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { SalesDoc, SalesLine, SalesPrefs, money, balanceOf, fmtD } from "@/lib/sales";
+import { SalesDoc, SalesLine, SalesPrefs, money, balanceOf } from "@/lib/sales";
+import { DocLang, docDate, docLangOf, docTx } from "@/lib/doc-lang";
 import { PdfInput } from "@/lib/sales-pdf";
 
 // Descarga las fotos (JPG/PNG) adjuntas a la FACTURA para ponerlas en el PDF
@@ -14,7 +15,9 @@ export async function loadPhotos(supabase: SupabaseClient, doc: SalesDoc, files:
   return out;
 }
 
-export const pdfInputFrom = (d: { doc: SalesDoc; lines: SalesLine[]; prefs: SalesPrefs; companyName: string }, variant?: PdfInput["variant"]): PdfInput => ({
+// lang: idioma del cliente (Paso 6.2d); si no se pasa, el de su ficha (loadDoc lo trae)
+export const pdfInputFrom = (d: { doc: SalesDoc; lines: SalesLine[]; prefs: SalesPrefs; companyName: string; lang?: DocLang }, variant?: PdfInput["variant"], lang?: DocLang): PdfInput => ({
+  lang: lang ?? d.lang ?? "en",
   doc: d.doc, lines: d.lines, companyName: d.companyName, logoUrl: d.prefs.logo_url, org: d.prefs.org_info ?? {}, pdf: d.prefs.pdf_settings ?? {},
   whiteLabel: d.prefs.white_label, hideZero: d.doc.kind === "quote" ? d.prefs.quote_settings.hide_zero_lines : d.prefs.invoice_settings.hide_zero_lines, variant,
 });
@@ -37,9 +40,10 @@ const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
 const rich = (t: string) => esc(t).replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(/__([^_]+)__/g, "<u>$1</u>").replace(/\*([^*]+)\*/g, "<i>$1</i>");
 
 // Correo bonito con botón, en los colores de la compañía
-export function emailHtml(o: { body: string; link: string; pixel: string; doc: SalesDoc; companyName: string; logoUrl: string | null; accent: string; whiteLabel: boolean }) {
+export function emailHtml(o: { body: string; link: string; pixel: string; doc: SalesDoc; companyName: string; logoUrl: string | null; accent: string; whiteLabel: boolean; lang?: DocLang }) {
   const isQuote = o.doc.kind === "quote";
-  const btn = `<a href="${o.link}" style="display:inline-block;background:${o.accent};color:#ffffff;text-decoration:none;font-weight:600;padding:12px 26px;border-radius:8px;font-size:15px">${isQuote ? "VIEW QUOTE" : "VIEW INVOICE"}</a>`;
+  const lang: DocLang = o.lang ?? "en", L = docTx(lang);
+  const btn = `<a href="${o.link}" style="display:inline-block;background:${o.accent};color:#ffffff;text-decoration:none;font-weight:600;padding:12px 26px;border-radius:8px;font-size:15px">${L.viewBtn[o.doc.kind]}</a>`;
   const paras = o.body.split(/\n{2,}/).map((p) => p.includes("{link}")
     ? `<p style="margin:0 0 16px">${rich(p.replace("{link}", "").trim()).replace(/\n/g, "<br>")}</p><p style="margin:0 0 20px">${btn}</p>`
     : `<p style="margin:0 0 16px">${rich(p).replace(/\n/g, "<br>")}</p>`).join("");
@@ -50,11 +54,24 @@ export function emailHtml(o: { body: string; link: string; pixel: string; doc: S
 <tr><td style="background:${o.accent};height:6px;font-size:0">&nbsp;</td></tr>
 <tr><td style="padding:26px 32px 8px">${o.logoUrl ? `<img src="${o.logoUrl}" alt="${esc(o.companyName)}" style="max-height:70px;max-width:220px;display:block">` : `<p style="margin:0;font-size:20px;font-weight:700;color:#0b1f3a">${esc(o.companyName)}</p>`}</td></tr>
 <tr><td style="padding:8px 32px 4px"><table role="presentation" width="100%" style="background:#f8fafc;border-radius:10px"><tr>
-<td style="padding:16px 18px"><p style="margin:0;color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.5px">${isQuote ? "Quote" : "Invoice"} ${esc(o.doc.number)}</p>
+<td style="padding:16px 18px"><p style="margin:0;color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.5px">${L.noun[o.doc.kind]} ${esc(o.doc.number)}</p>
 <p style="margin:4px 0 0;font-size:24px;font-weight:700;color:#0b1f3a">${amount}</p>
-${!isQuote && o.doc.due_date ? `<p style="margin:4px 0 0;color:#64748b;font-size:13px">Due ${fmtD(o.doc.due_date)}</p>` : ""}
-${isQuote && o.doc.expiry_date ? `<p style="margin:4px 0 0;color:#64748b;font-size:13px">Valid until ${fmtD(o.doc.expiry_date)}</p>` : ""}</td></tr></table></td></tr>
+${!isQuote && o.doc.due_date ? `<p style="margin:4px 0 0;color:#64748b;font-size:13px">${L.dueOn(docDate(o.doc.due_date, lang))}</p>` : ""}
+${isQuote && o.doc.expiry_date ? `<p style="margin:4px 0 0;color:#64748b;font-size:13px">${L.validUntil(docDate(o.doc.expiry_date, lang))}</p>` : ""}</td></tr></table></td></tr>
 <tr><td style="padding:20px 32px 10px;font-size:15px;line-height:1.6">${paras}</td></tr>
-<tr><td style="padding:14px 32px 24px;border-top:1px solid #f1f5f9;color:#94a3b8;font-size:12px">${esc(o.companyName)}${o.whiteLabel ? "" : ` · Sent with <b style="color:#0b1f3a">Bright</b><b style="color:#e8713a">Pro</b>`}</td></tr>
+<tr><td style="padding:14px 32px 24px;border-top:1px solid #f1f5f9;color:#94a3b8;font-size:12px">${esc(o.companyName)}${o.whiteLabel ? "" : ` · ${L.sentWith} <b style="color:#0b1f3a">Bright</b><b style="color:#e8713a">Pro</b>`}</td></tr>
 </table></td></tr></table><img src="${o.pixel}" width="1" height="1" alt="" style="display:block;border:0;width:1px;height:1px"></body></html>`;
+}
+
+// Paso 6.2d · Idioma del enlace público /share: ?lang= (el cliente lo cambió) → el de su ficha → el de su navegador
+export async function shareLang(customerId: string | null | undefined, override: string | null | undefined, acceptLanguage: string | null): Promise<DocLang> {
+  if (override === "en" || override === "es") return override;
+  const { admin } = await import("@/lib/push");
+  const db = admin();
+  if (db && customerId) {
+    const { data } = await db.from("customers").select("language").eq("id", customerId).maybeSingle();
+    const l = (data as { language?: string | null } | null)?.language;
+    if (l) return docLangOf(l);
+  }
+  return /^\s*es\b/i.test(acceptLanguage ?? "") ? "es" : "en";
 }

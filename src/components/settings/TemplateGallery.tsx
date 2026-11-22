@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { CATEGORIES, TEMPLATE_DEFS, TplCategory, TplDef } from "@/lib/pdf-templates";
 import { SalesDoc, SalesLine, SalesPrefs, docStatus, pdfOf } from "@/lib/sales";
 import DocPaper from "@/components/sales/DocPaper";
@@ -12,11 +12,12 @@ import { Toast, XButton } from "@/components/sales/SalesBits";
 
 // Miniatura real del documento con esa plantilla
 function Thumb({ tpl, doc, lines, prefs, company, scale }: { tpl: TplDef; doc: SalesDoc; lines: SalesLine[]; prefs: SalesPrefs; company: string; scale: number }) {
+  const lang = useLocale() === "es" ? "es" : "en";
   const p = { ...prefs, pdf_settings: { ...prefs.pdf_settings, template: tpl.id, accent: "" } };
   return (
     <div className="pointer-events-none relative overflow-hidden bg-white" style={{ height: 1060 * scale }}>
       <div className="absolute left-0 top-0 origin-top-left" style={{ width: 820, transform: `scale(${scale})` }}>
-        <DocPaper doc={doc} lines={lines} prefs={p} companyName={company} ribbon={false} stack={false} />
+        <DocPaper doc={doc} lines={lines} prefs={p} companyName={company} ribbon={false} stack={false} lang={lang} />
       </div>
     </div>
   );
@@ -26,6 +27,7 @@ export default function TemplateGallery({ companyId, prefs, company, sample, sam
   companyId: string; prefs: SalesPrefs; company: string; sample: SalesDoc; sampleLines: SalesLine[]; back: string | null; kind: "quote" | "invoice";
 }) {
   const tr = useTranslations("tplGallery");
+  const lang = useLocale() === "es" ? "es" : "en";
   const catName = (id: string) => tr(`cat.${id}`);
   const router = useRouter();
   const [cat, setCat] = useState<"all" | TplCategory>("all");
@@ -113,7 +115,7 @@ export default function TemplateGallery({ companyId, prefs, company, sample, sam
             </div>
           </div>
           <div className="flex-1 overflow-y-auto px-3 py-6" onMouseDown={(e) => { if (e.target === e.currentTarget) setPreview(null); }}>
-            <DocPaper doc={sample} lines={sampleLines} prefs={{ ...prefs, pdf_settings: { ...prefs.pdf_settings, template: preview.id, accent: "" } }} companyName={company} status={docStatus(sample)} />
+            <DocPaper doc={sample} lines={sampleLines} prefs={{ ...prefs, pdf_settings: { ...prefs.pdf_settings, template: preview.id, accent: "" } }} companyName={company} status={docStatus(sample)} lang={lang} />
           </div>
         </div>
       )}

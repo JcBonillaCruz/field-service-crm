@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
+import { Locale, setLocaleCookie } from "@/i18n/config";
 
 const TEAL = "#0f766e";
 const TEAL_LIGHT = "#14a39a";
@@ -27,7 +30,7 @@ function InvoiceArt() {
   );
 }
 
-function VanArt() {
+function VanArt({ left }: { left: string }) {
   return (
     <svg viewBox="0 0 260 170" className="w-full h-full" aria-hidden="true">
       <ellipse cx="130" cy="150" rx="100" ry="10" fill="#eef2f6" />
@@ -43,7 +46,7 @@ function VanArt() {
       <circle cx="190" cy="136" r="13" fill={INK} />
       <circle cx="190" cy="136" r="5" fill="#fff" />
       <rect x="160" y="30" width="62" height="28" rx="14" fill={INK} />
-      <text x="191" y="49" textAnchor="middle" fontSize="12" fontWeight="600" fill="#fff">3 left</text>
+      <text x="191" y="49" textAnchor="middle" fontSize="12" fontWeight="600" fill="#fff">{left}</text>
     </svg>
   );
 }
@@ -63,26 +66,37 @@ function DispatchArt() {
   );
 }
 
-const SLIDES = [
-  {
-    art: <InvoiceArt />,
-    title: "Quotes that turn into paid invoices",
-    text: "Your customer signs the estimate on their phone, and BrightPro creates the job and the invoice for you.",
-  },
-  {
-    art: <VanArt />,
-    title: "Know what's in every van",
-    text: "Parts used on a job come off the van's stock automatically, and you get an alert before anything runs out.",
-  },
-  {
-    art: <DispatchArt />,
-    title: "Dispatch your crew in one tap",
-    text: "Assign jobs on the calendar and follow each technician from on the way to job done.",
-  },
-];
+const SLIDE_KEYS = ["quotes", "van", "dispatch"] as const;
+
+// Paso 6.2d: inglés / español antes de entrar (se guarda en la cookie de este aparato; al entrar manda la misma)
+function LangSwitch() {
+  const t = useTranslations("auth");
+  const locale = useLocale();
+  const router = useRouter();
+  const pick = (l: Locale) => { if (l === locale) return; setLocaleCookie(l); router.refresh(); };
+  return (
+    <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/90 p-0.5 text-[13px] shadow-sm backdrop-blur" role="radiogroup" aria-label={t("language")}>
+      <svg viewBox="0 0 24 24" className="ml-2 h-4 w-4 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" />
+      </svg>
+      {(["en", "es"] as const).map((l) => (
+        <button key={l} type="button" role="radio" aria-checked={locale === l} onClick={() => pick(l)}
+          className={`rounded-full px-3 py-1 font-medium transition-colors ${locale === l ? "bg-[#e9f7f4] text-[#0f766e]" : "text-slate-500 hover:text-[#0b1f3a]"}`}>
+          {l === "en" ? "English" : "Español"}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export default function AuthShell({ children }: { children: React.ReactNode }) {
+  const t = useTranslations("auth");
   const [slide, setSlide] = useState(0);
+  const SLIDES = SLIDE_KEYS.map((k) => ({
+    key: k,
+    art: k === "quotes" ? <InvoiceArt /> : k === "van" ? <VanArt left={t("artLeft")} /> : <DispatchArt />,
+    title: t(`slide.${k}.title`), text: t(`slide.${k}.text`),
+  }));
 
   useEffect(() => {
     const id = setInterval(() => setSlide((s) => (s + 1) % SLIDES.length), 6000);
@@ -99,7 +113,8 @@ export default function AuthShell({ children }: { children: React.ReactNode }) {
         <polygon points="300,900 820,420 1440,900" fill="#eef7f5" opacity="0.8" />
       </svg>
 
-      <div className="relative z-10 flex flex-1 items-center justify-center px-4 py-10">
+      <div className="relative z-10 flex justify-end px-4 pt-4 sm:px-6"><LangSwitch /></div>
+      <div className="relative z-10 flex flex-1 items-center justify-center px-4 pb-10 pt-4">
         <div className="w-full max-w-[920px] overflow-hidden rounded-2xl bg-white shadow-[0_12px_40px_rgba(15,40,60,0.08)] grid md:grid-cols-[1.1fr_1fr]">
           <section className="p-8 sm:p-12">{children}</section>
 
@@ -112,9 +127,9 @@ export default function AuthShell({ children }: { children: React.ReactNode }) {
             <div className="mt-8 flex gap-2">
               {SLIDES.map((s, i) => (
                 <button
-                  key={s.title}
+                  key={s.key}
                   type="button"
-                  aria-label={`Show slide ${i + 1}`}
+                  aria-label={t("slideN", { n: i + 1 })}
                   onClick={() => setSlide(i)}
                   className={`h-1.5 rounded-full transition-all ${i === slide ? "w-6 bg-[#0f766e]" : "w-1.5 bg-slate-300"}`}
                 />
@@ -125,7 +140,7 @@ export default function AuthShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <footer className="relative z-10 pb-6 text-center text-xs text-slate-400">
-        © 2026 BrightPro. All rights reserved.
+        {t("rights")}
       </footer>
 
       <style jsx global>{`

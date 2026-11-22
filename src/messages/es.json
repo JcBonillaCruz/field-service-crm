@@ -6020,7 +6020,10 @@
     "noFiles": "No hay archivos adjuntos",
     "uploading": "Subiendo…",
     "filesInvoice": "Hasta 15 archivos de 10 MB cada uno. Las fotos JPG/PNG van dentro del PDF (4 por página, hasta 12).",
-    "filesQuote": "Puedes subir máximo 5 archivos de 10 MB cada uno"
+    "filesQuote": "Puedes subir máximo 5 archivos de 10 MB cada uno",
+    "language": "Idioma",
+    "custLang": "Idioma del cliente · el correo, el PDF y el enlace salen en este idioma",
+    "notCustLang": "No es el idioma del cliente · el correo, el PDF y el enlace salen en este idioma"
   },
   "subForm": {
     "mode": {
@@ -7381,5 +7384,82 @@
     "sub": "Pantalla completa, más rápida y con alertas en tu iPhone.",
     "here": "El botón Compartir está aquí abajo",
     "notNow": "Ahora no"
+  },
+  "auth": {
+    "language": "Idioma",
+    "signIn": "Iniciar sesión",
+    "signInSub": "para entrar a BrightPro",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "passwordNew": "Contraseña (8 caracteres o más)",
+    "hide": "Ocultar",
+    "show": "Ver",
+    "forgot": "¿Olvidó su contraseña?",
+    "signingIn": "Entrando...",
+    "noAccount": "¿No tiene una cuenta de BrightPro?",
+    "signUpNow": "Regístrese ahora",
+    "eEmailSignIn": "Escriba el correo con el que se registró.",
+    "ePassword": "Escriba su contraseña.",
+    "eConfirm": "Primero confirme su correo. Busque en su bandeja el enlace de BrightPro.",
+    "eWrong": "El correo y la contraseña no coinciden. Inténtelo de nuevo.",
+    "eName": "Escriba su nombre completo.",
+    "eEmail": "Escriba un correo válido.",
+    "ePwShort": "Use al menos 8 caracteres en su contraseña.",
+    "eTerms": "Acepte los Términos del servicio para continuar.",
+    "eRate": "Se enviaron demasiados correos de registro. Espere unos minutos e inténtelo de nuevo.",
+    "eExists": "Ya existe una cuenta con este correo. Mejor inicie sesión.",
+    "ePwWeak": "Elija una contraseña más segura.",
+    "eSignUp": "No se pudo crear la cuenta. Inténtelo de nuevo.",
+    "checkEmail": "Revise su correo",
+    "sentTo": "Le enviamos un enlace de confirmación a <b>{email}</b>. Ábralo para activar su cuenta de BrightPro.",
+    "spam": "¿No lo encuentra? Busque en la carpeta de spam o de promociones.",
+    "backSignIn": "Volver a iniciar sesión",
+    "createTitle": "Cree su cuenta",
+    "createSub": "Empiece gratis. Sin tarjeta de crédito.",
+    "fullName": "Nombre completo",
+    "agree": "Acepto los Términos del servicio y la Política de privacidad.",
+    "creating": "Creando la cuenta...",
+    "create": "Crear cuenta",
+    "haveAccount": "¿Ya tiene una cuenta?",
+    "eMin8": "Use al menos 8 caracteres.",
+    "eTemp": "Elija una contraseña nueva, no la temporal.",
+    "eMatch": "Las contraseñas no coinciden.",
+    "eDifferent": "Elija una contraseña distinta a la temporal.",
+    "eSave": "No se pudo guardar. Inténtelo de nuevo.",
+    "setTitle": "Cree su contraseña",
+    "setSub": "Entró con una contraseña temporal. Elija la suya para que solo usted pueda usar su cuenta.",
+    "newPw": "Contraseña nueva",
+    "repeatPw": "Repítala",
+    "showPw": "Ver contraseña",
+    "saving": "Guardando...",
+    "saveContinue": "Guardar y continuar",
+    "soon": "Pronto podrá entrar con {name}. Por ahora use su correo.",
+    "signInUsing": "Entrar con",
+    "with": "Entrar con {name}",
+    "nfLink": "Este enlace ya no está disponible",
+    "nfLinkSub": "Pídale al negocio que le envíe un enlace nuevo.",
+    "nfPage": "Esta página ya no está disponible",
+    "nfHome": "Le llevamos al inicio…",
+    "artLeft": "Quedan 3",
+    "slideN": "Ver diapositiva {n}",
+    "rights": "© 2026 BrightPro. Todos los derechos reservados.",
+    "slide": {
+      "quotes": {
+        "title": "Cotizaciones que se vuelven facturas pagadas",
+        "text": "Su cliente firma la cotización en su teléfono y BrightPro crea el trabajo y la factura por usted."
+      },
+      "van": {
+        "title": "Sepa qué hay en cada camioneta",
+        "text": "Las piezas que se usan en un trabajo se descuentan solas del inventario de la camioneta, y le llega un aviso antes de que algo se acabe."
+      },
+      "dispatch": {
+        "title": "Despache a su equipo con un toque",
+        "text": "Asigne trabajos en el calendario y siga a cada técnico desde que va en camino hasta que termina."
+      }
+    }
+  },
+  "printBar": {
+    "print": "Imprimir / Guardar como PDF",
+    "close": "Cerrar"
   }
 }

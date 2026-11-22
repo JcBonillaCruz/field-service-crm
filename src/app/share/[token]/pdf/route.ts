@@ -3,13 +3,13 @@ import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_PREFS, SalesDoc, SalesLine } from "@/lib/sales";
 import { buildSalesPdf, pdfFileName } from "@/lib/sales-pdf";
 import { admin } from "@/lib/push";
-import { loadPhotos } from "@/lib/sales-mail";
+import { loadPhotos, shareLang } from "@/lib/sales-mail";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // El cliente descarga el PDF desde el enlace público
-export async function GET(_req: Request, { params }: { params: { token: string } }) {
+export async function GET(req: Request, { params }: { params: { token: string } }) {
   const { data } = await createClient().rpc("public_sales_doc", { tok: params.token });
   const p = data as { doc: SalesDoc; lines: SalesLine[]; company: { name: string } | null; white_label: boolean;
     prefs: { logo_url: string | null; org_info: Record<string, string> | null; pdf_settings: Record<string, unknown> | null; quote_settings: { hide_zero_lines?: boolean } | null; invoice_settings: { hide_zero_lines?: boolean } | null } | null } | null;
@@ -22,8 +22,10 @@ export async function GET(_req: Request, { params }: { params: { token: string }
     const { data: files } = await adm.from("sales_files").select("name, path, mime").eq("entity_id", doc.id);
     photos = await loadPhotos(adm, doc, files ?? []);
   }
+  // Paso 6.2d: el PDF en el idioma del cliente (o el que eligió en la página)
+  const lang = await shareLang(doc.customer_id, new URL(req.url).searchParams.get("lang"), req.headers.get("accept-language"));
   const bytes = await buildSalesPdf({
-    photos,
+    photos, lang,
     doc, lines: p.lines ?? [], companyName: p.company?.name ?? "", logoUrl: p.prefs?.logo_url ?? null, org: p.prefs?.org_info ?? {},
     pdf: (p.prefs?.pdf_settings ?? {}) as never, whiteLabel: Boolean(p.white_label),
     hideZero: doc.kind === "quote" ? p.prefs?.quote_settings?.hide_zero_lines ?? DEFAULT_PREFS.quote_settings.hide_zero_lines : p.prefs?.invoice_settings?.hide_zero_lines,

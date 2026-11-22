@@ -1,4 +1,5 @@
-import { PdfSettings, SalesDoc, SalesLine, Status, addressLines, balanceOf, discountSummary, fmtD, fmtDT, num2, pdfOf } from "@/lib/sales";
+import { PdfSettings, SalesDoc, SalesLine, Status, addressLines, balanceOf, discountSummary, num2, pdfOf } from "@/lib/sales";
+import { DocLang, docDateTime, docMeta, docRibbon, docTitle, docTx, metaIcon } from "@/lib/doc-lang";
 import { TPL_ICONS, tplOf } from "@/lib/pdf-templates";
 import { Ribbon } from "@/components/sales/SalesBits";
 
@@ -18,8 +19,9 @@ export type PaperPrefs = {
 };
 
 // El documento como se ve en "PDF" (mismo diseño que el PDF real), en cualquiera de las 30 plantillas.
-export default function DocPaper({ doc, lines, prefs, companyName, status, variant = "full", ribbon = true, compact = false, stack = true }: {
-  doc: SalesDoc; lines: SalesLine[]; prefs: PaperPrefs; companyName: string; status?: Status; variant?: PaperVariant; ribbon?: boolean; compact?: boolean;
+// Paso 6.2d: `lang` = idioma del CLIENTE (Customer Language), no el de quien usa BrightPro.
+export default function DocPaper({ doc, lines, prefs, companyName, status, variant = "full", ribbon = true, compact = false, stack = true, lang = "en" }: {
+  doc: SalesDoc; lines: SalesLine[]; prefs: PaperPrefs; companyName: string; status?: Status; variant?: PaperVariant; ribbon?: boolean; compact?: boolean; lang?: DocLang;
   stack?: boolean; // en el celular, los artículos se ven en renglones (sin deslizar de lado)
 }) {
   const s = pdfOf(prefs.pdf_settings);
@@ -29,7 +31,8 @@ export default function DocPaper({ doc, lines, prefs, companyName, status, varia
   const priced = variant === "full";
   const hideZero = isQuote ? prefs.quote_settings?.hide_zero_lines : prefs.invoice_settings?.hide_zero_lines;
   const rows = lines.filter((l) => !(priced && hideZero && Number(l.amount) === 0));
-  const title = variant === "delivery" ? "DELIVERY NOTE" : variant === "packing" ? "PACKING SLIP" : isQuote ? "QUOTE" : "INVOICE";
+  const L = docTx(lang);
+  const title = docTitle(lang, doc.kind, variant);
   const org = prefs.org_info ?? {};
   const bill = addressLines(doc.billing_address);
   const site = addressLines(doc.site_address);
@@ -44,11 +47,9 @@ export default function DocPaper({ doc, lines, prefs, companyName, status, varia
   const fontCls = tp.font === "serif" ? "font-serif" : tp.font === "mono" ? "font-mono" : "";
   const logoH = s.logo_size === "small" ? "max-h-24" : s.logo_size === "large" ? "max-h-60" : "max-h-40";
   const showPowered = !prefs.white_label || s.show_powered;
-  const meta = (isQuote
-    ? [["Quote Date", fmtD(doc.doc_date)], ["Expiry Date", fmtD(doc.expiry_date)], ["Reference#", doc.reference ?? ""], ["Salesperson", doc.salesperson ?? ""]]
-    : [["Invoice Date", fmtD(doc.doc_date)], ["Terms", doc.payment_terms ?? ""], ["Due Date", fmtD(doc.due_date)], ["P.O.#", doc.order_number ?? ""], ["Salesperson", doc.salesperson ?? ""]]
-  ).filter(([, v]) => v) as [string, string][];
-  const discLabel = doc.coupon_code ? `Discount (${doc.coupon_code})` : doc.discount_type === "percent" && Number(doc.discount_value) && !disc.itemDisc ? `Discount (${+doc.discount_value}%)` : "Discount";
+  const meta = docMeta(lang, doc);
+  const metaIc = (k: string) => TPL_ICONS[metaIcon(lang, k)];
+  const discLabel = doc.coupon_code ? `${L.discount} (${doc.coupon_code})` : doc.discount_type === "percent" && Number(doc.discount_value) && !disc.itemDisc ? `${L.discount} (${+doc.discount_value}%)` : L.discount;
   const titleCls = `${tp.titleWeight === "bold" ? "font-bold" : "font-light"} tracking-wide ${tp.receipt ? "text-[22px]" : "text-[28px] sm:text-[34px]"}`;
 
   const logo = prefs.logo_url ? (
@@ -67,7 +68,7 @@ export default function DocPaper({ doc, lines, prefs, companyName, status, varia
     </>
   );
   const balance = !isQuote && priced && (
-    <div className="mt-3"><p className="text-[0.9em] font-semibold text-slate-500">{ic(TPL_ICONS.wallet)}Balance Due</p><p className="text-[1.35em] font-semibold text-[#0b1f3a]">${num2(balanceOf(doc))}</p></div>
+    <div className="mt-3"><p className="text-[0.9em] font-semibold text-slate-500">{ic(TPL_ICONS.wallet)}{L.balanceDue}</p><p className="text-[1.35em] font-semibold text-[#0b1f3a]">${num2(balanceOf(doc))}</p></div>
   );
   const titleBlock = (align: string) => (
     <div className={align}>
@@ -112,43 +113,43 @@ export default function DocPaper({ doc, lines, prefs, companyName, status, varia
 
   return (
     <div className={`bp-paper relative mx-auto w-full ${tp.receipt ? "max-w-[460px]" : compact ? "max-w-[740px]" : "max-w-[820px]"} bg-white ${size} ${fontCls} leading-relaxed text-slate-700 shadow-[0_2px_16px_rgba(15,40,60,0.08)] print:max-w-none print:shadow-none ${tp.border ? "border-2 border-slate-300" : "border border-slate-200"}`}>
-      {showRibbon && <Ribbon label={status!.label.replace(/^Overdue by .*/, "Overdue")} tone={status!.tone} />}
+      {showRibbon && <Ribbon label={docRibbon(lang, status!)} tone={status!.tone} />}
       <div className={`${top} ${padY} ${signed ? "flex min-h-[1040px] flex-col" : ""}`}>
         {header}
         {tp.header === "split" && <div className={`${pad} mt-6`}><div className="h-1 rounded-full" style={{ background: A }} /></div>}
         <div className={`${pad} ${signed ? "flex flex-1 flex-col" : ""}`}>
           {tp.meta === "row" && meta.length > 0 && (
             <div className="mt-6 grid grid-cols-2 border border-slate-200 sm:grid-cols-4">
-              {meta.slice(0, 4).map(([k, v]) => <div key={k} className="border-slate-200 px-3 py-2 [&:not(:last-child)]:border-r"><p className="text-[0.85em] text-slate-500">{ic(/Date/.test(k) ? TPL_ICONS.calendar : /Salesperson/.test(k) ? TPL_ICONS.user : TPL_ICONS.hash)}{k}</p><p className="text-[#0b1f3a]">{v}</p></div>)}
+              {meta.slice(0, 4).map(([k, v]) => <div key={k} className="border-slate-200 px-3 py-2 [&:not(:last-child)]:border-r"><p className="text-[0.85em] text-slate-500">{ic(metaIc(k))}{k}</p><p className="text-[#0b1f3a]">{v}</p></div>)}
             </div>
           )}
           <div className={`mt-8 grid gap-6 ${tp.receipt ? "" : "sm:grid-cols-[minmax(0,1fr)_auto]"}`}>
             <div className={`grid gap-6 ${tp.receipt ? "" : "sm:grid-cols-2"}`}>
               <div className="min-w-0">
-                <p className="text-slate-500">{ic(TPL_ICONS.user)}Bill To</p>
+                <p className="text-slate-500">{ic(TPL_ICONS.user)}{L.billTo}</p>
                 <p className="font-semibold" style={{ color: tp.id === "standard" ? "#0f766e" : A }}>{doc.customer_name}</p>
                 {bill.map((l, i) => <p key={i}>{l}</p>)}
               </div>
               {site.length > 0 && (
                 <div className="min-w-0">
-                  <p className="text-slate-500">{ic(TPL_ICONS.pin)}{doc.site_address?.label ? `Job Site · ${doc.site_address.label}` : "Job Site / Ship To"}</p>
+                  <p className="text-slate-500">{ic(TPL_ICONS.pin)}{doc.site_address?.label ? `${L.jobSite} · ${doc.site_address.label}` : L.jobSiteShip}</p>
                   {site.map((l, i) => <p key={i}>{l}</p>)}
                 </div>
               )}
             </div>
             {tp.meta === "right" && meta.length > 0 && (
               <table className="self-end">
-                <tbody>{meta.map(([k, v]) => <tr key={k}><td className="py-0.5 pr-6 text-slate-500 sm:text-right">{ic(/Date/.test(k) ? TPL_ICONS.calendar : /Salesperson/.test(k) ? TPL_ICONS.user : TPL_ICONS.hash)}{k} :</td><td className="py-0.5 text-right text-[#0b1f3a]">{v}</td></tr>)}</tbody>
+                <tbody>{meta.map(([k, v]) => <tr key={k}><td className="py-0.5 pr-6 text-slate-500 sm:text-right">{ic(metaIc(k))}{k} :</td><td className="py-0.5 text-right text-[#0b1f3a]">{v}</td></tr>)}</tbody>
               </table>
             )}
           </div>
 
-          {doc.subject && <p className="mt-6"><span className="text-slate-500">Subject :</span><br /><span className="text-[#0b1f3a]">{doc.subject}</span></p>}
+          {doc.subject && <p className="mt-6"><span className="text-slate-500">{L.subject} :</span><br /><span className="text-[#0b1f3a]">{doc.subject}</span></p>}
 
           {stack && (
             <div className="mt-6 sm:hidden print:hidden">
-              <div className="flex justify-between rounded-t-md px-3 py-2 text-[0.92em] font-medium" style={th}><span>Items</span>{priced && <span>Amount</span>}</div>
-              {rows.length === 0 && <p className="px-3 py-6 text-center text-slate-400">No items</p>}
+              <div className="flex justify-between rounded-t-md px-3 py-2 text-[0.92em] font-medium" style={th}><span>{L.items}</span>{priced && <span>{L.amount}</span>}</div>
+              {rows.length === 0 && <p className="px-3 py-6 text-center text-slate-400">{L.noItems}</p>}
               {rows.map((l, i) => (
                 <div key={l.id ?? i} className="flex items-start justify-between gap-3 border-b border-slate-200 px-3 py-3">
                   <div className="min-w-0">
@@ -167,15 +168,15 @@ export default function DocPaper({ doc, lines, prefs, companyName, status, varia
               <thead>
                 <tr className="text-left text-[0.92em]" style={th}>
                   {!tp.receipt && <th className={`w-10 px-3 py-2.5 text-center font-medium ${cellB}`}>#</th>}
-                  <th className={`px-3 py-2.5 font-medium ${cellB}`}>{tp.receipt ? "Item" : "Item & Description"}</th>
-                  <th className={`w-16 px-3 py-2.5 text-right font-medium ${cellB}`}>Qty</th>
-                  {priced && <th className={`w-24 px-3 py-2.5 text-right font-medium ${cellB}`}>Rate</th>}
-                  {priced && <th className={`w-24 px-3 py-2.5 text-right font-medium ${cellB}`}>Amount</th>}
-                  {variant === "packing" && <th className={`w-20 px-3 py-2.5 text-center font-medium ${cellB}`}>Packed</th>}
+                  <th className={`px-3 py-2.5 font-medium ${cellB}`}>{tp.receipt ? L.item : L.itemDesc}</th>
+                  <th className={`w-16 px-3 py-2.5 text-right font-medium ${cellB}`}>{L.qty}</th>
+                  {priced && <th className={`w-24 px-3 py-2.5 text-right font-medium ${cellB}`}>{L.rate}</th>}
+                  {priced && <th className={`w-24 px-3 py-2.5 text-right font-medium ${cellB}`}>{L.amount}</th>}
+                  {variant === "packing" && <th className={`w-20 px-3 py-2.5 text-center font-medium ${cellB}`}>{L.packed}</th>}
                 </tr>
               </thead>
               <tbody>
-                {rows.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-400">No items</td></tr>}
+                {rows.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-400">{L.noItems}</td></tr>}
                 {rows.map((l, i) => (
                   <tr key={l.id ?? i} className={`align-top ${cellB ? "" : "border-b border-slate-200"} ${tp.table === "accent" && i % 2 ? "bg-slate-50" : ""}`}>
                     {!tp.receipt && <td className={`px-3 py-3 text-center ${cellB}`}>{i + 1}</td>}
@@ -194,16 +195,16 @@ export default function DocPaper({ doc, lines, prefs, companyName, status, varia
             <div className="mt-2 flex justify-end">
               <table className={`w-full ${tp.receipt ? "" : "sm:max-w-[330px]"} ${tp.totals === "box" ? "mt-2 border border-slate-300" : ""}`}>
                 <tbody>
-                  <tr><td className="py-2 pr-6 text-right">Sub Total</td><td className="py-2 pr-3 text-right tabular-nums">{num2(disc.gross)}</td></tr>
+                  <tr><td className="py-2 pr-6 text-right">{L.subTotal}</td><td className="py-2 pr-3 text-right tabular-nums">{num2(disc.gross)}</td></tr>
                   {disc.total > 0 && <tr><td className="py-1.5 pr-6 text-right">{discLabel}</td><td className="py-1.5 pr-3 text-right tabular-nums text-[#e11d48]">(-) {num2(disc.total)}</td></tr>}
-                  {Number(doc.tax_amount) > 0 && <tr><td className="py-1.5 pr-6 text-right">{doc.tax_name || "Tax"} ({+doc.tax_rate}%)</td><td className="py-1.5 pr-3 text-right tabular-nums">{num2(doc.tax_amount)}</td></tr>}
-                  {Number(doc.shipping) !== 0 && <tr><td className="py-1.5 pr-6 text-right">Shipping Charges</td><td className="py-1.5 pr-3 text-right tabular-nums">{num2(doc.shipping)}</td></tr>}
-                  {Number(doc.adjustment) !== 0 && <tr><td className="py-1.5 pr-6 text-right">{doc.adjustment_label || "Adjustment"}</td><td className="py-1.5 pr-3 text-right tabular-nums">{num2(doc.adjustment)}</td></tr>}
+                  {Number(doc.tax_amount) > 0 && <tr><td className="py-1.5 pr-6 text-right">{doc.tax_name || L.tax} ({+doc.tax_rate}%)</td><td className="py-1.5 pr-3 text-right tabular-nums">{num2(doc.tax_amount)}</td></tr>}
+                  {Number(doc.shipping) !== 0 && <tr><td className="py-1.5 pr-6 text-right">{L.shipping}</td><td className="py-1.5 pr-3 text-right tabular-nums">{num2(doc.shipping)}</td></tr>}
+                  {Number(doc.adjustment) !== 0 && <tr><td className="py-1.5 pr-6 text-right">{doc.adjustment_label || L.adjustment}</td><td className="py-1.5 pr-3 text-right tabular-nums">{num2(doc.adjustment)}</td></tr>}
                   <tr className={`font-semibold text-[#0b1f3a] ${tp.totals === "plain" ? "border-t-2 border-slate-800" : ""}`} style={isQuote ? finalStyle : undefined}>
-                    <td className="px-3 py-3 text-right">Total</td><td className="px-3 py-3 text-right tabular-nums">${num2(doc.total)}</td></tr>
-                  {!isQuote && Number(doc.amount_paid) > 0 && <tr><td className="py-2 pr-6 text-right">Payment Made</td><td className="py-2 pr-3 text-right tabular-nums text-[#e11d48]">(-) {num2(doc.amount_paid)}</td></tr>}
-                  {!isQuote && Number(doc.written_off) > 0 && <tr><td className="py-2 pr-6 text-right">Written Off</td><td className="py-2 pr-3 text-right tabular-nums">(-) {num2(doc.written_off)}</td></tr>}
-                  {!isQuote && <tr className="font-semibold text-[#0b1f3a]" style={finalStyle}><td className="px-3 py-3 text-right">Balance Due</td><td className="px-3 py-3 text-right tabular-nums">${num2(balanceOf(doc))}</td></tr>}
+                    <td className="px-3 py-3 text-right">{L.total}</td><td className="px-3 py-3 text-right tabular-nums">${num2(doc.total)}</td></tr>
+                  {!isQuote && Number(doc.amount_paid) > 0 && <tr><td className="py-2 pr-6 text-right">{L.paymentMade}</td><td className="py-2 pr-3 text-right tabular-nums text-[#e11d48]">(-) {num2(doc.amount_paid)}</td></tr>}
+                  {!isQuote && Number(doc.written_off) > 0 && <tr><td className="py-2 pr-6 text-right">{L.writtenOff}</td><td className="py-2 pr-3 text-right tabular-nums">(-) {num2(doc.written_off)}</td></tr>}
+                  {!isQuote && <tr className="font-semibold text-[#0b1f3a]" style={finalStyle}><td className="px-3 py-3 text-right">{L.balanceDue}</td><td className="px-3 py-3 text-right tabular-nums">${num2(balanceOf(doc))}</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -211,29 +212,29 @@ export default function DocPaper({ doc, lines, prefs, companyName, status, varia
 
           {(doc.notes || doc.terms) && (
             <div className="mt-10 space-y-5">
-              {doc.notes && <div><p className="text-slate-500">{ic(TPL_ICONS.note)}Notes</p><p className="whitespace-pre-line text-[#0b1f3a]">{doc.notes}</p></div>}
-              {doc.terms && <div><p className="text-slate-500">{ic(TPL_ICONS.shield)}Terms & Conditions</p><p className="whitespace-pre-line text-[#0b1f3a]">{doc.terms}</p></div>}
+              {doc.notes && <div><p className="text-slate-500">{ic(TPL_ICONS.note)}{L.notes}</p><p className="whitespace-pre-line text-[#0b1f3a]">{doc.notes}</p></div>}
+              {doc.terms && <div><p className="text-slate-500">{ic(TPL_ICONS.shield)}{L.termsConditions}</p><p className="whitespace-pre-line text-[#0b1f3a]">{doc.terms}</p></div>}
             </div>
           )}
-          {tp.receipt && priced && <p className="mt-8 text-center text-[1.1em] text-[#0b1f3a]">Thank you!</p>}
+          {tp.receipt && priced && <p className="mt-8 text-center text-[1.1em] text-[#0b1f3a]">{L.thanks}</p>}
           {doc.signed_name && doc.signed_at && (
             <div className="mt-auto pt-12">
-              <p className="font-semibold text-[#0b1f3a]">Accepted & signed by the customer</p>
+              <p className="font-semibold text-[#0b1f3a]">{L.signedBy}</p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              {doc.signature_data && <img src={doc.signature_data} alt={`Signature of ${doc.signed_name}`} className="mt-2 max-h-20 max-w-[260px] object-contain" />}
-              <div className="mt-1 w-64 border-t border-slate-400 pt-1 text-slate-600">{doc.signed_name} · {fmtDT(doc.signed_at)}</div>
+              {doc.signature_data && <img src={doc.signature_data} alt={L.signatureOf(doc.signed_name)} className="mt-2 max-h-20 max-w-[260px] object-contain" />}
+              <div className="mt-1 w-64 border-t border-slate-400 pt-1 text-slate-600">{doc.signed_name} · {docDateTime(doc.signed_at, lang)}</div>
             </div>
           )}
           {variant !== "full" && (
             <div className="mt-16 grid gap-10 sm:grid-cols-2">
-              <div className="border-t border-slate-400 pt-2 text-slate-500">Received by (name & signature)</div>
-              <div className="border-t border-slate-400 pt-2 text-slate-500">Date</div>
+              <div className="border-t border-slate-400 pt-2 text-slate-500">{L.receivedBy}</div>
+              <div className="border-t border-slate-400 pt-2 text-slate-500">{L.date}</div>
             </div>
           )}
           {(s.footer_text || showPowered) && (
             <div className="mt-12 flex items-center gap-4 border-t border-slate-200 pt-3 font-sans text-[11px] text-slate-400">
               {s.footer_text && <span>{s.footer_text}</span>}
-              {showPowered && <span className="flex items-center gap-1.5">POWERED BY <b className="text-[13px] text-[#0b1f3a]">Bright<span className="text-[#e8713a]">Pro</span></b></span>}
+              {showPowered && <span className="flex items-center gap-1.5">{L.poweredBy} <b className="text-[13px] text-[#0b1f3a]">Bright<span className="text-[#e8713a]">Pro</span></b></span>}
             </div>
           )}
         </div>

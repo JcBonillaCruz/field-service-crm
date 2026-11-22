@@ -22,6 +22,7 @@ import {
 import { ActivityList, Divider, I, Ico, StatusPill, ToolButton, ToolItem, ToolMenu, Toast } from "@/components/sales/SalesBits";
 import { CustomizeMenu } from "@/components/sales/TemplateModals";
 import { jobError } from "@/lib/jobs";
+import type { DocLang } from "@/lib/doc-lang";
 
 // Ícono de "trabajo" (calendario con palomita) para Convert to Job — Paso 5.6
 const JOB_ICON = "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 15l2 2 4-4";
@@ -29,6 +30,7 @@ const JOB_ICON = "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 15l2 2 4-4";
 export type DocData = {
   doc: SalesDoc; lines: SalesLine[]; activity: Activity[]; comments: Comment[]; files: SalesFile[]; payments: Payment[];
   related: SalesDoc[]; prefs: SalesPrefs; companyName: string;
+  lang?: DocLang; // Paso 6.2d: idioma del cliente (el documento se ve como lo recibe él)
 };
 
 export default function DocDetail({ data, actor }: { data: DocData; actor: string }) {
@@ -422,9 +424,9 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
               <div className="group/paper relative mx-auto max-w-[740px]">
                 <div className="absolute right-0 top-0 z-20 opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover/paper:opacity-100 has-[[data-open]]:opacity-100 [@media(hover:none)]:opacity-100">
                   <CustomizeMenu companyId={doc.company_id} pdf={prefs.pdf_settings} whiteLabel={prefs.white_label} onLogo={() => setModal("prefs")} kind={doc.kind}
-                    back={`${base}/${doc.id}`} preview={{ doc, lines, prefs, companyName }} />
+                    back={`${base}/${doc.id}`} preview={{ doc, lines, prefs, companyName, lang: data.lang }} />
                 </div>
-                <DocPaper doc={doc} lines={lines} prefs={prefs} companyName={companyName} status={status} compact />
+                <DocPaper doc={doc} lines={lines} prefs={prefs} companyName={companyName} status={status} compact lang={data.lang} />
               </div>
             </div>
           ) : details) : tab === 1 ? relatedTab : activityTab}
@@ -449,8 +451,8 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
         </ul>
       </BottomSheet>
 
-      <SendEmailModal open={modal === "email" || modal === "reminder"} reminder={modal === "reminder"} onClose={close} doc={doc} companyName={companyName} actor={actor} files={data.files} whiteLabel={prefs.white_label} />
-      <ShareModal open={modal === "share"} onClose={close} doc={doc} actor={actor} companyName={companyName} />
+      <SendEmailModal open={modal === "email" || modal === "reminder"} reminder={modal === "reminder"} onClose={close} doc={doc} companyName={companyName} actor={actor} files={data.files} whiteLabel={prefs.white_label} lang={data.lang} />
+      <ShareModal open={modal === "share"} onClose={close} doc={doc} actor={actor} companyName={companyName} lang={data.lang} />
       {!isQuote && <PaymentModal open={modal === "payment" || modal === "write_off"} mode={modal === "write_off" ? "write_off" : "payment"} onClose={close} doc={doc} actor={actor} onDone={() => { router.refresh(); flash(t("saved")); }} />}
       {!isQuote && <ExpectedDateModal open={modal === "expected"} onClose={close} doc={doc} actor={actor} />}
       <CommentsPanel open={modal === "comments"} onClose={close} entity={doc.kind} entityId={doc.id} companyId={doc.company_id} comments={data.comments} actor={actor} />

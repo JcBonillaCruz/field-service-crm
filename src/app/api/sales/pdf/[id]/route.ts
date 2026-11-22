@@ -4,6 +4,7 @@ import { canManageSales } from "@/lib/sales";
 import { loadDoc } from "@/lib/sales-server";
 import { buildSalesPdf, pdfFileName } from "@/lib/sales-pdf";
 import { loadPhotos, pdfInputFrom } from "@/lib/sales-mail";
+import { isDocLang } from "@/lib/doc-lang";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,7 +20,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   const v = request.nextUrl.searchParams.get("v");
   const variant = v === "delivery" ? "delivery" : v === "packing" ? "packing" : "full";
   const photos = variant === "full" ? await loadPhotos(supabase, d.doc, d.files) : [];
-  const bytes = await buildSalesPdf({ ...pdfInputFrom(d, variant), photos });
+  const lq = request.nextUrl.searchParams.get("lang"); // Paso 6.2d: por defecto, el idioma del cliente
+  const bytes = await buildSalesPdf({ ...pdfInputFrom(d, variant, isDocLang(lq) ? lq : undefined), photos });
   const inline = request.nextUrl.searchParams.get("inline") === "1";
   return new NextResponse(Buffer.from(bytes), {
     headers: {

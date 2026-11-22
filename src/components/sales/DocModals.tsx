@@ -15,6 +15,7 @@ import SelectMenu from "@/components/ui/SelectMenu";
 import { I, Ico, Modal, SlideOver, btnGhost, btnPrimary } from "@/components/sales/SalesBits";
 import { useTranslations } from "next-intl";
 import { useSalesTx } from "@/i18n/useSalesTx";
+import { DocLang, docDate, docEmailBody, docEmailSubject, docTextMessage } from "@/lib/doc-lang";
 
 const Label = ({ children, req }: { children: React.ReactNode; req?: boolean }) => (
   <label className={`mb-1.5 block text-sm font-medium ${req ? "text-red-600" : "text-slate-700"}`}>{children}{req && "*"}</label>
@@ -89,8 +90,9 @@ function ContactPills({ title, list, selected, onToggle, kind, multi = true }: {
   );
 }
 
-export function SendEmailModal({ open, onClose, doc, companyName, actor, reminder = false, files = [], whiteLabel = false }: {
+export function SendEmailModal({ open, onClose, doc, companyName, actor, reminder = false, files = [], whiteLabel = false, lang: custLang = "en" }: {
   open: boolean; onClose: () => void; doc: SalesDoc; companyName: string; actor: string; reminder?: boolean; files?: SalesFile[]; whiteLabel?: boolean;
+  lang?: DocLang; // Paso 6.2d: idioma del cliente; el correo, el PDF y el enlace salen en este idioma
 }) {
   const t = useTranslations("docModals");
   const tc = useTranslations("common");
@@ -104,6 +106,8 @@ export function SendEmailModal({ open, onClose, doc, companyName, actor, reminde
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [attachPdf, setAttachPdf] = useState(true);
+  const [lang, setLang] = useState<DocLang>(custLang);
+  useEffect(() => { if (open) setLang(custLang); }, [open, custLang]);
   // Paso 5.13: reporte de servicio (solo facturas que salieron de un trabajo). Opcional en cada envío.
   const [job, setJob] = useState<{ id: string; number: string } | null>(null);
   const [withReport, setWithReport] = useState(false);
@@ -113,15 +117,16 @@ export function SendEmailModal({ open, onClose, doc, companyName, actor, reminde
   useEffect(() => {
     setJob(null); setWithReport(false); setReport(null); setPreview(false);
     if (!open || doc.kind !== "invoice" || reminder) return;
+    void lang; // el reporte se vuelve a armar si cambia el idioma
     let alive = true;
     jobOfInvoice(doc.id).then((j) => { if (alive) setJob(j); }, () => undefined);
     return () => { alive = false; };
-  }, [open, doc.id, doc.kind, reminder]);
+  }, [open, doc.id, doc.kind, reminder, lang]);
   async function getReport(): Promise<ServiceReport | null> {
     if (report) return report;
     if (!job) return null;
     setReportBusy(true);
-    const r = await loadServiceReport(job.id, companyName);
+    const r = await loadServiceReport(job.id, companyName, lang);
     setReportBusy(false);
     if ("error" in r) { setError(r.error); return null; }
     setReport(r); return r;
@@ -149,17 +154,14 @@ export function SendEmailModal({ open, onClose, doc, companyName, actor, reminde
   useEffect(() => {
     if (!open) return;
     setTo(doc.emails); setCc([]); setBcc([]); setShowCc(false); setError(""); setFallback(false); setAttachPdf(true); setFileIds([]);
-    // Como Zoho: "Quote - QT-001126 is awaiting your approval - Sent Using BrightPro"
-    const tail = whiteLabel ? "" : " - Sent Using BrightPro";
-    setSubject(reminder ? `Payment reminder: Invoice - ${doc.number} is due${tail}`
-      : doc.kind === "quote" ? `Quote - ${doc.number} is awaiting your approval${tail}` : `Invoice - ${doc.number} from ${companyName}${tail}`);
-    const amount = money(doc.kind === "invoice" ? balanceOf(doc) : doc.total);
-    setBody(reminder
-      ? `Dear ${doc.customer_name},\n\nThis is a friendly reminder that invoice ${doc.number} for ${amount} was due on ${fmtD(doc.due_date)}.\n\nYou can view, print or download the invoice from the link below.\n{link}\n\nThank you,\n${actor || companyName}\n${companyName}`
-      : doc.kind === "quote"
-        ? `Dear ${doc.customer_name},\n\nThank you for contacting us. Your quote ${doc.number} for **${amount}** is ready.\n\nYou can view, accept and sign the quote from the link below.\n{link}\n\nWe look forward to working with you.\n\nRegards,\n${actor || companyName}\n${companyName}`
-        : `Dear ${doc.customer_name},\n\nIt was a pleasure doing business with you. Your invoice ${doc.number} for **${amount}** is due on ${fmtD(doc.due_date)}.\n\nYou can view, print or download the invoice from the link below.\n{link}\n\nRegards,\n${actor || companyName}\n${companyName}`);
-  }, [open, doc, companyName, actor, reminder, noun, whiteLabel]);
+  }, [open, doc]);
+  // Asunto y texto en el idioma del cliente (Paso 6.2d). Como Zoho: "Quote - QT-001126 is awaiting your approval - Sent Using BrightPro"
+  useEffect(() => {
+    if (!open) return;
+    const v = { kind: doc.kind, number: doc.number, customer: doc.customer_name, amount: money(doc.kind === "invoice" ? balanceOf(doc) : doc.total), due: docDate(doc.due_date, lang), actor, company: companyName, whiteLabel, reminder };
+    setSubject(docEmailSubject(lang, v));
+    setBody(docEmailBody(lang, v));
+  }, [open, doc, companyName, actor, reminder, whiteLabel, lang]);
 
   function wrap(mark: string) {
     const el = ref.current; if (!el) return;
@@ -178,7 +180,7 @@ export function SendEmailModal({ open, onClose, doc, companyName, actor, reminde
       try { extra = [await serviceReportAttachment(r)]; } catch { setBusy(false); return setError(t("eReport")); }
     }
     const res = await fetch("/api/sales/send", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: doc.id, to, cc, bcc, subject, body, attachPdf, fileIds, reminder, extra }) });
+      body: JSON.stringify({ id: doc.id, to, cc, bcc, subject, body, attachPdf, fileIds, reminder, extra, lang }) });
     const j = await res.json().catch(() => ({}));
     setBusy(false);
     if (!res.ok) { setError(j.error || t("eSend")); if (j.code === "not_configured") setFallback(true); return; }
@@ -218,6 +220,20 @@ export function SendEmailModal({ open, onClose, doc, companyName, actor, reminde
           <div className="grid grid-cols-1 gap-1 border-b border-slate-100 px-4 py-2.5 sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:items-start sm:gap-3"><span className="text-[13px] font-medium text-slate-500 sm:pt-3 sm:text-[15px] sm:font-normal">Cc <span className="font-normal text-slate-400">{t("copy")}</span></span><Chips value={cc} onChange={setCc} placeholder={t("copyPh")} /></div>
           <div className="grid grid-cols-1 gap-1 border-b border-slate-100 px-4 py-2.5 sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:items-start sm:gap-3"><span className="text-[13px] font-medium text-slate-500 sm:pt-3 sm:text-[15px] sm:font-normal">Bcc <span className="font-normal text-slate-400">{t("hidden")}</span></span><Chips value={bcc} onChange={setBcc} placeholder={t("hiddenPh")} /></div>
         </>}
+        <div className="grid grid-cols-1 gap-1 border-b border-slate-100 px-4 py-2 sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:items-center sm:gap-3">
+          <span className="text-[13px] font-medium text-slate-500 sm:text-[15px] sm:font-normal">{t("language")}</span>
+          <div className="flex flex-wrap items-center gap-2 py-0.5">
+            <div className="inline-flex rounded-lg bg-slate-100 p-0.5" role="radiogroup" aria-label={t("language")}>
+              {(["en", "es"] as const).map((l) => (
+                <button key={l} type="button" role="radio" aria-checked={lang === l} onClick={() => setLang(l)}
+                  className={`rounded-md px-3 py-1 text-[13.5px] font-medium transition-colors ${lang === l ? "bg-white text-[#0b1f3a] shadow-sm" : "text-slate-500 hover:text-[#0b1f3a]"}`}>
+                  {l === "en" ? "English" : "Español"}
+                </button>
+              ))}
+            </div>
+            <span className="text-[12.5px] text-slate-400">{lang === custLang ? t("custLang") : t("notCustLang")}</span>
+          </div>
+        </div>
         <div className="grid grid-cols-1 gap-1 border-b border-slate-100 px-4 py-2 sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:items-center sm:gap-3">
           <span className="text-[13px] font-medium text-slate-500 sm:text-[15px] sm:font-normal">{t("subject")}</span>
           <input value={subject} onChange={(e) => setSubject(e.target.value)} className="w-full bg-transparent py-1.5 text-[15px] text-slate-800 focus:outline-none" />
@@ -265,7 +281,7 @@ export function SendEmailModal({ open, onClose, doc, companyName, actor, reminde
 }
 
 // ---------- Compartir enlace público ----------
-export function ShareModal({ open, onClose, doc, actor, companyName = "" }: { open: boolean; onClose: () => void; doc: SalesDoc; actor: string; companyName?: string }) {
+export function ShareModal({ open, onClose, doc, actor, companyName = "", lang = "en" }: { open: boolean; onClose: () => void; doc: SalesDoc; actor: string; companyName?: string; lang?: DocLang }) {
   const t = useTranslations("docModals");
   const tc = useTranslations("common");
   const sx = useSalesTx();
@@ -287,7 +303,8 @@ export function ShareModal({ open, onClose, doc, actor, companyName = "" }: { op
     let t = token;
     if (!t) { t = randomToken(); await db().from("sales_docs").update({ share_token: t }).eq("id", doc.id); setToken(t); }
     const amount = money(doc.kind === "invoice" ? balanceOf(doc) : doc.total);
-    const text = `Hi ${doc.customer_name}, here is your ${doc.kind} ${doc.number} for ${amount}${companyName ? ` from ${companyName}` : ""}. You can view it here: ${shareUrl(t)}`;
+    // Paso 6.2d: el texto sale en el idioma del cliente
+    const text = docTextMessage(lang, { kind: doc.kind, number: doc.number, customer: doc.customer_name, amount, company: companyName, url: shareUrl(t) });
     const digits = phone.replace(/\D/g, "");
     const intl = digits.length === 10 ? `1${digits}` : digits;
     if (channel === "native" && navigator.share) { try { await navigator.share({ title: `${noun} ${doc.number}`, text }); } catch { return; } }

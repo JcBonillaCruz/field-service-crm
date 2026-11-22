@@ -5,11 +5,13 @@ import Image from "next/image";
 import Link from "next/link";
 import AuthShell from "@/components/AuthShell";
 import { createClient } from "@/lib/supabase/client";
+import { useTranslations } from "next-intl";
 
 const inputClass =
   "w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-[15px] placeholder:text-slate-400 focus:bg-white focus:border-[#0f766e] focus:outline-none focus:ring-4 focus:ring-[#14a39a]/15";
 
 export default function SignUpPage() {
+  const t = useTranslations("auth");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   // Invitaciones: llega con ?next=/join/…&email=…&name=… → se llenan solos y al confirmar regresa a la invitación
@@ -28,10 +30,10 @@ export default function SignUpPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!fullName.trim()) return setError("Enter your full name.");
-    if (!email.includes("@")) return setError("Enter a valid email address.");
-    if (password.length < 8) return setError("Use at least 8 characters for your password.");
-    if (!agree) return setError("Accept the Terms of Service to continue.");
+    if (!fullName.trim()) return setError(t("eName"));
+    if (!email.includes("@")) return setError(t("eEmail"));
+    if (password.length < 8) return setError(t("ePwShort"));
+    if (!agree) return setError(t("eTerms"));
 
     setLoading(true);
     setError("");
@@ -51,9 +53,9 @@ export default function SignUpPage() {
 
     if (error) {
       if (error.message.toLowerCase().includes("rate limit")) {
-        return setError("Too many sign-up emails were sent. Wait a few minutes and try again.");
+        return setError(t("eRate"));
       }
-      return setError(error.message);
+      return setError(error.message.toLowerCase().includes("already") ? t("eExists") : /password/i.test(error.message) ? t("ePwWeak") : t("eSignUp"));
     }
     setSent(true);
   }
@@ -69,53 +71,52 @@ export default function SignUpPage() {
               <path d="M4 6h16v12H4z" /><path d="m4 7 8 6 8-6" />
             </svg>
           </div>
-          <h1 className="mt-5 text-[1.75rem] font-semibold text-[#0b1f3a] tracking-tight">Check your email</h1>
+          <h1 className="mt-5 text-[1.75rem] font-semibold text-[#0b1f3a] tracking-tight">{t("checkEmail")}</h1>
           <p className="mt-2 text-slate-600 leading-relaxed">
-            We sent a confirmation link to <span className="font-medium text-slate-800">{email}</span>.
-            Open it to activate your BrightPro account.
+            {t.rich("sentTo", { email, b: (c) => <span className="font-medium text-slate-800">{c}</span> })}
           </p>
-          <p className="mt-4 text-sm text-slate-500">Can&apos;t find it? Look in your spam or promotions folder.</p>
-          <Link prefetch={false} href="/" className="mt-8 inline-block text-sm font-semibold text-[#0f766e] hover:underline">Back to sign in</Link>
+          <p className="mt-4 text-sm text-slate-500">{t("spam")}</p>
+          <Link prefetch={false} href="/" className="mt-8 inline-block text-sm font-semibold text-[#0f766e] hover:underline">{t("backSignIn")}</Link>
         </div>
       ) : (
         <>
-          <h1 className="mt-8 text-[1.75rem] font-semibold text-[#0b1f3a] tracking-tight">Create your account</h1>
-          <p className="mt-1 text-slate-500">Start free. No credit card needed.</p>
+          <h1 className="mt-8 text-[1.75rem] font-semibold text-[#0b1f3a] tracking-tight">{t("createTitle")}</h1>
+          <p className="mt-1 text-slate-500">{t("createSub")}</p>
 
           <form onSubmit={handleSubmit} noValidate className="mt-7 space-y-4">
             <div>
-              <label htmlFor="name" className="sr-only">Full name</label>
-              <input id="name" autoComplete="name" placeholder="Full name" value={fullName}
+              <label htmlFor="name" className="sr-only">{t("fullName")}</label>
+              <input id="name" autoComplete="name" placeholder={t("fullName")} value={fullName}
                 onChange={(e) => { setFullName(e.target.value); setError(""); }} className={inputClass} />
             </div>
             <div>
-              <label htmlFor="email" className="sr-only">Email address</label>
-              <input id="email" type="email" autoComplete="email" placeholder="Email address" value={email}
+              <label htmlFor="email" className="sr-only">{t("email")}</label>
+              <input id="email" type="email" autoComplete="email" placeholder={t("email")} value={email}
                 onChange={(e) => { setEmail(e.target.value); setError(""); }} className={inputClass} />
             </div>
             <div>
-              <label htmlFor="password" className="sr-only">Password</label>
-              <input id="password" type="password" autoComplete="new-password" placeholder="Password (8+ characters)" value={password}
+              <label htmlFor="password" className="sr-only">{t("password")}</label>
+              <input id="password" type="password" autoComplete="new-password" placeholder={t("passwordNew")} value={password}
                 onChange={(e) => { setPassword(e.target.value); setError(""); }} className={inputClass} />
             </div>
 
             <label className="flex items-start gap-3 text-sm text-slate-600">
               <input type="checkbox" checked={agree} onChange={(e) => { setAgree(e.target.checked); setError(""); }}
                 className="mt-0.5 h-4 w-4 accent-[#0f766e]" />
-              <span>I agree to the Terms of Service and Privacy Policy.</span>
+              <span>{t("agree")}</span>
             </label>
 
             {error && <p className="text-sm text-red-600">{error}</p>}
 
             <button type="submit" disabled={loading}
               className="w-full rounded-lg bg-[#0f766e] py-3 text-[15px] font-semibold text-white hover:bg-[#0c5f59] transition-colors disabled:opacity-60">
-              {loading ? "Creating account..." : "Create account"}
+              {loading ? t("creating") : t("create")}
             </button>
           </form>
 
           <p className="mt-8 text-sm text-slate-600">
-            Already have an account?{" "}
-            <Link prefetch={false} href={`/${qs}`} className="font-semibold text-[#0f766e] hover:underline">Sign in</Link>
+            {t("haveAccount")}{" "}
+            <Link prefetch={false} href={`/${qs}`} className="font-semibold text-[#0f766e] hover:underline">{t("signIn")}</Link>
           </p>
         </>
       )}

@@ -1,3 +1,4 @@
+import { docLangOf } from "@/lib/doc-lang";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { TAG, cached, must } from "@/lib/data-cache";
 import { Activity, Comment, DEFAULT_PREFS, DocKind, Payment, SalesDoc, SalesFile, SalesLine, SalesPrefs, Subscription } from "@/lib/sales";
@@ -82,7 +83,10 @@ export async function loadDoc(supabase: SupabaseClient, companyId: string, kind:
     loadPrefs(supabase, companyId),
     supabase.from("companies").select("name").eq("id", companyId).maybeSingle(),
   ]);
+  // Paso 6.2d: idioma del cliente (Customer Language) para el documento, el PDF y el correo
+  const { data: cust } = doc.customer_id ? await supabase.from("customers").select("language").eq("id", doc.customer_id).maybeSingle() : { data: null };
   return {
+    lang: docLangOf((cust as { language?: string | null } | null)?.language),
     doc: doc as SalesDoc, lines: (lines ?? []) as SalesLine[], activity: (activity ?? []) as Activity[], comments: (comments ?? []) as Comment[],
     files: (files ?? []) as SalesFile[], payments, related, prefs, companyName: (company?.name as string) ?? "",
   };

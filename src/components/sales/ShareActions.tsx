@@ -4,9 +4,11 @@ import { askConfirm } from "@/lib/confirm";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, btnGhost, btnPrimary } from "@/components/sales/SalesBits";
+import { DocLang, docTx } from "@/lib/doc-lang";
 
 // Panel para firmar con el dedo o el mouse
-function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) => void }) {
+function SignaturePad({ onChange, lang }: { onChange: (dataUrl: string | null) => void; lang: DocLang }) {
+  const L = docTx(lang).share;
   const ref = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const dirty = useRef(false);
@@ -24,15 +26,16 @@ function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) => void
         onPointerMove={(e) => { if (!drawing.current) return; const [x, y] = pos(e); const ctx = ref.current!.getContext("2d")!; ctx.lineTo(x, y); ctx.stroke(); dirty.current = true; }}
         onPointerUp={() => { drawing.current = false; if (dirty.current) onChange(ref.current!.toDataURL("image/png")); }} />
       <div className="mt-1 flex items-center justify-between text-[12px] text-slate-400">
-        <span>Sign above with your finger or mouse</span>
-        <button type="button" className="font-medium text-[#2563eb]" onClick={() => { const c = ref.current!; c.getContext("2d")!.clearRect(0, 0, c.width, c.height); dirty.current = false; onChange(null); }}>Clear</button>
+        <span>{L.signHere}</span>
+        <button type="button" className="font-medium text-[#2563eb]" onClick={() => { const c = ref.current!; c.getContext("2d")!.clearRect(0, 0, c.width, c.height); dirty.current = false; onChange(null); }}>{L.clear}</button>
       </div>
     </div>
   );
 }
 
-// Botones del enlace público: PDF, imprimir y aceptar con firma o rechazar
-export default function ShareActions({ token, canRespond, defaultName }: { token: string; canRespond: boolean; defaultName: string }) {
+// Botones del enlace público: PDF, imprimir y aceptar con firma o rechazar (Paso 6.2d: en el idioma del cliente)
+export default function ShareActions({ token, canRespond, defaultName, lang = "en" }: { token: string; canRespond: boolean; defaultName: string; lang?: DocLang }) {
+  const L = docTx(lang).share;
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -42,44 +45,44 @@ export default function ShareActions({ token, canRespond, defaultName }: { token
   const [agree, setAgree] = useState(false);
   const [error, setError] = useState("");
   async function respond(accept: boolean) {
-    if (!accept && !(await askConfirm({ title: "Decline this quote?", confirmLabel: "Decline", tone: "danger" }))) return;
+    if (!accept && !(await askConfirm({ title: L.declineQ, confirmLabel: L.decline, cancelLabel: L.cancel, tone: "danger" }))) return;
     if (accept) {
-      if (name.trim().length < 2) return setError("Type your full name.");
-      if (!sig) return setError("Please sign in the box.");
-      if (!agree) return setError("Please confirm you accept the quote.");
+      if (name.trim().length < 2) return setError(L.eName);
+      if (!sig) return setError(L.eSig);
+      if (!agree) return setError(L.eAgree);
     }
     setBusy(true); setError("");
     const res = await fetch("/api/share/respond", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token, accept, sig: accept ? sig : null, signer: accept ? name.trim() : null }) });
     const data = (await res.json().catch(() => ({}))).result;
     setBusy(false);
-    if (data === "signature_required") return setError("Please sign and type your name.");
+    if (data === "signature_required") return setError(L.eBoth);
     setSign(false);
-    setMsg(data === "accepted" ? "Thank you! The quote was accepted and signed." : data === "declined" ? "The quote was declined." : "This quote can't be changed anymore.");
+    setMsg(data === "accepted" ? L.accepted : data === "declined" ? L.declined : L.locked);
     router.refresh();
   }
   return (
     <div className="flex flex-wrap items-center gap-2 print:hidden">
       {canRespond && !msg && (
         <>
-          <button type="button" disabled={busy} onClick={() => setSign(true)} className="rounded-lg bg-[#16a34a] px-4 py-2 text-sm font-semibold text-white hover:bg-[#15803d] disabled:opacity-60">Accept & Sign</button>
-          <button type="button" disabled={busy} onClick={() => respond(false)} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-60">Decline</button>
+          <button type="button" disabled={busy} onClick={() => setSign(true)} className="rounded-lg bg-[#16a34a] px-4 py-2 text-sm font-semibold text-white hover:bg-[#15803d] disabled:opacity-60">{L.accept}</button>
+          <button type="button" disabled={busy} onClick={() => respond(false)} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-60">{L.decline}</button>
         </>
       )}
       {msg && <span className="text-sm font-medium text-[#0f766e]">{msg}</span>}
-      <a href={`/share/${token}/pdf`} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Download PDF</a>
-      <button type="button" onClick={() => window.print()} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Print</button>
-      <Modal open={sign} onClose={() => setSign(false)} title="Accept & Sign"
-        footer={<><button type="button" onClick={() => respond(true)} disabled={busy} className={btnPrimary}>{busy ? "Saving..." : "Accept & Sign"}</button><button type="button" onClick={() => setSign(false)} className={btnGhost}>Cancel</button></>}>
+      <a href={`/share/${token}/pdf?lang=${lang}`} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">{L.pdf}</a>
+      <button type="button" onClick={() => window.print()} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">{L.print}</button>
+      <Modal open={sign} onClose={() => setSign(false)} title={L.accept}
+        footer={<><button type="button" onClick={() => respond(true)} disabled={busy} className={btnPrimary}>{busy ? L.saving : L.accept}</button><button type="button" onClick={() => setSign(false)} className={btnGhost}>{L.cancel}</button></>}>
         <div className="space-y-4">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Full name</label>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">{L.fullName}</label>
             <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-[15px] focus:border-[#0f766e] focus:bg-white focus:outline-none" />
           </div>
-          <SignaturePad onChange={setSig} />
+          <SignaturePad onChange={setSig} lang={lang} />
           <label className="flex cursor-pointer items-start gap-2.5 text-[14px] text-slate-600">
             <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-1 h-4 w-4 accent-[#16a34a]" />
-            I accept this quote and agree that this electronic signature is as valid as my handwritten signature.
+            {L.agree}
           </label>
           {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
         </div>

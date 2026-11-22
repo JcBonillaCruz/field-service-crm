@@ -1,12 +1,14 @@
 import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb } from "pdf-lib";
 import { TPL_ICONS, tplOf } from "@/lib/pdf-templates";
-import { AddressSnap, PdfSettings, SalesDoc, SalesLine, addressLines, balanceOf, discountSummary, fmtD, num2, pdfOf } from "@/lib/sales";
+import { AddressSnap, PdfSettings, SalesDoc, SalesLine, addressLines, balanceOf, discountSummary, num2, pdfOf } from "@/lib/sales";
+import { DocLang, docDate, docMeta, docTitle, docTx } from "@/lib/doc-lang";
 
 export type PdfInput = {
   doc: SalesDoc; lines: SalesLine[]; companyName: string; logoUrl: string | null;
   org: { address?: string; phone?: string; email?: string; website?: string }; pdf: PdfSettings; whiteLabel: boolean;
   hideZero?: boolean; variant?: "full" | "delivery" | "packing";
   photos?: { name: string; bytes: Uint8Array }[]; // fotos del trabajo (4 por hoja)
+  lang?: DocLang; // Paso 6.2d: idioma del cliente
 };
 export const MAX_PDF_PHOTOS = 12;
 
@@ -40,9 +42,11 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
   const variant = input.variant ?? "full";
   const priced = variant === "full";
   const isQuote = doc.kind === "quote";
+  const lang: DocLang = input.lang ?? "en";
+  const L = docTx(lang);
   const lines = input.lines.filter((l) => !(priced && input.hideZero && Number(l.amount) === 0));
   const pdf = await PDFDocument.create();
-  pdf.setTitle(`${isQuote ? "Quote" : "Invoice"} ${doc.number}`);
+  pdf.setTitle(`${L.noun[doc.kind]} ${doc.number}`);
   pdf.setAuthor(companyName);
   pdf.setCreator(input.whiteLabel ? companyName : "BrightPro");
   const tp = tplOf(s.template);
@@ -104,7 +108,7 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
   const ensure = (h: number) => { if (y - h < MV + 28) { newPage(); return true; } return false; };
 
   // ---------- Encabezado (izquierda y derecha se miden por separado para que nada se monte) ----------
-  const title = variant === "delivery" ? "DELIVERY NOTE" : variant === "packing" ? "PACKING SLIP" : isQuote ? "QUOTE" : "INVOICE";
+  const title = docTitle(lang, doc.kind, variant);
   const logoMax = s.logo_px > 0 ? s.logo_px * 0.75 : s.logo_size === "small" ? 80 : s.logo_size === "large" ? 190 : 135; // px de pantalla → puntos del PDF
   const titleSize = tp.receipt ? 18 : tp.titleWeight === "bold" ? 22 : 26;
   const titleFont = tp.titleWeight === "bold" ? bold : font;
@@ -135,8 +139,8 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
     text(title, x, yy, { f: titleFont, size: titleSize, color: tp.header === "split" ? accent : color, align });
     yy -= 16; text(`# ${doc.number}`, x, yy, { f: bold, size: base + 0.5, color: INK, align });
     if (!isQuote && priced) {
-      yy -= 22; text("Balance Due", x, yy, { f: bold, size: base - 0.5, color: MUTED, align });
-      if (tp.icons && align === "right") icon(TPL_ICONS.wallet, x - bold.widthOfTextAtSize("Balance Due", base - 0.5) - 18, yy);
+      yy -= 22; text(L.balanceDue, x, yy, { f: bold, size: base - 0.5, color: MUTED, align });
+      if (tp.icons && align === "right") icon(TPL_ICONS.wallet, x - widthOf(L.balanceDue, bold, base - 0.5) - 18, yy);
       yy -= 17; text(`$${num2(balanceOf(doc))}`, x, yy, { f: bold, size: base + 5, color: INK, align });
     }
     return yy - 8;
@@ -150,7 +154,7 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
     l = drawOrg(M, l, "left", false);
     let r = H - 118;
     if (!isQuote && priced) {
-      text("Balance Due", right, r - base, { f: bold, size: base - 0.5, color: MUTED, align: "right" });
+      text(L.balanceDue, right, r - base, { f: bold, size: base - 0.5, color: MUTED, align: "right" });
       text(`$${num2(balanceOf(doc))}`, right, r - base - 18, { f: bold, size: base + 5, color: INK, align: "right" });
       r -= base + 26;
     }
@@ -178,21 +182,18 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
   const blockTop = y;
   const addr = (label: string, name: string | null, a: AddressSnap, x: number) => {
     let yy = blockTop;
-    const off = icon(label.startsWith("Bill") ? TPL_ICONS.user : TPL_ICONS.pin, x, yy);
+    const off = icon(label === L.billTo ? TPL_ICONS.user : TPL_ICONS.pin, x, yy);
     text(label, x + off, yy, { color: MUTED }); yy -= base + (tp.icons ? 7 : 4);
     if (name) { text(name, x, yy, { f: bold, color: accent }); yy -= base + 4; }
     addressLines(a).forEach((l) => { wrap(l, font, base, 150).forEach((w) => { text(w, x, yy); yy -= base + 3; }); });
     return yy;
   };
-  let low = addr("Bill To", doc.customer_name, doc.billing_address, M);
-  if (doc.site_address && !tp.receipt) low = Math.min(low, addr(doc.site_address.label ? `Job Site - ${doc.site_address.label}` : "Job Site / Ship To", null, doc.site_address, M + 165));
-  const meta: [string, string][] = (isQuote
-    ? [["Quote Date", fmtD(doc.doc_date)], ["Expiry Date", fmtD(doc.expiry_date)], ["Reference#", doc.reference ?? ""], ["Salesperson", doc.salesperson ?? ""]]
-    : [["Invoice Date", fmtD(doc.doc_date)], ["Terms", doc.payment_terms ?? ""], ["Due Date", fmtD(doc.due_date)], ["P.O.#", doc.order_number ?? ""], ["Salesperson", doc.salesperson ?? ""]]
-  ).filter(([, v]) => v) as [string, string][];
+  let low = addr(L.billTo, doc.customer_name, doc.billing_address, M);
+  if (doc.site_address && !tp.receipt) low = Math.min(low, addr(doc.site_address.label ? `${L.jobSite} - ${doc.site_address.label}` : L.jobSiteShip, null, doc.site_address, M + 165));
+  const meta = docMeta(lang, doc);
   let my = blockTop - (base + 4);
   if (tp.meta === "right" && !tp.receipt) {
-    meta.forEach(([k, v]) => { text(`${k} :`, right - 90, my, { color: MUTED, align: "right" }); text(v, right, my, { color: INK, align: "right" }); my -= base + 6; });
+    meta.forEach(([k, v]) => { text(`${k} :`, right - (lang === "es" ? 104 : 90), my, { color: MUTED, align: "right" }); text(v, right, my, { color: INK, align: "right" }); my -= base + 6; });
   }
   y = Math.min(low, my) - 14;
   if (tp.meta === "row" || tp.receipt) {
@@ -207,7 +208,7 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
     y -= 46;
   }
   if (doc.subject) {
-    text("Subject :", M, y, { color: MUTED }); y -= base + 3;
+    text(`${L.subject} :`, M, y, { color: MUTED }); y -= base + 3;
     wrap(doc.subject, font, base, right - M).forEach((l) => { text(l, M, y, { color: INK }); y -= base + 3; });
     y -= 8;
   }
@@ -227,10 +228,10 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
     const c = filled ? rgb(1, 1, 1) : INK;
     const ty = y - h + 7;
     if (!tp.receipt) text("#", M + 12, ty, { f: bold, color: c, align: "center" });
-    text(tp.receipt ? "Item" : "Item & Description", cName, ty, { f: bold, color: c });
-    text("Qty", cQty, ty, { f: bold, color: c, align: "right" });
-    if (priced) { text("Rate", cRate, ty, { f: bold, color: c, align: "right" }); text("Amount", cAmt, ty, { f: bold, color: c, align: "right" }); }
-    if (variant === "packing") text("Packed", cAmt, ty, { f: bold, color: c, align: "right" });
+    text(tp.receipt ? L.item : L.itemDesc, cName, ty, { f: bold, color: c });
+    text(L.qty, cQty, ty, { f: bold, color: c, align: "right" });
+    if (priced) { text(L.rate, cRate, ty, { f: bold, color: c, align: "right" }); text(L.amount, cAmt, ty, { f: bold, color: c, align: "right" }); }
+    if (variant === "packing") text(L.packed, cAmt, ty, { f: bold, color: c, align: "right" });
     y -= h + 4;
   };
   head();
@@ -255,21 +256,21 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
     if (tp.table === "grid") page.drawRectangle({ x: M, y, width: right - M, height: h, borderColor: rgb(0.8, 0.82, 0.86), borderWidth: 0.6 });
     else page.drawLine({ start: { x: M, y }, end: { x: right, y }, thickness: 0.6, color: LINE });
   });
-  if (!lines.length) { text("No items", (M + right) / 2, y - 16, { color: MUTED, align: "center" }); y -= 28; }
+  if (!lines.length) { text(L.noItems, (M + right) / 2, y - 16, { color: MUTED, align: "center" }); y -= 28; }
 
   // ---------- Totales (descuento abajo en rojo, como Zoho) ----------
   if (priced) {
     const d = discountSummary(doc, input.lines);
-    const rows: { k: string; v: string; red?: boolean; strong?: boolean; shade?: boolean }[] = [{ k: "Sub Total", v: num2(d.gross) }];
-    if (d.total > 0) rows.push({ k: doc.coupon_code ? `Discount (${doc.coupon_code})` : doc.discount_type === "percent" && Number(doc.discount_value) && !d.itemDisc ? `Discount (${+doc.discount_value}%)` : "Discount", v: `(-) ${num2(d.total)}`, red: true });
-    if (Number(doc.tax_amount) > 0) rows.push({ k: `${doc.tax_name || "Tax"} (${+doc.tax_rate}%)`, v: num2(doc.tax_amount) });
-    if (Number(doc.shipping) !== 0) rows.push({ k: "Shipping Charges", v: num2(doc.shipping) });
-    if (Number(doc.adjustment) !== 0) rows.push({ k: doc.adjustment_label || "Adjustment", v: num2(doc.adjustment) });
-    rows.push({ k: "Total", v: `$${num2(doc.total)}`, strong: true, shade: isQuote });
+    const rows: { k: string; v: string; red?: boolean; strong?: boolean; shade?: boolean }[] = [{ k: L.subTotal, v: num2(d.gross) }];
+    if (d.total > 0) rows.push({ k: doc.coupon_code ? `${L.discount} (${doc.coupon_code})` : doc.discount_type === "percent" && Number(doc.discount_value) && !d.itemDisc ? `${L.discount} (${+doc.discount_value}%)` : L.discount, v: `(-) ${num2(d.total)}`, red: true });
+    if (Number(doc.tax_amount) > 0) rows.push({ k: `${doc.tax_name || L.tax} (${+doc.tax_rate}%)`, v: num2(doc.tax_amount) });
+    if (Number(doc.shipping) !== 0) rows.push({ k: L.shipping, v: num2(doc.shipping) });
+    if (Number(doc.adjustment) !== 0) rows.push({ k: doc.adjustment_label || L.adjustment, v: num2(doc.adjustment) });
+    rows.push({ k: L.total, v: `$${num2(doc.total)}`, strong: true, shade: isQuote });
     if (!isQuote) {
-      if (Number(doc.amount_paid) > 0) rows.push({ k: "Payment Made", v: `(-) ${num2(doc.amount_paid)}`, red: true });
-      if (Number(doc.written_off) > 0) rows.push({ k: "Written Off", v: `(-) ${num2(doc.written_off)}` });
-      rows.push({ k: "Balance Due", v: `$${num2(balanceOf(doc))}`, strong: true, shade: true });
+      if (Number(doc.amount_paid) > 0) rows.push({ k: L.paymentMade, v: `(-) ${num2(doc.amount_paid)}`, red: true });
+      if (Number(doc.written_off) > 0) rows.push({ k: L.writtenOff, v: `(-) ${num2(doc.written_off)}` });
+      rows.push({ k: L.balanceDue, v: `$${num2(balanceOf(doc))}`, strong: true, shade: true });
     }
     ensure(rows.length * 22 + 10);
     y -= 8;
@@ -287,15 +288,15 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
   }
 
   // ---------- Notas, términos y firma ----------
-  const para = (label: string, body: string | null) => {
+  const para = (label: string, body: string | null, note = false) => {
     if (!body) return;
     const ls = wrap(body, font, base, right - M);
     ensure(ls.length * (base + 3) + 30);
-    y -= 14; const off = icon(label === "Notes" ? TPL_ICONS.note : TPL_ICONS.shield, M, y); text(label, M + off, y, { color: MUTED }); y -= base + (tp.icons ? 8 : 5);
+    y -= 14; const off = icon(note ? TPL_ICONS.note : TPL_ICONS.shield, M, y); text(label, M + off, y, { color: MUTED }); y -= base + (tp.icons ? 8 : 5);
     ls.forEach((l) => { if (ensure(base + 3)) y -= 4; text(l, M, y, { color: INK }); y -= base + 3; });
   };
-  para("Notes", doc.notes);
-  para("Terms & Conditions", doc.terms);
+  para(L.notes, doc.notes, true);
+  para(L.termsConditions, doc.terms);
   // Firma del cliente: abajo, justo arriba del pie de página de la última hoja (se ve más profesional)
   if (doc.signed_name && doc.signed_at) {
     const sc = sign ? Math.min(60 / sign.height, 220 / sign.width) : 0;
@@ -303,17 +304,17 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
     const bh = 18 + sh + 8 + base * 2 + 10;
     if (y - bh < MV + 48) newPage();
     let sy = MV + 40 + bh;
-    text("Accepted & signed by the customer", M, sy - base, { f: bold, color: INK }); sy -= base + 10;
+    text(L.signedBy, M, sy - base, { f: bold, color: INK }); sy -= base + 10;
     if (sign) { page.drawImage(sign, { x: M, y: sy - sh, width: sign.width * sc, height: sh }); sy -= sh + 4; }
     page.drawLine({ start: { x: M, y: sy }, end: { x: M + 230, y: sy }, thickness: 0.6, color: MUTED }); sy -= base + 3;
-    text(`${doc.signed_name} - ${fmtD(doc.signed_at)}`, M, sy, { color: TEXT });
+    text(`${doc.signed_name} - ${docDate(doc.signed_at, lang)}`, M, sy, { color: TEXT });
     y = MV + 40;
   }
   if (variant !== "full") {
     ensure(60); y -= 40;
     page.drawLine({ start: { x: M, y }, end: { x: M + 220, y }, thickness: 0.6, color: MUTED });
     page.drawLine({ start: { x: right - 160, y }, end: { x: right, y }, thickness: 0.6, color: MUTED });
-    text("Received by (name & signature)", M, y - 12, { color: MUTED }); text("Date", right - 160, y - 12, { color: MUTED });
+    text(L.receivedBy, M, y - 12, { color: MUTED }); text(L.date, right - 160, y - 12, { color: MUTED });
   }
 
   // ---------- Fotos del trabajo: 4 por hoja (2 × 2), con su margen ----------
@@ -328,8 +329,8 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
   }
   for (let i = 0; i < embedded.length; i += 4) {
     newPage();
-    text(i === 0 ? "Job Photos" : "Job Photos (continued)", M, y - 14, { f: bold, size: base + 4, color: INK });
-    text(`${doc.kind === "quote" ? "Quote" : "Invoice"} # ${doc.number}`, right, y - 14, { color: MUTED, align: "right" });
+    text(i === 0 ? L.jobPhotos : L.jobPhotosMore, M, y - 14, { f: bold, size: base + 4, color: INK });
+    text(`${L.noun[doc.kind]} # ${doc.number}`, right, y - 14, { color: MUTED, align: "right" });
     const top = y - 34, gap = 14;
     const cw = (right - M - gap) / 2, ch = (top - (MV + 40) - gap) / 2;
     embedded.slice(i, i + 4).forEach((p, k) => {
@@ -351,9 +352,9 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
     if (s.footer_text) { text(s.footer_text.slice(0, 140), fx, MV + 5, { size: base - 1.5, color: MUTED }); fx += widthOf(s.footer_text.slice(0, 140), font, base - 1.5) + 14; }
     // Sin plan pagado siempre sale "Powered by BrightPro"; con marca blanca la compañía decide
     if (!input.whiteLabel || s.show_powered) {
-      text("POWERED BY", fx, MV + 5, { size: base - 2, color: MUTED });
-      text("Bright", fx + widthOf("POWERED BY", font, base - 2) + 5, MV + 5, { f: bold, size: base, color: INK });
-      text("Pro", fx + widthOf("POWERED BY", font, base - 2) + 5 + widthOf("Bright", bold, base), MV + 5, { f: bold, size: base, color: rgb(0.91, 0.44, 0.23) });
+      text(L.poweredBy, fx, MV + 5, { size: base - 2, color: MUTED });
+      text("Bright", fx + widthOf(L.poweredBy, font, base - 2) + 5, MV + 5, { f: bold, size: base, color: INK });
+      text("Pro", fx + widthOf(L.poweredBy, font, base - 2) + 5 + widthOf("Bright", bold, base), MV + 5, { f: bold, size: base, color: rgb(0.91, 0.44, 0.23) });
     }
     text(`${i + 1}`, right, MV + 5, { size: base - 1.5, color: MUTED, align: "right" });
   });

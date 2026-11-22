@@ -1,11 +1,14 @@
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
-import { DEFAULT_PREFS, PdfSettings, SalesDoc, SalesLine, docStatus, money, balanceOf, fmtD } from "@/lib/sales";
+import { DEFAULT_PREFS, PdfSettings, SalesDoc, SalesLine, docStatus, money, balanceOf } from "@/lib/sales";
 import DocPaper from "@/components/sales/DocPaper";
 import { docByToken, docUrl, pushToCompany } from "@/lib/push";
 import ShareActions from "@/components/sales/ShareActions";
+import { shareLang } from "@/lib/sales-mail";
+import { docDate, docTx } from "@/lib/doc-lang";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Your document", robots: { index: false, follow: false } };
+export const metadata = { title: "Your document · Su documento", robots: { index: false, follow: false } };
 
 type Payload = {
   doc: SalesDoc; lines: SalesLine[]; company: { name: string } | null;
@@ -13,8 +16,9 @@ type Payload = {
   white_label?: boolean;
 };
 
-// Enlace público para el cliente (no necesita cuenta)
-export default async function SharePage({ params }: { params: { token: string } }) {
+// Enlace público para el cliente (no necesita cuenta).
+// Paso 6.2d: sale en el idioma del cliente (Customer Language); él puede cambiarlo con un toque (?lang=es / ?lang=en).
+export default async function SharePage({ params, searchParams }: { params: { token: string }; searchParams?: { lang?: string } }) {
   const supabase = createClient();
   const before = await docByToken(params.token);
   const { data } = await supabase.rpc("public_sales_doc", { tok: params.token });
@@ -23,10 +27,12 @@ export default async function SharePage({ params }: { params: { token: string } 
     await pushToCompany(before.company_id, { title: `👀 ${before.customer_name} is viewing your ${before.kind}`, body: `${before.kind === "quote" ? "Quote" : "Invoice"} ${before.number} was opened.`, url: docUrl(before), tag: `v-${before.id}` }).catch(() => 0);
   }
   const p = data as Payload | null;
+  const lang = await shareLang(p?.doc?.customer_id, searchParams?.lang, headers().get("accept-language"));
+  const L = docTx(lang);
   if (!p?.doc) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f4f6f8] px-6 text-center">
-        <div><p className="text-xl font-semibold text-[#0b1f3a]">This link isn&apos;t available</p><p className="mt-2 text-slate-500">It may have expired or been disabled. Please contact the business that sent it.</p></div>
+      <main lang={lang} className="flex min-h-screen items-center justify-center bg-[#f4f6f8] px-6 text-center">
+        <div><p className="text-xl font-semibold text-[#0b1f3a]">{L.share.unavailable}</p><p className="mt-2 text-slate-500">{L.share.unavailableText}</p></div>
       </main>
     );
   }
@@ -40,23 +46,26 @@ export default async function SharePage({ params }: { params: { token: string } 
   const canRespond = doc.kind === "quote" && prefs.quote_settings.allow_customer_respond !== false && ["draft", "sent", "viewed"].includes(doc.status) && status.key !== "expired";
   const company = p.company?.name ?? "";
   return (
-    <main className="min-h-screen bg-[#eef1f4] print:bg-white">
+    <main lang={lang} className="min-h-screen bg-[#eef1f4] print:bg-white">
       <div className="border-b border-slate-200 bg-white print:hidden">
         <div className="mx-auto flex max-w-[860px] flex-wrap items-center justify-between gap-3 px-4 py-4">
           <div>
-            <p className="text-[13px] text-slate-500">{company}</p>
+            <p className="flex items-center gap-3 text-[13px] text-slate-500">
+              <span>{company}</span>
+              <a href={`/share/${params.token}?lang=${L.share.otherLang}`} hrefLang={L.share.otherLang} className="font-medium text-[#0f766e] hover:underline">{L.share.other}</a>
+            </p>
             <p className="text-lg font-semibold text-[#0b1f3a]">
-              {doc.kind === "quote" ? "Quote" : "Invoice"} {doc.number} · {money(doc.kind === "invoice" ? balanceOf(doc) : doc.total)}
-              {doc.kind === "invoice" && doc.due_date && <span className="ml-2 text-sm font-normal text-slate-500">due {fmtD(doc.due_date)}</span>}
+              {L.noun[doc.kind]} {doc.number} · {money(doc.kind === "invoice" ? balanceOf(doc) : doc.total)}
+              {doc.kind === "invoice" && doc.due_date && <span className="ml-2 text-sm font-normal text-slate-500">{L.share.due(docDate(doc.due_date, lang))}</span>}
             </p>
           </div>
-          <ShareActions token={params.token} canRespond={canRespond} defaultName={doc.customer_name} />
+          <ShareActions token={params.token} canRespond={canRespond} defaultName={doc.customer_name} lang={lang} />
         </div>
       </div>
       <div className="px-2 py-6 sm:px-6 print:p-0">
-        <DocPaper doc={doc} lines={p.lines ?? []} prefs={prefs} companyName={company} status={status} />
+        <DocPaper doc={doc} lines={p.lines ?? []} prefs={prefs} companyName={company} status={status} lang={lang} />
       </div>
-      {!prefs.white_label && <p className="pb-8 text-center text-xs text-slate-400 print:hidden">Sent with BrightPro</p>}
+      {!prefs.white_label && <p className="pb-8 text-center text-xs text-slate-400 print:hidden">{L.share.sentWith}</p>}
     </main>
   );
 }

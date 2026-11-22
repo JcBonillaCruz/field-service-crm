@@ -4,11 +4,13 @@ import { canManageSales, pdfOf } from "@/lib/sales";
 import { loadDoc } from "@/lib/sales-server";
 import { buildSalesPdf, pdfFileName } from "@/lib/sales-pdf";
 import { emailHtml, ensureToken, loadPhotos, pdfInputFrom } from "@/lib/sales-mail";
+import { isDocLang } from "@/lib/doc-lang";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type Body = { id: string; to: string[]; cc?: string[]; bcc?: string[]; subject: string; body: string; attachPdf?: boolean; fileIds?: string[]; reminder?: boolean;
+  lang?: string; // Paso 6.2d: idioma en que sale el correo y el PDF (por defecto, el del cliente)
   extra?: { filename: string; content: string }[]; // Paso 5.13: reporte de servicio (PDF armado en el navegador de la oficina)
 };
 const okEmail = (e: string) => /^\S+@\S+\.\S+$/.test(e);
@@ -36,11 +38,12 @@ export async function POST(request: NextRequest) {
   const token = await ensureToken(supabase, d.doc);
   if (!token) return NextResponse.json({ error: "The link couldn't be created. Did you run the SQL for Paso 3.31?" }, { status: 500 });
 
+  const lang = isDocLang(b.lang) ? b.lang : d.lang;
   const origin = request.headers.get("origin") || `https://${request.headers.get("host")}`;
-  const link = `${origin}/share/${token}`;
+  const link = `${origin}/share/${token}${lang !== d.lang ? `?lang=${lang}` : ""}`;
   const attachments: { filename: string; content: string }[] = [];
   if (b.attachPdf !== false) {
-    const bytes = await buildSalesPdf({ ...pdfInputFrom(d), photos: await loadPhotos(supabase, d.doc, d.files) });
+    const bytes = await buildSalesPdf({ ...pdfInputFrom(d, undefined, lang), photos: await loadPhotos(supabase, d.doc, d.files) });
     attachments.push({ filename: pdfFileName(d.doc), content: Buffer.from(bytes).toString("base64") });
   }
   for (const f of d.files.filter((x) => (b.fileIds ?? []).includes(x.id))) {
@@ -52,7 +55,7 @@ export async function POST(request: NextRequest) {
   if (extra.reduce((a, x) => a + x.content.length, 0) > 4_700_000) return NextResponse.json({ error: "The service report is too large to email. Remove some photos from the job and try again." }, { status: 413 });
   extra.forEach((x) => attachments.push({ filename: `${String(x.filename || "service-report").replace(/[^A-Za-z0-9._-]+/g, "-").replace(/\.pdf$/i, "").slice(0, 80)}.pdf`, content: x.content }));
   const accent = pdfOf(d.prefs.pdf_settings).accent === "#2f3437" ? "#0f766e" : pdfOf(d.prefs.pdf_settings).accent;
-  const html = emailHtml({ body: b.body, link, pixel: `${origin}/api/track/${token}.gif`, doc: d.doc, companyName: d.companyName, logoUrl: d.prefs.logo_url, accent, whiteLabel: d.prefs.white_label });
+  const html = emailHtml({ body: b.body, link, pixel: `${origin}/api/track/${token}.gif`, doc: d.doc, companyName: d.companyName, logoUrl: d.prefs.logo_url, accent, whiteLabel: d.prefs.white_label, lang });
   // Sale como "BrightPro"; con marca blanca (plan pagado) sale con el nombre de la compañía
   // Sale con el nombre de la COMPAÑÍA (el cliente reconoce el negocio, no a una persona), desde la dirección de BrightPro
   const senderName = (d.companyName || "BrightPro").replace(/[<>"]/g, "");

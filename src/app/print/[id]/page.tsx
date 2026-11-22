@@ -4,12 +4,13 @@ import { canManageSales, docStatus } from "@/lib/sales";
 import { loadDoc } from "@/lib/sales-server";
 import DocPaper, { PaperVariant } from "@/components/sales/DocPaper";
 import PrintBar from "@/components/sales/PrintBar";
+import { docTitle, docTx, isDocLang } from "@/lib/doc-lang";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Print | BrightPro" };
 
 // Página limpia para imprimir o guardar como PDF (Quote, Invoice, Delivery Note, Packing Slip)
-export default async function PrintPage({ params, searchParams }: { params: { id: string }; searchParams: { v?: string; auto?: string } }) {
+export default async function PrintPage({ params, searchParams }: { params: { id: string }; searchParams: { v?: string; auto?: string; lang?: string } }) {
   const { supabase, current } = await getSession();
   if (!current) redirect("/dashboard");
   if (!canManageSales(current.role)) notFound();
@@ -18,12 +19,14 @@ export default async function PrintPage({ params, searchParams }: { params: { id
   const d = await loadDoc(supabase, current.id, row.kind, params.id);
   if (!d) notFound();
   const variant: PaperVariant = searchParams.v === "delivery" ? "delivery" : searchParams.v === "packing" ? "packing" : "full";
-  const label = variant === "delivery" ? "Delivery Note" : variant === "packing" ? "Packing Slip" : d.doc.kind === "quote" ? "Quote" : "Invoice";
+  // Paso 6.2d: en el idioma del cliente (o el que se pida con ?lang=)
+  const lang = isDocLang(searchParams.lang) ? searchParams.lang : d.lang;
+  const label = variant === "full" ? docTx(lang).noun[d.doc.kind] : docTitle(lang, d.doc.kind, variant).toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
   return (
     <div className="min-h-screen bg-[#eef1f4] print:bg-white">
       <PrintBar auto={searchParams.auto === "1"} title={`${label} ${d.doc.number} · ${d.doc.customer_name}`} />
       <div className="px-2 py-6 sm:px-6 print:p-0">
-        <DocPaper doc={d.doc} lines={d.lines} prefs={d.prefs} companyName={d.companyName} status={docStatus(d.doc)} variant={variant} ribbon={false} />
+        <DocPaper doc={d.doc} lines={d.lines} prefs={d.prefs} companyName={d.companyName} status={docStatus(d.doc)} variant={variant} ribbon={false} lang={lang} />
       </div>
     </div>
   );

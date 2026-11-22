@@ -5,7 +5,8 @@ import { SalesDoc, canManageSales, pdfOf, today } from "@/lib/sales";
 import { loadPrefs } from "@/lib/sales-server";
 import { emailHtml } from "@/lib/sales-mail";
 import NoAccess from "@/components/customers/NoAccess";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
+import { docEmailBody, docEmailSubject } from "@/lib/doc-lang";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +22,12 @@ export default async function EmailSettingsPage() {
   const from = process.env.SALES_FROM_EMAIL ?? "invoices@yourdomain.com";
   const accent = pdfOf(prefs.pdf_settings).accent === "#2f3437" ? "#0f766e" : pdfOf(prefs.pdf_settings).accent;
   const doc = { kind: "invoice", number: "INV-000123", total: 683.06, amount_paid: 0, written_off: 0, due_date: today(), expiry_date: null } as unknown as SalesDoc;
+  // Paso 6.2d: la muestra en el idioma de quien la ve (al cliente le llega en SU idioma)
+  const lang = (await getLocale()) === "es" ? "es" : "en";
+  const mail = { kind: "invoice" as const, number: "INV-000123", customer: "Rob & Joe Traders", amount: "$683.06", due: null, actor: user.fullName || current.name, company: current.name, whiteLabel: prefs.white_label };
   const html = emailHtml({
-    body: `Dear Rob & Joe Traders,\n\nIt was a pleasure doing business with you. Your invoice INV-000123 for **$683.06** is ready.\n\nYou can view, print or download the invoice from the link below.\n{link}\n\nRegards,\n${user.fullName || current.name}\n${current.name}`,
-    link: "#", pixel: "", doc, companyName: current.name, logoUrl: prefs.logo_url, accent, whiteLabel: prefs.white_label,
+    body: docEmailBody(lang, mail).replace(/ (?:is due on|vence el) \./, lang === "es" ? " está lista." : " is ready."),
+    link: "#", pixel: "", doc, companyName: current.name, logoUrl: prefs.logo_url, accent, whiteLabel: prefs.white_label, lang,
   });
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-[#f6f8f9] px-4 py-6 sm:px-6">
@@ -54,7 +58,7 @@ export default async function EmailSettingsPage() {
             <div className="border-b border-slate-100 px-5 py-3">
               <p className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">{t("inbox")}</p>
               <p className="mt-1 truncate text-[14px]"><b className="text-[#0b1f3a]">{current.name}</b> <span className="text-slate-500">&lt;{from}&gt;</span></p>
-              <p className="truncate text-[14px] text-slate-700">Invoice - INV-000123 from {current.name}{prefs.white_label ? "" : " - Sent Using BrightPro"}</p>
+              <p className="truncate text-[14px] text-slate-700">{docEmailSubject(lang, mail)}</p>
             </div>
             <iframe title={t("inbox")} srcDoc={html} className="h-[620px] w-full border-0" sandbox="" />
           </div>

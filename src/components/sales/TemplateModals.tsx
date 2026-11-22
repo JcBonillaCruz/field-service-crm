@@ -11,7 +11,8 @@ import DocPaper from "@/components/sales/DocPaper";
 import { tplOf } from "@/lib/pdf-templates";
 import { inputClass } from "@/components/customers/ui";
 import { Modal, btnGhost, btnPrimary } from "@/components/sales/SalesBits";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import type { DocLang } from "@/lib/doc-lang";
 
 const SWATCHES = ["#2f3437", "#1a2744", "#e8713a", "#0f766e", "#2563eb", "#7c3aed", "#be123c", "#15803d"];
 
@@ -39,10 +40,11 @@ export function TemplateThumb({ t, accent }: { t: string; accent: string }) {
 
 export function EditTemplateModal({ open, onClose, companyId, pdf, whiteLabel, preview }: {
   open: boolean; onClose: () => void; companyId: string; pdf: PdfSettings; whiteLabel: boolean;
-  preview?: { doc: SalesDoc; lines: SalesLine[]; prefs: SalesPrefs; companyName: string };
+  preview?: { doc: SalesDoc; lines: SalesLine[]; prefs: SalesPrefs; companyName: string; lang?: DocLang };
 }) {
   const t = useTranslations("tplModal");
   const tc = useTranslations("common");
+  const locale = useLocale();
   const router = useRouter();
   const [p, setP] = useState(pdfOf(pdf));
   const [logo, setLogo] = useState<string | null>(preview?.prefs.logo_url ?? null);
@@ -141,7 +143,7 @@ export function EditTemplateModal({ open, onClose, companyId, pdf, whiteLabel, p
           {preview && livePrefs ? (
             <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-[#f4f6f8]" style={{ height: 520 }}>
               <div className="absolute left-0 top-0 origin-top-left" style={{ width: 820, transform: "scale(0.46)" }}>
-                <DocPaper doc={preview.doc} lines={preview.lines} prefs={livePrefs} companyName={preview.companyName} ribbon={false} stack={false} />
+                <DocPaper doc={preview.doc} lines={preview.lines} prefs={livePrefs} companyName={preview.companyName} ribbon={false} stack={false} lang={preview.lang ?? (locale === "es" ? "es" : "en")} />
               </div>
             </div>
           ) : (
@@ -156,7 +158,7 @@ export function EditTemplateModal({ open, onClose, companyId, pdf, whiteLabel, p
 // Botón "Customize ▾" encima del documento (como Zoho). Change Template abre la galería en su propia página.
 export function CustomizeMenu({ companyId, pdf, whiteLabel, onLogo, kind, back, preview }: {
   companyId: string; pdf: PdfSettings; whiteLabel: boolean; onLogo: () => void; kind: "quote" | "invoice"; back?: string;
-  preview?: { doc: SalesDoc; lines: SalesLine[]; prefs: SalesPrefs; companyName: string };
+  preview?: { doc: SalesDoc; lines: SalesLine[]; prefs: SalesPrefs; companyName: string; lang?: DocLang };
 }) {
   const t = useTranslations("tplModal");
   const [edit, setEdit] = useState(false);
