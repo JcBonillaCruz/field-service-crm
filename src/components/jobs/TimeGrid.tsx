@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useImperativeHandle, useMemo, useRef } from "react";
-import { CalVisit, addDays, fmtHour, fmtTime, minutesOf, sameDay, tint } from "@/lib/jobs";
+import { CalVisit, addDays, minutesOf, sameDay, tint } from "@/lib/jobs";
 import { Col, GridApi, Handlers, Preview } from "@/components/jobs/cal-shared";
 import { EventBar, TechDot } from "@/components/jobs/EventBar";
 
+import { useTranslations } from "next-intl";
+import { useJobsTx } from "@/i18n/useJobsTx";
 export const PX = 1; // 1 px por minuto → 60 px por hora
 
 type Placed = { v: CalVisit; s: number; e: number; start: Date; end: Date; lane: number; lanes: number };
@@ -30,6 +32,8 @@ export default function TimeGrid({ cols, visits, visStart, visEnd, workStart, wo
   cols: Col[]; visits: CalVisit[]; visStart: number; visEnd: number; workStart: number; workEnd: number; slot: number;
   preview: Preview; handlers: Handlers; apiRef: React.MutableRefObject<GridApi | null>; now: Date; dispatch: boolean; scrollTo: number;
 }) {
+  const t = useTranslations("sched");
+  const { hour: fmtHour, time: fmtTime } = useJobsTx();
   const scroller = useRef<HTMLDivElement>(null);
   const area = useRef<HTMLDivElement>(null);
   const height = (visEnd - visStart) * PX;
@@ -94,7 +98,7 @@ export default function TimeGrid({ cols, visits, visStart, visEnd, workStart, wo
                     : <span className="flex h-[30px] w-[30px] items-center justify-center rounded-full border border-dashed border-slate-300 text-slate-400"><svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="10" cy="7" r="3" /><path d="M4.5 17a5.5 5.5 0 0 1 11 0" strokeLinecap="round" /></svg></span>}
                   <span className="min-w-0">
                     <span className="block truncate text-[13px] font-semibold text-[#0b1f3a]">{c.label}</span>
-                    <span className="block text-[11px] text-slate-500">{n} job{n === 1 ? "" : "s"}{mins ? ` · ${Math.round(mins / 6) / 10}h` : ""}</span>
+                    <span className="block text-[11px] text-slate-500">{t("jobsCount", { n })}{mins ? ` · ${Math.round(mins / 6) / 10}h` : ""}</span>
                   </span>
                 </>
               ) : (
@@ -167,7 +171,7 @@ export default function TimeGrid({ cols, visits, visStart, visEnd, workStart, wo
           })}
         </div>
       </div>
-      {slot < 30 && <div className="sr-only">Snaps every {slot} minutes</div>}
+      {slot < 30 && <div className="sr-only">{t("snaps", { n: slot })}</div>}
     </div>
   );
 }

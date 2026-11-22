@@ -80,7 +80,7 @@ export default function SiteEquipment({ companyId, jobId, addressId, customerId,
     );
   };
   const addBtn = !readOnly && !noSite && (
-    <button type="button" onClick={() => setDraft(blank(firstSite))} className="rounded-lg px-2 py-1 text-[12.5px] font-semibold text-[#0f766e] transition-colors hover:bg-[#e9f7f4]">+ Add equipment</button>
+    <button type="button" onClick={() => setDraft(blank(firstSite))} className="rounded-lg px-2 py-1 text-[12.5px] font-semibold text-[#0f766e] transition-colors hover:bg-[#e9f7f4]">{t("addEquip")}</button>
   );
   const editor = draft && (
     <EquipmentEditor draft={draft} setDraft={setDraft} companyId={companyId} jobId={jobId} customerId={customerId} sites={byCustomer ? sites ?? [] : []} canDelete={canDelete}

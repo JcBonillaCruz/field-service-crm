@@ -3,17 +3,21 @@
 import { PlanTag } from "@/components/jobs/plans/PlanArt";
 import { useRouter } from "next/navigation";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
-import { VisitStatus, addressLine, fmtTime, sameDay } from "@/lib/jobs";
-import { OPS_GROUPS, OpsGroup, OpsJob, STAGE_LABEL, delayOf, progressOf } from "@/lib/operations";
+import { VisitStatus, addressLine } from "@/lib/jobs";
+import { OPS_GROUPS, OpsGroup, OpsJob, progressOf } from "@/lib/operations";
 import { AfterHoursMoon, StatusArt, TechDots } from "@/components/jobs/EventBar";
 
+import { useTranslations } from "next-intl";
+import { useOpsTx } from "@/i18n/useOpsTx";
+import { useJobsTx } from "@/i18n/useJobsTx";
 export const GROUP_TONE = Object.fromEntries(OPS_GROUPS.map((g) => [g.id, g.tone])) as Record<OpsGroup, string>;
 
 // Anillo de % de avance (se llena con animación cuando cambia)
 export function ProgressRing({ pct, size = 42, color = "#0f766e", stroke = 4, track = "#e8edf2", fill, text = "#0b1f3a" }: { pct: number; size?: number; color?: string; stroke?: number; track?: string; fill?: string; text?: string }) {
+  const t = useTranslations("opsLib");
   const r = (size - stroke) / 2, c = 2 * Math.PI * r;
   return (
-    <span className="relative inline-flex shrink-0" style={{ width: size, height: size }} title={`${pct}% done`} aria-label={`${pct}% done`}>
+    <span className="relative inline-flex shrink-0" style={{ width: size, height: size }} title={t("pctDone", { n: pct })} aria-label={t("pctDone", { n: pct })}>
       <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} className="-rotate-90">
         {/* fill = disco por dentro (con un aire blanco entre el disco y el anillo que va creciendo afuera) */}
         {fill && <circle cx={size / 2} cy={size / 2} r={r - stroke / 2 - 1.5} fill={fill} />}
@@ -32,7 +36,7 @@ export function ProgressRing({ pct, size = 42, color = "#0f766e", stroke = 4, tr
 
 // Etiqueta roja suave de "Retrasado" (con reloj que se mueve)
 export function DelayTag({ job, now, small = false }: { job: OpsJob; now: number; small?: boolean }) {
-  const d = delayOf(job, now);
+  const d = useOpsTx().delay(job, now);
   if (!d) return null;
   return (
     <span title={d.detail} className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-[#fff1f2] font-semibold text-[#be123c] ring-1 ring-[#fecdd3] ${small ? "px-1.5 py-px text-[10.5px]" : "px-2 py-0.5 text-[11.5px]"}`}>
@@ -42,14 +46,7 @@ export function DelayTag({ job, now, small = false }: { job: OpsJob; now: number
   );
 }
 
-export function whenLabel(j: OpsJob, now = Date.now()) {
-  const v = j.visit;
-  if (!v?.starts_at) return "Not scheduled";
-  const s = new Date(v.starts_at), e = v.ends_at ? new Date(v.ends_at) : null;
-  const today = new Date(now), tomorrow = new Date(now + 86400000);
-  const day = sameDay(s, today) ? "Today" : sameDay(s, tomorrow) ? "Tomorrow" : s.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-  return `${day} · ${fmtTime(s)}${e ? ` – ${fmtTime(e)}` : ""}`;
-}
+// Paso 6.2a: la versión traducida vive en useOpsTx().when (las pantallas la usan desde ahí)
 
 const STAGE_PILL: Record<OpsGroup, string> = {
   unassigned: "bg-slate-100 text-slate-600",
@@ -67,7 +64,6 @@ export function liveStatus(j: OpsJob): VisitStatus | null {
   if (j.status === "on_hold") return "on_hold";
   return null;
 }
-const LIVE_TEXT: Record<string, string> = { on_my_way: "On the way", in_progress: "Working now", paused: "Paused", on_hold: "Left for follow-up" };
 
 export type CardMenu = { label: string; onClick: () => void; danger?: boolean; icon: string; divider?: boolean }[];
 
@@ -80,23 +76,25 @@ export function OpsCard({ job, group, now, innerRef, onHover, dim = false, menu,
   innerRef?: (el: HTMLDivElement | null) => void; onHover?: (on: boolean) => void; dim?: boolean;
   menu?: CardMenu; drag?: React.HTMLAttributes<HTMLDivElement> & { draggable?: boolean }; dragging?: boolean;
 }) {
+  const ox = useOpsTx();
+  const jt = useJobsTx();
   const router = useRouter();
   const pct = progressOf(job);
   const toInvoice = group === "to_invoice";          // Paso 5.6b: terminado, falta enviar la factura
   const done = group === "done" || toInvoice;        // el trabajo de campo ya terminó
   const gray = group === "done";                     // completado del todo: tarjeta gris, solo la palomita en verde
   const live = liveStatus(job);
-  const delay = delayOf(job, now);
+  const delay = ox.delay(job, now);
   const addr = addressLine(job.site_address).split(",")[0];
   const color = job.type_color ?? "#94a3b8";
   const open = () => router.push(href ?? `/dashboard/jobs/${job.id}`);
   const when = done && job.completed_at
-    ? `Done ${new Date(job.completed_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`
-    : whenLabel(job, now);
+    ? ox.t("done", { when: jt.dateTime(new Date(job.completed_at)) })
+    : ox.when(job, now);
   return (
     <div ref={innerRef} role="link" tabIndex={0} onClick={open} onKeyDown={(e) => { if (e.key === "Enter") open(); }}
       onMouseEnter={() => onHover?.(true)} onMouseLeave={() => onHover?.(false)} {...drag}
-      title={delay ? `${delay.label} · ${delay.detail}` : job.phase_now && !done ? `${job.phase_blocked ? "Blocked" : "Phase"}: ${job.phase_now}` : live ? LIVE_TEXT[live] : undefined}
+      title={delay ? `${delay.label} · ${delay.detail}` : job.phase_now && !done ? `${job.phase_blocked ? ox.t("blocked") : ox.t("phase")}: ${job.phase_now}` : live ? ox.live(live) : undefined}
       className={`group/card relative cursor-pointer select-none rounded-xl border ${tiny ? "px-2 py-1.5" : "px-2.5 py-2"} transition-all duration-100 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]
         ${tint ? "hover:-translate-y-0.5 hover:shadow-[0_8px_18px_rgba(15,40,60,0.10)] hover:brightness-[0.98]" : gray ? "border-[#e2e8f0] bg-[#f1f5f9]" : toInvoice ? "border-[#fbd5bd] bg-white hover:-translate-y-0.5 hover:border-[#e8713a] hover:shadow-[0_8px_18px_rgba(232,113,58,0.14)]" : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-[#14a39a] hover:shadow-[0_8px_18px_rgba(15,40,60,0.09)]"}
         ${drag?.draggable ? "active:cursor-grabbing" : ""} ${dim ? "opacity-35" : ""} ${dragging ? "opacity-40" : ""}`}
@@ -110,9 +108,9 @@ export function OpsCard({ job, group, now, innerRef, onHover, dim = false, menu,
       <div className="flex items-center gap-1.5">
         <span className={`min-w-0 flex-1 truncate ${tiny ? "text-[10.5px]" : "text-[11.5px]"} font-semibold ${delay ? "text-[#be123c]" : "text-slate-500"}`}>{delay ? delay.label : when}</span>
         {!done && (job.priority === "urgent" || job.priority === "high") && (
-          <span className={`shrink-0 rounded-full px-1.5 text-[9.5px] font-bold uppercase ${job.priority === "urgent" ? "bg-[#ffe4e6] text-[#be123c]" : "bg-[#fff4e0] text-[#b45309]"}`}>{job.priority}</span>
+          <span className={`shrink-0 rounded-full px-1.5 text-[9.5px] font-bold uppercase ${job.priority === "urgent" ? "bg-[#ffe4e6] text-[#be123c]" : "bg-[#fff4e0] text-[#b45309]"}`}>{jt.priority(job.priority)}</span>
         )}
-        {job.plan && <PlanTag label={tiny ? "" : "Plan"} />}
+        {job.plan && <PlanTag label={tiny ? "" : ox.t("plan")} />}
         {afterHours && !done && <AfterHoursMoon size={16} />}
         {menu && menu.length > 0 && <CardActions items={menu} />}
       </div>
@@ -137,13 +135,13 @@ export function OpsCard({ job, group, now, innerRef, onHover, dim = false, menu,
           {toInvoice ? (
             <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-[#e8713a] px-1.5 py-px text-[10.5px] font-semibold text-white">
               <span className="relative flex h-1.5 w-1.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-80" /><span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" /></span>
-              {STAGE_LABEL(job)}</span>
-          ) : done ? <span className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-wide text-slate-400">{STAGE_LABEL(job)}</span>
+              {ox.stage(job)}</span>
+          ) : done ? <span className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-wide text-slate-400">{ox.stage(job)}</span>
             : group === "unassigned" && !job.techs.length ? (
-              <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-[#0f766e]">Assign
+              <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-[#0f766e]">{ox.t("assign")}
                 <svg viewBox="0 0 20 20" className="h-3 w-3 transition-transform group-hover/card:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M7.5 5 12.5 10l-5 5" /></svg></span>
-            ) : live ? <span className="text-[10.5px] font-semibold" style={{ color: live === "on_my_way" ? "#6d28d9" : live === "in_progress" ? "#b45309" : "#be123c" }}>{LIVE_TEXT[live]} · {pct}%</span>
-            : <span className={`rounded-full px-1.5 py-px text-[10.5px] font-semibold ${STAGE_PILL[group === "delayed" ? "assigned" : group]}`}>{STAGE_LABEL(job)}</span>}
+            ) : live ? <span className="text-[10.5px] font-semibold" style={{ color: live === "on_my_way" ? "#6d28d9" : live === "in_progress" ? "#b45309" : "#be123c" }}>{ox.live(live)} · {pct}%</span>
+            : <span className={`rounded-full px-1.5 py-px text-[10.5px] font-semibold ${STAGE_PILL[group === "delayed" ? "assigned" : group]}`}>{ox.stage(job)}</span>}
         </span>
       </div>
     </div>
@@ -151,9 +149,10 @@ export function OpsCard({ job, group, now, innerRef, onHover, dim = false, menu,
 }
 
 function CardActions({ items }: { items: CardMenu }) {
+  const t = useTranslations("opsLib");
   return (
     <Menu>
-      <MenuButton onClick={(e: React.MouseEvent) => e.stopPropagation()} aria-label="Job actions"
+      <MenuButton onClick={(e: React.MouseEvent) => e.stopPropagation()} aria-label={t("jobActions")}
         className="-my-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-[#0b1f3a] data-[open]:bg-slate-100 data-[open]:text-[#0b1f3a] focus:outline-none">
         <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><circle cx="4.5" cy="10" r="1.6" /><circle cx="10" cy="10" r="1.6" /><circle cx="15.5" cy="10" r="1.6" /></svg>
       </MenuButton>

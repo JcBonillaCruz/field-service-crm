@@ -3,10 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import DatePicker from "@/components/ui/DatePicker";
-import { SiteAddress, addDays, addressLine, dayStart, fmtDayShort, fmtTime, fromIsoDay, isoDay, jobError, startOfWeek } from "@/lib/jobs";
+import { SiteAddress, addDays, addressLine, dayStart, fromIsoDay, isoDay, startOfWeek } from "@/lib/jobs";
 import { TechDot } from "@/components/jobs/EventBar";
 import { notifyAssigned } from "@/lib/jobs-assign-notify";
 
+import { useTranslations } from "next-intl";
+import { useJobsTx } from "@/i18n/useJobsTx";
+import { useJobError } from "@/i18n/useFmt";
 export type AssignTech = {
   user_id: string; full_name: string; initials: string; color: string; avatar_url: string | null; email: string | null; phone: string | null; job_title: string | null;
   role?: string; worker_type?: "employee" | "subcontractor";
@@ -26,6 +29,11 @@ const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").t
 export default function AssignBoard({ companyId, techs, weekStartsOn }: { companyId: string; techs: AssignTech[]; weekStartsOn: number }) {
   const [range, setRange] = useState<Range>("today");
   const [date, setDate] = useState(isoDay(new Date()));
+  const T = useTranslations("assign");
+  const tc = useTranslations("common");
+  const jt = useJobsTx();
+  const { time: fmtTime } = jt;
+  const jobError = useJobError();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
@@ -117,30 +125,30 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
     // Al agregar a alguien el trabajo queda escogido: así puedes agregar más personas con un toque
     setPicked(keepPicked ? rowId : null);
     const { error } = await createClient().rpc("visit_set_collaborators", { p_visit: rowId, p_users: next, p_lead: newLead });
-    if (error) { setRows((rs) => rs.map((r) => (r.id === rowId ? { ...r, tech_ids: before, lead_id: beforeLead } : r))); setPicked(null); flash(error.hint || jobError(error), true); return; }
+    if (error) { setRows((rs) => rs.map((r) => (r.id === rowId ? { ...r, tech_ids: before, lead_id: beforeLead } : r))); setPicked(null); flash(jobError(error), true); return; }
     if (pulseId) { setPulse(pulseId); setTimeout(() => setPulse((p) => (p === pulseId ? null : p)), 700); }
     flash(message);
     // Solo a quien se AGREGA al trabajo le llega su aviso (campana + push + correo). Mover o quitar no avisa a nadie.
     const added = next.filter((t) => !before.includes(t));
-    if (added.length) notifyAssigned({ visitId: rowId }, added).then((why) => { if (why) flash(`${message} · not notified: ${why}`, true); });
+    if (added.length) notifyAssigned({ visitId: rowId }, added).then((why) => { if (why) flash(T("notNotified", { m: message, why }), true); });
   }
-  const nameOf = (id: string) => techs.find((t) => t.user_id === id)?.full_name ?? "collaborator";
+  const nameOf = (id: string) => techs.find((t) => t.user_id === id)?.full_name ?? T("collaborator");
   const label = (r: Row) => r.customer_name || r.number;
   function addTo(rowId: string, techId: string) {
     const r = rows.find((x) => x.id === rowId); if (!r) return;
-    if (r.tech_ids.includes(techId)) { setPicked(rowId); return flash(`${nameOf(techId)} is already on ${label(r)}`); }
-    setCollaborators(rowId, [...r.tech_ids, techId], r.lead_id ?? techId, r.tech_ids.length ? `${nameOf(techId)} added to ${label(r)}` : `${label(r)} → ${nameOf(techId)}`, techId, true);
+    if (r.tech_ids.includes(techId)) { setPicked(rowId); return flash(T("already", { name: nameOf(techId), job: label(r) })); }
+    setCollaborators(rowId, [...r.tech_ids, techId], r.lead_id ?? techId, r.tech_ids.length ? T("added", { name: nameOf(techId), job: label(r) }) : `${label(r)} → ${nameOf(techId)}`, techId, true);
   }
   function moveTo(rowId: string, fromId: string, toId: string) {
     const r = rows.find((x) => x.id === rowId); if (!r || fromId === toId) return;
     if (r.tech_ids.includes(toId)) return removeFrom(rowId, fromId);
     const next = r.tech_ids.map((t) => (t === fromId ? toId : t));
-    setCollaborators(rowId, next, r.lead_id === fromId ? toId : r.lead_id, `${label(r)} moved from ${nameOf(fromId)} to ${nameOf(toId)}`, toId);
+    setCollaborators(rowId, next, r.lead_id === fromId ? toId : r.lead_id, T("movedFrom", { job: label(r), a: nameOf(fromId), b: nameOf(toId) }), toId);
   }
   function removeFrom(rowId: string, techId: string) {
     const r = rows.find((x) => x.id === rowId); if (!r) return;
     const next = r.tech_ids.filter((t) => t !== techId);
-    setCollaborators(rowId, next, r.lead_id === techId ? next[0] ?? null : r.lead_id, next.length ? `${nameOf(techId)} removed from ${label(r)}` : `${label(r)} is unassigned`, null);
+    setCollaborators(rowId, next, r.lead_id === techId ? next[0] ?? null : r.lead_id, next.length ? T("removed", { name: nameOf(techId), job: label(r) }) : T("unassigned", { job: label(r) }), null);
   }
   // Tocar (celular): el trabajo elegido se agrega a la persona
   const assign = (rowId: string, techId: string | null) => { if (techId) addTo(rowId, techId); };
@@ -209,14 +217,14 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
       <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 lg:px-6">
         <div className="mr-auto">
           {fromOps && <a href="/dashboard/jobs/operations" className="mb-0.5 inline-flex items-center gap-1 text-[13px] font-semibold text-[#0f766e] hover:underline">
-            <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 5 7.5 10l5 5" /></svg>Back to Operations</a>}
-          <h1 className="text-[20px] font-semibold tracking-tight text-[#0b1f3a]">Assign jobs</h1>
-          <p className="hidden text-[13px] text-slate-500 sm:block">Drop a job on a person to assign it — then tap or drop on more people to add helpers. Drag it between people to move it.</p>
-          <p className="text-[13px] text-slate-500 sm:hidden">Tap a job, then tap one or more people.</p>
+            <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 5 7.5 10l5 5" /></svg>{T("back")}</a>}
+          <h1 className="text-[20px] font-semibold tracking-tight text-[#0b1f3a]">{T("title")}</h1>
+          <p className="hidden text-[13px] text-slate-500 sm:block">{T("intro")}</p>
+          <p className="text-[13px] text-slate-500 sm:hidden">{T("introMobile")}</p>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-          <div className="flex rounded-lg bg-slate-100 p-0.5">{rangeBtn("today", "Today")}{rangeBtn("tomorrow", "Tomorrow")}{rangeBtn("week", "This week")}</div>
-          <div className="w-36 sm:w-44" onClick={() => setRange("date")}><DatePicker value={range === "date" ? date : ""} placeholder="Pick a day" onChange={(v) => { setDate(v); setRange("date"); }} /></div>
+          <div className="flex rounded-lg bg-slate-100 p-0.5">{rangeBtn("today", T("today"))}{rangeBtn("tomorrow", T("tomorrow"))}{rangeBtn("week", T("week"))}</div>
+          <div className="w-36 sm:w-44" onClick={() => setRange("date")}><DatePicker value={range === "date" ? date : ""} placeholder={T("pickDay")} onChange={(v) => { setDate(v); setRange("date"); }} /></div>
         </div>
       </div>
 
@@ -228,29 +236,29 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
           onDrop={(e) => { e.preventDefault(); setOver(null); setDragId(null); setDragFrom(null); const [k, rowId, fromId] = e.dataTransfer.getData("text/plain").split(":"); if (k === "job" && fromId) removeFrom(rowId, fromId); }}
           className={`flex min-h-0 min-w-0 flex-col rounded-2xl border bg-white transition-colors ${over === "__left" ? "border-[#f59e0b] bg-[#fffaf0]" : "border-slate-200"}`}>
           <div className="flex items-center gap-2 border-b border-slate-100 p-3">
-            <p className="shrink-0 text-[14px] font-semibold text-[#0b1f3a]">To assign <span className={`ml-1 rounded-full px-2 py-0.5 text-[12px] ${shownJobs.length ? "bg-[#fff4e0] text-[#b45309]" : "bg-slate-100 text-slate-400"}`}>{rows.filter((r) => !r.tech_ids.length).length}</span></p>
-            {search(q, setQ, "Search: customer, phone, address, #")}
+            <p className="shrink-0 text-[14px] font-semibold text-[#0b1f3a]">{T("toAssign")} <span className={`ml-1 rounded-full px-2 py-0.5 text-[12px] ${shownJobs.length ? "bg-[#fff4e0] text-[#b45309]" : "bg-slate-100 text-slate-400"}`}>{rows.filter((r) => !r.tech_ids.length).length}</span></p>
+            {search(q, setQ, T("searchJobs"))}
           </div>
           <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2">
             <div className="flex shrink-0 rounded-full bg-slate-100 p-1">
-              {([[false, "Unassigned", "M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3.5 20a6.5 6.5 0 0 1 11-4.7M17 15h5"], [true, "All jobs", "M4 6h16M4 12h16M4 18h16"]] as [boolean, string, string][]).map(([v, l, d]) => (
+              {([[false, T("fUnassigned"), "M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3.5 20a6.5 6.5 0 0 1 11-4.7M17 15h5"], [true, T("fAll"), "M4 6h16M4 12h16M4 18h16"]] as [boolean, string, string][]).map(([v, l, d]) => (
                 <button key={l} type="button" onClick={() => setListAll(v)}
                   className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-[12.5px] font-semibold transition-all ${listAll === v ? "bg-white text-[#0f766e] shadow-sm" : "text-slate-500 hover:text-[#0b1f3a]"}`}>
                   <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>{l}
                 </button>
               ))}
             </div>
-            <p className="hidden min-w-0 truncate text-[12px] text-slate-500 sm:block">{listAll ? "Drop a job on more people to add helpers" : "Tap a job, then tap one or more people"}</p>
+            <p className="hidden min-w-0 truncate text-[12px] text-slate-500 sm:block">{listAll ? T("hintAll") : T("hintUn")}</p>
           </div>
           <div className="min-h-[12rem] flex-1 overflow-y-auto p-3">
-            {over === "__left" && <p className="mb-2 rounded-lg border-2 border-dashed border-[#f59e0b] py-2 text-center text-[13px] font-semibold text-[#b45309]">Drop here to take it off {dragFrom ? nameOf(dragFrom) : "this person"}</p>}
+            {over === "__left" && <p className="mb-2 rounded-lg border-2 border-dashed border-[#f59e0b] py-2 text-center text-[13px] font-semibold text-[#b45309]">{T("dropOff", { name: dragFrom ? nameOf(dragFrom) : T("thisPerson") })}</p>}
             {loading ? (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-[4.6rem] animate-pulse rounded-xl bg-slate-100" />)}</div>
             ) : shownJobs.length === 0 ? (
               <div className="px-4 py-12 text-center">
                 <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#e7f6f1] text-[#0f766e]"><svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5 9.5 17 19 7" /></svg></span>
-                <p className="mt-3 text-[15px] font-semibold text-[#0b1f3a]">{q ? "No jobs match" : "Every job has a collaborator"}</p>
-                <p className="mt-1 text-[13px] text-slate-500">Drag a job from one person to another to move it. Drop it on a second person to add a helper.</p>
+                <p className="mt-3 text-[15px] font-semibold text-[#0b1f3a]">{q ? T("noMatch") : T("allHave")}</p>
+                <p className="mt-1 text-[13px] text-slate-500">{T("emptyHint")}</p>
               </div>
             ) : (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-2">
@@ -262,8 +270,8 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
                       className={`group cursor-grab select-none rounded-xl border bg-white px-3 py-2 transition-all duration-100 active:cursor-grabbing ${sel ? "border-[#0f766e] ring-4 ring-[#14a39a]/15" : "border-slate-200 hover:-translate-y-0.5 hover:border-[#14a39a] hover:shadow-[0_8px_18px_rgba(15,40,60,0.09)]"} ${dragId === r.id ? "opacity-40" : ""}`}
                       style={{ borderTop: `3px solid ${r.type_color ?? "#94a3b8"}` }}>
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-[12px] font-semibold text-slate-500">{s ? `${fmtDayShort(s).replace(/^\w+, /, "")} · ${fmtTime(s)}` : "No date"}</span>
-                        {(r.priority === "urgent" || r.priority === "high") && <span className={`rounded-full px-1.5 text-[10px] font-bold uppercase ${r.priority === "urgent" ? "bg-[#ffe4e6] text-[#be123c]" : "bg-[#fff4e0] text-[#b45309]"}`}>{r.priority}</span>}
+                        <span className="text-[12px] font-semibold text-slate-500">{s ? `${jt.monthDay(s)} · ${fmtTime(s)}` : T("noDate")}</span>
+                        {(r.priority === "urgent" || r.priority === "high") && <span className={`rounded-full px-1.5 text-[10px] font-bold uppercase ${r.priority === "urgent" ? "bg-[#ffe4e6] text-[#be123c]" : "bg-[#fff4e0] text-[#b45309]"}`}>{jt.priority(r.priority)}</span>}
                       </div>
                       <p className="mt-0.5 flex items-center gap-1.5 text-[14px] font-semibold text-[#0b1f3a]"><span className="min-w-0 flex-1 truncate">{r.customer_name || r.number}</span>
                         {r.tech_ids.length > 0 && <span className="flex shrink-0 -space-x-1">{r.tech_ids.slice(0, 3).map((x) => { const o = techs.find((y) => y.user_id === x); return o ? <TechDot key={x} t={o} size={18} /> : null; })}</span>}</p>
@@ -278,11 +286,11 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
 
         <section className="flex min-h-0 min-w-0 flex-col rounded-2xl border border-slate-200 bg-white">
           <div className="flex items-center gap-2 border-b border-slate-100 p-3">
-            <p className="shrink-0 text-[14px] font-semibold text-[#0b1f3a]">Collaborators <span className="font-normal text-slate-400">({techs.length})</span></p>
-            {search(tq, setTq, "Search by name, phone or email")}
+            <p className="shrink-0 text-[14px] font-semibold text-[#0b1f3a]">{T("collabs")} <span className="font-normal text-slate-400">({techs.length})</span></p>
+            {search(tq, setTq, T("searchTech"))}
           </div>
           <div className="min-h-[12rem] flex-1 overflow-y-auto p-3">
-            {techs.length === 0 && <p className="px-3 py-10 text-center text-[13.5px] text-slate-500">No collaborators yet. Invite technicians in Team, or turn on “Can receive jobs” for yourself (Team → Edit).</p>}
+            {techs.length === 0 && <p className="px-3 py-10 text-center text-[13.5px] text-slate-500">{T("noCollabs")}</p>}
             <div className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] items-start gap-2.5">
               {shownTechs.map((t) => {
                 const mine = rows.filter((r) => r.tech_ids.includes(t.user_id)).sort((x, y) => (x.starts_at ?? "z").localeCompare(y.starts_at ?? "z"));
@@ -296,12 +304,12 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
                     style={{ borderTop: `3px solid ${t.color}` }}>
                     <div draggable onDragStart={(e) => { e.dataTransfer.setData("text/plain", `tech:${t.user_id}`); e.dataTransfer.effectAllowed = "move"; }}
                       onClick={() => picked && assign(picked, t.user_id)}
-                      className={`flex items-center gap-2.5 px-3 py-2.5 ${picked ? "cursor-pointer" : "cursor-grab"}`} title="Drag to reorder">
+                      className={`flex items-center gap-2.5 px-3 py-2.5 ${picked ? "cursor-pointer" : "cursor-grab"}`} title={T("dragReorder")}>
                       <TechDot t={t} size={34} ring={false} />
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-1.5"><span className="truncate text-[14px] font-semibold text-[#0b1f3a]">{t.full_name}</span>
-                          {t.role === "owner" && <span className="shrink-0 rounded-full bg-[#0b1f3a] px-1.5 py-px text-[10px] font-semibold text-white">Owner</span>}
-                          {t.worker_type === "subcontractor" && <span className="shrink-0 rounded-full bg-[#fff7ed] px-1.5 py-px text-[10px] font-semibold text-[#c2410c] ring-1 ring-[#fed7aa]">Sub</span>}</span>
+                          {t.role === "owner" && <span className="shrink-0 rounded-full bg-[#0b1f3a] px-1.5 py-px text-[10px] font-semibold text-white">{T("owner")}</span>}
+                          {t.worker_type === "subcontractor" && <span className="shrink-0 rounded-full bg-[#fff7ed] px-1.5 py-px text-[10px] font-semibold text-[#c2410c] ring-1 ring-[#fed7aa]">{T("sub")}</span>}</span>
                         <span className="block truncate text-[11.5px] text-slate-500">{[t.job_title, t.phone].filter(Boolean).join(" · ") || t.email}</span>
                       </span>
                       <span className="text-right">
@@ -311,29 +319,29 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
                     </div>
                     {picked && pickedRow && (pickedRow.tech_ids.includes(t.user_id)
                       ? <p className="flex items-center gap-1.5 border-t border-dashed border-[#bfe7de] bg-[#f3fbf8] px-3 py-1.5 text-[12px] font-semibold text-[#0f766e]">
-                          <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="m5 10.5 3 3 7-7" /></svg>On {pickedRow.customer_name || pickedRow.number}</p>
+                          <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="m5 10.5 3 3 7-7" /></svg>{T("onX", { job: pickedRow.customer_name || pickedRow.number })}</p>
                       : <button type="button" onClick={() => assign(picked, t.user_id)} className="flex w-full items-center gap-1.5 border-t border-dashed border-[#bfe7de] px-3 py-1.5 text-left text-[12px] font-semibold text-[#0f766e] transition-colors hover:bg-[#f3fbf8]">
                           <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>
-                          {pickedRow.tech_ids.length ? "Add as helper on" : "Assign"} {pickedRow.customer_name || pickedRow.number}</button>)}
+                          {pickedRow.tech_ids.length ? T("addHelper", { job: pickedRow.customer_name || pickedRow.number }) : T("assignX", { job: pickedRow.customer_name || pickedRow.number })}</button>)}
                     <div className="space-y-1 border-t border-slate-100 px-2 py-2">
-                      {mine.length === 0 && <p className="px-1 py-1.5 text-center text-[12px] text-slate-400">{isOver ? "Drop to assign" : "No jobs · drop one here"}</p>}
+                      {mine.length === 0 && <p className="px-1 py-1.5 text-center text-[12px] text-slate-400">{isOver ? T("dropAssign") : T("noJobsDrop")}</p>}
                       {mine.map((r) => (
-                        <div key={r.id} {...jobDrag(r.id, t.user_id)} title="Drag to another person to move it · hold Ctrl (or ⌥) to add them instead · + to add more people"
+                        <div key={r.id} {...jobDrag(r.id, t.user_id)} title={T("dragHint")}
                           className={`flex cursor-grab items-center gap-2 rounded-lg px-2 py-1.5 text-[12.5px] transition-colors active:cursor-grabbing hover:bg-slate-50 ${dragId === r.id ? "opacity-40" : ""}`}
                           style={{ background: `${r.type_color ?? "#94a3b8"}12` }}>
-                          <span className="w-14 shrink-0 font-semibold text-slate-500">{r.starts_at ? fmtTime(new Date(r.starts_at)) : "No date"}</span>
+                          <span className="w-14 shrink-0 font-semibold text-slate-500">{r.starts_at ? fmtTime(new Date(r.starts_at)) : T("noDate")}</span>
                           <span className="min-w-0 flex-1 truncate text-[#0b1f3a]">{r.customer_name || r.number}</span>
                           {r.tech_ids.length > 1 && (
-                            <span title={`With ${r.tech_ids.filter((x) => x !== t.user_id).map(nameOf).join(", ")}`} className="flex shrink-0 -space-x-1">
+                            <span title={T("with", { names: r.tech_ids.filter((x) => x !== t.user_id).map(nameOf).join(", ") })} className="flex shrink-0 -space-x-1">
                               {r.tech_ids.filter((x) => x !== t.user_id).slice(0, 2).map((x) => { const o = techs.find((y) => y.user_id === x); return o ? <TechDot key={x} t={o} size={16} /> : null; })}
                             </span>
                           )}
-                          {r.lead_id === t.user_id && r.tech_ids.length > 1 && <span title="Lead" className="shrink-0 text-[10px] font-bold uppercase text-[#0f766e]">Lead</span>}
-                          <button type="button" onClick={(e) => { e.stopPropagation(); setPicked(picked === r.id ? null : r.id); }} title="Add more people to this job" aria-label="Add more people to this job"
+                          {r.lead_id === t.user_id && r.tech_ids.length > 1 && <span title={T("lead")} className="shrink-0 text-[10px] font-bold uppercase text-[#0f766e]">{T("lead")}</span>}
+                          <button type="button" onClick={(e) => { e.stopPropagation(); setPicked(picked === r.id ? null : r.id); }} title={T("addMore")} aria-label={T("addMore")}
                             className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-all hover:scale-110 ${picked === r.id ? "bg-[#0f766e] text-white" : "text-[#0f766e] hover:bg-[#d7f1eb]"}`}>
                             <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>
                           </button>
-                          <button type="button" onClick={() => removeFrom(r.id, t.user_id)} title={`Take off ${t.full_name}`} aria-label={`Take off ${t.full_name}`}
+                          <button type="button" onClick={() => removeFrom(r.id, t.user_id)} title={T("takeOff", { name: t.full_name })} aria-label={T("takeOff", { name: t.full_name })}
                             className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
                             <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M5 5l10 10M15 5 5 15" /></svg>
                           </button>
@@ -354,13 +362,13 @@ export default function AssignBoard({ companyId, techs, weekStartsOn }: { compan
             <>
               <span className="flex shrink-0 -space-x-1.5">{pickedRow.tech_ids.slice(0, 4).map((x) => { const o = techs.find((y) => y.user_id === x); return o ? <TechDot key={x} t={o} size={24} /> : null; })}</span>
               <p className="min-w-0 flex-1 text-[13.5px] leading-snug"><b className="block truncate">{pickedRow.customer_name || pickedRow.number}</b>
-                <span className="text-white/75">Need more people? Tap or drop on them.</span></p>
-              <button type="button" onClick={() => setPicked(null)} className="rounded-lg bg-white px-3 py-1.5 text-[13px] font-semibold text-[#0b1f3a] hover:bg-[#e9f7f4]">Done</button>
+                <span className="text-white/75">{T("needMore")}</span></p>
+              <button type="button" onClick={() => setPicked(null)} className="rounded-lg bg-white px-3 py-1.5 text-[13px] font-semibold text-[#0b1f3a] hover:bg-[#e9f7f4]">{tc("done")}</button>
             </>
           ) : (
             <>
-              <p className="min-w-0 flex-1 truncate text-[14px]">Now tap one or more people for <b>{pickedRow.customer_name || pickedRow.number}</b></p>
-              <button type="button" onClick={() => setPicked(null)} className="text-[13px] font-semibold text-white/70">Cancel</button>
+              <p className="min-w-0 flex-1 truncate text-[14px]">{T.rich("nowTap", { job: pickedRow.customer_name || pickedRow.number, b: (c) => <b>{c}</b> })}</p>
+              <button type="button" onClick={() => setPicked(null)} className="text-[13px] font-semibold text-white/70">{tc("cancel")}</button>
             </>
           )}
         </div>

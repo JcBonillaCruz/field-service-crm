@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Menu, MenuButton, MenuItem, MenuItems, Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { createClient } from "@/lib/supabase/client";
-import { JobSettings, TeamMember, addDays, addressLine, afterHoursOf, dayStart, fromIsoDay, isoDay, jobError, receivesJobs, startOfMonth, startOfWeek } from "@/lib/jobs";
+import { JobSettings, TeamMember, addDays, addressLine, afterHoursOf, dayStart, fromIsoDay, isoDay, receivesJobs, startOfMonth, startOfWeek } from "@/lib/jobs";
 import { Modal, btnGhost, btnPrimary } from "@/components/sales/SalesBits";
 import { loadPhaseProgress, withPhases } from "@/lib/phases";
 import { loadBilling, withBilling } from "@/lib/job-billing";
@@ -18,6 +18,10 @@ import { loadPlanJobIds } from "@/lib/maintenance";
 import OpsConnections from "@/components/jobs/ops/OpsConnections";
 import { MoveTarget, OpsAsk, OpsDialog } from "@/components/jobs/ops/OpsDialogs";
 
+import { useLocale, useTranslations } from "next-intl";
+import { intlTag } from "@/i18n/config";
+import { useOpsTx } from "@/i18n/useOpsTx";
+import { useJobError } from "@/i18n/useFmt";
 type View = "board" | "connections";
 type When = "today" | "week" | "last_week" | "month" | "last_month" | "quarter" | "all";
 const WHEN: { v: When; label: string; hint: string }[] = [
@@ -32,14 +36,26 @@ const WHEN: { v: When; label: string; hint: string }[] = [
 // Filtro propio de cada columna: periodo (o el de la página) + búsqueda
 type ColFilter = { when: When | "custom" | null; q: string; from?: string; to?: string }; // from/to = "yyyy-mm-dd" (calendario)
 const NO_FILTER: ColFilter = { when: null, q: "" };
-const fmtD = (iso: string) => fromIsoDay(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 // Periodo de la página movido con las flechas o escogido en el calendario (from/to = días incluidos)
 type Span = { unit: "day" | "week" | "month" | "range"; from: string; to: string };
-function spanLabel(s: Span) {
-  const a = fromIsoDay(s.from);
-  if (s.unit === "day" || s.from === s.to) return a.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-  if (s.unit === "month") return a.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-  return `${fmtD(s.from)} – ${fmtD(s.to)}`;
+// Paso 6.2a: periodos, fechas y dinero en el idioma de la persona
+function useOpsWhen() {
+  const t = useTranslations("ops");
+  const tag = intlTag(useLocale());
+  const fmtD = (iso: string) => fromIsoDay(iso).toLocaleDateString(tag, { month: "short", day: "numeric" });
+  const spanLabel = (s: Span) => {
+    const a = fromIsoDay(s.from);
+    if (s.unit === "day" || s.from === s.to) return a.toLocaleDateString(tag, { weekday: "short", month: "short", day: "numeric" });
+    if (s.unit === "month") return a.toLocaleDateString(tag, { month: "long", year: "numeric" });
+    return `${fmtD(s.from)} – ${fmtD(s.to)}`;
+  };
+  const money$ = (v: number | null | undefined) => new Intl.NumberFormat(tag, { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(v) || 0);
+  return {
+    t, tag, fmtD, spanLabel, money$,
+    WHEN: WHEN.map((w) => ({ ...w, label: t(`w.${w.v}` as never), hint: t(`wh.${w.v}` as never) })),
+    earnedHint: (c: Money) => t("completedJobs", { n: c.jobs_done }) + (c.jobs_done && !c.revenue ? t("noPriceYet") : ""),
+    collectedHint: (c: Money) => (c.revenue > c.collected ? t("toCollect", { v: money$(c.revenue - c.collected) }) : c.revenue > 0 ? t("allCollected") : c.jobs_done ? t("nothingBilled") : t("nothingCollect")),
+  };
 }
 function rangeOf(w: When, now: number, weekStartsOn: number, done: boolean): [Date, Date] | null {
   const today = dayStart(new Date(now)), wk = startOfWeek(today, weekStartsOn);
@@ -77,6 +93,11 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
   money: "owner" | "manager" | null; // quién ve dinero arriba (la oficina no)
 }) {
   const router = useRouter();
+  const ow = useOpsWhen();
+  const T = ow.t;
+  const { spanLabel, WHEN } = ow;
+  const ox = useOpsTx();
+  const jobError = useJobError();
   const [jobs, setJobs] = useState<OpsJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -259,7 +280,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
     setMobileGroup(colOrder[Math.min(colOrder.length - 1, Math.max(0, i + (dx < 0 ? 1 : -1)))]);
   };
 
-  const ordered = colOrder.map((id) => OPS_GROUPS.find((g) => g.id === id)!);
+  const ordered = colOrder.map((id) => ox.groups.find((g) => g.id === id)!);
   const columns = focus ? ordered.filter((g) => g.id === focus) : ordered;
 
   // Sin asignar: tocar la tarjeta abre "Assign jobs" con ese trabajo ya escogido
@@ -275,39 +296,39 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
   // ---------- Paso 5.6b: por facturar ----------
   async function draftInvoice(j: OpsJob) {
     if (j.invoice_id) { router.push(`/dashboard/invoices/${j.invoice_id}`); return; }
-    if (!(await askConfirm({ title: "Create a draft invoice?", message: "It copies the services and materials of this job. You can edit it before sending.", confirmLabel: "Create draft", tone: "green" }))) return;
+    if (!(await askConfirm({ title: T("invQ"), message: T("invMsg"), confirmLabel: T("createDraft"), tone: "green" }))) return;
     const { data: id, error: e } = await createClient().rpc("job_draft_invoice", { p_job: j.id });
-    if (e || !id) return flash(e?.hint || jobError(e), true);
+    if (e || !id) return flash(jobError(e), true);
     router.push(`/dashboard/invoices/${id}`);
   }
   async function noInvoice(j: OpsJob, on: boolean) {
-    if (on && !(await askConfirm({ title: "No invoice needed?", message: `${j.customer_name || `Job ${j.number}`} moves to Completed without an invoice (warranty, courtesy, covered by a plan). It stays on the job's history with your name.`, confirmLabel: "No invoice needed", tone: "green" }))) return;
+    if (on && !(await askConfirm({ title: T("noInvQ"), message: T("noInvMsg", { name: j.customer_name || T("jobN", { n: j.number }) }), confirmLabel: T("noInv"), tone: "green" }))) return;
     const { error: e } = await createClient().rpc("job_no_invoice", { p_job: j.id, p_on: on });
-    if (e) return flash(e.hint || jobError(e), true);
-    flash(on ? "Moved to Completed — no invoice needed" : "Back in To invoice"); load();
+    if (e) return flash(jobError(e), true);
+    flash(on ? T("movedNoInv") : T("backToInv")); load();
   }
 
   const menuFor = (j: OpsJob, g: OpsGroup): CardMenu => {
     if (g === "to_invoice") return [
-      { label: "Open job", icon: ICON.open, onClick: () => router.push(`/dashboard/jobs/${j.id}`) },
-      { label: j.invoice_id ? `Review & send ${j.invoice_number ?? "invoice"}` : "Create draft invoice", icon: ICON.invoice, onClick: () => draftInvoice(j) },
-      { label: "No invoice needed", icon: ICON.check, divider: true, onClick: () => noInvoice(j, true) },
+      { label: T("openJob"), icon: ICON.open, onClick: () => router.push(`/dashboard/jobs/${j.id}`) },
+      { label: j.invoice_id ? T("reviewSend", { n: j.invoice_number ?? T("invoice") }) : T("createDraftInv"), icon: ICON.invoice, onClick: () => draftInvoice(j) },
+      { label: T("noInv"), icon: ICON.check, divider: true, onClick: () => noInvoice(j, true) },
     ];
     if (g === "done") return [
-      { label: "Open job", icon: ICON.open, onClick: () => router.push(`/dashboard/jobs/${j.id}`) },
-      ...(j.invoice_id ? [{ label: `Open ${j.invoice_number ?? "invoice"}`, icon: ICON.invoice, onClick: () => router.push(`/dashboard/invoices/${j.invoice_id}`) }] : []),
-      ...(j.billing === "none" ? [{ label: "Invoice needed after all", icon: ICON.invoice, divider: true, onClick: () => noInvoice(j, false) }] : []),
+      { label: T("openJob"), icon: ICON.open, onClick: () => router.push(`/dashboard/jobs/${j.id}`) },
+      ...(j.invoice_id ? [{ label: T("openX", { n: j.invoice_number ?? T("invoice") }), icon: ICON.invoice, onClick: () => router.push(`/dashboard/invoices/${j.invoice_id}`) }] : []),
+      ...(j.billing === "none" ? [{ label: T("invAfterAll"), icon: ICON.invoice, divider: true, onClick: () => noInvoice(j, false) }] : []),
     ];
     const moves: CardMenu = MOVABLE.filter((t) => t !== g).map((t, i) => ({
-      label: `Move to ${OPS_GROUPS.find((x) => x.id === t)!.label}`, icon: ICON[t as MoveTarget], divider: i === 0,
+      label: T("moveTo", { g: ox.groupLabel(t) }), icon: ICON[t as MoveTarget], divider: i === 0,
       onClick: () => setAsk({ kind: "move", job: j, from: g, to: t as MoveTarget }),
     }));
     return [
-      { label: "Open job", icon: ICON.open, onClick: () => router.push(`/dashboard/jobs/${j.id}`) },
-      { label: "Edit job", icon: ICON.edit, onClick: () => router.push(`/dashboard/jobs/${j.id}/edit`) },
+      { label: T("openJob"), icon: ICON.open, onClick: () => router.push(`/dashboard/jobs/${j.id}`) },
+      { label: T("editJob"), icon: ICON.edit, onClick: () => router.push(`/dashboard/jobs/${j.id}/edit`) },
       ...moves,
-      { label: "Cancel job", icon: ICON.cancel, danger: true, divider: true, onClick: () => setAsk({ kind: "cancel", job: j }) },
-      ...(canDelete ? [{ label: "Delete job", icon: ICON.del, danger: true, onClick: () => setAsk({ kind: "delete", job: j }) }] : []),
+      { label: T("cancelJob"), icon: ICON.cancel, danger: true, divider: true, onClick: () => setAsk({ kind: "cancel", job: j }) },
+      ...(canDelete ? [{ label: T("deleteJob"), icon: ICON.del, danger: true, onClick: () => setAsk({ kind: "delete", job: j }) }] : []),
     ];
   };
 
@@ -332,7 +353,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
       ids.splice(i < 0 ? ids.length : i, 0, d.id);
       saveCards({ ...cardOrder, [g]: ids }); return;
     }
-    if (!MOVABLE.includes(g)) return flash(g === "done" ? "Use Finish on the job to complete it." : g === "to_invoice" ? "Jobs show here on their own when they're finished and the invoice isn't sent." : "Delayed is automatic: a job shows here when it's running late.", true);
+    if (!MOVABLE.includes(g)) return flash(g === "done" ? T("useFinish") : g === "to_invoice" ? T("autoInv") : T("autoDelayed"), true);
     setAsk({ kind: "move", job, from: d.from, to: g as MoveTarget });
   }
   // Mover o arrastrar en Operations es solo acomodar: no se pregunta nada ni se avisa al cliente.
@@ -342,7 +363,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
     const added = (notify?.assigned as string[] | undefined) ?? [];
     if (notify && added.length) {
       const target = notify.visitId ? { visitId: notify.visitId as string } : { jobId: notify.jobId as string };
-      notifyAssigned(target, added).then((why) => { if (why) flash(`${msg} · not notified: ${why}`, true); });
+      notifyAssigned(target, added).then((why) => { if (why) flash(T("notNotified", { m: msg, why }), true); });
     }
   };
 
@@ -351,15 +372,15 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
       {/* Encabezado */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="mr-auto min-w-0">
-          <h1 className="text-[22px] font-semibold tracking-tight text-[#0b1f3a]">Operations</h1>
-          <p className="text-[13px] text-slate-500">Every job, who&apos;s on it and how far along it is{updatedAt ? ` · updated ${new Date(updatedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}.</p>
+          <h1 className="text-[22px] font-semibold tracking-tight text-[#0b1f3a]">{T("title")}</h1>
+          <p className="text-[13px] text-slate-500">{T("intro")}{updatedAt ? T("updated", { t: new Date(updatedAt).toLocaleTimeString(ow.tag, { hour: "numeric", minute: "2-digit" }) }) : ""}.</p>
         </div>
         {/* Computadora */}
         <div className="relative hidden w-72 lg:block">
           <svg viewBox="0 0 20 20" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search job, customer, phone, address" aria-label="Search jobs"
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={T("searchPh")} aria-label={T("searchAria")}
             className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 text-[14px] focus:border-[#0f766e] focus:outline-none focus:ring-4 focus:ring-[#14a39a]/15" />
-          {q && <button type="button" onClick={() => setQ("")} aria-label="Clear search" className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
+          {q && <button type="button" onClick={() => setQ("")} aria-label={T("clear")} className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
             <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M5 5l10 10M15 5 5 15" /></svg></button>}
         </div>
         <div className="hidden items-center gap-3 lg:flex">
@@ -367,7 +388,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
           <ViewMenu view={view} setView={pickView} />
           <FiltersMenu people={people} setPeople={setPeople} list={peopleList} active={filtersOn} />
           <Link prefetch={false} href="/dashboard/jobs/new" className="group/n inline-flex h-10 items-center gap-1.5 rounded-lg bg-[#0f766e] px-4 text-[14.5px] font-semibold text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59]">
-            <svg viewBox="0 0 20 20" className="h-5 w-5 transition-transform duration-200 group-hover/n:rotate-90" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>New job
+            <svg viewBox="0 0 20 20" className="h-5 w-5 transition-transform duration-200 group-hover/n:rotate-90" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>{T("newJob")}
           </Link>
         </div>
       </div>
@@ -376,14 +397,14 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
         <FiltersMenu people={people} setPeople={setPeople} list={peopleList} active={filtersOn} mobile />
         <div className="relative">
           <svg viewBox="0 0 20 20" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search job, customer, phone, address" aria-label="Search jobs"
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={T("searchPh")} aria-label={T("searchAria")}
             className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 text-[14px] focus:border-[#0f766e] focus:outline-none focus:ring-4 focus:ring-[#14a39a]/15" />
-          {q && <button type="button" onClick={() => setQ("")} aria-label="Clear search" className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
+          {q && <button type="button" onClick={() => setQ("")} aria-label={T("clear")} className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
             <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M5 5l10 10M15 5 5 15" /></svg></button>}
         </div>
         <div className="flex justify-end"><PeriodNav when={when} span={span} label={periodLabel} setWhen={setWhen} setSpan={setSpan} weekStartsOn={weekStartsOn} /></div>
       </div>
-      <Link prefetch={false} href="/dashboard/jobs/new" aria-label="New job"
+      <Link prefetch={false} href="/dashboard/jobs/new" aria-label={T("newJob")}
         className="fixed bottom-6 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#0f766e] text-white shadow-lg shadow-[#0f766e]/30 transition-transform active:scale-95 lg:hidden">
         <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
       </Link>
@@ -406,7 +427,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
                 </div>
                 <GroupArt g={g.id} size={42} />
               </div>
-              <p className="truncate text-[12px] text-slate-500">{on ? "Showing only this group · tap to show all" : g.hint}</p>
+              <p className="truncate text-[12px] text-slate-500">{on ? T("showingOnly") : g.hint}</p>
             </button>
           );
         })}
@@ -414,7 +435,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
 
       {shownView === "connections" ? (
         <div className="mt-4">
-          {focus && <FocusNote label={OPS_GROUPS.find((g) => g.id === focus)!.label} onClear={() => setFocus(null)} />}
+          {focus && <FocusNote label={ox.groupLabel(focus)} onClear={() => setFocus(null)} />}
           {loading ? <div className="h-80 animate-pulse rounded-2xl bg-white" /> : <OpsConnections companyId={companyId}
             period={<PeriodNav when={when} span={span} label={periodLabel} setWhen={setWhen} setSpan={setSpan} weekStartsOn={weekStartsOn} compact />} jobs={connJobs} groupOf={groupOf} team={team} now={now} menuFor={menuFor} isAfter={isAfter} hrefFor={hrefFor}
             onChanged={(m, n, err) => (err ? flash(m, true) : afterAction(m, n))}
@@ -438,7 +459,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
                   <div draggable={!focus}
                     onDragStart={(e) => { e.dataTransfer.setData("text/plain", `col:${g.id}`); e.dataTransfer.effectAllowed = "move"; setDrag({ kind: "col", id: g.id }); }}
                     onDragEnd={() => { setDrag(null); setOver(null); }}
-                    title={focus ? undefined : "Drag to reorder the columns"}
+                    title={focus ? undefined : T("dragCols")}
                     className={`group/h flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-slate-200/70 px-3 py-2 ${focus ? "" : "cursor-grab active:cursor-grabbing"}`}>
                     {!focus && <svg viewBox="0 0 20 20" className="hidden h-3.5 w-3.5 shrink-0 text-slate-300 transition-colors group-hover/h:text-slate-500 2xl:block" fill="currentColor"><circle cx="7" cy="5" r="1.4" /><circle cx="13" cy="5" r="1.4" /><circle cx="7" cy="10" r="1.4" /><circle cx="13" cy="10" r="1.4" /><circle cx="7" cy="15" r="1.4" /><circle cx="13" cy="15" r="1.4" /></svg>}
                     <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${g.dot}`} />
@@ -446,8 +467,8 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
                     <span className="rounded-full bg-white px-2 py-0.5 text-[12px] font-semibold text-slate-500 ring-1 ring-slate-200">{byGroup[g.id].length}</span>
                     {/* Con 6 columnas las herramientas van en una segunda línea, para que el nombre del grupo se lea completo */}
                     <span className={`ml-auto flex items-center gap-1.5 ${focus ? "" : "-mr-1 basis-full justify-end"}`}>
-                      {focus && <button type="button" onClick={() => setFocus(null)} className="text-[12.5px] font-semibold text-[#0f766e] hover:underline">Show all</button>}
-                      <button type="button" onClick={() => setSearchOpen((m) => ({ ...m, [g.id]: !m[g.id] }))} aria-label={`Search in ${g.label}`} title={`Search in ${g.label}`}
+                      {focus && <button type="button" onClick={() => setFocus(null)} className="text-[12.5px] font-semibold text-[#0f766e] hover:underline">{T("showAll")}</button>}
+                      <button type="button" onClick={() => setSearchOpen((m) => ({ ...m, [g.id]: !m[g.id] }))} aria-label={T("searchIn", { g: g.label })} title={T("searchIn", { g: g.label })}
                         className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${searchOpen[g.id] || colF[g.id].q ? "bg-[#eef4ff] text-[#2563eb]" : "text-slate-400 hover:bg-white hover:text-[#0b1f3a]"}`}>
                         <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg></button>
                       <ColumnTools label={g.label} f={colF[g.id]} pageLabel={periodLabel} onChange={(f) => setCol(g.id, f)} />
@@ -456,16 +477,16 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
                   {colF[g.id].q !== "" || searchOpen[g.id] ? (
                     <div className="relative mx-2 mt-2">
                       <svg viewBox="0 0 20 20" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
-                      <input autoFocus value={colF[g.id].q} onChange={(e) => setCol(g.id, { q: e.target.value })} placeholder={`Search in ${g.label}`}
+                      <input autoFocus value={colF[g.id].q} onChange={(e) => setCol(g.id, { q: e.target.value })} placeholder={T("searchIn", { g: g.label })}
                         className="h-8 w-full rounded-lg border border-slate-200 bg-white pl-8 pr-7 text-[13px] focus:border-[#0f766e] focus:outline-none" />
-                      <button type="button" onClick={() => { setCol(g.id, { q: "" }); setSearchOpen((m) => ({ ...m, [g.id]: false })); }} aria-label="Close search"
+                      <button type="button" onClick={() => { setCol(g.id, { q: "" }); setSearchOpen((m) => ({ ...m, [g.id]: false })); }} aria-label={T("closeSearch")}
                         className="absolute right-1.5 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
                         <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M5 5l10 10M15 5 5 15" /></svg></button>
                     </div>
                   ) : null}
                   {drag?.kind === "card" && drag.from !== g.id && (
                     <p className={`mx-2 mt-2 rounded-lg border-2 border-dashed py-1.5 text-center text-[12px] font-semibold ${can ? "border-[#14a39a] text-[#0f766e]" : "border-slate-300 text-slate-400"}`}>
-                      {can ? `Drop to move to ${g.label}` : g.id === "done" ? "Finish the job to complete it" : g.id === "to_invoice" ? "Automatic — finished, invoice not sent" : "Automatic — late jobs show here"}
+                      {can ? T("dropTo", { g: g.label }) : g.id === "done" ? T("finishToComplete") : g.id === "to_invoice" ? T("autoInvShort") : T("autoLateShort")}
                     </p>
                   )}
                   <div className={`flex-1 overflow-y-auto p-2 ${focus ? "grid content-start gap-2 sm:grid-cols-2 xl:grid-cols-4" : "space-y-2"}`}>
@@ -488,7 +509,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
           <div className="mt-4 lg:hidden">
             <div className="flex items-center gap-2">
               <div className="min-w-0 flex-1"><GroupPicker groups={ordered} value={mobileGroup} onChange={setMobileGroup} counts={byGroup} /></div>
-              <ColumnTools label={OPS_GROUPS.find((x) => x.id === mobileGroup)!.label} f={colF[mobileGroup]} pageLabel={periodLabel} onChange={(f) => setCol(mobileGroup, f)} wide />
+              <ColumnTools label={ox.groupLabel(mobileGroup)} f={colF[mobileGroup]} pageLabel={periodLabel} onChange={(f) => setCol(mobileGroup, f)} wide />
             </div>
             <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} className="mt-2.5 min-h-[50vh]">
               <div key={mobileGroup} className="animate-[bp-fade_0.2s_ease-out]">
@@ -496,7 +517,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
                   : byGroup[mobileGroup].length === 0 ? <EmptyGroup g={mobileGroup} />
                   : <div className="grid grid-cols-2 gap-2">{byGroup[mobileGroup].map((j) => <OpsCard key={j.id} job={j} group={mobileGroup} now={now} tiny afterHours={isAfter(j)} href={hrefFor(j, mobileGroup)} menu={menuFor(j, mobileGroup)} />)}</div>}
               </div>
-              <p className="mt-3 text-center text-[11.5px] text-slate-400">Swipe left or right to change group</p>
+              <p className="mt-3 text-center text-[11.5px] text-slate-400">{T("swipe")}</p>
             </div>
           </div>
         </>
@@ -508,37 +529,37 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
 }
 
 function FocusNote({ label, onClear }: { label: string; onClear: () => void }) {
+  const T = useTranslations("ops");
   return (
-    <p className="mb-2 flex items-center gap-2 text-[13px] text-slate-600">Showing only <b className="text-[#0b1f3a]">{label}</b>
-      <button type="button" onClick={onClear} className="font-semibold text-[#0f766e] hover:underline">Show all</button></p>
+    <p className="mb-2 flex items-center gap-2 text-[13px] text-slate-600"><span>{T.rich("showingOnlyX", { label, b: (c) => <b className="text-[#0b1f3a]">{c}</b> })}</span>
+      <button type="button" onClick={onClear} className="font-semibold text-[#0f766e] hover:underline">{T("showAll")}</button></p>
   );
 }
 
 function EmptyGroup({ g }: { g: OpsGroup }) {
-  const text: Record<OpsGroup, string> = {
-    unassigned: "Every job has someone on it. New jobs without a collaborator show up here.", assigned: "Nothing waiting to start.", in_progress: "Nobody is working right now.",
-    delayed: "Nothing is running late. 🎉", to_invoice: "Every finished job has its invoice sent.", done: "No finished jobs in this period.",
-  };
+  const T = useTranslations("ops");
+  const text = (k: OpsGroup) => T(`e.${k}` as never);
   return (
     <div className="flex flex-col items-center px-3 py-8 text-center">
       <span className="opacity-70"><GroupArt g={g} size={40} /></span>
-      <p className="mt-2 text-[12.5px] text-slate-500">{text[g]}</p>
-      {g === "unassigned" && <Link prefetch={false} href="/dashboard/jobs/assign" className="mt-1 text-[12.5px] font-semibold text-[#0f766e] hover:underline">Go to Assign jobs</Link>}
+      <p className="mt-2 text-[12.5px] text-slate-500">{text(g)}</p>
+      {g === "unassigned" && <Link prefetch={false} href="/dashboard/jobs/assign" className="mt-1 text-[12.5px] font-semibold text-[#0f766e] hover:underline">{T("goAssign")}</Link>}
     </div>
   );
 }
 
 function ViewMenu({ view, setView, mobile = false }: { view: View; setView: (v: View) => void; mobile?: boolean }) {
+  const T = useTranslations("ops");
   const opts: { v: View; label: string; hint: string; d: string }[] = [
-    { v: "board", label: "Board", hint: "Jobs in 5 groups", d: "M4 5h4v14H4zM10 5h4v9h-4zM16 5h4v11h-4z" },
-    { v: "connections", label: "Connections", hint: "Lines from jobs to people", d: "M6 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM6 21a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM8 5c5 0 4 7 8 7M8 19c5 0 4-7 8-7" },
+    { v: "board", label: T("v.board"), hint: T("vh.board"), d: "M4 5h4v14H4zM10 5h4v9h-4zM16 5h4v11h-4z" },
+    { v: "connections", label: T("v.connections"), hint: T("vh.connections"), d: "M6 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM6 21a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM8 5c5 0 4 7 8 7M8 19c5 0 4-7 8-7" },
   ];
   const cur = opts.find((o) => o.v === view)!;
   return (
     <Menu>
-      <MenuButton className={`${btn} ${mobile ? "w-full justify-between" : ""}`} aria-label="View">
+      <MenuButton className={`${btn} ${mobile ? "w-full justify-between" : ""}`} aria-label={T("view")}>
         <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] shrink-0 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={cur.d} /></svg>
-        <span className={mobile ? "min-w-0 flex-1 truncate text-left" : ""}>{mobile && <span className="font-normal text-slate-400">View · </span>}{cur.label}</span>
+        <span className={mobile ? "min-w-0 flex-1 truncate text-left" : ""}>{mobile && <span className="font-normal text-slate-400">{T("viewDot")}</span>}{cur.label}</span>
         <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-400" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
       </MenuButton>
       <MenuItems anchor="bottom end" transition className="z-[100] mt-1 w-60 rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_12px_40px_rgba(15,40,60,0.16)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
@@ -557,21 +578,22 @@ function ViewMenu({ view, setView, mobile = false }: { view: View; setView: (v: 
 }
 
 function FiltersMenu({ people, setPeople, list, active, mobile = false }: { people: string[]; setPeople: (v: string[]) => void; list: TeamMember[]; active: number; mobile?: boolean }) {
+  const T = useTranslations("ops");
   const toggle = (id: string) => setPeople(people.includes(id) ? people.filter((x) => x !== id) : [...people, id]);
   return (
     <Popover className="relative">
-      <PopoverButton className={`${btn} ${mobile ? "w-full" : ""}`} aria-label="Filters">
+      <PopoverButton className={`${btn} ${mobile ? "w-full" : ""}`} aria-label={T("filters")}>
         <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
-        <span>{mobile ? "Filters · people" : "Filters"}</span>
+        <span>{mobile ? T("filtersPeople") : T("filters")}</span>
         {active > 0 && <span className="rounded-full bg-[#0f766e] px-1.5 text-[11px] text-white">{active}</span>}
       </PopoverButton>
       <PopoverPanel anchor="bottom end" transition
         className="z-[100] mt-2 max-h-[min(34rem,calc(100dvh-7rem))] w-[min(21rem,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_18px_48px_rgba(15,40,60,0.2)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0">
         <div className="flex items-center justify-between">
-          <p className="text-[15px] font-semibold text-[#0b1f3a]">Filters</p>
-          {active > 0 && <button type="button" onClick={() => setPeople([])} className="text-[13px] font-semibold text-[#0f766e] hover:underline">Clear all</button>}
+          <p className="text-[15px] font-semibold text-[#0b1f3a]">{T("filters")}</p>
+          {active > 0 && <button type="button" onClick={() => setPeople([])} className="text-[13px] font-semibold text-[#0f766e] hover:underline">{T("clearAll")}</button>}
         </div>
-        <p className="mb-2 mt-4 text-[12.5px] font-semibold text-slate-500">Collaborators</p>
+        <p className="mb-2 mt-4 text-[12.5px] font-semibold text-slate-500">{T("collabs")}</p>
         <div className="space-y-0.5">
           {[...list.map((m) => ({ id: m.user_id, m })), { id: UNASSIGNED, m: null as TeamMember | null }].map(({ id, m }) => {
             const on = people.includes(id);
@@ -581,9 +603,9 @@ function FiltersMenu({ people, setPeople, list, active, mobile = false }: { peop
                   {on && <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3"><path d="m5 10.5 3 3 7-7" /></svg>}
                 </span>
                 {m ? <TechDot t={m} size={22} ring={false} /> : <span className="h-[22px] w-[22px] rounded-full border border-dashed border-slate-400" />}
-                <span className="min-w-0 flex-1 truncate">{m ? m.full_name : "Unassigned"}</span>
-                {m?.role === "owner" && <span className="rounded-full bg-[#0b1f3a] px-1.5 py-px text-[10px] font-semibold text-white">Owner</span>}
-                {m?.worker_type === "subcontractor" && <span className="rounded-full bg-[#fff7ed] px-1.5 py-px text-[10px] font-semibold text-[#c2410c]">Sub</span>}
+                <span className="min-w-0 flex-1 truncate">{m ? m.full_name : T("unassigned")}</span>
+                {m?.role === "owner" && <span className="rounded-full bg-[#0b1f3a] px-1.5 py-px text-[10px] font-semibold text-white">{T("owner")}</span>}
+                {m?.worker_type === "subcontractor" && <span className="rounded-full bg-[#fff7ed] px-1.5 py-px text-[10px] font-semibold text-[#c2410c]">{T("sub")}</span>}
               </button>
             );
           })}
@@ -598,6 +620,8 @@ function FiltersMenu({ people, setPeople, list, active, mobile = false }: { peop
 function PeriodNav({ when, span, label, setWhen, setSpan, weekStartsOn, compact = false }: {
   when: When; span: Span | null; label: string; setWhen: (v: When) => void; setSpan: (s: Span) => void; weekStartsOn: number; compact?: boolean;
 }) {
+  const T = useTranslations("ops");
+  const { WHEN } = useOpsWhen();
   const [cal, setCal] = useState(false);
   const today = dayStart(new Date()), wk = startOfWeek(today, weekStartsOn), mo = startOfMonth(today);
   const endOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth() + 1, 0);
@@ -628,7 +652,7 @@ function PeriodNav({ when, span, label, setWhen, setSpan, weekStartsOn, compact 
     setSpan(next);
   };
   const arrow = (dir: 1 | -1) => (
-    <button type="button" onClick={() => move(dir)} disabled={!cur} aria-label={dir < 0 ? "Previous period" : "Next period"} title={dir < 0 ? "Previous" : "Next"}
+    <button type="button" onClick={() => move(dir)} disabled={!cur} aria-label={dir < 0 ? T("prevPeriod") : T("nextPeriod")} title={dir < 0 ? T("prev") : T("next")}
       className={`flex ${compact ? "h-9 w-8" : "h-10 w-9"} items-center justify-center text-slate-500 transition-colors hover:bg-[#eef8f5] hover:text-[#0f766e] disabled:cursor-default disabled:text-slate-300 disabled:hover:bg-transparent ${dir < 0 ? "rounded-l-lg" : "rounded-r-lg"}`}>
       <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d={dir < 0 ? "M12.5 5 7.5 10l5 5" : "M7.5 5 12.5 10l-5 5"} /></svg>
     </button>
@@ -638,7 +662,7 @@ function PeriodNav({ when, span, label, setWhen, setSpan, weekStartsOn, compact 
     <div className="flex shrink-0 items-stretch rounded-lg border border-slate-200 bg-white">
       {arrow(-1)}
       <Menu>
-        <MenuButton aria-label="Period" className={`flex ${compact ? "h-9 text-[13.5px]" : "h-10 text-[14px]"} items-center gap-2 border-x border-slate-200 px-3 font-medium text-slate-700 transition-colors hover:text-[#0f766e] data-[open]:text-[#0f766e] focus:outline-none`}>
+        <MenuButton aria-label={T("period")} className={`flex ${compact ? "h-9 text-[13.5px]" : "h-10 text-[14px]"} items-center gap-2 border-x border-slate-200 px-3 font-medium text-slate-700 transition-colors hover:text-[#0f766e] data-[open]:text-[#0f766e] focus:outline-none`}>
           <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4" /></svg>
           <span className="whitespace-nowrap">{label}</span>
           <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-400" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
@@ -656,15 +680,15 @@ function PeriodNav({ when, span, label, setWhen, setSpan, weekStartsOn, compact 
           <MenuItem>
             <button type="button" onClick={() => setCal(true)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left data-[focus]:bg-[#eef4ff] ${span ? "bg-[#eef4ff]" : ""}`}>
               <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M8 14h2M12 14h2M8 17h2" /></svg>
-              <span className="min-w-0 flex-1"><span className="block text-[14px] font-semibold text-[#0f766e]">Pick dates on the calendar…</span><span className="block text-[12px] text-slate-500">{span ? label : "A day or a range of days"}</span></span>
+              <span className="min-w-0 flex-1"><span className="block text-[14px] font-semibold text-[#0f766e]">{T("pickDates")}</span><span className="block text-[12px] text-slate-500">{span ? label : T("dayOrRange")}</span></span>
               {span && check}
             </button>
           </MenuItem>
-          <p className="px-3 pb-1 pt-2 text-[11.5px] text-slate-400">Use ‹ › to go back or forward one day, week or month. Applies to the whole page and the earnings.</p>
+          <p className="px-3 pb-1 pt-2 text-[11.5px] text-slate-400">{T("periodHint")}</p>
         </MenuItems>
       </Menu>
       {arrow(1)}
-      {cal && <RangeModal label="Operations" from={span?.from} to={span?.to} onClose={() => setCal(false)}
+      {cal && <RangeModal label={T("title")} from={span?.from} to={span?.to} onClose={() => setCal(false)}
         onApply={(a, b) => { setSpan({ unit: a === b ? "day" : "range", from: a, to: b }); setCal(false); }} />}
     </div>
   );
@@ -672,11 +696,7 @@ function PeriodNav({ when, span, label, setWhen, setSpan, weekStartsOn, compact 
 
 type Money = { owner: boolean; jobs_done: number; revenue: number; collected: number; pipeline: number; open_jobs: number;
   labor: number | null; materials: number | null; hours: number | null; missing_rates: number | null; salaried: number | null; profit: number | null };
-const money$ = (v: number | null | undefined) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(v) || 0);
-// Que el texto chiquito no diga algo que no es: "All collected" con $0, o "no completed jobs" cuando sí hay
-const earnedHint = (c: Money) => `${c.jobs_done} completed job${c.jobs_done === 1 ? "" : "s"}${c.jobs_done && !c.revenue ? " · no price yet" : ""}`;
-const collectedHint = (c: Money) => c.revenue > c.collected ? `${money$(c.revenue - c.collected)} still to collect`
-  : c.revenue > 0 ? "All collected" : c.jobs_done ? "Nothing billed yet" : "Nothing to collect yet";
+// Que el texto chiquito no diga algo que no es: "All collected" con $0, o "no completed jobs" cuando sí hay (ver useOpsWhen)
 
 // Número que se mueve: sube o baja hasta el valor nuevo cada vez que cambia
 function useCountUp(value: number, ms = 900) {
@@ -697,6 +717,7 @@ function useCountUp(value: number, ms = 900) {
   return v;
 }
 function Count({ value, money = false, className = "" }: { value: number; money?: boolean; className?: string }) {
+  const { money$ } = useOpsWhen();
   const v = useCountUp(value);
   const prev = useRef(value);
   const [dir, setDir] = useState<"up" | "down" | null>(null);
@@ -748,6 +769,7 @@ function Overview({ totals, cash, money, period }: {
   totals: { pct: number; openPct: number; total: number; done: number; working: number; late: number; assigned?: number; unassigned?: number };
   cash: Money | null; money: "owner" | "manager" | null; period: string;
 }) {
+  const { t: T, money$, earnedHint, collectedHint } = useOpsWhen();
   const margin = cash?.profit != null && cash.revenue > 0 ? Math.round((cash.profit / cash.revenue) * 100) : null;
   const stat = (label: string, value: number, hint: string, tip: React.ReactNode, tone = "text-[#0b1f3a]", art?: React.ReactNode, right = false) => (
     <Tip tip={tip} right={right}>
@@ -764,43 +786,43 @@ function Overview({ totals, cash, money, period }: {
     <section className="mt-4 hidden rounded-2xl border border-slate-200 bg-white p-3 lg:block lg:p-4">
       <div className="flex flex-wrap items-center gap-3 lg:gap-5">
         <Tip wide tip={<>
-          <p className="mb-1 font-semibold text-[#0f766e]">Average progress of {totals.total} jobs</p>
-          <Row l="Completed" v={String(totals.done)} tone="text-[#0f766e]" />
-          <Row l="In progress" v={String(totals.working)} tone="text-[#b45309]" />
-          <Row l="Delayed" v={String(totals.late)} tone="text-[#be123c]" />
-          {totals.assigned != null && <Row l="Assigned" v={String(totals.assigned)} />}
-          {totals.unassigned != null && <Row l="Unassigned" v={String(totals.unassigned)} />}
+          <p className="mb-1 font-semibold text-[#0f766e]">{T("avgProgress", { n: totals.total })}</p>
+          <Row l={T("r.completed")} v={String(totals.done)} tone="text-[#0f766e]" />
+          <Row l={T("r.working")} v={String(totals.working)} tone="text-[#b45309]" />
+          <Row l={T("r.delayed")} v={String(totals.late)} tone="text-[#be123c]" />
+          {totals.assigned != null && <Row l={T("r.assigned")} v={String(totals.assigned)} />}
+          {totals.unassigned != null && <Row l={T("r.unassigned")} v={String(totals.unassigned)} />}
         </>}>
           <div className="group/ring flex cursor-default items-center gap-3 rounded-2xl px-1 pr-3 transition-colors hover:bg-slate-50">
             <BigRing pct={totals.pct} />
             <div>
-              <p className="text-[12px] font-semibold uppercase tracking-wide text-slate-400">Total progress · {period}</p>
-              <p className="text-[14px] font-semibold text-[#0b1f3a] sm:text-[15px]"><Count value={totals.done} /> of <Count value={totals.total} /> job{totals.total === 1 ? "" : "s"} completed</p>
-              <p className="text-[12.5px] text-slate-500">Open jobs are {totals.openPct}% along · {totals.working} working · <span className={totals.late ? "font-semibold text-[#be123c]" : ""}>{totals.late} delayed</span></p>
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-slate-400">{T("totalProgress", { p: period })}</p>
+              <p className="text-[14px] font-semibold text-[#0b1f3a] sm:text-[15px]">{T("ofCompleted", { done: totals.done, total: totals.total })}</p>
+              <p className="text-[12.5px] text-slate-500">{T("openAlong", { pct: totals.openPct, w: totals.working })}<span className={totals.late ? "font-semibold text-[#be123c]" : ""}>{T("nDelayed", { n: totals.late })}</span></p>
             </div>
           </div>
         </Tip>
         {money && cash && (
           <div className="grid min-w-0 flex-1 grid-cols-2 gap-1 border-slate-100 sm:grid-cols-3 lg:border-l lg:pl-4 xl:grid-cols-5">
-            {stat("Earned", cash.revenue, earnedHint(cash), <>
-              <p>Value of the completed jobs (invoice, services or estimate).</p>
+            {stat(T("earned"), cash.revenue, earnedHint(cash), <>
+              <p>{T("earnedTip")}</p>
             </>)}
-            {stat("Collected", cash.collected, collectedHint(cash), <>
-              <p>Money already paid on those jobs&apos; invoices.</p>
+            {stat(T("collected"), cash.collected, collectedHint(cash), <>
+              <p>{T("collectedTip")}</p>
             </>, "text-[#0f766e]")}
-            {stat("Open jobs", cash.pipeline, `${cash.open_jobs} job${cash.open_jobs === 1 ? "" : "s"} not finished yet`, <>
-              <p>Estimated value of jobs not finished yet.</p>
+            {stat(T("openJobs"), cash.pipeline, T("openJobsHint", { n: cash.open_jobs }), <>
+              <p>{T("openJobsTip")}</p>
             </>)}
             {money === "owner" && cash.profit != null ? (
               <>
-                {stat("Costs", (cash.labor ?? 0) + (cash.materials ?? 0), `Labor ${money$(cash.labor)} · Materials ${money$(cash.materials)}`, <>
-                  <Row l="Labor" v={money$(cash.labor)} /><Row l="Hours on site" v={`${Math.round((cash.hours ?? 0) * 10) / 10}h`} /><Row l="Materials" v={money$(cash.materials)} />
-                  <p className="mt-1 text-[11px] text-slate-400">Only you see this.</p>
+                {stat(T("costs"), (cash.labor ?? 0) + (cash.materials ?? 0), T("costsHint", { a: money$(cash.labor), b: money$(cash.materials) }), <>
+                  <Row l={T("labor")} v={money$(cash.labor)} /><Row l={T("hoursSite")} v={`${Math.round((cash.hours ?? 0) * 10) / 10}h`} /><Row l={T("materials")} v={money$(cash.materials)} />
+                  <p className="mt-1 text-[11px] text-slate-400">{T("onlyYou")}</p>
                 </>, "text-[#b45309]", undefined, true)}
-                {stat("Profit", cash.profit, margin != null ? `${margin}% margin${cash.missing_rates ? ` · ${cash.missing_rates} without pay rate` : ""}` : cash.jobs_done ? "No price on the completed jobs yet" : "No completed jobs yet", <>
-                  <Row l="Earned" v={money$(cash.revenue)} /><Row l="− Costs" v={money$((cash.labor ?? 0) + (cash.materials ?? 0))} />
-                  <Row l="= Profit" v={money$(cash.profit)} tone={cash.profit >= 0 ? "text-[#15803d]" : "text-[#be123c]"} />
-                  <p className="mt-1 text-[11px] text-slate-400">Only you see this.</p>
+                {stat(T("profit"), cash.profit, margin != null ? T("marginX", { n: margin }) + (cash.missing_rates ? T("noRateX", { n: cash.missing_rates }) : "") : cash.jobs_done ? T("noPriceDone") : T("noDone"), <>
+                  <Row l={T("earned")} v={money$(cash.revenue)} /><Row l={T("minusCosts")} v={money$((cash.labor ?? 0) + (cash.materials ?? 0))} />
+                  <Row l={T("eqProfit")} v={money$(cash.profit)} tone={cash.profit >= 0 ? "text-[#15803d]" : "text-[#be123c]"} />
+                  <p className="mt-1 text-[11px] text-slate-400">{T("onlyYou")}</p>
                 </>, cash.profit >= 0 ? "text-[#15803d]" : "text-[#be123c]",
                   <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="4.5" y="9" width="11" height="7.5" rx="1.5" /><path d="M7 9V7a3 3 0 0 1 6 0v2" /></svg>, true)}
               </>
@@ -810,8 +832,8 @@ function Overview({ totals, cash, money, period }: {
       </div>
       {money === "owner" && cash && ((cash.missing_rates ?? 0) > 0 || (cash.salaried ?? 0) > 0) && (
         <p className="mt-2 rounded-lg bg-[#f6f9fc] px-3 py-1.5 text-[11.5px] text-slate-500 sm:text-[12px]">
-          {(cash.missing_rates ?? 0) > 0 && <>Some collaborators don&apos;t have a pay rate yet, so their labor counts as $0. Add it in Team → Edit. </>}
-          {(cash.salaried ?? 0) > 0 && <>Salaried people aren&apos;t counted per job.</>}
+          {(cash.missing_rates ?? 0) > 0 && <>{T("noRateNote")}</>}
+          {(cash.salaried ?? 0) > 0 && <>{T("salariedNote")}</>}
         </p>
       )}
     </section>
@@ -821,6 +843,7 @@ function Overview({ totals, cash, money, period }: {
 
 // Periodo de cada columna: menú desplegable + "Pick dates" con calendario (rango de días)
 function ColumnTools({ label, f, pageLabel, onChange, wide = false }: { label: string; f: ColFilter; pageLabel: string; onChange: (f: Partial<ColFilter>) => void; wide?: boolean }) {
+  const { t: T, fmtD, WHEN } = useOpsWhen();
   const [cal, setCal] = useState(false);
   const cur = f.when === "custom" && f.from && f.to ? (f.from === f.to ? fmtD(f.from) : `${fmtD(f.from)} – ${fmtD(f.to)}`) : f.when ? WHEN.find((w) => w.v === f.when)?.label ?? pageLabel : pageLabel;
   const on = Boolean(f.when);
@@ -829,7 +852,7 @@ function ColumnTools({ label, f, pageLabel, onChange, wide = false }: { label: s
   return (
     <>
       <Menu>
-        <MenuButton aria-label={`Period for ${label}`} title={`Period for ${label}`}
+        <MenuButton aria-label={T("periodFor", { g: label })} title={T("periodFor", { g: label })}
           className={`flex h-7 max-w-[8.5rem] items-center gap-1 rounded-lg px-1.5 text-[11.5px] font-semibold transition-colors focus:outline-none data-[open]:bg-[#eef4ff] data-[open]:text-[#2563eb] ${on ? "bg-[#eef4ff] text-[#2563eb]" : "text-slate-500 hover:bg-white hover:text-[#0b1f3a]"} ${wide ? "h-9 max-w-none border border-slate-200 bg-white px-3 text-[13px]" : ""}`}>
           <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4" /></svg>
           <span className="truncate">{cur}</span>
@@ -837,7 +860,7 @@ function ColumnTools({ label, f, pageLabel, onChange, wide = false }: { label: s
         </MenuButton>
         <MenuItems anchor="bottom end" transition className="z-[100] mt-1 w-56 rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_12px_40px_rgba(15,40,60,0.16)] transition duration-100 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
           <p className="px-2.5 pb-1 pt-0.5 text-[11.5px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
-          <MenuItem><button type="button" onClick={() => onChange({ when: null })} className={item}>Same as page · {pageLabel}{!f.when && check}</button></MenuItem>
+          <MenuItem><button type="button" onClick={() => onChange({ when: null })} className={item}>{T("samePage", { p: pageLabel })}{!f.when && check}</button></MenuItem>
           <div className="my-1 border-t border-slate-100" />
           {WHEN.map((w) => (
             <MenuItem key={w.v}><button type="button" onClick={() => onChange({ when: w.v })} className={item}>{w.label}{f.when === w.v && check}</button></MenuItem>
@@ -845,7 +868,7 @@ function ColumnTools({ label, f, pageLabel, onChange, wide = false }: { label: s
           <div className="my-1 border-t border-slate-100" />
           <MenuItem><button type="button" onClick={() => setCal(true)} className={`${item} font-semibold text-[#0f766e]`}>
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M8 14h2M12 14h2M8 17h2" /></svg>
-            Pick dates on the calendar…{f.when === "custom" && check}</button></MenuItem>
+            {T("pickDates")}{f.when === "custom" && check}</button></MenuItem>
         </MenuItems>
       </Menu>
       {cal && <RangeModal label={label} from={f.from} to={f.to} onClose={() => setCal(false)} onApply={(a, b) => { onChange({ when: "custom", from: a, to: b }); setCal(false); }} />}
@@ -855,6 +878,8 @@ function ColumnTools({ label, f, pageLabel, onChange, wide = false }: { label: s
 
 // Calendario para escoger un día o un rango (toca el primer día y luego el último)
 function RangeModal({ label, from, to, onClose, onApply }: { label: string; from?: string; to?: string; onClose: () => void; onApply: (a: string, b: string) => void }) {
+  const { t: T, fmtD, tag } = useOpsWhen();
+  const tc = useTranslations("common");
   const [a, setA] = useState<string | null>(from ?? null);
   const [b, setB] = useState<string | null>(to ?? null);
   const [month, setMonth] = useState(() => { const d = from ? fromIsoDay(from) : new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
@@ -867,15 +892,15 @@ function RangeModal({ label, from, to, onClose, onApply }: { label: string; from
   };
   const lo = a && b ? (a < b ? a : b) : a, hi = a && b ? (a < b ? b : a) : a;
   const quick: [string, () => [Date, Date]][] = [
-    ["Yesterday", () => { const d = addDays(dayStart(new Date()), -1); return [d, d]; }],
-    ["Last 7 days", () => [addDays(dayStart(new Date()), -6), dayStart(new Date())]],
-    ["Last 30 days", () => [addDays(dayStart(new Date()), -29), dayStart(new Date())]],
-    ["Next 7 days", () => [dayStart(new Date()), addDays(dayStart(new Date()), 6)]],
+    [T("q.yesterday"), () => { const d = addDays(dayStart(new Date()), -1); return [d, d]; }],
+    [T("q.last7"), () => [addDays(dayStart(new Date()), -6), dayStart(new Date())]],
+    [T("q.last30"), () => [addDays(dayStart(new Date()), -29), dayStart(new Date())]],
+    [T("q.next7"), () => [dayStart(new Date()), addDays(dayStart(new Date()), 6)]],
   ];
   return (
-    <Modal open onClose={onClose} title={`${label} · pick dates`} width="max-w-md" footer={<>
-      <button type="button" disabled={!a} onClick={() => a && onApply(lo!, hi ?? lo!)} className={btnPrimary}>Show these days</button>
-      <button type="button" onClick={onClose} className={btnGhost}>Cancel</button></>}>
+    <Modal open onClose={onClose} title={T("pickTitle", { label })} width="max-w-md" footer={<>
+      <button type="button" disabled={!a} onClick={() => a && onApply(lo!, hi ?? lo!)} className={btnPrimary}>{T("showDays")}</button>
+      <button type="button" onClick={onClose} className={btnGhost}>{tc("cancel")}</button></>}>
       <div className="mb-3 flex flex-wrap gap-1.5">
         {quick.map(([l, fn]) => (
           <button key={l} type="button" onClick={() => { const [x, y] = fn(); setA(isoDay(x)); setB(isoDay(y)); setMonth(new Date(x.getFullYear(), x.getMonth(), 1)); }}
@@ -883,13 +908,13 @@ function RangeModal({ label, from, to, onClose, onApply }: { label: string; from
         ))}
       </div>
       <div className="flex items-center justify-between">
-        <button type="button" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} aria-label="Previous month" className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
+        <button type="button" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} aria-label={T("prevMonth")} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
           <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 5 7.5 10l5 5" /></svg></button>
-        <p className="text-[15px] font-semibold text-[#0b1f3a]">{month.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</p>
-        <button type="button" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} aria-label="Next month" className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
+        <p className="text-[15px] font-semibold text-[#0b1f3a]">{month.toLocaleDateString(tag, { month: "long", year: "numeric" })}</p>
+        <button type="button" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} aria-label={T("nextMonth")} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
           <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M7.5 5 12.5 10l-5 5" /></svg></button>
       </div>
-      <div className="mt-2 grid grid-cols-7 text-center text-[11.5px] font-semibold text-slate-400">{["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => <span key={d} className="py-1">{d}</span>)}</div>
+      <div className="mt-2 grid grid-cols-7 text-center text-[11.5px] font-semibold text-slate-400">{[0, 1, 2, 3, 4, 5, 6].map((i) => new Date(2023, 0, 1 + i).toLocaleDateString(tag, { weekday: "short" }).slice(0, 2)).map((d, i) => <span key={i} className="py-1">{d}</span>)}</div>
       <div className="grid grid-cols-7 gap-y-1">
         {cells.map((d) => {
           const iso = isoDay(d), inMonth = d.getMonth() === month.getMonth();
@@ -904,13 +929,13 @@ function RangeModal({ label, from, to, onClose, onApply }: { label: string; from
           );
         })}
       </div>
-      <p className="mt-3 text-[13px] text-slate-500">{lo ? (hi && hi !== lo ? `${fmtD(lo)} – ${fmtD(hi)}` : `${fmtD(lo)} · tap another day for a range`) : "Tap a day. Tap a second day to pick a range."}</p>
+      <p className="mt-3 text-[13px] text-slate-500">{lo ? (hi && hi !== lo ? `${fmtD(lo)} – ${fmtD(hi)}` : T("tapAnother", { d: fmtD(lo) })) : T("tapDay")}</p>
     </Modal>
   );
 }
 
 // Celular: el grupo se escoge en un desplegable (con su número y su color)
-function GroupPicker({ groups, value, onChange, counts }: { groups: typeof OPS_GROUPS; value: OpsGroup; onChange: (g: OpsGroup) => void; counts: Record<OpsGroup, OpsJob[]> }) {
+function GroupPicker({ groups, value, onChange, counts }: { groups: { id: OpsGroup; label: string; hint: string; dot: string }[]; value: OpsGroup; onChange: (g: OpsGroup) => void; counts: Record<OpsGroup, OpsJob[]> }) {
   const cur = groups.find((g) => g.id === value)!;
   return (
     <Menu>
@@ -941,15 +966,16 @@ function MobileOverview({ totals, cash, money, period }: {
   totals: { pct: number; openPct: number; total: number; done: number; working: number; late: number };
   cash: Money | null; money: "owner" | "manager" | null; period: string;
 }) {
+  const { t: T, money$, earnedHint, collectedHint } = useOpsWhen();
   const [open, setOpen] = useState(false);
   const canOpen = Boolean(money && cash);
   const rows = cash ? [
-    { label: "Earned", value: cash.revenue, hint: earnedHint(cash), color: "#0b1f3a", text: "text-[#0b1f3a]" },
-    { label: "Collected", value: cash.collected, hint: collectedHint(cash), color: "#14b8a6", text: "text-[#0f766e]" },
-    { label: "Open jobs", value: cash.pipeline, hint: `${cash.open_jobs} not finished yet`, color: "#2563eb", text: "text-[#2563eb]" },
+    { key: "earned", label: T("earned"), value: cash.revenue, hint: earnedHint(cash), color: "#0b1f3a", text: "text-[#0b1f3a]" },
+    { key: "collected", label: T("collected"), value: cash.collected, hint: collectedHint(cash), color: "#14b8a6", text: "text-[#0f766e]" },
+    { key: "open", label: T("openJobs"), value: cash.pipeline, hint: T("notFinishedYet", { n: cash.open_jobs }), color: "#2563eb", text: "text-[#2563eb]" },
     ...(money === "owner" && cash.profit != null ? [
-      { label: "Costs", value: (cash.labor ?? 0) + (cash.materials ?? 0), hint: `Labor ${money$(cash.labor)} · Materials ${money$(cash.materials)}`, color: "#f59e0b", text: "text-[#b45309]" },
-      { label: "Profit", value: cash.profit, hint: cash.revenue > 0 ? `${Math.round((cash.profit / cash.revenue) * 100)}% margin · only you see this` : cash.jobs_done ? "No price on the completed jobs yet · only you see this" : "No completed jobs yet · only you see this", color: cash.profit >= 0 ? "#16a34a" : "#e11d48", text: cash.profit >= 0 ? "text-[#15803d]" : "text-[#be123c]" },
+      { key: "costs", label: T("costs"), value: (cash.labor ?? 0) + (cash.materials ?? 0), hint: T("costsHint", { a: money$(cash.labor), b: money$(cash.materials) }), color: "#f59e0b", text: "text-[#b45309]" },
+      { key: "profit", label: T("profit"), value: cash.profit, hint: cash.revenue > 0 ? T("marginOnly", { n: Math.round((cash.profit / cash.revenue) * 100) }) : cash.jobs_done ? T("noPriceOnly") : T("noDoneOnly"), color: cash.profit >= 0 ? "#16a34a" : "#e11d48", text: cash.profit >= 0 ? "text-[#15803d]" : "text-[#be123c]" },
     ] : []),
   ] : [];
   const max = Math.max(1, ...rows.map((r) => Math.abs(r.value)));
@@ -960,9 +986,9 @@ function MobileOverview({ totals, cash, money, period }: {
       <button type="button" onClick={() => canOpen && setOpen((o) => !o)} aria-expanded={open} className="group/ring flex w-full items-center gap-4 text-left">
         <BigRing pct={totals.pct} />
         <span className="min-w-0 flex-1">
-          <span className="block text-[11.5px] font-semibold uppercase tracking-wide text-slate-400">Total progress · {period}</span>
-          <span className="mt-0.5 block text-[16px] font-semibold text-[#0b1f3a]">{totals.done} of {totals.total} job{totals.total === 1 ? "" : "s"} completed</span>
-          <span className="mt-0.5 block text-[13px] text-slate-500">{totals.working} working · <span className={totals.late ? "font-semibold text-[#be123c]" : ""}>{totals.late} delayed</span></span>
+          <span className="block text-[11.5px] font-semibold uppercase tracking-wide text-slate-400">{T("totalProgress", { p: period })}</span>
+          <span className="mt-0.5 block text-[16px] font-semibold text-[#0b1f3a]">{T("ofCompleted", { done: totals.done, total: totals.total })}</span>
+          <span className="mt-0.5 block text-[13px] text-slate-500">{T("nWorking", { n: totals.working })}<span className={totals.late ? "font-semibold text-[#be123c]" : ""}>{T("nDelayed", { n: totals.late })}</span></span>
         </span>
         {canOpen && (
           <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#eef8f5] text-[#0f766e] transition-transform duration-300 ${open ? "rotate-180" : ""}`}>
@@ -970,14 +996,14 @@ function MobileOverview({ totals, cash, money, period }: {
           </span>
         )}
       </button>
-      {canOpen && !open && <p className="mt-4 text-center text-[12.5px] font-medium text-[#0f766e]">Tap to see earnings</p>}
+      {canOpen && !open && <p className="mt-4 text-center text-[12.5px] font-medium text-[#0f766e]">{T("tapEarnings")}</p>}
       <div className={`grid transition-all duration-300 ease-out ${open ? "mt-7 grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
         <div className="space-y-5 overflow-hidden">
           {rows.map((r, i) => (
-            <div key={r.label}>
+            <div key={r.key}>
               <div className="flex items-baseline justify-between gap-3">
                 <span className="flex items-center gap-1.5 text-[13.5px] font-medium text-slate-500">
-                  {r.label === "Profit" && <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="4.5" y="9" width="11" height="7.5" rx="1.5" /><path d="M7 9V7a3 3 0 0 1 6 0v2" /></svg>}
+                  {r.key === "profit" && <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="4.5" y="9" width="11" height="7.5" rx="1.5" /><path d="M7 9V7a3 3 0 0 1 6 0v2" /></svg>}
                   {r.label}
                 </span>
                 <span className={`text-[19px] font-semibold tabular-nums tracking-tight ${r.text}`}><Count value={r.value} money /></span>
@@ -989,7 +1015,7 @@ function MobileOverview({ totals, cash, money, period }: {
             </div>
           ))}
           {money === "owner" && cash && (cash.missing_rates ?? 0) > 0 && (
-            <p className="rounded-lg bg-[#f6f9fc] px-3 py-2 text-[12px] text-slate-500">Some collaborators don&apos;t have a pay rate yet, so their labor counts as $0. Add it in Team → Edit.</p>
+            <p className="rounded-lg bg-[#f6f9fc] px-3 py-2 text-[12px] text-slate-500">{T("noRateNote")}</p>
           )}
         </div>
       </div>

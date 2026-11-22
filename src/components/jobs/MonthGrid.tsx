@@ -5,13 +5,16 @@ import { CalVisit, isoDay, sameDay, tint } from "@/lib/jobs";
 import { Col, GridApi, Handlers, Preview } from "@/components/jobs/cal-shared";
 import { EventChip } from "@/components/jobs/EventBar";
 
-const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+import { useTranslations } from "next-intl";
+import { useJobsTx } from "@/i18n/useJobsTx";
 // Vista de Mes: 6 semanas; cada día muestra hasta 3 trabajos y "+N more"
 export default function MonthGrid({ days, month, visits, preview, handlers, apiRef, now, onOpenDay }: {
   days: Date[]; month: number; visits: CalVisit[]; preview: Preview; handlers: Handlers; apiRef: React.MutableRefObject<GridApi | null>;
   now: Date; onOpenDay: (d: Date) => void;
 }) {
+  const t = useTranslations("sched");
+  const DOW = useJobsTx().dayNames("short");
   const grid = useRef<HTMLDivElement>(null);
   const cols: Col[] = useMemo(() => days.map((d) => ({ key: isoDay(d), day: d, techId: null, label: "" })), [days]);
 
@@ -63,7 +66,7 @@ export default function MonthGrid({ days, month, visits, preview, handlers, apiR
               ))}
               {list.length > 3 && (
                 <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => onOpenDay(c.day)}
-                  className="self-start rounded px-1.5 text-[11.5px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4]">+{list.length - 3} more</button>
+                  className="self-start rounded px-1.5 text-[11.5px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4]">{t("more", { n: list.length - 3 })}</button>
               )}
             </div>
           );

@@ -2,12 +2,15 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { TeamMember, jobError, receivesJobs } from "@/lib/jobs";
+import { TeamMember, receivesJobs } from "@/lib/jobs";
 import { OpsGroup, OpsJob } from "@/lib/operations";
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { StatusArt, TechDot } from "@/components/jobs/EventBar";
 import { CardMenu, OpsCard, liveStatus } from "@/components/jobs/ops/OpsBits";
 
+import { useTranslations } from "next-intl";
+import { useOpsTx } from "@/i18n/useOpsTx";
+import { useJobError } from "@/i18n/useFmt";
 type Line = { key: string; job: string; user: string; d: string; color: string; lead: boolean; flow: "fast" | "slow" | "none"; ex: number; ey: number };
 // Colores de persona (fuertes) y de tarjeta (suaves, empezando por el menta de la marca)
 const PERSON_COLORS = ["#db2777", "#2563eb", "#0f766e", "#7c3aed", "#ea580c", "#0891b2", "#65a30d", "#c026d3", "#4f46e5", "#ca8a04", "#dc2626", "#0d9488"];
@@ -49,6 +52,9 @@ export default function OpsConnections({ companyId, jobs: rawJobs, groupOf, team
   const wrap = useRef<HTMLDivElement>(null);
   const jobEls = useRef(new Map<string, HTMLElement>());
   const userEls = useRef(new Map<string, HTMLElement>());
+  const T = useTranslations("opsConn");
+  const ta = useTranslations("assign");
+  const jobError = useJobError();
   const [lines, setLines] = useState<Line[]>([]);
   const [h, setH] = useState(0);
   const [hoverJob, setHoverJob] = useState<string | null>(null);
@@ -87,7 +93,7 @@ export default function OpsConnections({ companyId, jobs: rawJobs, groupOf, team
     const fromJobs = new Map(rawJobs.flatMap((j) => j.techs).map((t) => [t.user_id, t]));
     const list = Array.from(ids).map((id) => {
       const m = byId.get(id), t = fromJobs.get(id);
-      return { id, name: m?.full_name ?? t?.name ?? "Team member", initials: m?.initials ?? t?.initials ?? "?", color: m?.color ?? t?.color ?? "#94a3b8", avatar_url: m?.avatar_url ?? t?.avatar_url ?? null };
+      return { id, name: m?.full_name ?? t?.name ?? T("member"), initials: m?.initials ?? t?.initials ?? "?", color: m?.color ?? t?.color ?? "#94a3b8", avatar_url: m?.avatar_url ?? t?.avatar_url ?? null };
     });
     const pos = new Map(pOrder.map((id, i) => [id, i]));
     const sorted = list.sort((a, b) => (pos.get(a.id) ?? 9999) - (pos.get(b.id) ?? 9999) || a.name.localeCompare(b.name));
@@ -199,11 +205,11 @@ export default function OpsConnections({ companyId, jobs: rawJobs, groupOf, team
 
   // ---------- Arrastrar y soltar ----------
   async function setPeople(j: OpsJob, next: string[], msg: string) {
-    if (!j.visit) return onChanged("This job has no visit to assign.", undefined, true);
+    if (!j.visit) return onChanged(T("noVisit"), undefined, true);
     const before = j.techs.map((t) => t.user_id);
     const lead = j.techs.find((t) => t.is_lead)?.user_id ?? null;
     const { error } = await createClient().rpc("visit_set_collaborators", { p_visit: j.visit.id, p_users: next, p_lead: lead && next.includes(lead) ? lead : next[0] ?? null });
-    if (error) return onChanged(error.hint || jobError(error), undefined, true);
+    if (error) return onChanged(jobError(error), undefined, true);
     onChanged(msg, { visitId: j.visit.id, assigned: next.filter((x) => !before.includes(x)), unassigned: before.filter((x) => !next.includes(x)) });
   }
   function dropOnPerson(pid: string, e: React.DragEvent) {
@@ -218,11 +224,11 @@ export default function OpsConnections({ companyId, jobs: rawJobs, groupOf, team
     }
     const j = jobs.find((x) => x.id === d.id); if (!j || groupOf(j) === "done" || groupOf(j) === "to_invoice") return;
     const ids = j.techs.map((t) => t.user_id), label = j.customer_name || `#${j.number}`;
-    if (ids.includes(pid)) return onChanged(`${nameOf(pid)} is already on ${label}`);
+    if (ids.includes(pid)) return onChanged(ta("already", { name: nameOf(pid), job: label }));
     // Sin nadie → se asigna · con 1 persona → se le pasa (Ctrl/⌥ = ayudante) · con varias → se agrega como ayudante
     if (!ids.length) return setPeople(j, [pid], `${label} → ${nameOf(pid)}`);
-    if (ids.length === 1 && !(e.ctrlKey || e.altKey || e.metaKey)) return setPeople(j, [pid], `${label} moved from ${nameOf(ids[0])} to ${nameOf(pid)}`);
-    setPeople(j, [...ids, pid], `${nameOf(pid)} added to ${label}`);
+    if (ids.length === 1 && !(e.ctrlKey || e.altKey || e.metaKey)) return setPeople(j, [pid], ta("movedFrom", { job: label, a: nameOf(ids[0]), b: nameOf(pid) }));
+    setPeople(j, [...ids, pid], ta("added", { name: nameOf(pid), job: label }));
   }
   function dropOnJob(targetId: string, e: React.DragEvent) {
     if (drag?.kind !== "job") return;
@@ -255,17 +261,17 @@ export default function OpsConnections({ companyId, jobs: rawJobs, groupOf, team
         {onlyUser && (
           <button type="button" onClick={() => setOnlyUser(null)} className="ml-1 inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#0b1f3a] py-1 pl-1 pr-2.5 text-[12px] font-semibold text-white">
             {(() => { const p = people.find((x) => x.id === onlyUser); return p ? <TechDot t={p} size={18} ring={false} /> : null; })()}
-            Only {nameOf(onlyUser).split(" ")[0]}<span className="opacity-70">✕</span>
+            {T("only", { name: nameOf(onlyUser).split(" ")[0] })}<span className="opacity-70">✕</span>
           </button>
         )}
-        <span className="ml-auto hidden text-[11.5px] text-slate-400 2xl:inline">Tap a person to see only their jobs · drag a job onto a person to assign it (Ctrl/⌥ adds a helper)</span>
+        <span className="ml-auto hidden text-[11.5px] text-slate-400 2xl:inline">{T("hint")}</span>
         {pages > 1 && (
           <div className="ml-auto hidden items-center gap-1 lg:flex 2xl:ml-3">
-            <button type="button" onClick={() => setPage(Math.max(0, pg - 1))} disabled={pg === 0} aria-label="Previous screen"
+            <button type="button" onClick={() => setPage(Math.max(0, pg - 1))} disabled={pg === 0} aria-label={T("prevScreen")}
               className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition-colors hover:border-[#14a39a] hover:text-[#0f766e] disabled:opacity-40 disabled:hover:border-slate-200 disabled:hover:text-slate-500">
               <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.5 5 7.5 10l5 5" /></svg></button>
             <span className="min-w-[4.5rem] text-center text-[12.5px] font-semibold tabular-nums text-slate-600">{pg + 1} / {pages}<span className="block text-[10.5px] font-normal text-slate-400">{pageJobs.length} of {ordered.length} jobs</span></span>
-            <button type="button" onClick={() => setPage(Math.min(pages - 1, pg + 1))} disabled={pg >= pages - 1} aria-label="Next screen"
+            <button type="button" onClick={() => setPage(Math.min(pages - 1, pg + 1))} disabled={pg >= pages - 1} aria-label={T("nextScreen")}
               className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition-colors hover:border-[#14a39a] hover:text-[#0f766e] disabled:opacity-40 disabled:hover:border-slate-200 disabled:hover:text-slate-500">
               <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M7.5 5 12.5 10l-5 5" /></svg></button>
           </div>
@@ -286,8 +292,8 @@ export default function OpsConnections({ companyId, jobs: rawJobs, groupOf, team
                 style={{ borderColor: `${color}55`, borderLeft: `3px solid ${color}` }}>
                 {p ? <TechDot t={p} size={28} ring={false} /> : <span className="h-7 w-7 rounded-full border border-dashed border-slate-400" />}
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[14px] font-semibold text-[#0b1f3a]">{p ? p.name : "Unassigned"}</span>
-                  <span className="block text-[12px] text-slate-500">{list.length} job{list.length === 1 ? "" : "s"} here{st?.done ? ` · ${st.done} done` : ""}</span>
+                  <span className="block truncate text-[14px] font-semibold text-[#0b1f3a]">{p ? p.name : T("unassigned")}</span>
+                  <span className="block text-[12px] text-slate-500">{T("jobsHere", { n: list.length })}{st?.done ? T("nDone", { n: st.done }) : ""}</span>
                 </span>
                 {st?.live && st.live !== "on_hold" && <StatusArt s={st.live} size={24} />}
               </button>
@@ -300,7 +306,7 @@ export default function OpsConnections({ companyId, jobs: rawJobs, groupOf, team
             </div>
           );
         })}
-        {ordered.length === 0 && <p className="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-[13px] text-slate-500">No jobs with these filters.</p>}
+        {ordered.length === 0 && <p className="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-[13px] text-slate-500">{T("noJobs")}</p>}
       </div>
 
       <div ref={wrap} className="relative hidden overflow-hidden p-4 lg:block">
@@ -337,7 +343,7 @@ export default function OpsConnections({ companyId, jobs: rawJobs, groupOf, team
                   {...target(`p-${p.id}`, (e) => dropOnPerson(p.id, e))}
                   onClick={() => setOnlyUser((u) => (u === p.id ? null : p.id))}
                   onMouseEnter={() => setHoverUser(p.id)} onMouseLeave={() => setHoverUser(null)}
-                  title="Tap to see only their jobs · drag to reorder"
+                  title={T("tapSee")}
                   className={`group flex cursor-pointer items-center gap-2 rounded-xl border bg-white px-2 py-1.5 transition-all duration-100 hover:-translate-y-0.5 hover:shadow-[0_8px_18px_rgba(15,40,60,0.09)] active:cursor-grabbing
                     ${dim ? "opacity-35" : ""} ${isOver ? "scale-[1.03] ring-2 ring-[#14a39a]" : ""} ${onlyUser === p.id ? "ring-2 ring-[#0b1f3a]" : ""} ${drag?.kind === "person" && drag.id === p.id ? "opacity-40" : ""}`}
                   style={{ borderColor: `${p.color}55`, borderLeft: `3px solid ${p.color}` }}>
@@ -345,7 +351,7 @@ export default function OpsConnections({ companyId, jobs: rawJobs, groupOf, team
                     {st.live === "in_progress" && <span className="absolute -right-0.5 -top-0.5 h-2 w-2 animate-pulse rounded-full bg-[#f59e0b] ring-2 ring-white" />}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[12.5px] font-semibold text-[#0b1f3a]">{p.name}</span>
-                    <span className="block truncate text-[11px] text-slate-500">{isOver ? "Drop to assign" : `${st.total} job${st.total === 1 ? "" : "s"}${st.done ? ` · ${st.done} done` : ""}`}</span>
+                    <span className="block truncate text-[11px] text-slate-500">{isOver ? T("dropAssign") : `${T("jobs", { n: st.total })}${st.done ? T("nDone", { n: st.done }) : ""}`}</span>
                   </span>
                   {st.live && st.live !== "on_hold" && <span className="hidden sm:inline-flex"><StatusArt s={st.live} size={20} /></span>}
                 </div>
@@ -354,14 +360,14 @@ export default function OpsConnections({ companyId, jobs: rawJobs, groupOf, team
             {drag?.kind === "job" && (
               <div {...target("unassigned", dropOnUnassigned)}
                 className={`flex items-center gap-2 rounded-xl border-2 border-dashed px-2 py-2 text-[12px] font-semibold transition-colors ${over === "unassigned" ? "border-[#f59e0b] bg-[#fffaf0] text-[#b45309]" : "border-slate-300 text-slate-500"}`}>
-                <span className="h-[22px] w-[22px] shrink-0 rounded-full border border-dashed border-current" />Drop to unassign
+                <span className="h-[22px] w-[22px] shrink-0 rounded-full border border-dashed border-current" />{T("dropUn")}
               </div>
             )}
           </div>
           <div />
           {/* Trabajos: se llenan de izquierda a derecha, fila por fila, a todo el ancho (terminados al final, en gris). */}
           <div className="relative z-10 flex min-w-0 items-start" style={{ columnGap: COL_GAP }}>
-            {ordered.length === 0 && <p className="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-[13px] text-slate-500">No jobs with these filters.</p>}
+            {ordered.length === 0 && <p className="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-[13px] text-slate-500">{T("noJobs")}</p>}
             {ordered.length > 0 && pageCols.map((col, ci) => (
               <div key={`${pg}-${ci}`} className="flex min-w-0 flex-1 flex-col" style={{ rowGap: ROW_GAP }}>
                 {col.jobs.map((j, ri) => {
@@ -395,9 +401,11 @@ export default function OpsConnections({ companyId, jobs: rawJobs, groupOf, team
 
 // "Show": un selector (se pueden marcar varios). El botón dice qué se está viendo.
 function ShowPicker({ show, counts, onToggle, onAll }: { show: Show[]; counts: Map<string, number>; onToggle: (v: Show) => void; onAll: () => void }) {
+  const T = useTranslations("opsConn");
+  const ox = useOpsTx();
   const all = show.length === SHOW.length;
-  const picked = SHOW.filter((x) => show.includes(x.v));
-  const label = all ? "All jobs" : picked.length <= 2 ? picked.map((x) => x.label).join(" · ") : `${picked[0].label} +${picked.length - 1}`;
+  const picked = SHOW.filter((x) => show.includes(x.v)).map((x) => ({ ...x, label: ox.groupLabel(x.v as OpsGroup) }));
+  const label = all ? T("allJobs") : picked.length <= 2 ? picked.map((x) => x.label).join(" · ") : `${picked[0].label} +${picked.length - 1}`;
   const total = picked.reduce((a, x) => a + (counts.get(x.v) ?? 0), 0);
   const box = (on: boolean) => (
     <span className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-md border transition-colors ${on ? "border-[#0f766e] bg-[#0f766e] text-white" : "border-slate-300 bg-white"}`}>
@@ -407,7 +415,7 @@ function ShowPicker({ show, counts, onToggle, onAll }: { show: Show[]; counts: M
   return (
     <Popover className="relative">
       <PopoverButton className="flex h-9 min-w-[13rem] items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-left text-[13.5px] transition-colors hover:border-[#14a39a] focus:outline-none data-[open]:border-[#0f766e] data-[open]:ring-4 data-[open]:ring-[#14a39a]/15">
-        <span className="text-slate-400">Show</span>
+        <span className="text-slate-400">{T("show")}</span>
         <span className="flex shrink-0 -space-x-0.5">{picked.slice(0, 4).map((x) => <span key={x.v} className={`h-2.5 w-2.5 rounded-full ring-2 ring-white ${x.dot}`} />)}</span>
         <span className="min-w-0 flex-1 truncate font-semibold text-[#0b1f3a]">{label}</span>
         <span className="rounded-full bg-slate-100 px-1.5 text-[11.5px] font-semibold text-slate-500">{total}</span>
@@ -416,14 +424,14 @@ function ShowPicker({ show, counts, onToggle, onAll }: { show: Show[]; counts: M
       <PopoverPanel anchor="bottom start" transition
         className="z-[100] mt-1 w-[max(var(--button-width),15rem)] rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_12px_40px_rgba(15,40,60,0.16)] transition duration-100 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
         <button type="button" onClick={onAll} className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] font-semibold text-[#0b1f3a] hover:bg-[#eef4ff] ${all ? "bg-[#eef4ff]" : ""}`}>
-          {box(all)}<span className="flex-1">All jobs</span><span className="text-[12px] font-normal text-slate-400">{SHOW.reduce((a, x) => a + (counts.get(x.v) ?? 0), 0)}</span>
+          {box(all)}<span className="flex-1">{T("allJobs")}</span><span className="text-[12px] font-normal text-slate-400">{SHOW.reduce((a, x) => a + (counts.get(x.v) ?? 0), 0)}</span>
         </button>
         <div className="my-1 border-t border-slate-100" />
         {SHOW.map((x) => {
           const on = show.includes(x.v);
           return (
             <button key={x.v} type="button" onClick={() => onToggle(x.v)} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] text-slate-700 hover:bg-[#eef4ff]">
-              {box(on)}<span className={`h-2 w-2 shrink-0 rounded-full ${x.dot}`} /><span className="flex-1">{x.label}</span>
+              {box(on)}<span className={`h-2 w-2 shrink-0 rounded-full ${x.dot}`} /><span className="flex-1">{ox.groupLabel(x.v as OpsGroup)}</span>
               <span className="text-[12px] tabular-nums text-slate-400">{counts.get(x.v) ?? 0}</span>
             </button>
           );

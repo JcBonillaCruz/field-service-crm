@@ -9,9 +9,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions, Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { createClient } from "@/lib/supabase/client";
 import {
-  CalView, CalVisit, ColorBy, JobRow, JobSettings, JobStatus, JobType, PRIORITIES, STATUS_META, STATUS_ORDER, TeamMember, TechChip, UNASSIGNED_COLOR, leadOf, startOfMonth, startOfWeek,
-  addDays, addMinutes, atMinute, barColor, dayStart, fmtDayShort, fmtTime, fromIsoDay, isoDay, jobError, minutesOf,
-  afterHoursOf, rangeLabel, receivesJobs, sameDay, shiftAnchor, timeToMin, viewDays,
+  CalView, CalVisit, ColorBy, JobRow, JobSettings, JobStatus, JobType, PRIORITIES, STATUS_ORDER, TeamMember, TechChip, UNASSIGNED_COLOR, leadOf, startOfMonth, startOfWeek,
+  addDays, addMinutes, atMinute, barColor, dayStart, fromIsoDay, isoDay, minutesOf,
+  afterHoursOf, receivesJobs, sameDay, shiftAnchor, timeToMin, viewDays,
 } from "@/lib/jobs";
 import { Col, GridApi, Handlers, Hit, Preview } from "@/components/jobs/cal-shared";
 import TimeGrid from "@/components/jobs/TimeGrid";
@@ -22,12 +22,21 @@ import JobTray from "@/components/jobs/JobTray";
 import { TechDot } from "@/components/jobs/EventBar";
 import { Check, Chevron, optionClass, panelClass } from "@/components/ui/SearchSelect";
 
+import { useTranslations } from "next-intl";
+import { useJobsTx } from "@/i18n/useJobsTx";
+import { useJobError } from "@/i18n/useFmt";
 // Paso 5.9: el mapa solo se descarga cuando alguien abre la vista Map (no pesa en el calendario)
-const LiveMap = dynamic(() => import("@/components/jobs/map/LiveMap"), { ssr: false, loading: () => <div className="flex h-full items-center justify-center text-[13.5px] text-slate-400">Loading map…</div> });
+const LiveMap = dynamic(() => import("@/components/jobs/map/LiveMap"), { ssr: false, loading: () => <MapLoading /> });
+function MapLoading() { return <div className="flex h-full items-center justify-center text-[13.5px] text-slate-400">{useTranslations("sched")("loadingMap")}</div>; }
 
 const VIEWS: { id: CalView; label: string }[] = [
   { id: "day", label: "Day" }, { id: "week", label: "Week" }, { id: "workweek", label: "Mon–Fri" }, { id: "month", label: "Month" }, { id: "map", label: "Map" }, { id: "dispatch", label: "Dispatch" },
 ];
+// Paso 6.2a: los nombres de las vistas en el idioma de la persona
+function useViews() {
+  const t = useTranslations("sched");
+  return VIEWS.map((v) => ({ ...v, label: t(`v.${v.id}` as never) }));
+}
 const COLOR_KEY = "bp-schedule-color";
 const TRAY_KEY = "bp-schedule-tray";
 const UNASSIGNED = "__none__";
@@ -46,6 +55,10 @@ type DragState = {
 export default function ScheduleBoard({ companyId, settings, types, team, canSeeMoney }: {
   companyId: string; settings: JobSettings; types: JobType[]; team: TeamMember[]; canSeeMoney: boolean;
 }) {
+  const T = useTranslations("sched");
+  const jt = useJobsTx();
+  const jobError = useJobError();
+  const { dayShort: fmtDayShort, time: fmtTime, rangeLabel } = jt;
   const router = useRouter();
   const sp = useSearchParams();
   // Siempre abre en Semana (a menos que el enlace diga otra vista)
@@ -178,18 +191,18 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
     if (byRows) {
       const list = techF.length ? techs.filter((m) => techF.includes(m.user_id)) : techs;
       const out: Col[] = list.map((m) => ({ key: `t:${m.user_id}`, day: anchor, techId: m.user_id, label: m.full_name, color: m.color, initials: m.initials, avatar: m.avatar_url }));
-      const none: Col = { key: "t:none", day: anchor, techId: null, label: "Unassigned" };
+      const none: Col = { key: "t:none", day: anchor, techId: null, label: T("unassignedCol") };
       // Day: "Unassigned" va arriba para arrastrar de ahí a cada persona; Dispatch lo deja al final
       if (!techF.length || techF.includes(UNASSIGNED)) { if (view === "day") out.unshift(none); else out.push(none); }
       return out;
     }
-    return days.map((d) => ({ key: isoDay(d), day: d, techId: null, label: d.toLocaleDateString("en-US", { weekday: "short" }), sub: String(d.getDate()), today: sameDay(d, now) }));
-  }, [view, byRows, days, anchor, techs, techF, now]);
+    return days.map((d) => ({ key: isoDay(d), day: d, techId: null, label: jt.weekdayShort(d), sub: String(d.getDate()), today: sameDay(d, now) }));
+  }, [view, byRows, days, anchor, techs, techF, now]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const chipsFor = useCallback((ids: string[], lead: string | null): TechChip[] => ids.map((id) => {
     const m = team.find((x) => x.user_id === id);
-    return { user_id: id, name: m?.full_name ?? "Technician", initials: m?.initials ?? "T", color: m?.color ?? "#94a3b8", avatar_url: m?.avatar_url ?? null, is_lead: id === (lead ?? ids[0]) };
-  }), [team]);
+    return { user_id: id, name: m?.full_name ?? T("technician"), initials: m?.initials ?? "T", color: m?.color ?? "#94a3b8", avatar_url: m?.avatar_url ?? null, is_lead: id === (lead ?? ids[0]) };
+  }), [team]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------- Avisos (técnicos por push/correo y cliente por correo) ----------
   async function notify(body: Record<string, unknown>) {
@@ -201,9 +214,9 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
   async function notifyCustomerNow(v: CalVisit) {
     const r = await notify({ visitId: v.visit_id, notifyCustomer: true });
     const c = r?.customer;
-    if (c?.ok) flash(`${v.customer_name} was notified by email`);
-    else if (c?.reason === "no_email") flash(`${v.customer_name} has no email on file, so they weren't notified.`, "error");
-    else flash("The email couldn't be sent. Check that email sending is set up (Resend).", "error");
+    if (c?.ok) flash(T("notified", { name: v.customer_name }));
+    else if (c?.reason === "no_email") flash(T("noEmail", { name: v.customer_name }), "error");
+    else flash(T("emailFail"), "error");
   }
 
   // ---------- Acciones en la base de datos ----------
@@ -231,18 +244,18 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
   }
   // La oficina reanuda, pausa, termina o reabre (sin GPS; queda firmado en el historial)
   async function officeAction(v: CalVisit, a: OfficeAction) {
-    if (a === "finish" && !(await askConfirm({ title: `Mark ${v.customer_name || v.number} as finished?`, message: "The job closes and shows as completed on the calendar.", confirmLabel: "Mark as finished", tone: "green" }))) return;
+    if (a === "finish" && !(await askConfirm({ title: T("finishQ", { name: v.customer_name || v.number }), message: T("finishMsg"), confirmLabel: T("markFinished"), tone: "green" }))) return;
     setPop(null);
     const { error } = await createClient().rpc("job_office_action", { p_visit: v.visit_id, p_action: a, p_reason: null, p_note: null });
-    if (error) { flash(error.hint || jobError(error), "error"); return; }
-    flash({ resume: "Work resumed", pause: "Job paused", finish: "Job marked as finished", reopen: "Job reopened" }[a]);
+    if (error) { flash(jobError(error), "error"); return; }
+    flash(T(`a.${a}` as never));
     load();
   }
   async function unschedule(v: CalVisit) {
     setPop(null);
     setVisits((vs) => vs.filter((x) => x.visit_id !== v.visit_id));
     const { error } = await createClient().rpc("visit_unschedule", { p_visit: v.visit_id });
-    if (error) flash(jobError(error), "error"); else flash(`${v.customer_name || v.number} moved to Unscheduled`);
+    if (error) flash(jobError(error), "error"); else flash(T("toUnscheduled", { name: v.customer_name || v.number }));
     load();
   }
   async function scheduleFromTray(j: JobRow, start: Date, end: Date, techIds: string[] | null) {
@@ -252,7 +265,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
     });
     if (error) flash(jobError(error), "error");
     else {
-      flash(`${j.customer_name || j.number} scheduled for ${fmtDayShort(start)} at ${fmtTime(start)}`);
+      flash(T("scheduledFor", { name: j.customer_name || j.number, day: fmtDayShort(start), time: fmtTime(start) }));
       if (visitId) notify({ visitId, assignAll: true });
     }
     load();
@@ -381,11 +394,11 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
       techIds = set;
       const curLead = v.techs.find((t) => t.is_lead)?.user_id ?? null;
       lead = to && (!from || curLead === from) ? to : curLead && set.includes(curLead) ? curLead : set[0] ?? null;
-      techMsg = to ? ` · assigned to ${team.find((m) => m.user_id === to)?.full_name ?? "technician"}` : " · unassigned";
+      techMsg = to ? T("assignedTo", { name: team.find((m) => m.user_id === to)?.full_name ?? T("technician").toLowerCase() }) : T("unassignedMsg");
     }
     if (start.getTime() === oldStart.getTime() && end.getTime() === oldEnd.getTime() && !techIds) return;
     const who = v.customer_name || v.number;
-    saveVisit(v, start, end, techIds, lead, s.kind === "resize" ? `${who}: now ${fmtTime(start)} – ${fmtTime(end)}` : `${who} moved to ${fmtDayShort(start)}, ${fmtTime(start)}${techMsg}`);
+    saveVisit(v, start, end, techIds, lead, s.kind === "resize" ? T("nowTime", { who, a: fmtTime(start), b: fmtTime(end) }) : T("movedTo", { who, day: fmtDayShort(start), time: fmtTime(start), tech: techMsg }));
   }
 
   // Los escuchas de la ventana son fijos y siempre llaman a la versión más nueva (sin datos viejos)
@@ -401,7 +414,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
   // Clic o arrastre en un espacio vacío: primero una tarjetita para confirmar (nunca abre el formulario solo)
   function openDraft(col: Col, startMin: number, endMin: number, x: number, y: number) {
     setDraft({ day: col.day, startMin, endMin, techId: col.techId, x, y });
-    setPreview({ colKey: col.key, day: col.day, startMin, endMin, color: "#0f766e", label: "New job" });
+    setPreview({ colKey: col.key, day: col.day, startMin, endMin, color: "#0f766e", label: T("newJob") });
   }
   function closeDraft() { setDraft(null); setPreview(null); }
 
@@ -439,7 +452,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
       });
     },
     onEmptyDown: (e, col, minute) => {
-      begin(e, { kind: "create", col, offsetMin: 0, durMin: settings.default_duration_min, startMin: minute ?? workStart, color: "#0f766e", label: "New job" });
+      begin(e, { kind: "create", col, offsetMin: 0, durMin: settings.default_duration_min, startMin: minute ?? workStart, color: "#0f766e", label: T("newJob") });
     },
     onVisitHover: (v, el) => {
       if (drag.current?.active) return;
@@ -503,8 +516,8 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
         <div className="group flex min-w-0 items-center gap-3">
           <ScheduleArt />
           <div className="min-w-0">
-            <h1 className="text-[24px] font-semibold leading-tight tracking-tight text-[#0b1f3a]">Schedule</h1>
-            <p className="mt-0.5 truncate text-[14px] text-slate-500">Plan and see every job at a glance</p>
+            <h1 className="text-[24px] font-semibold leading-tight tracking-tight text-[#0b1f3a]">{T("title")}</h1>
+            <p className="mt-0.5 truncate text-[14px] text-slate-500">{T("subtitle")}</p>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-3">
@@ -512,7 +525,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
         <Link prefetch={false} href="/dashboard/jobs/new"
           className="group/n inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl bg-[#0f766e] px-4 text-[15px] font-semibold text-white shadow-sm shadow-[#0f766e]/25 transition-all duration-150 hover:-translate-y-px hover:bg-[#0c5f59] hover:shadow-md">
           <svg viewBox="0 0 20 20" className="h-4 w-4 transition-transform duration-200 group-hover/n:rotate-90" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>
-          New job
+          {T("newJob")}
         </Link>
         </div>
       </div>
@@ -523,16 +536,16 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
       <div className="flex items-center gap-1.5 border-b border-slate-200 px-2.5 py-2 sm:gap-2 sm:px-3 lg:border-slate-100 lg:px-4 lg:py-3">
         <div className="flex min-w-0 flex-1 items-center gap-1 lg:gap-1.5">
           <button type="button" onClick={() => setAnchor(dayStart(new Date()))}
-            className="h-10 shrink-0 rounded-xl border border-slate-200 px-3 text-[14px] sm:h-9 sm:rounded-lg sm:px-2.5 sm:text-[13.5px] lg:order-3 lg:h-10 lg:rounded-xl lg:px-3.5 font-semibold text-slate-700 transition-all duration-150 hover:-translate-y-px hover:border-[#14a39a] hover:bg-[#f3fbf8] hover:text-[#0f766e]">Today</button>
+            className="h-10 shrink-0 rounded-xl border border-slate-200 px-3 text-[14px] sm:h-9 sm:rounded-lg sm:px-2.5 sm:text-[13.5px] lg:order-3 lg:h-10 lg:rounded-xl lg:px-3.5 font-semibold text-slate-700 transition-all duration-150 hover:-translate-y-px hover:border-[#14a39a] hover:bg-[#f3fbf8] hover:text-[#0f766e]">{T("today")}</button>
           {([-1, 1] as const).map((d) => (
-            <button key={d} type="button" aria-label={d < 0 ? "Previous" : "Next"} onClick={() => setAnchor((a) => shiftAnchor(view, a, d))}
+            <button key={d} type="button" aria-label={d < 0 ? T("prev") : T("next")} onClick={() => setAnchor((a) => shiftAnchor(view, a, d))}
               className="hidden h-9 w-8 shrink-0 sm:flex lg:order-1 lg:h-10 lg:w-10 lg:rounded-xl lg:border lg:border-slate-200 lg:hover:border-[#14a39a] lg:hover:bg-[#f3fbf8] lg:hover:text-[#0f766e] items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800">
               <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d < 0 ? "m12 5-5 5 5 5" : "m8 5 5 5-5 5"} /></svg>
             </button>
           ))}
           <span className="flex min-w-0 lg:order-4"><DateJump label={rangeLabel(view, anchor, settings.week_starts_on)} anchor={anchor} days={days} weekStartsOn={settings.week_starts_on}
             onPick={(d) => setAnchor(d)} /></span>
-          {loading && <span className="ml-1 h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-[#14a39a] border-t-transparent lg:order-5" aria-label="Loading" />}
+          {loading && <span className="ml-1 h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-[#14a39a] border-t-transparent lg:order-5" aria-label={T("loading")} />}
         </div>
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
@@ -540,16 +553,16 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
           <FiltersMenu statusF={statusF} setStatusF={setStatusF} counts={counts} team={techs} techF={techF} setTechF={setTechF}
             types={types.filter((t) => t.is_active)} typeF={typeF} setTypeF={setTypeF}
             colorBy={colorBy} setColorBy={(v) => { setColorBy(v); try { localStorage.setItem(COLOR_KEY, v); } catch { /* */ } }} />
-          <button type="button" onClick={toggleTray} aria-pressed={trayOpen} aria-label="To schedule" title="To schedule"
+          <button type="button" onClick={toggleTray} aria-pressed={trayOpen} aria-label={T("toSchedule")} title={T("toSchedule")}
             className={`relative h-10 min-w-[2.5rem] items-center justify-center gap-1.5 rounded-xl border px-2.5 text-[13px] font-semibold transition-colors sm:flex sm:h-9 sm:min-w-0 sm:rounded-lg lg:h-10 lg:rounded-xl lg:px-3 ${trayCount > 0 ? "flex" : "hidden"} ${trayOpen ? "border-[#0f766e] bg-[#e9f7f4] text-[#0f766e]" : "border-slate-200 text-slate-700 hover:border-[#14a39a]"}`}>
             <svg viewBox="0 0 24 24" className="h-5 w-5 sm:h-4 sm:w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5h16v14H4zM15 5v14" /></svg>
-            <span className="hidden xl:inline">To schedule</span>
+            <span className="hidden xl:inline">{T("toSchedule")}</span>
             {trayCount > 0 && <span className={`rounded-full px-1.5 text-[11px] text-white ${holdCount ? "bg-[#e11d48]" : "bg-[#0f766e]"}`}>{trayCount}</span>}
           </button>
-          <Link prefetch={false} href="/dashboard/jobs/new" aria-label="New job"
+          <Link prefetch={false} href="/dashboard/jobs/new" aria-label={T("newJob")}
             className="group/n hidden h-11 min-w-[2.75rem] sm:inline-flex lg:hidden items-center justify-center gap-1.5 rounded-xl bg-[#0f766e] px-2.5 text-[14px] sm:h-9 sm:min-w-0 sm:rounded-lg font-semibold text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59] sm:px-3.5">
             <svg viewBox="0 0 20 20" className="h-6 w-6 transition-transform duration-200 group-hover/n:rotate-90 sm:h-4 sm:w-4" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>
-            <span className="hidden sm:inline">New job</span>
+            <span className="hidden sm:inline">{T("newJob")}</span>
           </Link>
         </div>
       </div>
@@ -570,7 +583,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
           )}
           {!loading && visits.length === 0 && view !== "month" && view !== "map" && (
             <div className="pointer-events-none absolute left-1/2 top-24 -translate-x-1/2 rounded-full bg-white/90 px-4 py-2 text-[13px] text-slate-500 shadow-sm ring-1 ring-slate-200">
-              No jobs here yet. Tap or drag on an empty time to create one.
+              {T("emptyHint")}
             </div>
           )}
         </div>
@@ -583,7 +596,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
             onDetail={view === "day" && sameDay(anchor, focusDay) ? null : () => { setAnchor(focusDay); setView("day"); }} />
           {trayOpen && (
             <>
-              <button type="button" aria-label="Close panel" onClick={toggleTray} className="fixed inset-0 z-30 bg-slate-900/25 lg:hidden" />
+              <button type="button" aria-label={T("closePanel")} onClick={toggleTray} className="fixed inset-0 z-30 bg-slate-900/25 lg:hidden" />
               <aside className="fixed inset-y-0 right-0 z-40 w-[86%] max-w-[22rem] shadow-2xl animate-[bp-in-left_0.2s_ease-out] lg:static lg:z-auto lg:min-h-0 lg:w-auto lg:max-w-none lg:flex-1 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-slate-200 lg:shadow-[0_1px_2px_rgba(15,40,60,0.04),0_8px_24px_rgba(15,40,60,0.04)] lg:animate-none">
                 <JobTray jobs={tray} trayRef={trayRef} draggingId={draggingId} dropActive={trayDrop} onDown={onTrayDown} onClose={toggleTray} />
               </aside>
@@ -607,14 +620,14 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
       {ask && (
         <div className="fixed inset-0 z-[96] flex items-center justify-center bg-slate-900/30 p-4 animate-[bp-fade_0.15s_ease-out]" onPointerDown={(e) => e.stopPropagation()}>
           <div role="alertdialog" aria-labelledby="notify-title" className="w-full max-w-md rounded-2xl bg-white p-5 shadow-[0_24px_60px_rgba(15,40,60,0.3)] animate-[bp-pop-in_0.18s_ease-out]">
-            <h2 id="notify-title" className="text-[18px] font-semibold text-[#0b1f3a]">Notify customer of schedule change?</h2>
+            <h2 id="notify-title" className="text-[18px] font-semibold text-[#0b1f3a]">{T("notifyQ")}</h2>
             <p className="mt-3 rounded-xl bg-[#f3fbf8] px-4 py-3 text-[13.5px] text-slate-700">
-              <b className="font-semibold text-[#0b1f3a]">{ask.v.customer_name}</b> will get an email with the new time: {fmtDayShort(ask.start)} at {fmtTime(ask.start)}.
+              {T.rich("notifyText", { name: ask.v.customer_name, day: fmtDayShort(ask.start), time: fmtTime(ask.start), b: (c) => <b className="font-semibold text-[#0b1f3a]">{c}</b> })}
             </p>
             <div className="mt-5 flex flex-wrap justify-end gap-2">
-              <button type="button" onClick={() => setAsk(null)} className="rounded-lg px-4 py-2 text-[14px] font-semibold text-slate-600 hover:bg-slate-100">Don&apos;t notify</button>
+              <button type="button" onClick={() => setAsk(null)} className="rounded-lg px-4 py-2 text-[14px] font-semibold text-slate-600 hover:bg-slate-100">{T("dontNotify")}</button>
               <button type="button" autoFocus onClick={() => { const v = ask.v; setAsk(null); notifyCustomerNow(v); }}
-                className="rounded-lg bg-[#0f766e] px-4 py-2 text-[14px] font-semibold text-white hover:bg-[#0c5f59]">Notify customer</button>
+                className="rounded-lg bg-[#0f766e] px-4 py-2 text-[14px] font-semibold text-white hover:bg-[#0c5f59]">{T("notifyCustomer")}</button>
             </div>
           </div>
         </div>
@@ -638,11 +651,13 @@ const VIEW_ICON: Record<CalView, string> = {
   map: "M12 21s6.5-5.8 6.5-11A6.5 6.5 0 1 0 5.5 10c0 5.2 6.5 11 6.5 11zM12 12.3a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6z",
 };
 function ViewMenu({ value, onChange }: { value: CalView; onChange: (v: CalView) => void }) {
+  const T = useTranslations("sched");
+  const VIEWS = useViews();
   return (
     <Listbox value={value} onChange={onChange}>
-      <ListboxButton className={btn} aria-label="Calendar view">
+      <ListboxButton className={btn} aria-label={T("calView")}>
         <svg viewBox="0 0 24 24" className="h-4 w-4 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={VIEW_ICON[value]} /></svg>
-        <span className="text-[13.5px]">{(VIEWS.find((v) => v.id === value)?.label ?? "").replace("Mon–Fri", "Mon–Fri")}</span>
+        <span className="text-[13.5px]">{VIEWS.find((v) => v.id === value)?.label ?? ""}</span>
         <span className="text-slate-400"><Chevron /></span>
       </ListboxButton>
       <ListboxOptions anchor="bottom end" transition className={`${panelClass} w-48`}>
@@ -662,16 +677,18 @@ function ViewMenu({ value, onChange }: { value: CalView; onChange: (v: CalView) 
 
 // Selector de vista en computadora: Day · Week · Month · Map a la vista; Mon–Fri y Dispatch en "More"
 function ViewSwitch({ value, onChange }: { value: CalView; onChange: (v: CalView) => void }) {
+  const T = useTranslations("sched");
+  const VIEWS = useViews();
   const extra = value === "workweek" || value === "dispatch";
   const seg = (on: boolean) => `flex h-9 items-center gap-1 rounded-[9px] px-4 text-[14px] font-semibold transition-all duration-150 focus:outline-none ${on ? "bg-[#0f766e] text-white shadow-sm shadow-[#0f766e]/30" : "text-slate-600 hover:bg-[#e9f7f4] hover:text-[#0f766e]"}`;
   return (
-    <div className="hidden items-center gap-0.5 rounded-xl border border-[#cfe9e3] bg-white p-[3px] lg:flex" role="group" aria-label="Calendar view">
+    <div className="hidden items-center gap-0.5 rounded-xl border border-[#cfe9e3] bg-white p-[3px] lg:flex" role="group" aria-label={T("calView")}>
       {(["day", "week", "month", "map"] as const).map((id) => (
         <button key={id} type="button" aria-pressed={value === id} onClick={() => onChange(id)} className={seg(value === id)}>{VIEWS.find((v) => v.id === id)?.label}</button>
       ))}
       <Listbox value={value} onChange={onChange}>
-        <ListboxButton className={seg(extra)} aria-label="More views">
-          {extra ? VIEWS.find((v) => v.id === value)?.label : "More"}
+        <ListboxButton className={seg(extra)} aria-label={T("moreViews")}>
+          {extra ? VIEWS.find((v) => v.id === value)?.label : T("moreBtn")}
           <span className={extra ? "text-white/80" : "text-slate-400"}><Chevron /></span>
         </ListboxButton>
         <ListboxOptions anchor="bottom end" transition className={`${panelClass} w-44`}>
@@ -708,20 +725,22 @@ type Summary = { total: number; working: number; assigned: number; unassigned: n
 function DaySummary({ day, isToday, data, loading, compact, techF, onTech, onDetail }: {
   day: Date; isToday: boolean; data: Summary; loading: boolean; compact: boolean; techF: string[]; onTech: (id: string) => void; onDetail: (() => void) | null;
 }) {
+  const T = useTranslations("sched");
+  const jt = useJobsTx();
   const rows: { label: string; n: number; color: string; bg: string; d: string; fill?: boolean }[] = [
-    { label: "Total", n: data.total, color: "#0f766e", bg: "#e9f7f4", d: "M5 6h14v13H5zM5 10h14M9 4v4M15 4v4" },
-    { label: "In progress", n: data.working, color: "#2563eb", bg: "#e8f0ff", d: "M12 7v5l3 2M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17z" },
-    { label: "Assigned", n: data.assigned, color: "#0284c7", bg: "#e3f4fd", d: "M12 12a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM5.5 19.5a6.5 6.5 0 0 1 13 0" },
-    ...(data.unassigned ? [{ label: "No collaborator", n: data.unassigned, color: "#64748b", bg: "#f1f5f9", d: "M12 12a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM5.5 19.5a6.5 6.5 0 0 1 9-6M16 16l4 4M20 16l-4 4" }] : []),
-    { label: "Delayed", n: data.late, color: "#e11d48", bg: "#ffe9ec", d: "M12 8v4.5M12 16h.01M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17z" },
-    { label: "Completed", n: data.done, color: "#16a34a", bg: "#e6f8ec", d: "M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17zM8 12.3l2.7 2.7L16 9.5" },
+    { label: T("s.total"), n: data.total, color: "#0f766e", bg: "#e9f7f4", d: "M5 6h14v13H5zM5 10h14M9 4v4M15 4v4" },
+    { label: T("s.working"), n: data.working, color: "#2563eb", bg: "#e8f0ff", d: "M12 7v5l3 2M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17z" },
+    { label: T("s.assigned"), n: data.assigned, color: "#0284c7", bg: "#e3f4fd", d: "M12 12a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM5.5 19.5a6.5 6.5 0 0 1 13 0" },
+    ...(data.unassigned ? [{ label: T("s.noCollab"), n: data.unassigned, color: "#64748b", bg: "#f1f5f9", d: "M12 12a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM5.5 19.5a6.5 6.5 0 0 1 9-6M16 16l4 4M20 16l-4 4" }] : []),
+    { label: T("s.late"), n: data.late, color: "#e11d48", bg: "#ffe9ec", d: "M12 8v4.5M12 16h.01M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17z" },
+    { label: T("s.done"), n: data.done, color: "#16a34a", bg: "#e6f8ec", d: "M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17zM8 12.3l2.7 2.7L16 9.5" },
   ];
   return (
-    <section aria-label="Day summary"
+    <section aria-label={T("daySummary")}
       className={`hidden min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,40,60,0.04),0_8px_24px_rgba(15,40,60,0.04)] xl:flex ${compact ? "shrink-0" : "flex-1"}`}>
       <div className="px-5 pb-1 pt-5">
-        <h2 className="text-[17px] font-semibold leading-tight tracking-tight text-[#0b1f3a]">Day summary</h2>
-        <p className="mt-1 text-[14px] font-semibold text-[#0b1f3a]">{isToday ? "Today, " : ""}{day.toLocaleDateString("en-US", isToday ? { month: "short", day: "numeric" } : { weekday: "short", month: "short", day: "numeric" })}</p>
+        <h2 className="text-[17px] font-semibold leading-tight tracking-tight text-[#0b1f3a]">{T("daySummary")}</h2>
+        <p className="mt-1 text-[14px] font-semibold text-[#0b1f3a]">{isToday ? T("todayComma") : ""}{jt.date(day, isToday ? { month: "short", day: "numeric" } : { weekday: "short", month: "short", day: "numeric" })}</p>
       </div>
       <ul className="px-3 py-2">
         {rows.map((r) => (
@@ -739,20 +758,20 @@ function DaySummary({ day, isToday, data, loading, compact, techF, onTech, onDet
       {!compact && (
         <>
           <div className="mx-5 border-t border-slate-100" />
-          <h3 className="px-5 pb-1 pt-4 text-[15px] font-semibold tracking-tight text-[#0b1f3a]">Team on this day</h3>
+          <h3 className="px-5 pb-1 pt-4 text-[15px] font-semibold tracking-tight text-[#0b1f3a]">{T("teamDay")}</h3>
           <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-2">
-            {!loading && data.people.length === 0 && <p className="px-2 py-3 text-[13px] text-slate-400">Nobody has jobs on this day yet.</p>}
+            {!loading && data.people.length === 0 && <p className="px-2 py-3 text-[13px] text-slate-400">{T("nobodyDay")}</p>}
             {data.people.map(({ m, n }) => {
               const on = techF.length === 1 && techF[0] === m.user_id;
               return (
-                <button key={m.user_id} type="button" onClick={() => onTech(m.user_id)} aria-pressed={on} title={on ? "Show everyone" : `Show only ${m.full_name}'s jobs`}
+                <button key={m.user_id} type="button" onClick={() => onTech(m.user_id)} aria-pressed={on} title={on ? T("showEveryone") : T("showOnly", { name: m.full_name })}
                   className={`group/t flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors duration-150 ${on ? "bg-[#e9f7f4]" : "hover:bg-slate-50"}`}>
                   <span className="transition-transform duration-200 ease-out group-hover/t:scale-105"><TechDot t={m} size={38} ring={false} /></span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[14px] font-semibold text-[#0b1f3a]">{m.full_name}</span>
-                    <span className="block text-[12.5px] text-slate-500">{n} job{n === 1 ? "" : "s"}</span>
+                    <span className="block text-[12.5px] text-slate-500">{T("jobsCount", { n })}</span>
                   </span>
-                  {on && <span className="shrink-0 rounded-full bg-[#0f766e] px-2 py-0.5 text-[10.5px] font-semibold text-white">Filtered</span>}
+                  {on && <span className="shrink-0 rounded-full bg-[#0f766e] px-2 py-0.5 text-[10.5px] font-semibold text-white">{T("filtered")}</span>}
                 </button>
               );
             })}
@@ -763,7 +782,7 @@ function DaySummary({ day, isToday, data, loading, compact, techF, onTech, onDet
         <div className="p-3 pt-1">
           <button type="button" onClick={onDetail}
             className="group/d flex h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-[#eef4ff] text-[14px] font-semibold text-[#2563eb] transition-all duration-150 hover:-translate-y-px hover:bg-[#e0ebff] hover:shadow-sm">
-            View day <span className="transition-transform duration-200 group-hover/d:translate-x-1">→</span>
+            {T("viewDay")} <span className="transition-transform duration-200 group-hover/d:translate-x-1">→</span>
           </button>
         </div>
       )}
@@ -776,36 +795,38 @@ function FiltersMenu({ statusF, setStatusF, counts, team, techF, setTechF, types
   team: TeamMember[]; techF: string[]; setTechF: (v: string[]) => void; types: JobType[]; typeF: string; setTypeF: (v: string) => void;
   colorBy: ColorBy; setColorBy: (v: ColorBy) => void;
 }) {
+  const T = useTranslations("sched");
+  const jt = useJobsTx();
   const active = (statusF !== "all" ? 1 : 0) + (techF.length ? 1 : 0) + (typeF ? 1 : 0);
   const chip = (on: boolean) => `rounded-full border px-2.5 py-1 text-[12.5px] font-semibold transition-colors ${on ? "border-[#0f766e] bg-[#e9f7f4] text-[#0f766e]" : "border-slate-200 text-slate-600 hover:border-slate-300"}`;
   const statuses: ("all" | JobStatus)[] = ["all", ...STATUS_ORDER.filter((x) => x !== "unscheduled")];
   const toggleTech = (id: string) => setTechF(techF.includes(id) ? techF.filter((t) => t !== id) : [...techF, id]);
   return (
     <Popover className="relative">
-      <PopoverButton className={btn} aria-label="Filters">
+      <PopoverButton className={btn} aria-label={T("filters")}>
         <svg viewBox="0 0 24 24" className="h-5 w-5 sm:h-4 sm:w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
-        <span className="hidden sm:inline">Filters</span>
+        <span className="hidden sm:inline">{T("filters")}</span>
         {active > 0 && <span className="rounded-full bg-[#0f766e] px-1.5 text-[11px] text-white">{active}</span>}
       </PopoverButton>
       <PopoverPanel anchor="bottom end" transition
         className="z-[100] mt-2 max-h-[min(34rem,calc(100dvh-7rem))] w-[min(22rem,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_18px_48px_rgba(15,40,60,0.2)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0">
         <div className="flex items-center justify-between">
-          <p className="text-[15px] font-semibold text-[#0b1f3a]">Filters</p>
-          {active > 0 && <button type="button" onClick={() => { setStatusF("all"); setTechF([]); setTypeF(""); }} className="text-[13px] font-semibold text-[#0f766e] hover:underline">Clear all</button>}
+          <p className="text-[15px] font-semibold text-[#0b1f3a]">{T("filters")}</p>
+          {active > 0 && <button type="button" onClick={() => { setStatusF("all"); setTechF([]); setTypeF(""); }} className="text-[13px] font-semibold text-[#0f766e] hover:underline">{T("clearAll")}</button>}
         </div>
 
-        <p className="mb-2 mt-4 text-[12.5px] font-semibold text-slate-500">Status</p>
+        <p className="mb-2 mt-4 text-[12.5px] font-semibold text-slate-500">{T("status")}</p>
         <div className="flex flex-wrap gap-1.5">
           {statuses.map((x) => (
             <button key={x} type="button" onClick={() => setStatusF(x)} className={chip(statusF === x)}>
-              {x === "all" ? "All" : STATUS_META[x].label} <span className="font-normal text-slate-400">{counts.get(x) ?? 0}</span>
+              {x === "all" ? T("all") : jt.jobStatus(x)} <span className="font-normal text-slate-400">{counts.get(x) ?? 0}</span>
             </button>
           ))}
         </div>
 
-        <p className="mb-2 mt-4 text-[12.5px] font-semibold text-slate-500">Technicians</p>
+        <p className="mb-2 mt-4 text-[12.5px] font-semibold text-slate-500">{T("techs")}</p>
         <div className="space-y-0.5">
-          {team.length === 0 && <p className="text-[13px] text-slate-400">No technicians yet.</p>}
+          {team.length === 0 && <p className="text-[13px] text-slate-400">{T("noTechs")}</p>}
           {[...team.map((m) => ({ id: m.user_id, m })), { id: UNASSIGNED, m: null }].map(({ id, m }) => {
             const on = techF.includes(id);
             return (
@@ -814,7 +835,7 @@ function FiltersMenu({ statusF, setStatusF, counts, team, techF, setTechF, types
                   {on && <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3"><path d="m5 10.5 3 3 7-7" /></svg>}
                 </span>
                 {m ? <TechDot t={m} size={22} ring={false} /> : <span className="h-[22px] w-[22px] rounded-full border border-dashed border-slate-300" />}
-                <span className="truncate">{m ? m.full_name : "Unassigned"}</span>
+                <span className="truncate">{m ? m.full_name : T("unassignedCol")}</span>
               </button>
             );
           })}
@@ -822,9 +843,9 @@ function FiltersMenu({ statusF, setStatusF, counts, team, techF, setTechF, types
 
         {types.length > 0 && (
           <>
-            <p className="mb-2 mt-4 text-[12.5px] font-semibold text-slate-500">Job type</p>
+            <p className="mb-2 mt-4 text-[12.5px] font-semibold text-slate-500">{T("jobType")}</p>
             <div className="flex flex-wrap gap-1.5">
-              <button type="button" onClick={() => setTypeF("")} className={chip(!typeF)}>All</button>
+              <button type="button" onClick={() => setTypeF("")} className={chip(!typeF)}>{T("all")}</button>
               {types.map((t) => (
                 <button key={t.id} type="button" onClick={() => setTypeF(typeF === t.id ? "" : t.id)} className={`${chip(typeF === t.id)} flex items-center gap-1.5`}>
                   <span className="h-2 w-2 rounded-full" style={{ background: t.color }} />{t.name}
@@ -834,9 +855,9 @@ function FiltersMenu({ statusF, setStatusF, counts, team, techF, setTechF, types
           </>
         )}
 
-        <p className="mb-2 mt-4 text-[12.5px] font-semibold text-slate-500">Color bars by</p>
+        <p className="mb-2 mt-4 text-[12.5px] font-semibold text-slate-500">{T("colorBy")}</p>
         <div className="flex rounded-lg bg-slate-100 p-0.5">
-          {([["tech", "Technician"], ["type", "Job type"], ["priority", "Priority"]] as const).map(([v, l]) => (
+          {([["tech", T("cb.tech")], ["type", T("cb.type")], ["priority", T("cb.priority")]] as const).map(([v, l]) => (
             <button key={v} type="button" onClick={() => setColorBy(v)}
               className={`flex-1 rounded-md px-2 py-1.5 text-[12.5px] font-semibold transition-all ${colorBy === v ? "bg-white text-[#0f766e] shadow-sm" : "text-slate-500 hover:text-[#0b1f3a]"}`}>{l}</button>
           ))}
@@ -850,6 +871,9 @@ function FiltersMenu({ statusF, setStatusF, counts, team, techF, setTechF, types
 function DraftCard({ draft, techName, onCreate, onClose }: {
   draft: { day: Date; startMin: number; endMin: number; x: number; y: number }; techName: string | null; onCreate: () => void; onClose: () => void;
 }) {
+  const T = useTranslations("sched");
+  const tc = useTranslations("common");
+  const { dayShort: fmtDayShort, time: fmtTime } = useJobsTx();
   useEffect(() => {
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); if (e.key === "Enter") onCreate(); };
     const out = () => onClose();
@@ -862,14 +886,14 @@ function DraftCard({ draft, techName, onCreate, onClose }: {
   const left = Math.min(Math.max(12, draft.x + 14), vw - W - 12), top = Math.min(Math.max(12, draft.y - 20), vh - 170);
   const s = atMinute(draft.day, draft.startMin), e = atMinute(draft.day, draft.endMin);
   return (
-    <div role="dialog" aria-label="New job" onPointerDown={(ev) => ev.stopPropagation()}
+    <div role="dialog" aria-label={T("newJob")} onPointerDown={(ev) => ev.stopPropagation()}
       className="fixed z-[92] rounded-xl border border-slate-200 bg-white p-3.5 shadow-[0_18px_48px_rgba(15,40,60,0.22)] animate-[bp-pop-in_0.14s_ease-out]" style={{ left, top, width: W }}>
-      <p className="text-[15px] font-semibold text-[#0b1f3a]">New job</p>
+      <p className="text-[15px] font-semibold text-[#0b1f3a]">{T("newJob")}</p>
       <p className="mt-0.5 text-[13px] text-slate-600">{fmtDayShort(s)} · {fmtTime(s)} – {fmtTime(e)}</p>
-      {techName && <p className="text-[12.5px] text-slate-500">For {techName}</p>}
+      {techName && <p className="text-[12.5px] text-slate-500">{T("forX", { name: techName })}</p>}
       <div className="mt-3 flex gap-2">
-        <button type="button" autoFocus onClick={onCreate} className="flex-1 rounded-lg bg-[#0f766e] px-3 py-2 text-[13.5px] font-semibold text-white hover:bg-[#0c5f59]">Create job</button>
-        <button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-[13.5px] font-medium text-slate-600 hover:bg-slate-100">Cancel</button>
+        <button type="button" autoFocus onClick={onCreate} className="flex-1 rounded-lg bg-[#0f766e] px-3 py-2 text-[13.5px] font-semibold text-white hover:bg-[#0c5f59]">{T("createJob")}</button>
+        <button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-[13.5px] font-medium text-slate-600 hover:bg-slate-100">{tc("cancel")}</button>
       </div>
     </div>
   );
@@ -877,11 +901,13 @@ function DraftCard({ draft, techName, onCreate, onClose }: {
 
 // ---------- Clic en la fecha: calendario para saltar a cualquier día ----------
 function DateJump({ label, anchor, days, weekStartsOn, onPick }: { label: string; anchor: Date; days: Date[]; weekStartsOn: number; onPick: (d: Date) => void }) {
+  const T = useTranslations("sched");
+  const jt = useJobsTx();
   const [cursor, setCursor] = useState(() => startOfMonth(anchor));
   useEffect(() => setCursor(startOfMonth(anchor)), [anchor]);
   const first = startOfWeek(cursor, weekStartsOn);
   const cells = Array.from({ length: 42 }, (_, i) => addDays(first, i));
-  const dow = Array.from({ length: 7 }, (_, i) => addDays(first, i).toLocaleDateString("en-US", { weekday: "short" }).slice(0, 2));
+  const dow = Array.from({ length: 7 }, (_, i) => jt.weekdayShort(addDays(first, i)).slice(0, 2));
   const inRange = (d: Date) => days.length < 42 && d >= days[0] && d <= days[days.length - 1];
   const today = new Date();
   return (
@@ -894,10 +920,10 @@ function DateJump({ label, anchor, days, weekStartsOn, onPick }: { label: string
         {({ close }) => (
           <>
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-[14.5px] font-semibold text-[#0b1f3a]">{cursor.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</p>
+              <p className="text-[14.5px] font-semibold text-[#0b1f3a]">{jt.monthYear(cursor)}</p>
               <div className="flex">
                 {([-1, 1] as const).map((d) => (
-                  <button key={d} type="button" aria-label={d < 0 ? "Previous month" : "Next month"} onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() + d, 1))}
+                  <button key={d} type="button" aria-label={d < 0 ? T("prevMonth") : T("nextMonth")} onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() + d, 1))}
                     className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"><svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d={d < 0 ? "m12 5-5 5 5 5" : "m8 5 5 5-5 5"} /></svg></button>
                 ))}
               </div>
@@ -914,7 +940,7 @@ function DateJump({ label, anchor, days, weekStartsOn, onPick }: { label: string
                 );
               })}
             </div>
-            <button type="button" onClick={() => { onPick(dayStart(new Date())); close(); }} className="mt-2 w-full rounded-lg py-1.5 text-[13px] font-semibold text-[#0f766e] hover:bg-[#f3fbf8]">Go to today</button>
+            <button type="button" onClick={() => { onPick(dayStart(new Date())); close(); }} className="mt-2 w-full rounded-lg py-1.5 text-[13px] font-semibold text-[#0f766e] hover:bg-[#f3fbf8]">{T("goToday")}</button>
           </>
         )}
       </PopoverPanel>

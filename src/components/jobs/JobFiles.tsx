@@ -262,7 +262,7 @@ export default function JobFiles({ jobId, variant = "office", readOnly = false, 
   }
   async function editFiles(ids: string[], change: { kind?: string; caption?: string }) {
     const { error } = await createClient().rpc("job_files_edit", { p_ids: ids, p_kind: change.kind ?? null, p_caption: change.caption ?? null, p_set_caption: change.caption !== undefined });
-    if (error) { say(/job_files_edit|does not exist|Could not find/i.test(error.message) ? "Editing needs paso-5.8e in Supabase." : jobErr(error), true); return false; }
+    if (error) { say(/job_files_edit|does not exist|Could not find/i.test(error.message) ? tf("editSql") : jobErr(error), true); return false; }
     return true;
   }
   async function typeMany(kind: string) {

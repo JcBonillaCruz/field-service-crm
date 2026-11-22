@@ -10,8 +10,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { askConfirm } from "@/lib/confirm";
 import {
-  JobSettings, JobStatus, Priority, STATUS_META, SiteAddress, TechChip, VISIT_LABEL, VisitStatus, addressLine, afterHoursFee, afterHoursOf, businessHoursLabel,
-  fmtDayShort, fmtTime, holdLabel, jobError, mapsLink, usd,
+  JobSettings, JobStatus, Priority, STATUS_META, SiteAddress, TechChip, VisitStatus, addressLine, afterHoursFee, afterHoursOf,
+  mapsLink,
 } from "@/lib/jobs";
 import { OpsJob, groupOf, progressOf } from "@/lib/operations";
 import { AfterHoursMoon, StatusArt, TechDot } from "@/components/jobs/EventBar";
@@ -26,6 +26,9 @@ import JobInvoice, { AddServiceSheet, InvoiceNudge } from "@/components/jobs/Job
 import CustomerNotices, { RescheduleBanner, useCustomerNotices } from "@/components/jobs/CustomerNotices";
 import JobProfit from "@/components/jobs/JobProfit";
 
+import { useTranslations } from "next-intl";
+import { useJobsTx } from "@/i18n/useJobsTx";
+import { useJobError } from "@/i18n/useFmt";
 type Visit = {
   id: string; visit_no: number; status: VisitStatus; starts_at: string | null; ends_at: string | null; arrival_window_min: number; techs: TechChip[];
   on_my_way_at: string | null; started_at: string | null; finished_at: string | null;
@@ -55,7 +58,6 @@ const card = "rounded-2xl border border-slate-200 bg-white";
 const Icon = ({ d, className = "h-[18px] w-[18px]" }: { d: string; className?: string }) => (
   <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
 );
-const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : null);
 
 // La visita "actual", igual que en Operations: la que está en curso → la próxima → la que falta agendar → la última
 function currentVisit(vs: Visit[]): Visit | null {
@@ -69,6 +71,11 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
   companyId: string; data: JobDetailData; docs: JobDetailDoc[]; photoUrls: Record<string, string>; isOwner: boolean; seeProfit?: boolean; settings: JobSettings;
   plan?: { id: string; name: string } | null; // Paso 5.11: el plan de mantenimiento que creó este trabajo
 }) {
+  const T = useTranslations("jobDetail");
+  const jt = useJobsTx();
+  const jobError = useJobError();
+  const { usd, dayShort: fmtDayShort, time: fmtTime, businessHours: businessHoursLabel } = jt;
+  const when = (iso: string | null) => (iso ? jt.dateTime(new Date(iso)) : null);
   const router = useRouter();
   const j = data.job;
   const [now, setNow] = useState(() => Date.now());
@@ -78,7 +85,7 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
   const [phasePct, setPhasePct] = useState<number | null>(null); // Paso 5.4: avance por fases
   const [serviceOpen, setServiceOpen] = useState(false); // Paso 5.6: servicios editables
   const [invKey, setInvKey] = useState(0);
-  const flash = (m: string, err = false) => { setToast({ m, err }); setTimeout(() => setToast((t) => (t?.m === m ? null : t)), err ? 5000 : 2600); };
+  const flash = (m: string, err = false) => { setToast({ m, err }); setTimeout(() => setToast((x) => (x?.m === m ? null : x)), err ? 5000 : 2600); };
 
   // En vivo: si el colaborador cambia el estado o la oficina lo mueve, la ficha se actualiza sola
   useEffect(() => {
@@ -131,9 +138,9 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
 
   const assignedAt = data.events.find((e) => e.kind === "assigned")?.created_at ?? (people.length ? j.scheduled_at ?? j.created_at : null);
   const steps: { label: string; at: string | null }[] = [
-    { label: "Created", at: j.created_at }, { label: "Assigned", at: assignedAt }, { label: "Scheduled", at: j.scheduled_at },
-    { label: "On my way", at: j.on_my_way_at }, { label: "Started", at: j.started_at }, { label: "Finished", at: j.completed_at ?? j.finished_at },
-    { label: "Invoiced", at: j.invoiced_at }, { label: "Paid", at: j.paid_at },
+    { label: T("steps.created"), at: j.created_at }, { label: T("steps.assigned"), at: assignedAt }, { label: T("steps.scheduled"), at: j.scheduled_at },
+    { label: T("steps.omw"), at: j.on_my_way_at }, { label: T("steps.started"), at: j.started_at }, { label: T("steps.finished"), at: j.completed_at ?? j.finished_at },
+    { label: T("steps.invoiced"), at: j.invoiced_at }, { label: T("steps.paid"), at: j.paid_at },
   ];
   const reached = steps.reduce((n, s, i) => (s.at ? i : n), 0);
   const quote = docs.find((d) => d.kind === "quote"), invoice = docs.find((d) => d.kind === "invoice");
@@ -146,7 +153,7 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
   const feeAdded = data.lines.some((l) => /after-hours/i.test(l.name));
   async function addFee() {
     if (!fee) return;
-    if (!(await askConfirm({ title: `Add the after-hours fee (${fee.label})?`, message: `It adds ${usd(fee.amount)} to this job's services. You can still change it on the invoice.`, confirmLabel: "Add fee", tone: "green" }))) return;
+    if (!(await askConfirm({ title: T("feeQ", { fee: fee.label }), message: T("feeMsg", { amt: usd(fee.amount) }), confirmLabel: T("addFee"), tone: "green" }))) return;
     setBusy("fee");
     const { error } = await createClient().from("job_lines").insert({
       company_id: companyId, job_id: j.id, position: data.lines.length, kind: "service", name: "After-hours service fee",
@@ -154,35 +161,35 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
     });
     setBusy("");
     if (error) return flash(jobError(error), true);
-    flash("After-hours fee added"); router.refresh();
+    flash(T("feeAdded")); router.refresh();
   }
   const phone = j.customer_phone?.replace(/[^\d+]/g, "");
 
   // Paso 5.6: quitar un servicio del trabajo (las piezas escaneadas son inventario y no se quitan aquí)
   async function removeLine(l: Line) {
-    if (!(await askConfirm({ title: `Remove ${l.name}?`, message: "It comes off this job. If it's on a draft invoice, it comes off there too.", confirmLabel: "Remove", tone: "danger" }))) return;
+    if (!(await askConfirm({ title: T("removeQ", { name: l.name }), message: T("removeMsg"), confirmLabel: T("remove"), tone: "danger" }))) return;
     setBusy(`line-${l.id}`);
     const { error } = await createClient().rpc("job_line_remove", { p_line: l.id });
     setBusy("");
-    if (error) return flash(error.hint || jobError(error), true);
-    flash("Removed from the job"); setInvKey((k) => k + 1); router.refresh();
+    if (error) return flash(jobError(error), true);
+    flash(T("removed")); setInvKey((k) => k + 1); router.refresh();
   }
   async function createInvoice() {
-    if (!(await askConfirm({ title: "Create a draft invoice?", message: "It copies the services and materials of this job. You can edit it before sending.", confirmLabel: "Create draft", tone: "green" }))) return;
+    if (!(await askConfirm({ title: T("invQ"), message: T("invMsg"), confirmLabel: T("createDraft"), tone: "green" }))) return;
     setBusy("invoice");
     const { data: id, error } = await createClient().rpc("job_draft_invoice", { p_job: j.id });
     setBusy("");
-    if (error || !id) return flash(error?.hint || jobError(error), true);
+    if (error || !id) return flash(jobError(error), true);
     router.push(`/dashboard/invoices/${id}`);
   }
   async function officeAction(a: "finish" | "resume") {
     if (!cv) return;
-    if (a === "finish" && !(await askConfirm({ title: `Mark ${j.customer_name || j.number} as finished?`, message: "The visit closes and the job shows as completed.", confirmLabel: "Mark as finished", tone: "green" }))) return;
+    if (a === "finish" && !(await askConfirm({ title: T("finishQ", { name: j.customer_name || j.number }), message: T("finishMsg"), confirmLabel: T("markFinished"), tone: "green" }))) return;
     setBusy(a);
     const { error } = await createClient().rpc("job_office_action", { p_visit: cv.id, p_action: a, p_reason: null, p_note: null });
     setBusy("");
-    if (error) return flash(error.hint || jobError(error), true);
-    flash(a === "finish" ? "Job marked as finished" : "Work resumed"); router.refresh();
+    if (error) return flash(jobError(error), true);
+    flash(a === "finish" ? T("finishedToast") : T("resumedToast")); router.refresh();
   }
 
   return (
@@ -190,44 +197,44 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
       {/* Encabezado */}
       <div className="border-b border-slate-200 bg-white px-4 py-4 lg:px-8">
         <div className="flex flex-wrap items-start gap-4">
-          <Link prefetch={false} href="/dashboard/jobs/operations" aria-label="Back to Operations"
+          <Link prefetch={false} href="/dashboard/jobs/operations" aria-label={T("back")}
             className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition-all hover:-translate-x-0.5 hover:border-[#14a39a] hover:text-[#0f766e]">
             <Icon d="M15 5 8 12l7 7" />
           </Link>
           {group === "done" && !cancelled ? <StatusArt s="completed" size={58} /> : <ProgressRing pct={cancelled ? 0 : pct} size={58} stroke={5} color={cancelled ? "#94a3b8" : GROUP_TONE[group]} />}
           <div className="min-w-0 flex-1">
             <p className="flex flex-wrap items-center gap-2 text-[13px] font-semibold text-slate-400">
-              <span>Job #{j.number}</span>
-              {plan && <Link prefetch={false} href={`/dashboard/jobs/plans/${plan.id}`} title={`Maintenance plan: ${plan.name}. Open the plan.`} className="transition-transform hover:-translate-y-px"><PlanTag label="Maintenance plan" /></Link>}
+              <span>{T("jobNum", { n: j.number })}</span>
+              {plan && <Link prefetch={false} href={`/dashboard/jobs/plans/${plan.id}`} title={T("planTitle", { name: plan.name })} className="transition-transform hover:-translate-y-px"><PlanTag label={T("planLabel")} /></Link>}
               {data.type && <span className="rounded-full px-2 py-0.5 text-[11.5px]" style={{ background: `${data.type.color}18`, color: data.type.color }}>{data.type.name}</span>}
-              {(j.priority === "urgent" || j.priority === "high") && <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold uppercase ${j.priority === "urgent" ? "bg-[#ffe4e6] text-[#be123c]" : "bg-[#fff4e0] text-[#b45309]"}`}>{j.priority}</span>}
+              {(j.priority === "urgent" || j.priority === "high") && <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold uppercase ${j.priority === "urgent" ? "bg-[#ffe4e6] text-[#be123c]" : "bg-[#fff4e0] text-[#b45309]"}`}>{jt.priority(j.priority)}</span>}
               {data.tags.map((t) => <span key={t.id} className="rounded-full px-2 py-0.5 text-[11px]" style={{ background: `${t.color}18`, color: t.color }}>{t.name}</span>)}
             </p>
-            <h1 className="mt-0.5 truncate text-[22px] font-semibold tracking-tight text-[#0b1f3a]">{j.customer_name || j.title || "Job"}</h1>
+            <h1 className="mt-0.5 truncate text-[22px] font-semibold tracking-tight text-[#0b1f3a]">{j.customer_name || j.title || T("job")}</h1>
             {j.title && j.customer_name && <p className="truncate text-[14px] text-slate-500">{j.title}</p>}
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[12.5px] font-semibold ring-1 ${STATUS_META[j.status].badge}`}>{STATUS_META[j.status].label}</span>
+              <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[12.5px] font-semibold ring-1 ${STATUS_META[j.status].badge}`}>{jt.jobStatus(j.status)}</span>
               {!cancelled && (
-                <button type="button" disabled={srBusy} onClick={openReport} title="The PDF the customer can receive with the invoice: work done, readings and photos. No prices or internal notes."
+                <button type="button" disabled={srBusy} onClick={openReport} title={T("reportTitle")}
                   className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[12.5px] font-semibold text-[#0f766e] transition-colors hover:border-[#0f766e] disabled:opacity-50">
                   <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 2.5h7l3.5 3.5V17a.5.5 0 0 1-.5.5H5a.5.5 0 0 1-.5-.5V3a.5.5 0 0 1 .5-.5zM11.5 2.5v4h4M7.5 10.5h5M7.5 13.5h5" /></svg>
-                  {srBusy ? "Preparing…" : "Service report"}
+                  {srBusy ? T("preparing") : T("report")}
                 </button>
               )}
               <DelayTag job={ops} now={now} />
-              {j.status === "on_hold" && j.hold_reason && <span className="rounded-full bg-[#fff1f2] px-2.5 py-0.5 text-[12px] font-semibold text-[#be123c]">{holdLabel(j.hold_reason)}</span>}
+              {j.status === "on_hold" && j.hold_reason && <span className="rounded-full bg-[#fff1f2] px-2.5 py-0.5 text-[12px] font-semibold text-[#be123c]">{jt.hold(j.hold_reason)}</span>}
               {afterHours && <AfterHoursMoon withText size={20} />}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {phone && <a href={`tel:${phone}`} className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[14px] font-medium text-slate-700 transition-colors hover:border-[#14a39a] hover:text-[#0f766e]"><Icon d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z" />Call</a>}
-            {!cancelled && cv && ["paused", "on_hold"].includes(cv.status) && <button type="button" disabled={busy === "resume"} onClick={() => officeAction("resume")} className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[14px] font-medium text-slate-700 transition-colors hover:border-[#14a39a] hover:text-[#0f766e] disabled:opacity-60"><Icon d="M8 5v14l11-7z" />Resume</button>}
-            {!cancelled && cv && ["on_my_way", "in_progress", "paused"].includes(cv.status) && <button type="button" disabled={busy === "finish"} onClick={() => officeAction("finish")} className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[14px] font-medium text-slate-700 transition-colors hover:border-[#14a39a] hover:text-[#0f766e] disabled:opacity-60"><Icon d="m5 12.5 4.5 4.5L19 7" />Finish</button>}
+            {phone && <a href={`tel:${phone}`} className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[14px] font-medium text-slate-700 transition-colors hover:border-[#14a39a] hover:text-[#0f766e]"><Icon d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z" />{T("call")}</a>}
+            {!cancelled && cv && ["paused", "on_hold"].includes(cv.status) && <button type="button" disabled={busy === "resume"} onClick={() => officeAction("resume")} className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[14px] font-medium text-slate-700 transition-colors hover:border-[#14a39a] hover:text-[#0f766e] disabled:opacity-60"><Icon d="M8 5v14l11-7z" />{T("resume")}</button>}
+            {!cancelled && cv && ["on_my_way", "in_progress", "paused"].includes(cv.status) && <button type="button" disabled={busy === "finish"} onClick={() => officeAction("finish")} className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[14px] font-medium text-slate-700 transition-colors hover:border-[#14a39a] hover:text-[#0f766e] disabled:opacity-60"><Icon d="m5 12.5 4.5 4.5L19 7" />{T("finish")}</button>}
             {!cancelled && !j.invoice_id && j.customer_id && (j.status === "completed" || data.lines.length > 0) && (
-              <button type="button" disabled={busy === "invoice"} onClick={createInvoice} className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[14px] font-medium text-slate-700 transition-colors hover:border-[#14a39a] hover:text-[#0f766e] disabled:opacity-60"><Icon d="M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h4" />Create invoice</button>
+              <button type="button" disabled={busy === "invoice"} onClick={createInvoice} className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[14px] font-medium text-slate-700 transition-colors hover:border-[#14a39a] hover:text-[#0f766e] disabled:opacity-60"><Icon d="M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h4" />{T("createInvoice")}</button>
             )}
             <Link prefetch={false} href={`/dashboard/jobs/${j.id}/edit`} className="group inline-flex h-10 items-center gap-2 rounded-lg bg-[#0f766e] px-4 text-[14px] font-semibold text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59]">
-              <span className="transition-transform duration-200 group-hover:-rotate-12 group-hover:scale-110"><Icon d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" /></span>Edit
+              <span className="transition-transform duration-200 group-hover:-rotate-12 group-hover:scale-110"><Icon d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" /></span>{T("edit")}
             </Link>
           </div>
         </div>
@@ -247,7 +254,7 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
             ))}
           </ol>
         )}
-        {cancelled && <p className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[14px] text-slate-600">Cancelled {when(j.cancelled_at)}{j.cancelled_by_name ? ` by ${j.cancelled_by_name}` : ""}{j.cancel_reason ? ` — ${j.cancel_reason}` : ""}</p>}
+        {cancelled && <p className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[14px] text-slate-600">{T("cancelledLine", { when: when(j.cancelled_at) ?? "" })}{j.cancelled_by_name ? T("byX", { name: j.cancelled_by_name }) : ""}{j.cancel_reason ? ` — ${j.cancel_reason}` : ""}</p>}
       </div>
 
       <div className="grid gap-4 px-3 pt-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:px-8">
@@ -260,24 +267,24 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
             <section className="flex flex-wrap items-center gap-3 rounded-2xl border border-[#c7d2fe] bg-[#f5f6ff] px-4 py-3.5">
               <AfterHoursMoon size={34} />
               <div className="min-w-0 flex-1">
-                <p className="text-[14.5px] font-semibold text-[#312e81]">After-hours job</p>
-                <p className="text-[13px] text-[#4338ca]">Outside your business hours ({businessHoursLabel(settings)}). {fee ? `Your after-hours fee is ${fee.label}${settings.after_hours_fee_type === "percent" ? ` (${usd(fee.amount)})` : ""} — you decide if you charge it.` : "Set an after-hours fee in Jobs → Settings, or add the price you want on the invoice."}</p>
+                <p className="text-[14.5px] font-semibold text-[#312e81]">{T("ahJob")}</p>
+                <p className="text-[13px] text-[#4338ca]">{T("ahOutside", { hours: businessHoursLabel(settings) })}{fee ? T("ahFee", { fee: fee.label, amt: settings.after_hours_fee_type === "percent" ? ` (${usd(fee.amount)})` : "" }) : T("ahNoFee")}</p>
               </div>
-              {fee && !feeAdded && <button type="button" disabled={busy === "fee"} onClick={addFee} className="rounded-lg bg-[#4f46e5] px-4 py-2 text-[14px] font-semibold text-white transition-colors hover:bg-[#4338ca] disabled:opacity-60">Add fee {usd(fee.amount)}</button>}
-              {feeAdded && <span className="rounded-full bg-white px-3 py-1 text-[12.5px] font-semibold text-[#4338ca] ring-1 ring-[#c7d2fe]">Fee added ✓</span>}
+              {fee && !feeAdded && <button type="button" disabled={busy === "fee"} onClick={addFee} className="rounded-lg bg-[#4f46e5] px-4 py-2 text-[14px] font-semibold text-white transition-colors hover:bg-[#4338ca] disabled:opacity-60">{T("addFeeAmt", { amt: usd(fee.amount) })}</button>}
+              {feeAdded && <span className="rounded-full bg-white px-3 py-1 text-[12.5px] font-semibold text-[#4338ca] ring-1 ring-[#c7d2fe]">{T("feeAddedTag")}</span>}
             </section>
           )}
           {/* Lo que hay que hacer */}
           {(j.description || j.tech_notes || j.office_notes || (j.status === "on_hold" && j.hold_note)) && (
             <section className={`${card} p-5`}>
-              <h2 className="text-[16px] font-semibold text-[#0b1f3a]">Job notes</h2>
+              <h2 className="text-[16px] font-semibold text-[#0b1f3a]">{T("notes")}</h2>
               {j.description && <p className="mt-2 whitespace-pre-line text-[14.5px] text-slate-700">{j.description}</p>}
               {j.status === "on_hold" && j.hold_note && (
-                <div className="mt-3 rounded-xl bg-[#fff7f8] px-3.5 py-2.5 text-[14px] text-[#9f1239]"><b>Left for follow-up</b>{j.hold_by_name ? ` by ${j.hold_by_name}` : ""}: {j.hold_note}</div>
+                <div className="mt-3 rounded-xl bg-[#fff7f8] px-3.5 py-2.5 text-[14px] text-[#9f1239]"><b>{T("leftFollow")}</b>{j.hold_by_name ? T("byX", { name: j.hold_by_name }) : ""}: {j.hold_note}</div>
               )}
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                {j.tech_notes && <div className="rounded-xl bg-[#f6f9fc] px-3.5 py-2.5"><p className="text-[12px] font-semibold text-slate-500">For the collaborators</p><p className="mt-0.5 whitespace-pre-line text-[14px] text-slate-700">{j.tech_notes}</p></div>}
-                {j.office_notes && <div className="rounded-xl bg-[#fffaf0] px-3.5 py-2.5"><p className="text-[12px] font-semibold text-[#b45309]">Office only</p><p className="mt-0.5 whitespace-pre-line text-[14px] text-slate-700">{j.office_notes}</p></div>}
+                {j.tech_notes && <div className="rounded-xl bg-[#f6f9fc] px-3.5 py-2.5"><p className="text-[12px] font-semibold text-slate-500">{T("forCollabs")}</p><p className="mt-0.5 whitespace-pre-line text-[14px] text-slate-700">{j.tech_notes}</p></div>}
+                {j.office_notes && <div className="rounded-xl bg-[#fffaf0] px-3.5 py-2.5"><p className="text-[12px] font-semibold text-[#b45309]">{T("officeOnly")}</p><p className="mt-0.5 whitespace-pre-line text-[14px] text-slate-700">{j.office_notes}</p></div>}
               </div>
             </section>
           )}
@@ -285,8 +292,8 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
           {/* Visitas */}
           <section className={`${card} p-5`}>
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-[16px] font-semibold text-[#0b1f3a]">Visits <span className="font-normal text-slate-400">({data.visits.length})</span></h2>
-              <Link prefetch={false} href="/dashboard/jobs/schedule" className="text-[13.5px] font-semibold text-[#0f766e] hover:underline">Open Schedule</Link>
+              <h2 className="text-[16px] font-semibold text-[#0b1f3a]">{T("visits")} <span className="font-normal text-slate-400">({data.visits.length})</span></h2>
+              <Link prefetch={false} href="/dashboard/jobs/schedule" className="text-[13.5px] font-semibold text-[#0f766e] hover:underline">{T("openSchedule")}</Link>
             </div>
             <ul className="mt-3 space-y-2.5">
               {data.visits.map((v) => (
@@ -294,18 +301,18 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
                   {["on_my_way", "in_progress", "paused", "on_hold", "completed"].includes(v.status) ? <StatusArt s={v.status} size={34} /> :
                     <span className="flex h-[34px] w-[34px] items-center justify-center rounded-full bg-slate-100 text-[12px] font-bold text-slate-500">{v.visit_no}</span>}
                   <div className="min-w-0 flex-1">
-                    <p className="text-[14.5px] font-semibold text-[#0b1f3a]">Visit {v.visit_no} · <span className="font-medium text-slate-600">{VISIT_LABEL[v.status]}</span></p>
-                    <p className="text-[13px] text-slate-500">{v.starts_at ? `${fmtDayShort(new Date(v.starts_at))} · ${fmtTime(new Date(v.starts_at))}${v.ends_at ? ` – ${fmtTime(new Date(v.ends_at))}` : ""}` : "Not scheduled"}</p>
+                    <p className="text-[14.5px] font-semibold text-[#0b1f3a]">{T("visitN", { n: v.visit_no })} · <span className="font-medium text-slate-600">{jt.visitStatus(v.status)}</span></p>
+                    <p className="text-[13px] text-slate-500">{v.starts_at ? `${fmtDayShort(new Date(v.starts_at))} · ${fmtTime(new Date(v.starts_at))}${v.ends_at ? ` – ${fmtTime(new Date(v.ends_at))}` : ""}` : T("notScheduled")}</p>
                     {(v.on_my_way_at || v.started_at || v.finished_at) && (
-                      <p className="mt-0.5 text-[12px] text-slate-400">{[v.on_my_way_at && `On the way ${when(v.on_my_way_at)}`, v.started_at && `Started ${when(v.started_at)}`, v.finished_at && `Ended ${when(v.finished_at)}`].filter(Boolean).join(" · ")}</p>
+                      <p className="mt-0.5 text-[12px] text-slate-400">{[v.on_my_way_at && T("onWayAt", { when: when(v.on_my_way_at) ?? "" }), v.started_at && T("startedAt", { when: when(v.started_at) ?? "" }), v.finished_at && T("endedAt", { when: when(v.finished_at) ?? "" })].filter(Boolean).join(" · ")}</p>
                     )}
                   </div>
                   <div className="flex items-center gap-1.5">
-                    {v.techs.length === 0 ? <Link prefetch={false} href="/dashboard/jobs/assign" className="rounded-full border border-dashed border-slate-300 px-2.5 py-1 text-[12px] font-semibold text-slate-500 hover:border-[#14a39a] hover:text-[#0f766e]">+ Assign</Link>
+                    {v.techs.length === 0 ? <Link prefetch={false} href="/dashboard/jobs/assign" className="rounded-full border border-dashed border-slate-300 px-2.5 py-1 text-[12px] font-semibold text-slate-500 hover:border-[#14a39a] hover:text-[#0f766e]">{T("assign")}</Link>
                       : v.techs.map((t) => (
-                        <span key={t.user_id} className="flex items-center gap-1.5 rounded-full bg-white py-0.5 pl-0.5 pr-2.5 ring-1 ring-slate-200" title={t.is_lead ? "Lead" : undefined}>
+                        <span key={t.user_id} className="flex items-center gap-1.5 rounded-full bg-white py-0.5 pl-0.5 pr-2.5 ring-1 ring-slate-200" title={t.is_lead ? T("lead") : undefined}>
                           <TechDot t={t} size={22} ring={false} /><span className="text-[12.5px] font-medium text-slate-700">{t.name.split(" ")[0]}</span>
-                          {t.is_lead && v.techs.length > 1 && <span className="text-[9.5px] font-bold uppercase text-[#0f766e]">Lead</span>}
+                          {t.is_lead && v.techs.length > 1 && <span className="text-[9.5px] font-bold uppercase text-[#0f766e]">{T("lead")}</span>}
                         </span>
                       ))}
                   </div>
@@ -320,14 +327,14 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
           {/* Checklist */}
           {data.checklist.length > 0 && (
             <section className={`${card} p-5`}>
-              <h2 className="text-[16px] font-semibold text-[#0b1f3a]">Checklist <span className="font-normal text-slate-400">{ops.checklist_done}/{ops.checklist_total}</span></h2>
+              <h2 className="text-[16px] font-semibold text-[#0b1f3a]">{T("checklist")} <span className="font-normal text-slate-400">{ops.checklist_done}/{ops.checklist_total}</span></h2>
               <ul className="mt-3 divide-y divide-slate-100">
                 {data.checklist.map((c) => (
                   <li key={c.id} className="flex items-center gap-3 py-2.5">
                     <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 ${c.done ? "border-[#14a39a] bg-[#14a39a] text-white" : "border-slate-300"}`}>
                       {c.done && <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3"><path d="m5 10.5 3 3 7-7" /></svg>}
                     </span>
-                    <span className={`min-w-0 flex-1 text-[14.5px] ${c.done ? "text-slate-500" : "text-[#0b1f3a]"}`}>{c.label}{c.is_required && !c.done && <span className="ml-1.5 text-[11px] font-semibold text-[#be123c]">Required</span>}</span>
+                    <span className={`min-w-0 flex-1 text-[14.5px] ${c.done ? "text-slate-500" : "text-[#0b1f3a]"}`}>{c.label}{c.is_required && !c.done && <span className="ml-1.5 text-[11px] font-semibold text-[#be123c]">{T("required")}</span>}</span>
                     {c.done && <span className="text-right text-[12px] text-slate-400">{c.done_by_name}<br className="sm:hidden" /> {when(c.done_at)}</span>}
                   </li>
                 ))}
@@ -338,24 +345,24 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
           {/* Servicios y materiales */}
           <section className={`${card} p-5`}>
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-[16px] font-semibold text-[#0b1f3a]">Services &amp; materials</h2>
+              <h2 className="text-[16px] font-semibold text-[#0b1f3a]">{T("services")}</h2>
               {!cancelled && <button type="button" onClick={() => setServiceOpen(true)} className="group inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[13.5px] font-semibold text-[#0f766e] transition-colors hover:border-[#14a39a]">
-                <span className="transition-transform duration-200 group-hover:rotate-90"><Icon d="M12 5v14M5 12h14" className="h-4 w-4" /></span>Add service</button>}
+                <span className="transition-transform duration-200 group-hover:rotate-90"><Icon d="M12 5v14M5 12h14" className="h-4 w-4" /></span>{T("addService")}</button>}
             </div>
-            {data.lines.length === 0 ? <p className="mt-2 text-[14px] text-slate-500">No services or materials yet.</p> : (
+            {data.lines.length === 0 ? <p className="mt-2 text-[14px] text-slate-500">{T("noLines")}</p> : (
               <div className="mt-3 overflow-x-auto">
                 <table className="w-full min-w-[480px] text-left text-[14px]">
-                  <thead><tr className="border-b border-slate-200 text-[12px] font-semibold uppercase tracking-wide text-slate-400"><th className="py-2 pr-3">Item</th><th className="w-16 py-2 text-right">Qty</th>{data.prices_visible && <><th className="w-24 py-2 text-right">Rate</th><th className="w-28 py-2 text-right">Amount</th></>}<th className="w-9" /></tr></thead>
+                  <thead><tr className="border-b border-slate-200 text-[12px] font-semibold uppercase tracking-wide text-slate-400"><th className="py-2 pr-3">{T("thItem")}</th><th className="w-16 py-2 text-right">{T("thQty")}</th>{data.prices_visible && <><th className="w-24 py-2 text-right">{T("thRate")}</th><th className="w-28 py-2 text-right">{T("thAmount")}</th></>}<th className="w-9" /></tr></thead>
                   <tbody>
                     {data.lines.map((l) => (
                       <tr key={l.id} className="border-b border-slate-100 last:border-0">
                         <td className="py-2.5 pr-3"><p className="font-medium text-[#0b1f3a]">{l.name}</p>
-                          <p className="text-[12px] text-slate-400">{l.kind === "material" ? "Material" : "Service"}{l.source === "scan" ? " · scanned on site" : l.source === "tech" ? ` · added by ${l.created_by_name ?? "a collaborator"}` : l.source === "quote" ? " · from the quote" : ""}</p></td>
+                          <p className="text-[12px] text-slate-400">{l.kind === "material" ? T("material") : T("service")}{l.source === "scan" ? T("scanned") : l.source === "tech" ? T("addedBy", { name: l.created_by_name ?? T("aCollab") }) : l.source === "quote" ? T("fromQuote") : ""}</p></td>
                         <td className="py-2.5 text-right tabular-nums text-slate-600">{Number(l.quantity)}{l.unit ? ` ${l.unit}` : ""}</td>
                         {data.prices_visible && <><td className="py-2.5 text-right tabular-nums text-slate-600">{usd(Number(l.rate ?? 0))}</td><td className="py-2.5 text-right font-semibold tabular-nums text-[#0b1f3a]">{usd(Number(l.amount ?? 0))}</td></>}
                         <td className="py-2.5 text-right">
                           {!cancelled && l.source !== "scan" && (
-                            <button type="button" onClick={() => removeLine(l)} disabled={busy === `line-${l.id}`} aria-label={`Remove ${l.name}`} title="Remove"
+                            <button type="button" onClick={() => removeLine(l)} disabled={busy === `line-${l.id}`} aria-label={T("removeX", { name: l.name })} title={T("remove")}
                               className="inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-300 transition-all hover:bg-red-50 hover:text-red-600 disabled:opacity-50">
                               <Icon d="M6 7h12M10 7V5h4v2M8 7l.7 12h6.6L16 7M10.5 10.5v5M13.5 10.5v5" className="h-4 w-4" /></button>
                           )}
@@ -363,13 +370,13 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
                       </tr>
                     ))}
                   </tbody>
-                  {data.prices_visible && <tfoot><tr><td colSpan={3} className="pt-3 text-right text-[13px] font-semibold text-slate-500">Total</td><td className="pt-3 text-right text-[16px] font-semibold tabular-nums text-[#0b1f3a]">{usd(linesTotal)}</td><td /></tr></tfoot>}
+                  {data.prices_visible && <tfoot><tr><td colSpan={3} className="pt-3 text-right text-[13px] font-semibold text-slate-500">{T("total")}</td><td className="pt-3 text-right text-[16px] font-semibold tabular-nums text-[#0b1f3a]">{usd(linesTotal)}</td><td /></tr></tfoot>}
                 </table>
               </div>
             )}
             {data.parts.length > 0 && (
               <div className="mt-4 rounded-xl bg-[#f8fafb] px-3.5 py-3">
-                <p className="text-[12.5px] font-semibold text-slate-500">Parts scanned from the van</p>
+                <p className="text-[12.5px] font-semibold text-slate-500">{T("partsVan")}</p>
                 <ul className="mt-1.5 space-y-1">{data.parts.map((p) => <li key={p.movement_id} className="flex justify-between gap-3 text-[13px] text-slate-600"><span className="truncate">{Math.abs(Number(p.qty))} × {p.name}{p.sku ? ` · ${p.sku}` : ""}</span><span className="shrink-0 text-slate-400">{p.by} · {when(p.at)}</span></li>)}</ul>
               </div>
             )}
@@ -380,12 +387,12 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
 
           {/* Formularios del campo y equipos del Job Site (Paso 5.5) */}
           <JobForms jobId={j.id} companyId={companyId} addressId={j.address_id ?? null} formKind={data.type?.form_kind ?? null} visitId={cv?.id ?? null}
-            readOnly={cancelled} jobLabel={`${j.customer_name || "Job"} · ${j.number}`} onToast={flash} />
+            readOnly={cancelled} jobLabel={`${j.customer_name || T("job")} · ${j.number}`} onToast={flash} />
           <SiteEquipment companyId={companyId} jobId={j.id} addressId={j.address_id ?? null} readOnly={cancelled} onToast={flash} />
 
           {/* Historial */}
           <section className={`${card} p-5`}>
-            <h2 className="mb-4 text-[16px] font-semibold text-[#0b1f3a]">Activity</h2>
+            <h2 className="mb-4 text-[16px] font-semibold text-[#0b1f3a]">{T("activity")}</h2>
             <Timeline rows={[...data.events].reverse().map((e) => ({ id: e.id, title: e.message, who: e.actor_name, when: e.created_at, note: e.detail ?? undefined }))} />
           </section>
         </div>
@@ -393,37 +400,37 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
         {/* Columna derecha */}
         <aside className="space-y-4">
           <section className={`${card} p-5`}>
-            <h2 className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Customer</h2>
+            <h2 className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">{T("customer")}</h2>
             {j.customer_id ? <Link prefetch={false} href={`/dashboard/customers/${j.customer_id}`} className="mt-1 block text-[16px] font-semibold text-[#0b1f3a] hover:text-[#0f766e]">{j.customer_name}</Link>
-              : <p className="mt-1 text-[16px] font-semibold text-[#0b1f3a]">{j.customer_name || "No customer"}</p>}
+              : <p className="mt-1 text-[16px] font-semibold text-[#0b1f3a]">{j.customer_name || T("noCustomer")}</p>}
             {j.customer_phone && <a href={`tel:${phone}`} className="mt-1 block text-[14px] text-slate-600 hover:text-[#0f766e]">{j.customer_phone}</a>}
-            <h2 className="mt-4 text-[13px] font-semibold uppercase tracking-wide text-slate-400">Job site</h2>
+            <h2 className="mt-4 text-[13px] font-semibold uppercase tracking-wide text-slate-400">{T("site")}</h2>
             {addressLine(j.site_address) ? (
               <>
                 <p className="mt-1 text-[14px] text-slate-700">{j.site_address?.label && <span className="block font-semibold">{j.site_address.label}</span>}{addressLine(j.site_address)}</p>
-                {map && <a href={map} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-[#0f766e] hover:underline"><Icon d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21zM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" className="h-4 w-4" />Open in Maps</a>}
+                {map && <a href={map} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-[#0f766e] hover:underline"><Icon d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21zM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" className="h-4 w-4" />{T("openMaps")}</a>}
               </>
-            ) : <p className="mt-1 text-[14px] text-slate-400">No address</p>}
+            ) : <p className="mt-1 text-[14px] text-slate-400">{T("noAddress")}</p>}
           </section>
 
           {/* Paso 5.8: recordatorio, respuesta del cliente y reseña en Google */}
           {j.customer_id && (
             <section className={`${card} p-5`}>
-              <h2 className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Customer notices</h2>
+              <h2 className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">{T("notices")}</h2>
               <CustomerNotices jobId={j.id} state={notices.state} reload={notices.reload} cancelled={cancelled} onToast={flash} />
             </section>
           )}
 
           <section className={`${card} p-5`}>
-            <div className="flex items-center justify-between"><h2 className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Collaborators</h2>
-              <Link prefetch={false} href="/dashboard/jobs/assign" className="text-[13px] font-semibold text-[#0f766e] hover:underline">Assign</Link></div>
-            {people.length === 0 ? <p className="mt-2 text-[14px] text-slate-500">Nobody yet.</p> : (
+            <div className="flex items-center justify-between"><h2 className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">{T("collabs")}</h2>
+              <Link prefetch={false} href="/dashboard/jobs/assign" className="text-[13px] font-semibold text-[#0f766e] hover:underline">{T("assignLink")}</Link></div>
+            {people.length === 0 ? <p className="mt-2 text-[14px] text-slate-500">{T("nobody")}</p> : (
               <ul className="mt-2 space-y-2">
                 {people.map((p) => (
                   <li key={p.user_id} className="flex items-center gap-2.5">
                     <TechDot t={p} size={32} ring={false} />
                     <span className="min-w-0 flex-1"><span className="block truncate text-[14.5px] font-semibold text-[#0b1f3a]">{p.name}</span>
-                      <span className="text-[12px] text-slate-500">{p.is_lead ? "Lead · " : ""}Visit {p.visits.join(", ")}</span></span>
+                      <span className="text-[12px] text-slate-500">{p.is_lead ? T("leadDot") : ""}{T("visitList", { list: p.visits.join(", ") })}</span></span>
                   </li>
                 ))}
               </ul>
@@ -431,11 +438,11 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
           </section>
 
           <section className={`${card} p-5`}>
-            <h2 className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Quote &amp; invoice</h2>
-            {data.prices_visible && Number(j.estimated_total ?? 0) > 0 && <p className="mt-1 text-[14px] text-slate-600">Estimated <b className="text-[#0b1f3a]">{usd(Number(j.estimated_total))}</b></p>}
+            <h2 className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">{T("quoteInv")}</h2>
+            {data.prices_visible && Number(j.estimated_total ?? 0) > 0 && <p className="mt-1 text-[14px] text-slate-600">{T.rich("estimated", { v: usd(Number(j.estimated_total)), b: (c) => <b className="text-[#0b1f3a]">{c}</b> })}</p>}
             <div className="mt-2 space-y-2">
-              {quote ? <DocLink href={`/dashboard/quotes/${quote.id}`} label={`Quote ${quote.number}`} status={quote.status} total={quote.total} /> : <p className="text-[13.5px] text-slate-400">No quote</p>}
-              {invoice ? <DocLink href={`/dashboard/invoices/${invoice.id}`} label={`Invoice ${invoice.number}`} status={invoice.status} total={invoice.total} paid={invoice.amount_paid} /> : <p className="text-[13.5px] text-slate-400">No invoice yet</p>}
+              {quote ? <DocLink href={`/dashboard/quotes/${quote.id}`} label={T("quoteN", { n: quote.number })} status={quote.status} total={quote.total} /> : <p className="text-[13.5px] text-slate-400">{T("noQuote")}</p>}
+              {invoice ? <DocLink href={`/dashboard/invoices/${invoice.id}`} label={T("invoiceN", { n: invoice.number })} status={invoice.status} total={invoice.total} paid={invoice.amount_paid} /> : <p className="text-[13.5px] text-slate-400">{T("noInvoice")}</p>}
             </div>
             {/* Paso 5.6: lo que se agregó al trabajo después de crear la factura */}
             <JobInvoice jobId={j.id} variant="office" refreshKey={invKey + data.lines.length} readOnly={cancelled} onToast={flash} onChanged={() => router.refresh()} />
@@ -445,8 +452,8 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
           {seeProfit && !cancelled && <JobProfit jobId={j.id} refreshKey={invKey + data.lines.length} />}
 
           <section className={`${card} p-5 text-[13px] text-slate-500`}>
-            <p>Created {when(j.created_at)}{j.created_by_name ? ` by ${j.created_by_name}` : ""}{j.source === "quote" ? " from a quote" : ""}.</p>
-            {data.equipment.length > 0 && <p className="mt-1">{data.equipment.filter((e) => e.is_active).length} equipment saved at this job site.</p>}
+            <p>{T("createdLine", { when: when(j.created_at) ?? "", by: j.created_by_name ? T("byX", { name: j.created_by_name }) : "", fromQuote: j.source === "quote" ? "yes" : "no" })}</p>
+            {data.equipment.length > 0 && <p className="mt-1">{T("equipSaved", { n: data.equipment.filter((e) => e.is_active).length })}</p>}
           </section>
         </aside>
       </div>
@@ -459,20 +466,22 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
       )}
       {serviceOpen && <AddServiceSheet companyId={companyId} jobId={j.id} onClose={() => setServiceOpen(false)} onDone={(m) => { setServiceOpen(false); flash(m); setInvKey((k) => k + 1); router.refresh(); }} />}
       {sr && <PdfViewer doc={sr} onClose={() => setSr(null)} />}
-      <JobChat jobId={j.id} companyId={companyId} title={`${j.customer_name || "Job"} · ${j.number}`} />
+      <JobChat jobId={j.id} companyId={companyId} title={`${j.customer_name || T("job")} · ${j.number}`} />
       {toast && <div role="status" className={`fixed bottom-5 left-1/2 z-[95] max-w-[92vw] -translate-x-1/2 rounded-xl px-4 py-2.5 text-[13.5px] font-medium text-white shadow-lg animate-[bp-pop-in_0.2s_ease-out] ${toast.err ? "bg-[#be123c]" : "bg-[#0b1f3a]"}`}>{toast.m}</div>}
     </div>
   );
 }
 
 function DocLink({ href, label, status, total, paid }: { href: string; label: string; status: string; total: number; paid?: number }) {
+  const T = useTranslations("jobDetail");
+  const { usd } = useJobsTx();
   return (
     <Link prefetch={false} href={href} className="group flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-2.5 transition-all hover:-translate-y-0.5 hover:border-[#14a39a] hover:shadow-[0_8px_18px_rgba(15,40,60,0.07)]">
       <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#eef8f5] text-[#0f766e] transition-transform duration-200 group-hover:-rotate-6 group-hover:scale-110">
         <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h4" /></svg>
       </span>
       <span className="min-w-0 flex-1"><span className="block truncate text-[14px] font-semibold text-[#0b1f3a]">{label}</span>
-        <span className="block text-[12px] capitalize text-slate-500">{status.replace(/_/g, " ")}{paid ? ` · ${usd(paid)} paid` : ""}</span></span>
+        <span className="block text-[12px] capitalize text-slate-500">{T.has(`doc.${status}` as never) ? T(`doc.${status}` as never) : status.replace(/_/g, " ")}{paid ? T("paid", { v: usd(paid) }) : ""}</span></span>
       <span className="text-[13.5px] font-semibold tabular-nums text-[#0b1f3a]">{usd(Number(total))}</span>
     </Link>
   );

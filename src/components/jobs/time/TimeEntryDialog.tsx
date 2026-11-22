@@ -4,16 +4,17 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { confirmDelete } from "@/lib/confirm";
 import { TeamMember, fromIsoDay, isoDay } from "@/lib/jobs";
-import { KIND_META, KIND_OPTIONS, TimeEntry, TimeKind, fmtClock, hm, timeError } from "@/lib/timesheets";
+import { KIND_META, KIND_OPTIONS, TimeEntry, TimeKind, fmtClock as fmtClockEn, hm } from "@/lib/timesheets";
 import { Modal, btnGhost, btnPrimary } from "@/components/sales/SalesBits";
 import DatePicker from "@/components/ui/DatePicker";
 import SelectMenu from "@/components/ui/SelectMenu";
 import SearchSelect from "@/components/ui/SearchSelect";
 
+import { useTranslations } from "next-intl";
+import { useJobsTx, useTimeError } from "@/i18n/useJobsTx";
 // Qué se abre: corregir un registro que ya existe, o agregar uno que faltó (para una persona y un día)
 export type TimeAsk = { entry: TimeEntry } | { add: { userId?: string; day?: string } };
 
-const REASONS = ["Forgot to clock out", "Forgot to clock in", "Forgot to press Start", "Phone had no signal", "Wrong time recorded"];
 const field = "w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-[15px] text-slate-800 focus:border-[#0f766e] focus:bg-white focus:outline-none focus:ring-4 focus:ring-[#14a39a]/15";
 const pad = (n: number) => String(n).padStart(2, "0");
 const hhmm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -24,6 +25,17 @@ const Label = ({ children, htmlFor }: { children: React.ReactNode; htmlFor?: str
 export default function TimeEntryDialog({ ask, companyId, team, canDelete, onClose, onDone }: {
   ask: TimeAsk | null; companyId: string; team: TeamMember[]; canDelete: boolean; onClose: () => void; onDone: (msg: string) => void;
 }) {
+  const t = useTranslations("timeEdit");
+  const tc = useTranslations("common");
+  const tk = useTranslations("timesheet");
+  const tl = useTranslations("jobsLib");
+  const tr = useTranslations("roles");
+  const jt = useJobsTx();
+  const timeError = useTimeError();
+  const fmtClock = (iso: string | null | undefined) => fmtClockEn(iso, jt.tag);
+  const REASONS = [t("r1"), t("r2"), t("r3"), t("r4"), t("r5")];
+  const kindOptions = KIND_OPTIONS.map((o) => ({ value: o.value, label: tl(`kindOpt.${o.value}` as never) }));
+  const kindLabel = (k: TimeKind) => tk(`kind.${k}` as never);
   const entry = ask && "entry" in ask ? ask.entry : null;
   const [userId, setUserId] = useState("");
   const [kind, setKind] = useState<TimeKind>("shift");
@@ -58,7 +70,7 @@ export default function TimeEntryDialog({ ask, companyId, team, canDelete, onClo
     return () => { live = false; };
   }, [ask, entry, kind, userId, companyId]);
 
-  const people = useMemo(() => team.map((m) => ({ value: m.user_id, label: m.full_name, hint: m.role === "technician" ? "" : m.role })), [team]);
+  const people = useMemo(() => team.map((m) => ({ value: m.user_id, label: m.full_name, hint: m.role === "technician" ? "" : tr.has(m.role as never) ? tr(m.role as never) : m.role })), [team]);
   if (!ask) return null;
 
   const startAt = start ? at(day, start) : null;
@@ -67,14 +79,14 @@ export default function TimeEntryDialog({ ask, companyId, team, canDelete, onClo
   if (overnight && endAt) endAt = new Date(endAt.getTime() + 86400000);
   const minutes = startAt && endAt ? (endAt.getTime() - startAt.getTime()) / 60000 : 0;
   const stillOpen = Boolean(entry && !entry.ended_at);
-  const who = team.find((m) => m.user_id === (entry?.user_id ?? userId))?.full_name ?? "this person";
+  const who = team.find((m) => m.user_id === (entry?.user_id ?? userId))?.full_name ?? t("thisPerson");
 
   async function save() {
     setError("");
-    if (!entry && !userId) return setError("Choose the team member.");
-    if (!startAt) return setError("Choose the start time.");
-    if (!endAt && !stillOpen) return setError("Choose the end time.");
-    if (!reason.trim()) return setError("Write why you are changing this time. The team member will see it.");
+    if (!entry && !userId) return setError(t("chooseMember"));
+    if (!startAt) return setError(t("chooseStart"));
+    if (!endAt && !stillOpen) return setError(t("chooseEnd"));
+    if (!reason.trim()) return setError(t("needReason"));
     setBusy(true);
     const { error: e } = await createClient().rpc("time_entry_save", {
       p_company: companyId, p_id: entry?.id ?? null, p_user: entry?.user_id ?? userId, p_kind: entry?.kind ?? kind,
@@ -82,74 +94,74 @@ export default function TimeEntryDialog({ ask, companyId, team, canDelete, onClo
     });
     setBusy(false);
     if (e) return setError(timeError(e));
-    onDone(entry ? `Time corrected for ${who}.` : `Time added for ${who}.`);
+    onDone(entry ? t("corrected", { who }) : t("added", { who }));
   }
 
   async function remove() {
     if (!entry) return;
     setError("");
-    if (!reason.trim()) return setError("Write why you are deleting this time. It stays in the history.");
+    if (!reason.trim()) return setError(t("needReasonDel"));
     if (!(await confirmDelete({
-      title: `Delete this ${KIND_META[entry.kind].label.toLowerCase()} entry?`, confirmLabel: "Delete time",
-      message: `${who} · ${fmtClock(entry.started_at)} – ${entry.ended_at ? fmtClock(entry.ended_at) : "open"}. The hours are removed from the timesheet. The history keeps who deleted it, when and why.`,
+      title: t("deleteQ", { kind: kindLabel(entry.kind).toLowerCase() }), confirmLabel: t("deleteTime"),
+      message: t("deleteMsg", { who, from: fmtClock(entry.started_at), to: entry.ended_at ? fmtClock(entry.ended_at) : t("open") }),
     }))) return;
     setBusy(true);
     const { error: e } = await createClient().rpc("time_entry_delete", { p_id: entry.id, p_reason: reason.trim() });
     setBusy(false);
     if (e) return setError(timeError(e));
-    onDone(`Time deleted for ${who}.`);
+    onDone(t("deleted", { who }));
   }
 
   return (
-    <Modal open onClose={onClose} title={entry ? "Correct time" : "Add time"}
+    <Modal open onClose={onClose} title={entry ? t("correctTime") : t("addTime")}
       footer={<>
-        <button type="button" onClick={save} disabled={busy} className={btnPrimary}>{busy ? "Saving…" : entry ? "Save correction" : "Add time"}</button>
-        <button type="button" onClick={onClose} className={btnGhost}>Cancel</button>
-        {entry && canDelete && <button type="button" onClick={remove} disabled={busy} className="ml-auto rounded-lg px-3 py-2.5 text-[14px] font-semibold text-[#be123c] transition-colors hover:bg-[#fff1f2] disabled:opacity-60">Delete entry</button>}
+        <button type="button" onClick={save} disabled={busy} className={btnPrimary}>{busy ? tc("saving") : entry ? t("saveCorrection") : t("addTime")}</button>
+        <button type="button" onClick={onClose} className={btnGhost}>{tc("cancel")}</button>
+        {entry && canDelete && <button type="button" onClick={remove} disabled={busy} className="ml-auto rounded-lg px-3 py-2.5 text-[14px] font-semibold text-[#be123c] transition-colors hover:bg-[#fff1f2] disabled:opacity-60">{t("deleteEntry")}</button>}
       </>}>
       <div className="space-y-4">
         {entry ? (
           <div className="flex items-center gap-3 rounded-xl px-3.5 py-3" style={{ background: KIND_META[entry.kind].soft }}>
             <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: KIND_META[entry.kind].color }} />
             <div className="min-w-0 text-[13.5px] leading-snug">
-              <p className="font-semibold text-[#0b1f3a]">{who} · {KIND_META[entry.kind].label}{entry.job_number ? ` · ${entry.job_number}` : ""}</p>
-              <p className="text-slate-600">Recorded: {new Date(entry.started_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}, {fmtClock(entry.started_at)} – {entry.ended_at ? fmtClock(entry.ended_at) : "still open"}</p>
+              <p className="font-semibold text-[#0b1f3a]">{who} · {kindLabel(entry.kind)}{entry.job_number ? ` · ${entry.job_number}` : ""}</p>
+              <p className="text-slate-600">{t("recorded", { day: jt.dayShort(new Date(entry.started_at)), from: fmtClock(entry.started_at), to: entry.ended_at ? fmtClock(entry.ended_at) : t("stillOpen") })}</p>
             </div>
           </div>
         ) : (
           <>
-            <div><Label>Team member</Label><SearchSelect value={userId} options={people} onChange={setUserId} placeholder="Search a team member" ariaLabel="Team member" /></div>
-            <div><Label>What kind of time</Label><SelectMenu value={kind} options={KIND_OPTIONS} onChange={(v) => setKind(v as TimeKind)} ariaLabel="Kind of time" /></div>
+            <div><Label>{t("member")}</Label><SearchSelect value={userId} options={people} onChange={setUserId} placeholder={t("searchMember")} ariaLabel={t("member")} /></div>
+            <div><Label>{t("kindQ")}</Label><SelectMenu value={kind} options={kindOptions} onChange={(v) => setKind(v as TimeKind)} ariaLabel={t("kindAria")} /></div>
             {kind !== "shift" && (
-              <div><Label>Job <span className="font-normal text-slate-400">(optional)</span></Label>
-                <SearchSelect value={jobId} onChange={setJobId} ariaLabel="Job"
-                  placeholder={!userId ? "Choose the team member first" : jobs.length ? "Search a job of this person" : "No jobs found for this person"}
-                  options={jobs.map((j) => ({ value: j.id, label: `${j.number} · ${j.customer_name || "No customer"}` }))} />
+              <div><Label>{t("job")} <span className="font-normal text-slate-400">{t("optional")}</span></Label>
+                <SearchSelect value={jobId} onChange={setJobId} ariaLabel={t("job")}
+                  placeholder={!userId ? t("memberFirst") : jobs.length ? t("searchJob") : t("noJobs")}
+                  options={jobs.map((j) => ({ value: j.id, label: `${j.number} · ${j.customer_name || t("noCustomer")}` }))} />
               </div>
             )}
           </>
         )}
 
-        <div><Label>Day</Label><DatePicker value={day} onChange={(v) => v && setDay(v)} /></div>
+        <div><Label>{t("day")}</Label><DatePicker value={day} onChange={(v) => v && setDay(v)} /></div>
         <div className="grid grid-cols-2 gap-3">
-          <div><Label htmlFor="te-start">{kind === "shift" ? "Clock in" : "Start"}</Label><input id="te-start" type="time" value={start} onChange={(e) => setStart(e.target.value)} className={field} /></div>
-          <div><Label htmlFor="te-end">{kind === "shift" ? "Clock out" : "End"}</Label><input id="te-end" type="time" value={end} onChange={(e) => setEnd(e.target.value)} className={field} /></div>
+          <div><Label htmlFor="te-start">{kind === "shift" ? t("clockIn") : t("start")}</Label><input id="te-start" type="time" value={start} onChange={(e) => setStart(e.target.value)} className={field} /></div>
+          <div><Label htmlFor="te-end">{kind === "shift" ? t("clockOut") : t("end")}</Label><input id="te-end" type="time" value={end} onChange={(e) => setEnd(e.target.value)} className={field} /></div>
         </div>
         <p className="-mt-2 text-[12.5px] text-slate-500">
-          {!end && stillOpen ? "No end time: it keeps running. Fill it in to close a missed clock-out."
-            : minutes > 0 ? <>Total: <b className="text-[#0b1f3a]">{hm(minutes)}</b>{overnight ? " · ends the next day" : ""}</> : " "}
+          {!end && stillOpen ? t("noEnd")
+            : minutes > 0 ? <>{t.rich("total", { t: hm(minutes), b: (c) => <b className="text-[#0b1f3a]">{c}</b> })}{overnight ? t("nextDay") : ""}</> : " "}
         </p>
 
         <div>
-          <Label htmlFor="te-reason">Reason <span className="text-red-500">*</span></Label>
+          <Label htmlFor="te-reason">{t("reason")} <span className="text-red-500">*</span></Label>
           <div className="mb-2 flex flex-wrap gap-1.5">
             {REASONS.map((r) => (
               <button key={r} type="button" onClick={() => setReason(r)}
                 className={`rounded-full border px-2.5 py-1 text-[12.5px] font-medium transition-colors ${reason === r ? "border-[#14a39a] bg-[#e9f7f4] text-[#0f766e]" : "border-slate-200 bg-white text-slate-600 hover:border-[#14a39a]"}`}>{r}</button>
             ))}
           </div>
-          <textarea id="te-reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why is this time being changed?" className={field} />
-          <p className="mt-1 text-[12px] text-slate-500">{who === "this person" ? "The team member" : who} sees this note on their timesheet, with your name{entry ? " and the hours recorded before" : ""}.</p>
+          <textarea id="te-reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t("reasonPh")} className={field} />
+          <p className="mt-1 text-[12px] text-slate-500">{t("seesNote", { who: who === t("thisPerson") ? t("theMember") : who, before: entry ? "yes" : "no" })}</p>
         </div>
         {error && <p role="alert" className="rounded-lg bg-red-50 px-3.5 py-2.5 text-[13.5px] text-red-700">{error}</p>}
       </div>

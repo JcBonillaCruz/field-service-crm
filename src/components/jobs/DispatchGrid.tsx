@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { CalVisit, addDays, barColor, fmtHour, fmtTime, isoDay, minutesOf, sameDay, tint } from "@/lib/jobs";
+import { CalVisit, addDays, barColor, isoDay, minutesOf, sameDay, tint } from "@/lib/jobs";
 import { Col, GridApi, Handlers, Preview } from "@/components/jobs/cal-shared";
 import { StatusArt, TechDot, TechDots } from "@/components/jobs/EventBar";
 
+import { useTranslations } from "next-intl";
+import { useJobsTx } from "@/i18n/useJobsTx";
 // =====================================================================
 // Dispatch (como Housecall Pro): una FILA por técnico, las horas de lado a lado y los 7 días de la semana.
 // Se arrastra a la derecha/izquierda para cambiar la hora o el día, y arriba/abajo para cambiar de técnico.
@@ -25,6 +27,9 @@ export default function DispatchGrid({ days, rows, visits, dStart, dEnd, preview
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const area = useRef<HTMLDivElement>(null);
+  const tc = useTranslations("common");
+  const ts = useTranslations("sched");
+  const { hour: fmtHour, time: fmtTime } = useJobsTx();
   const [small, setSmall] = useState(false);
   useEffect(() => { const f = () => setSmall(window.innerWidth < 640); f(); window.addEventListener("resize", f); return () => window.removeEventListener("resize", f); }, []);
   const { HOUR_W, LANE_H, NAME_W, PAD } = big ? (small ? SIZE.bigSmall : SIZE.big) : SIZE.week;
@@ -98,7 +103,7 @@ export default function DispatchGrid({ days, rows, visits, dStart, dEnd, preview
                 <div className={`items-baseline gap-1.5 px-3 pb-1 pt-2 ${big && days.length === 1 ? "hidden" : "flex"}`}>
                   <span className={`text-[17px] font-semibold ${today ? "text-[#0f766e]" : "text-[#0b1f3a]"}`}>{String(d.getDate()).padStart(2, "0")}</span>
                   <span className="text-[12px] text-slate-500">{d.toLocaleDateString("en-US", { weekday: "short" })}</span>
-                  {today && <span className="rounded-full bg-[#0f766e] px-1.5 text-[10px] font-semibold text-white">Today</span>}
+                  {today && <span className="rounded-full bg-[#0f766e] px-1.5 text-[10px] font-semibold text-white">{tc("today")}</span>}
                 </div>
                 <div className="flex">
                   {hours.map((m) => <span key={m} className={`shrink-0 border-l border-slate-100 ${big ? "flex h-11 items-center pl-3 text-[12.5px] font-medium text-slate-500" : "pb-1.5 pl-1 text-[10.5px] text-slate-400"}`} style={{ width: HOUR_W }}>{fmtHour(m)}</span>)}
@@ -149,7 +154,7 @@ export default function DispatchGrid({ days, rows, visits, dStart, dEnd, preview
                       style={{ left: left + 1, width, top: p.lane * LANE_H + PAD, height: LANE_H - (big ? 8 : 6), ...(p.v.visit_status === "completed" ? { background: "#f1f5f9", borderLeftColor: "#16a34a", color: "#64748b" } : { background: tint(color, big ? 0.16 : 0.13), borderLeftColor: color }) }}>
                       <span className="min-w-0 flex-1">
                         <span className={`block truncate font-semibold leading-tight ${big ? "text-[13px] sm:text-[14px]" : "text-[12px]"}`}>{p.v.customer_name || p.v.number}</span>
-                        {width > 90 && <span className={`block truncate leading-tight text-slate-500 ${big ? "mt-0.5 text-[11.5px] sm:text-[12px]" : "text-[10.5px]"}`}>{fmtTime(new Date(p.v.starts_at))} · {p.v.type_name ?? "Job"}</span>}
+                        {width > 90 && <span className={`block truncate leading-tight text-slate-500 ${big ? "mt-0.5 text-[11.5px] sm:text-[12px]" : "text-[10.5px]"}`}>{fmtTime(new Date(p.v.starts_at))} · {p.v.type_name ?? ts("job")}</span>}
                       </span>
                       <span className="flex shrink-0 items-center gap-1"><StatusArt s={p.v.visit_status} size={big ? 30 : 26} />{width > 90 && p.v.visit_status !== "completed" && (!big || p.v.techs.length > 1) && <TechDots techs={big ? p.v.techs.filter((t) => t.user_id !== row.techId) : p.v.techs} size={big ? 20 : 16} max={big ? 2 : 1} />}</span>
                       {!done && (

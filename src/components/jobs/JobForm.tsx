@@ -11,10 +11,13 @@ import PayerPicker from "@/components/expenses/PayerPicker";
 import type { PayerOption } from "@/components/expenses/ExpensesWorkspace";
 import { AfterHoursMoon, TechDot } from "@/components/jobs/EventBar";
 import {
-  ARRIVAL_WINDOWS, ChecklistTemplate, JobSettings, JobTag, JobType, PRIORITIES, Priority, SiteAddress, TeamMember,
-  addressLine, afterHoursFee, afterHoursOf, arrivalLabel, atMinute, businessHoursLabel, dayStart, durationLabel, fmtHour, fromIsoDay, isoDay, jobError, minutesOf, receivesJobs, timeToMin,
+  ARRIVAL_WINDOWS, ChecklistTemplate, JobSettings, JobTag, JobType, Priority, SiteAddress, TeamMember,
+  addressLine, afterHoursFee, afterHoursOf, atMinute, dayStart, durationLabel, fromIsoDay, isoDay, minutesOf, receivesJobs, timeToMin,
 } from "@/lib/jobs";
 
+import { useTranslations } from "next-intl";
+import { useJobsTx } from "@/i18n/useJobsTx";
+import { useJobError } from "@/i18n/useFmt";
 type Addr = { id: string; label: string | null; street: string | null; unit: string | null; city: string | null; state: string | null; zip: string | null; is_primary: boolean };
 type CheckRow = { id?: string; label: string; required: boolean; done?: boolean };
 export type JobFormInitial = {
@@ -26,12 +29,18 @@ export type JobFormInitial = {
 };
 
 const TIMES = Array.from({ length: 96 }, (_, i) => i * 15);
-const timeLabel = (m: number) => `${fmtHour(m).replace(" ", ":" + String(m % 60).padStart(2, "0") + " ")}`;
 
 export default function JobForm({ companyId, settings, types, tags, team, templates, customers: initialCustomers, initial, defaults }: {
   companyId: string; settings: JobSettings; types: JobType[]; tags: JobTag[]; team: TeamMember[]; templates: ChecklistTemplate[]; customers: PayerOption[];
   initial?: JobFormInitial; defaults?: { start?: string; end?: string; tech?: string; unscheduled?: boolean; customer?: string };
 }) {
+  const t = useTranslations("jobForm");
+  const tc = useTranslations("common");
+  const jt = useJobsTx();
+  const jobError = useJobError();
+  const { arrival: arrivalLabel, businessHours: businessHoursLabel } = jt;
+  const PRIORITIES = jt.priorities;
+  const timeLabel = (m: number) => jt.time(new Date(2000, 0, 1, 0, m));
   const router = useRouter();
   const editing = Boolean(initial);
   const [customers, setCustomers] = useState(initialCustomers);
@@ -62,7 +71,7 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
   const [startMin, setStartMin] = useState(s0 ? minutesOf(s0) : fallbackStart);
   const [endMin, setEndMin] = useState(e0 ? (minutesOf(e0) || 24 * 60 - 15) : (s0 ? minutesOf(s0) : fallbackStart) + settings.default_duration_min);
   const [arrival, setArrival] = useState(visit?.arrival_window_min ?? settings.default_arrival_window_min);
-  const [techIds, setTechIds] = useState<string[]>(visit?.tech_ids?.length ? [visit.lead_id ?? visit.tech_ids[0], ...visit.tech_ids.filter((t) => t !== (visit.lead_id ?? visit.tech_ids[0]))] : defaults?.tech ? [defaults.tech] : []);
+  const [techIds, setTechIds] = useState<string[]>(visit?.tech_ids?.length ? [visit.lead_id ?? visit.tech_ids[0], ...visit.tech_ids.filter((x) => x !== (visit.lead_id ?? visit.tech_ids[0]))] : defaults?.tech ? [defaults.tech] : []);
 
   const [saving, setSaving] = useState(false);
   // Avisos: técnicos (push + correo) y, si se pide, el cliente
@@ -85,7 +94,7 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
     const rest = techFirst.filter((m) => !techIds.includes(m.user_id) && (!q || m.full_name.toLowerCase().includes(q))).slice(0, q ? 12 : 6);
     return [...sel, ...rest];
   }, [manyTechs, techFirst, techQ, techIds]);
-  const activeTypes = types.filter((t) => t.is_active || t.id === typeId);
+  const activeTypes = types.filter((x) => x.is_active || x.id === typeId);
 
   // Direcciones (Job Sites) del cliente elegido
   useEffect(() => {
@@ -103,34 +112,34 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
 
   function pickType(id: string) {
     setTypeId(id);
-    const t = types.find((x) => x.id === id);
-    if (t && !editing) setEndMin(Math.min(24 * 60 - 15, startMin + t.default_duration_min));
+    const ty = types.find((x) => x.id === id);
+    if (ty && !editing) setEndMin(Math.min(24 * 60 - 15, startMin + ty.default_duration_min));
   }
   function pickStart(m: number) { const dur = endMin - startMin; setStartMin(m); setEndMin(Math.min(24 * 60 - 15, m + Math.max(15, dur))); }
   function toggleTech(id: string) { setTechIds((l) => (l.includes(id) ? l.filter((x) => x !== id) : [...l, id])); }
   function makeLead(id: string) { setTechIds((l) => [id, ...l.filter((x) => x !== id)]); }
   function addCheck() { const v = newCheck.trim(); if (!v) return; setChecklist((l) => [...l, { label: v, required: true }]); setNewCheck(""); }
   function addTemplate(id: string) {
-    const t = templates.find((x) => x.id === id); if (!t) return;
-    setChecklist((l) => [...l, ...t.items.filter((i) => i.label?.trim() && !l.some((x) => x.label === i.label)).map((i) => ({ label: i.label, required: i.required !== false }))]);
+    const tp = templates.find((x) => x.id === id); if (!tp) return;
+    setChecklist((l) => [...l, ...tp.items.filter((i) => i.label?.trim() && !l.some((x) => x.label === i.label)).map((i) => ({ label: i.label, required: i.required !== false }))]);
   }
 
   async function saveSite(): Promise<string | null> {
     if (!newSite || !customerId) return addressId || null;
-    if (!newSite.street.trim() || !newSite.city.trim()) { setError("Enter at least the street and city of the job site."); return null; }
+    if (!newSite.street.trim() || !newSite.city.trim()) { setError(t("eSite")); return null; }
     const { data, error: e } = await createClient().from("customer_addresses").insert({
-      customer_id: customerId, company_id: companyId, label: "Job site", street: newSite.street.trim(), unit: newSite.unit.trim() || null,
+      customer_id: customerId, company_id: companyId, label: t("jobSiteLabel"), street: newSite.street.trim(), unit: newSite.unit.trim() || null,
       city: newSite.city.trim(), state: newSite.state.trim().toUpperCase() || null, zip: newSite.zip.trim() || null, country: "US", is_primary: addresses.length === 0,
     }).select("id").single();
-    if (e || !data) { setError("The job site couldn't be saved. Try again."); return null; }
+    if (e || !data) { setError(t("eSiteSave")); return null; }
     return data.id as string;
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!customerId && !title.trim()) return setError("Choose a customer or write a short description.");
-    if (scheduleNow && endMin <= startMin) return setError("The end time must be after the start time.");
-    if (estimate && Number.isNaN(Number(estimate))) return setError("The estimate must be a number.");
+    if (!customerId && !title.trim()) return setError(t("eCustomer"));
+    if (scheduleNow && endMin <= startMin) return setError(t("eTime"));
+    if (estimate && Number.isNaN(Number(estimate))) return setError(t("eEstimate"));
     setSaving(true); setError("");
     const siteId = await saveSite();
     if (newSite && !siteId) { setSaving(false); return; }
@@ -169,7 +178,7 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
     if (upErr) { setSaving(false); return setError(jobError(upErr)); }
 
     // Etiquetas
-    const gone = job.tag_ids.filter((t) => !tagIds.includes(t)), added = tagIds.filter((t) => !job.tag_ids.includes(t));
+    const gone = job.tag_ids.filter((x) => !tagIds.includes(x)), added = tagIds.filter((x) => !job.tag_ids.includes(x));
     if (gone.length) await sb.from("job_tag_links").delete().eq("job_id", job.id).in("tag_id", gone);
     if (added.length) await sb.from("job_tag_links").insert(added.map((tag_id) => ({ job_id: job.id, tag_id })));
     // Checklist
@@ -200,7 +209,7 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
     if (!visitLocked) {
       const was = visit?.tech_ids ?? [];
       const moved = scheduleNow && (!visit?.starts_at || new Date(visit.starts_at).getTime() !== starts.getTime() || new Date(visit.ends_at ?? 0).getTime() !== ends.getTime());
-      const assigned = techIds.filter((t) => !was.includes(t)), unassigned = was.filter((t) => !techIds.includes(t));
+      const assigned = techIds.filter((x) => !was.includes(x)), unassigned = was.filter((x) => !techIds.includes(x));
       if (assigned.length || unassigned.length || moved) {
         await notify({ ...(visit ? { visitId: visit.id } : { jobId: job.id }), assigned, unassigned, moved, notifyCustomer: Boolean(moved && visit?.starts_at && notifyCust && customerId) });
       }
@@ -211,7 +220,7 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
 
   async function cancelJob() {
     if (!initial) return;
-    if (!cancelReason.trim()) return setError("Write why the job is cancelled.");
+    if (!cancelReason.trim()) return setError(t("eCancel"));
     setSaving(true);
     const { error: err } = await createClient().rpc("job_cancel", { p_job: initial.id, p_reason: cancelReason.trim() });
     setSaving(false);
@@ -232,63 +241,63 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
 
   return (
     <form onSubmit={submit} noValidate autoComplete="off" className="flex min-h-[calc(100vh-4rem)] min-w-0 flex-col overflow-x-hidden bg-white">
-      <FormHeader title={editing ? `Edit Job ${initial!.number}` : "New Job"} closeHref={closeHref} />
+      <FormHeader title={editing ? t("editTitle", { n: initial!.number }) : t("newTitle")} closeHref={closeHref} />
 
       {initial?.cancelled_at && (
         <div className="mx-5 mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 sm:mx-8">
-          <p className="text-[14px] text-slate-700"><b className="font-semibold">Cancelled.</b> {initial.cancel_reason}</p>
-          <button type="button" onClick={restoreJob} className="ml-auto rounded-lg border border-[#0f766e] px-3 py-1.5 text-[13px] font-semibold text-[#0f766e] hover:bg-[#f3fbf8]">Restore job</button>
+          <p className="text-[14px] text-slate-700"><b className="font-semibold">{t("cancelledB")}</b> {initial.cancel_reason}</p>
+          <button type="button" onClick={restoreJob} className="ml-auto rounded-lg border border-[#0f766e] px-3 py-1.5 text-[13px] font-semibold text-[#0f766e] hover:bg-[#f3fbf8]">{t("restore")}</button>
         </div>
       )}
 
       <div className="space-y-6 border-b border-slate-200 px-5 py-7 sm:px-8">
         <div className="grid max-w-[1000px] grid-cols-[minmax(0,1fr)] gap-6">
-          <FormRow label="Customer" hint="Search your customers or add a new one here. It's saved in Customers too." alignTop width="max-w-[560px]">
+          <FormRow label={t("customer")} hint={t("customerHint")} alignTop width="max-w-[560px]">
             <PayerPicker companyId={companyId} people={customers} customerId={customerId} name={typed}
               onPick={(c) => setCustomerId(c?.id ?? null)} onType={setTyped}
-              onCreated={(c) => { setCustomers((l) => [c, ...l]); setCustomerId(c.id); }} hint="Search by name, phone or email. Not there? Tap New to add it." />
+              onCreated={(c) => { setCustomers((l) => [c, ...l]); setCustomerId(c.id); }} hint={t("pickerHint")} />
           </FormRow>
 
           {customerId && (
-            <FormRow label="Job Site" hint="The house or building where the work happens. Parts, equipment and readings stay linked to this address." alignTop width="max-w-[560px]">
+            <FormRow label={t("site")} hint={t("siteHint")} alignTop width="max-w-[560px]">
               {newSite ? (
                 <div className="rounded-xl border border-[#bfe7de] bg-[#f6fbfa] p-3.5 animate-[bp-pop-in_0.2s_ease-out]">
                   <div className="grid gap-2.5 sm:grid-cols-6">
-                    <input autoFocus value={newSite.street} onChange={(e) => setNewSite({ ...newSite, street: e.target.value })} placeholder="Street" className={`${inputClass} sm:col-span-4`} />
-                    <input value={newSite.unit} onChange={(e) => setNewSite({ ...newSite, unit: e.target.value })} placeholder="Apt / Unit" className={`${inputClass} sm:col-span-2`} />
-                    <input value={newSite.city} onChange={(e) => setNewSite({ ...newSite, city: e.target.value })} placeholder="City" className={`${inputClass} sm:col-span-3`} />
-                    <input value={newSite.state} onChange={(e) => setNewSite({ ...newSite, state: e.target.value })} placeholder="State" maxLength={2} className={`${inputClass} uppercase sm:col-span-1`} />
-                    <input value={newSite.zip} onChange={(e) => setNewSite({ ...newSite, zip: e.target.value })} placeholder="ZIP" inputMode="numeric" className={`${inputClass} sm:col-span-2`} />
+                    <input autoFocus value={newSite.street} onChange={(e) => setNewSite({ ...newSite, street: e.target.value })} placeholder={t("street")} className={`${inputClass} sm:col-span-4`} />
+                    <input value={newSite.unit} onChange={(e) => setNewSite({ ...newSite, unit: e.target.value })} placeholder={t("unit")} className={`${inputClass} sm:col-span-2`} />
+                    <input value={newSite.city} onChange={(e) => setNewSite({ ...newSite, city: e.target.value })} placeholder={t("city")} className={`${inputClass} sm:col-span-3`} />
+                    <input value={newSite.state} onChange={(e) => setNewSite({ ...newSite, state: e.target.value })} placeholder={t("state")} maxLength={2} className={`${inputClass} uppercase sm:col-span-1`} />
+                    <input value={newSite.zip} onChange={(e) => setNewSite({ ...newSite, zip: e.target.value })} placeholder={t("zip")} inputMode="numeric" className={`${inputClass} sm:col-span-2`} />
                   </div>
                   <div className="mt-2.5 flex items-center gap-2">
-                    <span className="text-[12px] text-slate-500">Saved to the customer when you save the job.</span>
-                    <button type="button" onClick={() => setNewSite(null)} className="ml-auto rounded-lg px-3 py-1.5 text-[13px] font-medium text-slate-500 hover:bg-white">Cancel</button>
+                    <span className="text-[12px] text-slate-500">{t("savedToCustomer")}</span>
+                    <button type="button" onClick={() => setNewSite(null)} className="ml-auto rounded-lg px-3 py-1.5 text-[13px] font-medium text-slate-500 hover:bg-white">{tc("cancel")}</button>
                   </div>
                 </div>
               ) : (
                 <div className="flex gap-2">
                   <div className="min-w-0 flex-1">
-                    <SelectMenu value={addressId} ariaLabel="Job site" placeholder={addresses.length ? "Choose a job site" : "No address on file"}
+                    <SelectMenu value={addressId} ariaLabel={t("jobSiteLabel")} placeholder={addresses.length ? t("chooseSite") : t("noAddr")}
                       options={addresses.map((a) => ({ value: a.id, label: `${a.label ? `${a.label} · ` : ""}${addressLine(a)}` }))} onChange={setAddressId} />
                   </div>
                   <button type="button" onClick={() => setNewSite({ street: "", unit: "", city: "", state: "TX", zip: "" })}
-                    className="shrink-0 rounded-lg border border-[#0f766e]/30 bg-[#e9f7f4] px-3 text-[13.5px] font-semibold text-[#0f766e] transition-all hover:-translate-y-0.5 hover:border-[#0f766e]">+ Job site</button>
+                    className="shrink-0 rounded-lg border border-[#0f766e]/30 bg-[#e9f7f4] px-3 text-[13.5px] font-semibold text-[#0f766e] transition-all hover:-translate-y-0.5 hover:border-[#0f766e]">{t("addSite")}</button>
                 </div>
               )}
             </FormRow>
           )}
 
-          <FormRow label="Job type" width="max-w-[340px]">
-            <SelectMenu value={typeId} ariaLabel="Job type" placeholder="Choose a type"
-              options={[{ value: "", label: "No type" }, ...activeTypes.map((t) => ({ value: t.id, label: `${t.name}${t.form_kind === "tune_up" ? " (Tune-Up form)" : ""}` }))]} onChange={pickType} />
+          <FormRow label={t("type")} width="max-w-[340px]">
+            <SelectMenu value={typeId} ariaLabel={t("type")} placeholder={t("chooseType")}
+              options={[{ value: "", label: t("noType") }, ...activeTypes.map((x) => ({ value: x.id, label: `${x.name}${x.form_kind === "tune_up" ? t("tuneForm") : ""}` }))]} onChange={pickType} />
           </FormRow>
-          <FormRow label="Short description" htmlFor="j-title" hint="Shows on the calendar bar and the hover card. Example: AC not cooling upstairs." width="max-w-[560px]">
-            <input id="j-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="What needs to be done" className={inputClass} />
+          <FormRow label={t("short")} htmlFor="j-title" hint={t("shortHint")} width="max-w-[560px]">
+            <input id="j-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder={t("shortPh")} className={inputClass} />
           </FormRow>
-          <FormRow label="Details" htmlFor="j-desc" alignTop width="max-w-[560px]">
-            <textarea id="j-desc" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="Anything the team should know about this job" className={`${inputClass} resize-y`} />
+          <FormRow label={t("details")} htmlFor="j-desc" alignTop width="max-w-[560px]">
+            <textarea id="j-desc" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder={t("detailsPh")} className={`${inputClass} resize-y`} />
           </FormRow>
-          <FormRow label="Priority" width="max-w-[560px]">
+          <FormRow label={t("priority")} width="max-w-[560px]">
             <div className="flex flex-wrap gap-2">
               {PRIORITIES.map((p) => (
                 <button key={p.value} type="button" onClick={() => setPriority(p.value)}
@@ -299,22 +308,22 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
             </div>
           </FormRow>
           {tags.length > 0 && (
-            <FormRow label="Tags" alignTop width="max-w-[560px]">
+            <FormRow label={t("tags")} alignTop width="max-w-[560px]">
               <div className="flex flex-wrap gap-2">
-                {tags.map((t) => {
-                  const on = tagIds.includes(t.id);
+                {tags.map((tg) => {
+                  const on = tagIds.includes(tg.id);
                   return (
-                    <button key={t.id} type="button" onClick={() => setTagIds((l) => (on ? l.filter((x) => x !== t.id) : [...l, t.id]))} aria-pressed={on}
+                    <button key={tg.id} type="button" onClick={() => setTagIds((l) => (on ? l.filter((x) => x !== tg.id) : [...l, tg.id]))} aria-pressed={on}
                       className="rounded-full border px-3 py-1 text-[13px] font-semibold transition-all hover:-translate-y-px"
-                      style={on ? { background: t.color, borderColor: t.color, color: "#fff" } : { borderColor: `${t.color}55`, color: t.color, background: `${t.color}10` }}>
-                      {t.name}
+                      style={on ? { background: tg.color, borderColor: tg.color, color: "#fff" } : { borderColor: `${tg.color}55`, color: tg.color, background: `${tg.color}10` }}>
+                      {tg.name}
                     </button>
                   );
                 })}
               </div>
             </FormRow>
           )}
-          <FormRow label="Estimate" htmlFor="j-est" hint="Expected amount. Services and parts are added on the job; quotes bring their own lines." width="max-w-[220px]">
+          <FormRow label={t("estimate")} htmlFor="j-est" hint={t("estimateHint")} width="max-w-[220px]">
             <div className="relative">
               <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">$</span>
               <input id="j-est" inputMode="decimal" value={estimate} onChange={(e) => setEstimate(e.target.value.replace(/[^\d.]/g, ""))} placeholder="0.00" className={`${inputClass} pl-7`} />
@@ -326,60 +335,60 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
       {/* Agenda */}
       <div className="border-b border-slate-200 px-5 py-7 sm:px-8">
         <div className="max-w-[1000px]">
-          <SectionTitle>Schedule</SectionTitle>
+          <SectionTitle>{t("schedule")}</SectionTitle>
           {visitLocked ? (
-            <p className="rounded-xl bg-slate-50 px-4 py-3 text-[14px] text-slate-600">Visit {visit!.visit_no} is already underway, so its time can&apos;t be changed here. The technician controls it from the app.</p>
+            <p className="rounded-xl bg-slate-50 px-4 py-3 text-[14px] text-slate-600">{t("locked", { n: visit!.visit_no })}</p>
           ) : (
             <div className="grid gap-6">
               <div className="flex w-fit rounded-lg bg-slate-100 p-0.5">
-                {[[true, "Schedule now"], [false, "Leave unscheduled"]].map(([v, l]) => (
+                {[[true, t("schedNow")], [false, t("leaveUn")]].map(([v, l]) => (
                   <button key={String(v)} type="button" onClick={() => setScheduleNow(v as boolean)}
                     className={`rounded-md px-3.5 py-1.5 text-[13.5px] font-semibold transition-all ${scheduleNow === v ? "bg-white text-[#0f766e] shadow-sm" : "text-slate-500 hover:text-[#0b1f3a]"}`}>{l as string}</button>
                 ))}
               </div>
               {scheduleNow ? (
                 <>
-                  <FormRow label="Date" width="max-w-[260px]"><DatePicker value={date} onChange={setDate} /></FormRow>
-                  <FormRow label="Time" width="max-w-[460px]">
+                  <FormRow label={t("date")} width="max-w-[260px]"><DatePicker value={date} onChange={setDate} /></FormRow>
+                  <FormRow label={t("time")} width="max-w-[460px]">
                     <div className="flex items-center gap-2">
-                      <div className="flex-1"><SelectMenu value={String(startMin)} ariaLabel="Start time" options={timeOpts} onChange={(v) => pickStart(Number(v))} /></div>
-                      <span className="text-slate-400">to</span>
-                      <div className="flex-1"><SelectMenu value={String(endMin)} ariaLabel="End time" options={timeOpts.filter((o) => Number(o.value) > startMin)} onChange={(v) => setEndMin(Number(v))} /></div>
+                      <div className="flex-1"><SelectMenu value={String(startMin)} ariaLabel={t("startTime")} options={timeOpts} onChange={(v) => pickStart(Number(v))} /></div>
+                      <span className="text-slate-400">{t("to")}</span>
+                      <div className="flex-1"><SelectMenu value={String(endMin)} ariaLabel={t("endTime")} options={timeOpts.filter((o) => Number(o.value) > startMin)} onChange={(v) => setEndMin(Number(v))} /></div>
                     </div>
-                    <p className="mt-1 text-[12px] text-slate-400">{endMin > startMin ? `${durationLabel(endMin - startMin)} on site` : ""}</p>
+                    <p className="mt-1 text-[12px] text-slate-400">{endMin > startMin ? t("onSite", { d: durationLabel(endMin - startMin) }) : ""}</p>
                     {afterHoursOf(atMinute(fromIsoDay(date), startMin), atMinute(fromIsoDay(date), endMin), settings) && (
                       <div className="mt-2 flex items-start gap-2.5 rounded-xl border border-[#c7d2fe] bg-[#f5f6ff] px-3 py-2.5 text-[13px] text-[#3730a3] animate-[bp-fade_0.2s_ease-out]">
                         <AfterHoursMoon size={22} />
-                        <span><b>After hours</b> — outside your business hours ({businessHoursLabel(settings)}). The owner gets a notice{afterHoursFee(settings, 100) ? ` and can charge the after-hours fee (${afterHoursFee(settings, 100)!.label})` : " and decides if an extra fee applies"}.</span>
+                        <span>{t.rich("afterHours", { hours: businessHoursLabel(settings), fee: afterHoursFee(settings, 100)?.label ?? "none", b: (c) => <b>{c}</b> })}</span>
                       </div>
                     )}
                   </FormRow>
                 </>
               ) : (
-                <p className="-mt-2 text-[13.5px] text-slate-500">The job goes to the <b className="font-semibold text-[#0b1f3a]">To schedule</b> panel. Drag it onto the calendar when you have a date.</p>
+                <p className="-mt-2 text-[13.5px] text-slate-500">{t.rich("toSchedule", { b: (c) => <b className="font-semibold text-[#0b1f3a]">{c}</b> })}</p>
               )}
               {editing && visit?.starts_at && scheduleNow && customerId && settings.notify_customer !== "never" && (
-                <FormRow label="Customer" width="max-w-[560px]">
+                <FormRow label={t("customer")} width="max-w-[560px]">
                   <label className="flex cursor-pointer items-center gap-2.5 text-[14px] text-slate-700">
                     <input type="checkbox" checked={notifyCust} onChange={(e) => setNotifyCust(e.target.checked)} className="h-4 w-4 accent-[#0f766e]" />
-                    Email the customer if the date or time changes
+                    {t("emailCust")}
                   </label>
                 </FormRow>
               )}
-              <FormRow label="Arrival window" hint="What the customer is told: the technician arrives between the start time and the end of this window." width="max-w-[560px]">
+              <FormRow label={t("arrival")} hint={t("arrivalHint")} width="max-w-[560px]">
                 <div className="flex flex-wrap gap-2">
                   {ARRIVAL_WINDOWS.map((m) => (
                     <button key={m} type="button" onClick={() => setArrival(m)}
                       className={`rounded-lg border px-3 py-1.5 text-[13.5px] font-medium transition-all ${arrival === m ? "border-[#0f766e] bg-[#f3fbf8] text-[#0b1f3a]" : "border-slate-200 text-slate-600 hover:border-slate-300"}`}>{arrivalLabel(m)}</button>
                   ))}
                 </div>
-                {scheduleNow && arrival > 0 && <p className="mt-1 text-[12px] text-slate-400">Customer sees: arriving between {timeLabel(startMin)} and {timeLabel(Math.min(24 * 60 - 15, startMin + arrival))}</p>}
+                {scheduleNow && arrival > 0 && <p className="mt-1 text-[12px] text-slate-400">{t("custSees", { a: timeLabel(startMin), b: timeLabel(Math.min(24 * 60 - 15, startMin + arrival)) })}</p>}
               </FormRow>
-              <FormRow label="Technicians" hint="The first one is the lead: their color paints the bar on the calendar." alignTop width="max-w-[640px]">
-                {techFirst.length === 0 ? <p className="pt-2 text-[13.5px] text-slate-500">No collaborators yet. Invite technicians in Team, or turn on “Can receive jobs” for yourself.</p> : (
+              <FormRow label={t("techs")} hint={t("techsHint")} alignTop width="max-w-[640px]">
+                {techFirst.length === 0 ? <p className="pt-2 text-[13.5px] text-slate-500">{t("noCollabs")}</p> : (
                   <div className="flex flex-wrap gap-2">
                     {manyTechs && (
-                      <input value={techQ} onChange={(e) => setTechQ(e.target.value)} placeholder={`Search ${techFirst.length} technicians`} className={`${inputClass} mb-1 w-full`} />
+                      <input value={techQ} onChange={(e) => setTechQ(e.target.value)} placeholder={t("searchTechs", { n: techFirst.length })} className={`${inputClass} mb-1 w-full`} />
                     )}
                     {techShown.map((m) => {
                       const i = techIds.indexOf(m.user_id);
@@ -392,12 +401,12 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
                             <span className="font-medium">{m.full_name}</span>
                           </button>
                           {on && (i === 0
-                            ? <span className="rounded-full bg-white px-1.5 text-[10.5px] font-semibold" style={{ color: m.color }}>Lead</span>
-                            : <button type="button" onClick={() => makeLead(m.user_id)} className="rounded-full px-1.5 text-[10.5px] font-semibold text-slate-400 hover:bg-white hover:text-[#0f766e]">Make lead</button>)}
+                            ? <span className="rounded-full bg-white px-1.5 text-[10.5px] font-semibold" style={{ color: m.color }}>{t("lead")}</span>
+                            : <button type="button" onClick={() => makeLead(m.user_id)} className="rounded-full px-1.5 text-[10.5px] font-semibold text-slate-400 hover:bg-white hover:text-[#0f766e]">{t("makeLead")}</button>)}
                         </div>
                       );
                     })}
-                    <p className="w-full text-[12px] text-slate-400">Optional. You can also assign later in <b className="font-semibold text-slate-500">Assign jobs</b> by dragging the job onto a technician.</p>
+                    <p className="w-full text-[12px] text-slate-400">{t.rich("assignLater", { b: (c) => <b className="font-semibold text-slate-500">{c}</b> })}</p>
                   </div>
                 )}
               </FormRow>
@@ -409,9 +418,9 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
       {/* Checklist y notas */}
       <div className="px-5 py-7 sm:px-8">
         <div className="grid max-w-[1000px] grid-cols-[minmax(0,1fr)] gap-6">
-          <SectionTitle>Checklist</SectionTitle>
+          <SectionTitle>{t("checklist")}</SectionTitle>
           <div className="-mt-3 max-w-[640px] space-y-2">
-            {checklist.length === 0 && <p className="text-[13.5px] text-slate-500">Required tasks the technician must check off before finishing the job.</p>}
+            {checklist.length === 0 && <p className="text-[13.5px] text-slate-500">{t("checklistHint")}</p>}
             {checklist.map((c, i) => (
               <div key={c.id ?? `n${i}`} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
                 <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${c.done ? "border-[#0f766e] bg-[#0f766e] text-white" : "border-slate-300"}`}>
@@ -419,8 +428,8 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
                 </span>
                 <input value={c.label} onChange={(e) => setChecklist((l) => l.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} className="min-w-0 flex-1 bg-transparent text-[14.5px] text-[#0b1f3a] focus:outline-none" />
                 <button type="button" onClick={() => setChecklist((l) => l.map((x, j) => (j === i ? { ...x, required: !x.required } : x)))}
-                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${c.required ? "bg-[#fff1f2] text-[#be123c]" : "bg-slate-100 text-slate-500"}`}>{c.required ? "Required" : "Optional"}</button>
-                <button type="button" onClick={() => setChecklist((l) => l.filter((_, j) => j !== i))} aria-label="Remove task"
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${c.required ? "bg-[#fff1f2] text-[#be123c]" : "bg-slate-100 text-slate-500"}`}>{c.required ? tc("required") : tc("optional")}</button>
+                <button type="button" onClick={() => setChecklist((l) => l.filter((_, j) => j !== i))} aria-label={t("removeTask")}
                   className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition-all hover:rotate-90 hover:bg-red-50 hover:text-red-600">
                   <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M5 5l10 10M15 5 5 15" /></svg>
                 </button>
@@ -428,19 +437,19 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
             ))}
             <div className="flex gap-2">
               <input value={newCheck} onChange={(e) => setNewCheck(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCheck(); } }}
-                placeholder="Add a task, e.g. Photo of the unit's data plate" className={inputClass} />
-              <button type="button" onClick={addCheck} className="shrink-0 rounded-lg border border-slate-200 px-4 text-[14px] font-semibold text-[#0f766e] hover:border-[#0f766e] hover:bg-[#f3fbf8]">Add</button>
+                placeholder={t("addTaskPh")} className={inputClass} />
+              <button type="button" onClick={addCheck} className="shrink-0 rounded-lg border border-slate-200 px-4 text-[14px] font-semibold text-[#0f766e] hover:border-[#0f766e] hover:bg-[#f3fbf8]">{tc("add")}</button>
             </div>
             {templates.length > 0 && (
-              <div className="max-w-[300px]"><SelectMenu value="" ariaLabel="Add from template" placeholder="Add from a saved checklist…" options={templates.map((t) => ({ value: t.id, label: t.name }))} onChange={addTemplate} /></div>
+              <div className="max-w-[300px]"><SelectMenu value="" ariaLabel={t("fromTpl")} placeholder={t("fromTplPh")} options={templates.map((x) => ({ value: x.id, label: x.name }))} onChange={addTemplate} /></div>
             )}
           </div>
 
-          <SectionTitle>Notes</SectionTitle>
-          <FormRow label="For the technician" htmlFor="j-tn" hint="Gate code, pets, parking, where the unit is. The technician sees this in the app." alignTop width="max-w-[560px]">
+          <SectionTitle>{t("notes")}</SectionTitle>
+          <FormRow label={t("forTech")} htmlFor="j-tn" hint={t("forTechHint")} alignTop width="max-w-[560px]">
             <textarea id="j-tn" value={techNotes} onChange={(e) => setTechNotes(e.target.value)} rows={2} className={`${inputClass} resize-y`} />
           </FormRow>
-          <FormRow label="Office only" htmlFor="j-on" hint="Private. Technicians never see these notes." alignTop width="max-w-[560px]">
+          <FormRow label={t("officeOnly")} htmlFor="j-on" hint={t("officeOnlyHint")} alignTop width="max-w-[560px]">
             <textarea id="j-on" value={officeNotes} onChange={(e) => setOfficeNotes(e.target.value)} rows={2} className={`${inputClass} resize-y`} />
           </FormRow>
         </div>
@@ -448,17 +457,17 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
 
       {cancelAsk && (
         <div className="mx-5 mb-2 rounded-xl border border-red-200 bg-red-50/60 p-4 sm:mx-8 animate-[bp-pop-in_0.2s_ease-out]">
-          <p className="text-[14px] font-semibold text-[#0b1f3a]">Cancel this job?</p>
-          <p className="text-[13px] text-slate-600">It stays in the history with who cancelled it, when and why. You can restore it later.</p>
-          <textarea autoFocus value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} rows={2} placeholder="Reason (required)" className={`${inputClass} mt-2.5 resize-y bg-white`} />
+          <p className="text-[14px] font-semibold text-[#0b1f3a]">{t("cancelQ")}</p>
+          <p className="text-[13px] text-slate-600">{t("cancelText")}</p>
+          <textarea autoFocus value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} rows={2} placeholder={t("reasonPh")} className={`${inputClass} mt-2.5 resize-y bg-white`} />
           <div className="mt-2.5 flex gap-2">
-            <button type="button" onClick={cancelJob} disabled={saving} className="rounded-lg bg-[#be123c] px-4 py-2 text-[14px] font-semibold text-white hover:bg-[#9f1239] disabled:opacity-60">Cancel job</button>
-            <button type="button" onClick={() => setCancelAsk(false)} className="rounded-lg px-3 py-2 text-[14px] font-medium text-slate-600 hover:bg-white">Keep it</button>
+            <button type="button" onClick={cancelJob} disabled={saving} className="rounded-lg bg-[#be123c] px-4 py-2 text-[14px] font-semibold text-white hover:bg-[#9f1239] disabled:opacity-60">{t("cancelJob")}</button>
+            <button type="button" onClick={() => setCancelAsk(false)} className="rounded-lg px-3 py-2 text-[14px] font-medium text-slate-600 hover:bg-white">{t("keep")}</button>
           </div>
         </div>
       )}
-      <SaveBar saving={saving} cancelHref={closeHref} error={error} saveLabel={editing ? "Save" : "Create job"}
-        onDelete={editing && !initial?.cancelled_at && initial?.status !== "completed" ? () => setCancelAsk(true) : undefined} deleteLabel="Cancel job" />
+      <SaveBar saving={saving} cancelHref={closeHref} error={error} saveLabel={editing ? tc("save") : t("createJob")}
+        onDelete={editing && !initial?.cancelled_at && initial?.status !== "completed" ? () => setCancelAsk(true) : undefined} deleteLabel={t("cancelJob")} />
     </form>
   );
 }

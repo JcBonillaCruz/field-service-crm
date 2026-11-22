@@ -104,9 +104,9 @@ export async function loadCompanyReport(supabase: SupabaseClient, companyId: str
 // El mes en curso con la misma cuenta que Finances → Reports, pero ligera: sin Payroll ni trabajos.
 // Se compara contra los mismos días del mes pasado (del 1 al día de hoy), no contra el mes pasado completo.
 export type MonthCard = {
-  title: string; day: string; soFar: string; prevDay: string;
+  title: string; day: string; today: string; soFar: string; prevDay: string;
   income: number; jobCosts: number; overhead: number; financing: number; expenses: number; net: number; margin: number | null; empty: boolean;
-  prev: { label: string; income: number; expenses: number; net: number } | null;
+  prev: { label: string; to: string; income: number; expenses: number; net: number } | null;
   owed: number;              // lo que todavía se debe de compras a pagos (hoy)
   weeks: RepBucket[];
 };
@@ -121,9 +121,9 @@ export async function loadMonthCard(supabase: SupabaseClient, companyId: string,
   // "Nov 1 – 18" (sin el año ni el mes repetido)
   const short = (a: string, b: string) => spanLabel(a, b).replace(/, \d{4}$/, "").replace(/ – [A-Za-z]+ /, " – ");
   return {
-    title: range.title, day: range.from, soFar: short(range.from, today), prevDay: prev.from,
+    title: range.title, day: range.from, today, soFar: short(range.from, today), prevDay: prev.from,
     income: r.income, jobCosts: r.jobCosts, overhead: r.overheadTotal, financing: r.financingTotal, expenses: r.expenses, net: r.net, margin: r.margin, empty: r.empty,
-    prev: p.empty ? null : { label: short(prev.from, prevTo), income: p.income, expenses: p.expenses, net: p.net },
+    prev: p.empty ? null : { label: short(prev.from, prevTo), to: prevTo, income: p.income, expenses: p.expenses, net: p.net },
     owed: financingTotals(purchases, today).owed,
     weeks: buildBuckets(src, "month", range.from, range.to, weekStartsOn).filter((w) => w.from <= today),
   };

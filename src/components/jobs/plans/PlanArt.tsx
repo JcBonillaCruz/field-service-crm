@@ -1,3 +1,5 @@
+import { useTranslations } from "next-intl";
+
 // Ícono ilustrado de Maintenance plans: calendario con la flecha de "se repite"
 export default function PlanArt({ size = 40, muted = false }: { size?: number; muted?: boolean }) {
   const a = muted ? "#cbd5e1" : "#14a39a", b = muted ? "#94a3b8" : "#0f766e", c = muted ? "#e2e8f0" : "#f59e0b";
@@ -15,7 +17,10 @@ export default function PlanArt({ size = 40, muted = false }: { size?: number; m
 }
 
 // Etiqueta pequeña "Plan" para las tarjetas y la ficha de un trabajo que salió de un plan
-export function PlanTag({ label = "Plan", title = "Created by a maintenance plan" }: { label?: string; title?: string }) {
+export function PlanTag({ label, title }: { label?: string; title?: string }) {
+  const t = useTranslations("planTag");
+  label ??= t("label");
+  title ??= t("title");
   return (
     <span title={title} className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#fff4e0] px-1.5 py-px text-[10.5px] font-semibold leading-4 text-[#b45309] ring-1 ring-[#fde3b4]">
       <svg viewBox="0 0 16 16" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 8a5 5 0 0 1 8.6-3.5M13 8a5 5 0 0 1-8.6 3.5M12 2v3H9M4 14v-3h3" /></svg>

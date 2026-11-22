@@ -1,8 +1,9 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { CalVisit, TechChip, barColor, fmtTime, tint } from "@/lib/jobs";
+import { CalVisit, TechChip, barColor, tint } from "@/lib/jobs";
 
+import { useJobsTx } from "@/i18n/useJobsTx";
 // Circulito con las iniciales del técnico en su color (con foto si tiene)
 export function TechDot({ t, size = 22, ring = true }: { t: TechChip | { initials: string; color: string; avatar_url?: string | null; name?: string }; size?: number; ring?: boolean }) {
   return (
@@ -15,8 +16,9 @@ export function TechDot({ t, size = 22, ring = true }: { t: TechChip | { initial
 }
 
 export function TechDots({ techs, size = 22, max = 2 }: { techs: TechChip[]; size?: number; max?: number }) {
+  const te = useTranslations("eventBar");
   if (!techs.length) return (
-    <span title="Unassigned" className="flex shrink-0 items-center justify-center rounded-full border border-dashed border-slate-400 bg-white text-slate-400" style={{ width: size, height: size }}>
+    <span title={te("unassigned")} className="flex shrink-0 items-center justify-center rounded-full border border-dashed border-slate-400 bg-white text-slate-400" style={{ width: size, height: size }}>
       <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="10" cy="7" r="3" /><path d="M4.5 17a5.5 5.5 0 0 1 11 0" strokeLinecap="round" /></svg>
     </span>
   );
@@ -98,12 +100,14 @@ export function EventBar({ v, start, end, compact, dragging, onDown, onResizeDow
   v: CalVisit; start: Date; end: Date; compact: boolean; dragging: boolean;
   onDown: (e: React.PointerEvent) => void; onResizeDown: (e: React.PointerEvent) => void; onHover: (el: HTMLElement | null) => void;
 }) {
+  const te = useTranslations("eventBar");
+  const { time: fmtTime } = useJobsTx();
   const color = barColor(v);
   const completed = v.visit_status === "completed";
   const done = completed || v.visit_status === "cancelled";
   const art = ["on_my_way", "in_progress", "paused", "on_hold", "completed"].includes(v.visit_status);
   return (
-    <div role="button" tabIndex={0} aria-label={`${v.customer_name}, ${fmtTime(start)}${completed ? ", completed" : ""}`}
+    <div role="button" tabIndex={0} aria-label={`${v.customer_name}, ${fmtTime(start)}${completed ? te("completedAria") : ""}`}
       onPointerDown={onDown}
       onMouseEnter={(e) => onHover(e.currentTarget)} onMouseLeave={() => onHover(null)}
       className={`group/bar absolute inset-0 flex cursor-grab select-none flex-col overflow-hidden rounded-[10px] border pl-2 pr-1.5 text-left transition-[box-shadow,transform,opacity] duration-150 ease-out touch-manipulation hover:z-10 hover:-translate-y-px hover:shadow-[0_8px_20px_rgba(15,40,60,0.12)] active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e] ${dragging ? "opacity-40" : ""} ${done ? "text-slate-500" : "text-[#0b1f3a]"}`}
@@ -120,7 +124,7 @@ export function EventBar({ v, start, end, compact, dragging, onDown, onResizeDow
           </p>
           {!compact && (
             <p className="mt-px truncate text-[11px] font-medium leading-tight" style={{ color: done ? "#94a3b8" : ink(color, 0.62) }}>
-              {fmtTime(start)} – {fmtTime(end)}{v.visit_count > 1 ? ` · Visit ${v.visit_no}` : ""}
+              {fmtTime(start)} – {fmtTime(end)}{v.visit_count > 1 ? te("visitN", { n: v.visit_no }) : ""}
             </p>
           )}
         </div>
@@ -131,7 +135,7 @@ export function EventBar({ v, start, end, compact, dragging, onDown, onResizeDow
         </span>
       </div>
       {!compact && (completed
-        ? <p className="mt-0.5 flex items-center gap-1 text-[10.5px] font-semibold uppercase tracking-wide text-[#16a34a]">Completed</p>
+        ? <p className="mt-0.5 flex items-center gap-1 text-[10.5px] font-semibold uppercase tracking-wide text-[#16a34a]">{te("completed")}</p>
         : v.type_name && end.getTime() - start.getTime() >= 80 * 60000 && <p className="mt-0.5 truncate text-[10.5px] text-slate-500">{v.type_name}</p>)}
       {/* Borde de abajo: estirar para cambiar la duración */}
       {!done && (
@@ -146,6 +150,7 @@ export function EventBar({ v, start, end, compact, dragging, onDown, onResizeDow
 
 // Chip compacto para la vista de Mes
 export function EventChip({ v, dragging, onDown, onHover }: { v: CalVisit; dragging: boolean; onDown: (e: React.PointerEvent) => void; onHover: (el: HTMLElement | null) => void }) {
+  const { time: fmtTime } = useJobsTx();
   const color = barColor(v);
   return (
     <div role="button" tabIndex={0} onPointerDown={onDown} onMouseEnter={(e) => onHover(e.currentTarget)} onMouseLeave={() => onHover(null)}
@@ -162,11 +167,12 @@ export function EventChip({ v, dragging, onDown, onHover }: { v: CalVisit; dragg
 
 // Luna: trabajo fuera del horario de oficina (se puede cobrar extra)
 export function AfterHoursMoon({ size = 18, withText = false }: { size?: number; withText?: boolean }) {
+  const te = useTranslations("eventBar");
   const icon = (
-    <span title="After hours — outside business hours" className="flex shrink-0 items-center justify-center rounded-full bg-[#eef0ff] ring-1 ring-[#c7d2fe]" style={{ width: size, height: size }}>
+    <span title={te("afterHoursTitle")} className="flex shrink-0 items-center justify-center rounded-full bg-[#eef0ff] ring-1 ring-[#c7d2fe]" style={{ width: size, height: size }}>
       <svg viewBox="0 0 20 20" style={{ width: size * 0.62, height: size * 0.62 }} fill="#4f46e5"><path d="M15.5 12.6A6.5 6.5 0 0 1 7.4 4.5a6.5 6.5 0 1 0 8.1 8.1z" /></svg>
     </span>
   );
   if (!withText) return icon;
-  return <span className="inline-flex items-center gap-1 rounded-full bg-[#eef0ff] py-0.5 pl-0.5 pr-2 text-[11px] font-semibold text-[#4338ca] ring-1 ring-[#c7d2fe]">{icon}After hours</span>;
+  return <span className="inline-flex items-center gap-1 rounded-full bg-[#eef0ff] py-0.5 pl-0.5 pr-2 text-[11px] font-semibold text-[#4338ca] ring-1 ring-[#c7d2fe]">{icon}{te("afterHours")}</span>;
 }

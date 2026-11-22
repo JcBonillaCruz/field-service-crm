@@ -4,6 +4,7 @@ import { canManageJobs } from "@/lib/jobs";
 import Confirmations from "@/components/jobs/Confirmations";
 import { ConfState, loadConfirmations } from "@/lib/confirmations";
 
+import { getTranslations } from "next-intl/server";
 export const dynamic = "force-dynamic";
 
 // Paso 5.8b · Confirmaciones: las próximas visitas y qué respondió cada cliente, sin entrar trabajo por trabajo
@@ -15,10 +16,11 @@ export default async function ConfirmationsPage({ searchParams }: { searchParams
     loadConfirmations(supabase, current.id, 14),
     supabase.from("job_settings").select("*").eq("company_id", current.id).maybeSingle(),
   ]);
+  const t = await getTranslations("conf");
   if (!rows) return (
     <section className="mx-auto max-w-lg px-5 py-16 text-center">
-      <h1 className="text-xl font-semibold text-[#0b1f3a]">Customer confirmations aren&apos;t set up yet</h1>
-      <p className="mt-2 text-slate-500">Run the SQL for Paso 5.8 (customer notices) in Supabase → SQL Editor, then reload this page.</p>
+      <h1 className="text-xl font-semibold text-[#0b1f3a]">{t("notSetTitle")}</h1>
+      <p className="mt-2 text-slate-500">{t("notSetText")}</p>
     </section>
   );
   const set = (s ?? {}) as { cn_reminder?: boolean; cn_reminder_days?: number };

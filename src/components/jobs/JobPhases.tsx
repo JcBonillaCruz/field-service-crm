@@ -210,7 +210,7 @@ export default function JobPhases({ jobId, canEdit = false, readOnly = false, va
               </div>
             ))}
           </div>
-          <button type="button" onClick={() => setDraft((l) => [...(l ?? []), { id: null, name: "", weight: "1", key: newKey() }])} className="mt-2 rounded-lg px-2.5 py-1.5 text-[13px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4]">+ Add phase</button>
+          <button type="button" onClick={() => setDraft((l) => [...(l ?? []), { id: null, name: "", weight: "1", key: newKey() }])} className="mt-2 rounded-lg px-2.5 py-1.5 text-[13px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4]">{t("addPhase")}</button>
           <div className="mt-3 flex justify-end gap-2 border-t border-slate-100 pt-3">
             <button type="button" onClick={() => setDraft(null)} className="rounded-lg px-3.5 py-2 text-[13.5px] font-semibold text-slate-500 hover:bg-slate-100">{tc("cancel")}</button>
             <button type="button" onClick={saveDraft} disabled={busy === "save"} className="rounded-lg bg-[#0f766e] px-4 py-2 text-[13.5px] font-semibold text-white transition-colors hover:bg-[#0c5f59] disabled:opacity-60">{busy === "save" ? tc("saving") : t("save")}</button>

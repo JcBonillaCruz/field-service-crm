@@ -4,9 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { createClient } from "@/lib/supabase/client";
-import { CalVisit, TeamMember, UNASSIGNED_COLOR, VISIT_LABEL, addDays, addressLine, dayStart, fmtTime, isoDay, leadOf, sameDay } from "@/lib/jobs";
-import { GeoRow, LiveRow, RoutePoint, TILE_ATTR, TILE_URL, agoLabel, esc, isFresh, needsMapSql } from "@/lib/live-map";
+import { CalVisit, TeamMember, UNASSIGNED_COLOR, addDays, addressLine, dayStart, isoDay, leadOf, sameDay } from "@/lib/jobs";
+import { GeoRow, LiveRow, RoutePoint, TILE_ATTR, TILE_URL, esc, isFresh, needsMapSql } from "@/lib/live-map";
 
+import { useTranslations } from "next-intl";
+import { useJobsTx } from "@/i18n/useJobsTx";
 // =====================================================================
 // Paso 5.9 · Vista "Map" del Schedule (solo dueño, manager y oficina).
 //  · Cada persona con el día iniciado, en su color, con "hace cuánto" se supo de ella.
@@ -28,6 +30,17 @@ const techHtml = (p: Person, fresh: boolean) =>
   `<div class="bp-tech${fresh ? " bp-tech-live" : " bp-tech-old"}" style="--c:${p.color}"><span>${esc(p.initials)}</span></div>`;
 
 export default function LiveMap({ companyId, day, visits, team }: { companyId: string; day: Date; visits: CalVisit[]; team: TeamMember[] }) {
+  const t = useTranslations("liveMap");
+  const jt = useJobsTx();
+  const { time: fmtTime } = jt;
+  const VISIT_LABEL = { get: (s: string) => jt.visitStatus(s) };
+  const agoLabel = (iso: string, now: number) => {
+    const min = Math.max(0, Math.round((now - new Date(iso).getTime()) / 60000));
+    if (min < 1) return t("justNow");
+    if (min < 60) return t("minAgo", { n: min });
+    if (min < 24 * 60) return t("hAgo", { n: Math.floor(min / 60) });
+    return jt.dateTime(new Date(iso));
+  };
   const boxRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layers = useRef<{ stops: L.LayerGroup; techs: L.LayerGroup; route: L.LayerGroup } | null>(null);
@@ -136,13 +149,13 @@ export default function LiveMap({ companyId, day, visits, team }: { companyId: s
       const mine = dayVisits.filter((v) => v.tech_ids.includes(m.user_id));
       const cur = visits.find((v) => v.tech_ids.includes(m.user_id) && (v.visit_status === "on_my_way" || v.visit_status === "in_progress" || v.visit_status === "paused"));
       const lv = liveOf.get(m.user_id) ?? null;
-      const [status, tone]: [string, Person["tone"]] = cur?.visit_status === "on_my_way" ? [`On the way · ${cur.customer_name}`, "way"]
-        : cur?.visit_status === "in_progress" ? [`Working · ${cur.customer_name}`, "work"]
-        : cur?.visit_status === "paused" ? [`Paused · ${cur.customer_name}`, "work"]
-        : lv?.on_shift ? ["Available", "free"] : lv ? ["Day ended", "off"] : ["No location yet", "off"];
+      const [status, tone]: [string, Person["tone"]] = cur?.visit_status === "on_my_way" ? [t("onWay", { c: cur.customer_name }), "way"]
+        : cur?.visit_status === "in_progress" ? [t("working", { c: cur.customer_name }), "work"]
+        : cur?.visit_status === "paused" ? [t("paused", { c: cur.customer_name }), "work"]
+        : lv?.on_shift ? [t("available"), "free"] : lv ? [t("dayEnded"), "off"] : [t("noLoc"), "off"];
       return { id: m.user_id, name: m.full_name, initials: m.initials, color: m.color, live: lv, status, tone, stops: mine.map((v, i) => stopOf(v, i + 1)) };
     }).sort((a, b) => Number(Boolean(b.live?.on_shift)) - Number(Boolean(a.live?.on_shift)) || a.name.localeCompare(b.name));
-  }, [team, live, dayVisits, visits, geo]);
+  }, [team, live, dayVisits, visits, geo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pines a pintar: con una persona elegida, solo los suyos; si no, todos (numerados dentro de la ruta de su responsable)
   const stops: { s: Stop; color: string }[] = useMemo(() => {
@@ -182,10 +195,10 @@ export default function LiveMap({ companyId, day, visits, team }: { companyId: s
       if (s.lat === null || s.lng === null) return;
       const v = s.v, a = new Date(v.starts_at), b = new Date(v.ends_at);
       const m = L.marker([s.lat, s.lng], { icon: L.divIcon({ className: "", html: pinHtml(s, color), iconSize: [28, 28], iconAnchor: [14, 14] }), zIndexOffset: v.visit_status === "completed" ? 0 : 200 });
-      m.bindPopup(`<div class="bp-pop"><p class="bp-pop-t">${esc(v.customer_name)}</p><p>${esc(v.number)}${v.title ? ` · ${esc(v.title)}` : ""}</p><p>${esc(fmtTime(a))} – ${esc(fmtTime(b))} · <b>${esc(VISIT_LABEL[v.visit_status] ?? "")}</b></p><p class="bp-pop-m">${esc(addressLine(v.site_address))}</p><p class="bp-pop-m">${v.techs.length ? esc(v.techs.map((t) => t.name).join(", ")) : "Unassigned"}</p><a href="/dashboard/jobs/${v.job_id}">Open job</a></div>`);
+      m.bindPopup(`<div class="bp-pop"><p class="bp-pop-t">${esc(v.customer_name)}</p><p>${esc(v.number)}${v.title ? ` · ${esc(v.title)}` : ""}</p><p>${esc(fmtTime(a))} – ${esc(fmtTime(b))} · <b>${esc(VISIT_LABEL.get(v.visit_status))}</b></p><p class="bp-pop-m">${esc(addressLine(v.site_address))}</p><p class="bp-pop-m">${v.techs.length ? esc(v.techs.map((x) => x.name).join(", ")) : esc(t("unassigned"))}</p><a href="/dashboard/jobs/${v.job_id}">${esc(t("openJob"))}</a></div>`);
       m.addTo(lay.stops);
     });
-  }, [ready, stops]);
+  }, [ready, stops]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Quién sale en el mapa: solo hoy; quien cerró el día ya no aparece (salvo que lo elijas)
   const onMap = useMemo(() => people.filter((p) => isToday && p.live && (!sel || p.id === sel) && (p.live.on_shift || p.id === sel)), [people, isToday, sel]);
@@ -196,10 +209,10 @@ export default function LiveMap({ companyId, day, visits, team }: { companyId: s
     onMap.forEach((p) => {
       const lv = p.live as LiveRow, fresh = lv.on_shift && isFresh(lv.recorded_at, now);
       const m = L.marker([lv.lat, lv.lng], { icon: L.divIcon({ className: "", html: techHtml(p, fresh), iconSize: [36, 36], iconAnchor: [18, 18] }), zIndexOffset: 1000 });
-      m.bindPopup(`<div class="bp-pop"><p class="bp-pop-t">${esc(p.name)}</p><p>${esc(p.status)}</p><p class="bp-pop-m">${fresh ? "Live" : "Last seen"} · ${esc(agoLabel(lv.recorded_at, now))}${lv.accuracy ? ` · ±${Math.round(lv.accuracy)} m` : ""}</p></div>`);
+      m.bindPopup(`<div class="bp-pop"><p class="bp-pop-t">${esc(p.name)}</p><p>${esc(p.status)}</p><p class="bp-pop-m">${esc(fresh ? t("live") : t("lastSeen"))} · ${esc(agoLabel(lv.recorded_at, now))}${lv.accuracy ? ` · ±${Math.round(lv.accuracy)} m` : ""}</p></div>`);
       m.addTo(lay.techs);
     });
-  }, [ready, onMap, now]);
+  }, [ready, onMap, now]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const lay = layers.current;
@@ -207,7 +220,7 @@ export default function LiveMap({ companyId, day, visits, team }: { companyId: s
     lay.route.clearLayers();
     if (!selected) return;
     if (route.length > 1) L.polyline(route.map((r) => [r.lat, r.lng] as L.LatLngTuple), { color: selected.color, weight: 4, opacity: 0.85, lineJoin: "round" }).addTo(lay.route);
-    if (route.length) L.circleMarker([route[0].lat, route[0].lng], { radius: 5, color: selected.color, fillColor: "#fff", fillOpacity: 1, weight: 3 }).bindTooltip(`First point · ${fmtTime(new Date(route[0].recorded_at))}`).addTo(lay.route);
+    if (route.length) L.circleMarker([route[0].lat, route[0].lng], { radius: 5, color: selected.color, fillColor: "#fff", fillOpacity: 1, weight: 3 }).bindTooltip(t("firstPoint", { t: fmtTime(new Date(route[0].recorded_at)) })).addTo(lay.route);
     // Lo que falta: de donde está ahora a las paradas pendientes, en orden
     const todo = selected.stops.filter((s) => s.lat !== null && s.v.visit_status !== "completed");
     const from: L.LatLngTuple[] = isToday && selected.live?.on_shift ? [[selected.live.lat, selected.live.lng]] : [];
@@ -247,27 +260,27 @@ export default function LiveMap({ companyId, day, visits, team }: { companyId: s
         .bp-pop a{display:inline-block;margin-top:6px;font-weight:700;color:#0f766e;text-decoration:none}.bp-pop a:hover{text-decoration:underline}
         .leaflet-container{font-family:inherit;background:#eef2f5}.leaflet-popup-content{margin:11px 13px}.leaflet-popup-content-wrapper{border-radius:12px}
       `}</style>
-      <div ref={boxRef} className="h-full w-full" aria-label="Map" />
+      <div ref={boxRef} className="h-full w-full" aria-label={t("map")} />
 
       {/* Lista del equipo: a la izquierda en computadora; en el celular, una hoja abajo que se abre al tocarla */}
       <div className="absolute inset-x-2 bottom-7 z-[1100] flex max-h-[62%] flex-col rounded-2xl border border-slate-200 bg-white/[0.97] shadow-[0_10px_28px_rgba(15,40,60,0.18)] lg:inset-x-auto lg:bottom-3 lg:left-3 lg:top-3 lg:max-h-none lg:w-[16.5rem]">
         <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left lg:cursor-default lg:py-3">
           <span className="min-w-0 flex-1">
-            <span className="block text-[14px] font-semibold text-[#0b1f3a]">{selected ? selected.name : "Team"}</span>
-            <span className="block truncate text-[12px] text-slate-500">{selected ? `${selected.stops.length} stop${selected.stops.length === 1 ? "" : "s"} · ${selected.status}` : isToday ? `${sharing} sharing location · ${dayVisits.length} job${dayVisits.length === 1 ? "" : "s"}` : `${dayVisits.length} job${dayVisits.length === 1 ? "" : "s"} this day`}</span>
+            <span className="block text-[14px] font-semibold text-[#0b1f3a]">{selected ? selected.name : t("team")}</span>
+            <span className="block truncate text-[12px] text-slate-500">{selected ? `${t("stops", { n: selected.stops.length })} · ${selected.status}` : isToday ? `${t("sharing", { n: sharing })} · ${t("jobs", { n: dayVisits.length })}` : t("jobsDay", { n: dayVisits.length })}</span>
           </span>
-          {searching && <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-[#14a39a] border-t-transparent" aria-label="Finding addresses" />}
+          {searching && <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-[#14a39a] border-t-transparent" aria-label={t("finding")} />}
           <svg viewBox="0 0 20 20" className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-150 lg:hidden ${open ? "" : "rotate-180"}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 8 5 5 5-5" /></svg>
         </button>
 
         <div className={`${open ? "block" : "hidden"} min-h-0 flex-1 overflow-y-auto border-t border-slate-100 px-1.5 py-1.5 lg:block`}>
-          {needSql && <p className="m-1.5 rounded-lg bg-[#fff6e6] px-3 py-2 text-[12.5px] text-[#92400e]">Run <b>paso-5.9-live-map.sql</b> in Supabase to turn on the live map.</p>}
+          {needSql && <p className="m-1.5 rounded-lg bg-[#fff6e6] px-3 py-2 text-[12.5px] text-[#92400e]">{t.rich("runSql", { b: (c) => <b>{c}</b> })}</p>}
           {sel && (
             <button type="button" onClick={() => setSel(null)} className="mb-1 flex w-full items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12.5px] font-semibold text-[#0f766e] transition-colors hover:bg-[#e9f7f4]">
-              <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 5-5 5 5 5" /></svg>Everyone
+              <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 5-5 5 5 5" /></svg>{t("everyone")}
             </button>
           )}
-          {!people.length && !needSql && <p className="px-2.5 py-2 text-[13px] text-slate-500">No one on the team receives jobs yet.</p>}
+          {!people.length && !needSql && <p className="px-2.5 py-2 text-[13px] text-slate-500">{t("noOne")}</p>}
           {people.map((p) => {
             const fresh = isToday && Boolean(p.live?.on_shift) && isFresh(p.live!.recorded_at, now);
             return (
@@ -280,7 +293,7 @@ export default function LiveMap({ companyId, day, visits, team }: { companyId: s
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13.5px] font-semibold text-[#0b1f3a]">{p.name}</span>
                   <span className="block truncate text-[12px] text-slate-500">{p.status}</span>
-                  {isToday && p.live && <span className={`block text-[11.5px] ${fresh ? "font-medium text-[#15803d]" : "text-slate-400"}`}>{fresh ? "Live" : "Last seen"} · {agoLabel(p.live.recorded_at, now)}</span>}
+                  {isToday && p.live && <span className={`block text-[11.5px] ${fresh ? "font-medium text-[#15803d]" : "text-slate-400"}`}>{fresh ? t("live") : t("lastSeen")} · {agoLabel(p.live.recorded_at, now)}</span>}
                 </span>
                 {p.stops.length > 0 && <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-600">{p.stops.filter((s) => s.v.visit_status === "completed").length}/{p.stops.length}</span>}
               </button>
@@ -297,32 +310,32 @@ export default function LiveMap({ companyId, day, visits, team }: { companyId: s
                   <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10.5px] font-bold text-white" style={{ background: s.v.visit_status === "completed" ? DONE : selected.color }}>{s.no}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13px] font-medium text-[#0b1f3a]">{s.v.customer_name}</span>
-                    <span className="block truncate text-[11.5px] text-slate-500">{fmtTime(new Date(s.v.starts_at))} · {VISIT_LABEL[s.v.visit_status]}{s.why === "no_address" ? " · no address" : s.why === "not_found" ? " · address not found" : ""}</span>
+                    <span className="block truncate text-[11.5px] text-slate-500">{fmtTime(new Date(s.v.starts_at))} · {VISIT_LABEL.get(s.v.visit_status)}{s.why === "no_address" ? t("noAddress") : s.why === "not_found" ? t("notFound") : ""}</span>
                   </span>
                 </button>
               ))}
-              {isToday && !route.length && <p className="px-1.5 pb-1 pt-1 text-[11.5px] leading-snug text-slate-400">No route yet today. It draws while {selected.name.split(" ")[0]} has the day started and BrightPro open.</p>}
+              {isToday && !route.length && <p className="px-1.5 pb-1 pt-1 text-[11.5px] leading-snug text-slate-400">{t("noRoute", { name: selected.name.split(" ")[0] })}</p>}
             </div>
           )}
 
-          {!isToday && <p className="mx-1.5 mt-1.5 rounded-lg bg-slate-50 px-2.5 py-2 text-[11.5px] leading-snug text-slate-500">Live positions show only for today. Pick a person to see the route of this day.</p>}
+          {!isToday && <p className="mx-1.5 mt-1.5 rounded-lg bg-slate-50 px-2.5 py-2 text-[11.5px] leading-snug text-slate-500">{t("onlyToday")}</p>}
 
           {missing.length > 0 && (
             <div className="mx-1.5 mt-1.5 rounded-lg bg-[#fff6e6] px-2.5 py-2 text-[12px] text-[#92400e]">
               <button type="button" onClick={() => setShowMissing((x) => !x)} className="flex w-full items-center justify-between gap-2 text-left font-semibold">
-                {missing.length} job{missing.length === 1 ? "" : "s"} not on the map
+                {t("notOnMap", { n: missing.length })}
                 <svg viewBox="0 0 20 20" className={`h-3.5 w-3.5 shrink-0 transition-transform ${showMissing ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 8 5 5 5-5" /></svg>
               </button>
               {showMissing && (
                 <>
                   {missing.map(({ s }) => (
-                    <a key={s.v.visit_id} href={`/dashboard/jobs/${s.v.job_id}`} className="mt-1 block truncate hover:underline">{s.v.customer_name} · {s.why === "no_address" ? "no address on the job" : "address not found"}</a>
+                    <a key={s.v.visit_id} href={`/dashboard/jobs/${s.v.job_id}`} className="mt-1 block truncate hover:underline">{s.v.customer_name} · {s.why === "no_address" ? t("noAddrJob") : t("addrNotFound")}</a>
                   ))}
                   {missing.some(({ s }) => s.why === "not_found") && (
                     <button type="button" disabled={searching} onClick={() => geocode(Array.from(new Set(missing.filter(({ s }) => s.why === "not_found").map(({ s }) => s.v.address_id as string))), true)}
-                      className="mt-1.5 rounded-md bg-white px-2 py-1 text-[11.5px] font-semibold text-[#92400e] ring-1 ring-[#fde3b4] transition-colors hover:bg-[#fffaf0] disabled:opacity-50">{searching ? "Searching…" : "Search again"}</button>
+                      className="mt-1.5 rounded-md bg-white px-2 py-1 text-[11.5px] font-semibold text-[#92400e] ring-1 ring-[#fde3b4] transition-colors hover:bg-[#fffaf0] disabled:opacity-50">{searching ? t("searching") : t("searchAgain")}</button>
                   )}
-                  <p className="mt-1.5 text-[11.5px] leading-snug opacity-80">Fix the street, city or ZIP on the customer and it is searched again.</p>
+                  <p className="mt-1.5 text-[11.5px] leading-snug opacity-80">{t("fixHint")}</p>
                 </>
               )}
             </div>

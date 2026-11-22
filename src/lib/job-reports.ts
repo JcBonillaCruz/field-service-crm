@@ -47,9 +47,9 @@ export function reportRange(p: ReportPeriod, weekStartsOn: number, today = new D
   if (p === "3months") return { from: new Date(t.getFullYear(), t.getMonth() - 3, t.getDate()), to: tomorrow };
   return { from: new Date(t.getFullYear(), 0, 1), to: new Date(t.getFullYear() + 1, 0, 1) };
 }
-export const rangeText = (from: Date, to: Date) => {
+export const rangeText = (from: Date, to: Date, tag = "en-US") => {
   const last = addDays(to, -1);
-  const f = (d: Date, y: boolean) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(y ? { year: "numeric" } : {}) });
+  const f = (d: Date, y: boolean) => d.toLocaleDateString(tag, { month: "short", day: "numeric", ...(y ? { year: "numeric" } : {}) });
   return `${f(from, from.getFullYear() !== last.getFullYear())} – ${f(last, true)}`;
 };
 
@@ -80,7 +80,7 @@ export function lateMinutes(v: Pick<RawVisit, "starts_at" | "started_at" | "arri
   return Math.max(0, Math.round((new Date(v.started_at).getTime() - limit) / 60000));
 }
 
-export function buildTeam(raw: RawReport, team: TeamMember[]): { rows: PersonRow[]; totals: TeamTotals } {
+export function buildTeam(raw: RawReport, team: TeamMember[], formerName = "Former team member"): { rows: PersonRow[]; totals: TeamTotals } {
   const members = new Map(team.map((m) => [m.user_id, m]));
   const jobs = new Map(raw.jobs.map((j) => [j.job_id, j]));
   const rows = new Map<string, PersonRow>();
@@ -90,7 +90,7 @@ export function buildTeam(raw: RawReport, team: TeamMember[]): { rows: PersonRow
     if (!r) {
       const m = members.get(uid) ?? null;
       r = {
-        user_id: uid, name: m?.full_name ?? "Former team member", member: m, jobsDone: 0, visits: 0, returns: 0, held: 0,
+        user_id: uid, name: m?.full_name ?? formerName, member: m, jobsDone: 0, visits: 0, returns: 0, held: 0,
         measured: 0, onTime: 0, late: 0, lateMinAvg: 0, onTimePct: null, siteMin: 0, travelMin: 0, shiftMin: 0, idleMin: 0, utilPct: null, avgSiteMin: 0,
         revenue: raw.money ? 0 : null, labor: raw.labor ? 0 : null, noRate: false, salaried: false, jobs: [],
       };
@@ -193,7 +193,7 @@ export type PartsRow = {
 export type PartsTotals = { units: number; value: number | null; jobs: number; doneJobs: number; noScanJobs: number; countUnits: number; countValue: number | null };
 export const NOBODY = "none"; // trabajos sin colaborador
 
-export function buildParts(raw: RawReport, team: TeamMember[]): { rows: PartsRow[]; totals: PartsTotals } {
+export function buildParts(raw: RawReport, team: TeamMember[], L: { noCollab: string; former: string } = PNL_EN): { rows: PartsRow[]; totals: PartsTotals } {
   const members = new Map(team.map((m) => [m.user_id, m]));
   const jobs = new Map(raw.jobs.map((j) => [j.job_id, j]));
   const rows = new Map<string, PartsRow>();
@@ -201,7 +201,7 @@ export function buildParts(raw: RawReport, team: TeamMember[]): { rows: PartsRow
     let r = rows.get(uid);
     if (!r) {
       const m = members.get(uid) ?? null;
-      r = { user_id: uid, name: uid === NOBODY ? "No collaborator" : m?.full_name ?? fallback ?? "Former team member", member: m, units: 0, value: raw.money ? 0 : null, jobs: 0, lines: [], noScan: [], countUnits: 0, countValue: raw.money ? 0 : null };
+      r = { user_id: uid, name: uid === NOBODY ? L.noCollab : m?.full_name ?? fallback ?? L.former, member: m, units: 0, value: raw.money ? 0 : null, jobs: 0, lines: [], noScan: [], countUnits: 0, countValue: raw.money ? 0 : null };
       rows.set(uid, r);
     }
     return r;
@@ -265,9 +265,33 @@ export type PnlTotals = {
 export type Pnl = { jobs: PnlJob[]; byType: PnlGroup[]; byPerson: PnlGroup[]; totals: PnlTotals; findings: string[] };
 export const LOW_MARGIN = 20; // menos de 20% de margen = "ganó poco"
 
-export function buildPnl(raw: RawReport, team: TeamMember[]): Pnl {
+// Paso 6.2a: las frases del P&L vienen de aquí (inglés por defecto); la pantalla manda las de su idioma
+export const PNL_EN = {
+  former: "Former team member", noCollab: "No collaborator", noType: "No job type", noCustomer: "No customer",
+  noPrice: "No price and no invoice", labor: "Labor", materials: "Materials", expenses: "Expenses",
+  took: (what: string, pct: number) => `${what} took ${pct}% of the price`,
+  visits: (n: number) => `Needed ${n} visits`, unscanned: (v: string) => `${v} in parts not scanned`,
+  noRateLine: "Labor not counted: no pay rate", notInvoiced: "Not invoiced yet (estimated price)",
+  fNone: "No jobs were finished in this period.",
+  fSummary: (n: number, rev: string, costs: string, profit: string, isProfit: boolean, margin: number | null) =>
+    `${n} job${n === 1 ? "" : "s"} finished: ${rev} in revenue, ${costs} in costs, ${profit} ${isProfit ? "profit" : "loss"}${margin != null ? ` (${margin}% margin)` : ""}.`,
+  costName: (k: "labor" | "materials" | "expenses"): string => k,
+  fBiggest: (what: string, v: string, pct: number) => `Biggest cost: ${what} (${v}, ${pct}% of all costs).`,
+  fLosers: (n: number, total: string, worst: string) => `${n} job${n === 1 ? "" : "s"} lost money, ${total} in total. The worst: ${worst}.`,
+  fNoLoss: "No job lost money.",
+  fLow: (n: number, low: number) => `${n} job${n === 1 ? "" : "s"} made less than ${low}% margin.`,
+  fNoPrice: (n: number) => `${n} finished job${n === 1 ? " has" : "s have"} no price and no invoice.`,
+  fBestType: (name: string, v: string) => `Most profitable job type: ${name} (${v}).`,
+  fWorstType: (name: string, v: string) => `Job type losing money: ${name} (${v}).`,
+  fUnscanned: (v: string) => `${v} in parts were charged but never scanned from a van.`,
+  fCounts: (v: string) => `${v} in parts (at cost) came up missing in inventory counts.`,
+  fNoRate: (n: number) => `${n} collaborator${n === 1 ? " has" : "s have"} no pay rate, so their labor counts as $0 and the profit looks higher than it is.`,
+};
+export type PnlText = typeof PNL_EN;
+
+export function buildPnl(raw: RawReport, team: TeamMember[], L: PnlText = PNL_EN): Pnl {
   const members = new Map(team.map((m) => [m.user_id, m]));
-  const nameOf = (uid: string) => members.get(uid)?.full_name ?? "Former team member";
+  const nameOf = (uid: string) => members.get(uid)?.full_name ?? L.former;
   const laborBy = new Map<string, number>(), noRateJobs = new Set<string>(), noRatePeople = new Set<string>();
   for (const l of raw.labor ?? []) {
     laborBy.set(l.job_id, (laborBy.get(l.job_id) ?? 0) + n(l.cost));
@@ -281,17 +305,17 @@ export function buildPnl(raw: RawReport, team: TeamMember[]): Pnl {
     const costs = r2(materials + labor + expenses), profit = r2(revenue - costs);
     const margin = revenue > 0 ? Math.round((profit / revenue) * 100) : null;
     const reasons: string[] = [];
-    if (revenue <= 0) reasons.push("No price and no invoice");
+    if (revenue <= 0) reasons.push(L.noPrice);
     else if (profit < 0 || (margin ?? 100) < LOW_MARGIN) {
-      const top = [["Labor", labor], ["Materials", materials], ["Expenses", expenses]].sort((a, b) => (b[1] as number) - (a[1] as number))[0];
-      if ((top[1] as number) > 0) reasons.push(`${top[0]} took ${Math.round(((top[1] as number) / revenue) * 100)}% of the price`);
+      const top = [[L.labor, labor], [L.materials, materials], [L.expenses, expenses]].sort((a, b) => (b[1] as number) - (a[1] as number))[0];
+      if ((top[1] as number) > 0) reasons.push(L.took(top[0] as string, Math.round(((top[1] as number) / revenue) * 100)));
     }
-    if (n(j.visits) > 1) reasons.push(`Needed ${j.visits} visits`);
-    if ((unscanned.get(j.job_id) ?? 0) > 0) reasons.push(`${money0(unscanned.get(j.job_id))} in parts not scanned`);
-    if (noRateJobs.has(j.job_id)) reasons.push("Labor not counted: no pay rate");
-    if (!j.invoice_number && revenue > 0) reasons.push("Not invoiced yet (estimated price)");
+    if (n(j.visits) > 1) reasons.push(L.visits(n(j.visits)));
+    if ((unscanned.get(j.job_id) ?? 0) > 0) reasons.push(L.unscanned(money0(unscanned.get(j.job_id))));
+    if (noRateJobs.has(j.job_id)) reasons.push(L.noRateLine);
+    if (!j.invoice_number && revenue > 0) reasons.push(L.notInvoiced);
     return {
-      job_id: j.job_id, number: j.number, customer: j.customer_name, title: j.title, type: j.type_name || "No job type", when: j.completed_at,
+      job_id: j.job_id, number: j.number, customer: j.customer_name, title: j.title, type: j.type_name || L.noType, when: j.completed_at,
       techs: (j.tech_ids ?? []).map(nameOf), revenue, materials, labor, expenses, costs, profit, margin,
       invoice: j.invoice_number, reasons, loss: profit < 0,
     };
@@ -310,7 +334,7 @@ export function buildPnl(raw: RawReport, team: TeamMember[]): Pnl {
   };
   const byType = group((j) => [{ key: j.type, name: j.type }]);
   // Por colaborador: el trabajo completo cuenta para cada persona que estuvo en él
-  const byPerson = group((_, rj) => (rj.tech_ids?.length ? rj.tech_ids : [NOBODY]).map((uid) => ({ key: uid, name: uid === NOBODY ? "No collaborator" : nameOf(uid) })));
+  const byPerson = group((_, rj) => (rj.tech_ids?.length ? rj.tech_ids : [NOBODY]).map((uid) => ({ key: uid, name: uid === NOBODY ? L.noCollab : nameOf(uid) })));
 
   const sum = (f: (j: PnlJob) => number) => r2(jobs.reduce((a, j) => a + f(j), 0));
   const revenue = sum((j) => j.revenue), profit = sum((j) => j.profit);
@@ -325,64 +349,76 @@ export function buildPnl(raw: RawReport, team: TeamMember[]): Pnl {
 
   // Lo que el manager le cuenta al dueño, en frases
   const findings: string[] = [];
-  if (!jobs.length) findings.push("No jobs were finished in this period.");
+  if (!jobs.length) findings.push(L.fNone);
   else {
-    findings.push(`${jobs.length} job${jobs.length === 1 ? "" : "s"} finished: ${money0(revenue)} in revenue, ${money0(totals.costs)} in costs, ${money0(profit)} ${profit >= 0 ? "profit" : "loss"}${totals.margin != null ? ` (${totals.margin}% margin)` : ""}.`);
+    findings.push(L.fSummary(jobs.length, money0(revenue), money0(totals.costs), money0(profit), profit >= 0, totals.margin));
     if (totals.costs > 0) {
-      const parts = [["labor", totals.labor], ["materials", totals.materials], ["expenses", totals.expenses]].filter((x) => (x[1] as number) > 0).sort((a, b) => (b[1] as number) - (a[1] as number));
-      findings.push(`Biggest cost: ${parts[0][0]} (${money0(parts[0][1] as number)}, ${Math.round(((parts[0][1] as number) / totals.costs) * 100)}% of all costs).`);
+      const parts = [[L.costName("labor"), totals.labor], [L.costName("materials"), totals.materials], [L.costName("expenses"), totals.expenses]].filter((x) => (x[1] as number) > 0).sort((a, b) => (b[1] as number) - (a[1] as number));
+      findings.push(L.fBiggest(parts[0][0] as string, money0(parts[0][1] as number), Math.round(((parts[0][1] as number) / totals.costs) * 100)));
     }
-    if (losers.length) findings.push(`${losers.length} job${losers.length === 1 ? "" : "s"} lost money, ${money0(totals.lossAmount)} in total. The worst: ${losers.slice(0, 3).map((j) => `${j.number} ${j.customer} (${money0(j.profit)})`).join(", ")}.`);
-    else findings.push("No job lost money.");
-    if (totals.lowJobs) findings.push(`${totals.lowJobs} job${totals.lowJobs === 1 ? "" : "s"} made less than ${LOW_MARGIN}% margin.`);
-    if (totals.noPrice) findings.push(`${totals.noPrice} finished job${totals.noPrice === 1 ? " has" : "s have"} no price and no invoice.`);
+    if (losers.length) findings.push(L.fLosers(losers.length, money0(totals.lossAmount), losers.slice(0, 3).map((j) => `${j.number} ${j.customer} (${money0(j.profit)})`).join(", ")));
+    else findings.push(L.fNoLoss);
+    if (totals.lowJobs) findings.push(L.fLow(totals.lowJobs, LOW_MARGIN));
+    if (totals.noPrice) findings.push(L.fNoPrice(totals.noPrice));
     const worstType = byType.find((g) => g.profit < 0), bestType = [...byType].sort((a, b) => b.profit - a.profit)[0];
-    if (bestType && bestType.profit > 0 && byType.length > 1) findings.push(`Most profitable job type: ${bestType.name} (${money0(bestType.profit)}).`);
-    if (worstType) findings.push(`Job type losing money: ${worstType.name} (${money0(worstType.profit)}).`);
+    if (bestType && bestType.profit > 0 && byType.length > 1) findings.push(L.fBestType(bestType.name, money0(bestType.profit)));
+    if (worstType) findings.push(L.fWorstType(worstType.name, money0(worstType.profit)));
   }
-  if (totals.unscannedValue > 0) findings.push(`${money0(totals.unscannedValue)} in parts were charged but never scanned from a van.`);
-  if (totals.countValue > 0) findings.push(`${money0(totals.countValue)} in parts (at cost) came up missing in inventory counts.`);
-  if (totals.noRate > 0) findings.push(`${totals.noRate} collaborator${totals.noRate === 1 ? " has" : "s have"} no pay rate, so their labor counts as $0 and the profit looks higher than it is.`);
+  if (totals.unscannedValue > 0) findings.push(L.fUnscanned(money0(totals.unscannedValue)));
+  if (totals.countValue > 0) findings.push(L.fCounts(money0(totals.countValue)));
+  if (totals.noRate > 0) findings.push(L.fNoRate(totals.noRate));
   return { jobs, byType, byPerson, totals, findings };
 }
 
 // El Profit & loss como PDF real (lo que el manager le entrega al dueño): se ve en el visor, se imprime o se descarga
-export function pnlPdf(p: Pnl, o: { company: string; period: string; range: string; by: string }): PdfDoc {
-  const t = p.totals, m = (v: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(v || 0);
+export const PNL_PDF_EN = {
+  jobs: "Jobs", revenue: "Revenue", costs: "Costs", profit: "Profit", loss: "Loss", margin: "Margin", revenueBT: "Revenue (before tax)",
+  lossJobs: "Jobs that lost money", summary: "Summary", where: "Where the money went", concept: "Concept", amount: "Amount", pctRevenue: "% of revenue",
+  labor: "- Labor", materials: "- Materials (at cost)", expenses: "- Expenses linked to invoices", byType: "By job type", jobType: "Job type",
+  byPerson: "By collaborator", collaborator: "Collaborator", severalNote: "A job with several collaborators counts in full for each of them.",
+  every: "Every job, from the biggest loss to the biggest profit", job: "Job", date: "Date", laborCol: "Labor", materialsCol: "Materials", expensesCol: "Expenses",
+  noCustomer: "No customer", total: (n: number) => `Total · ${n} jobs`,
+  footNote: "Revenue is the invoice before tax; without an invoice, the price on the job. Labor is on-site hours x pay rate. Materials are the parts on the job at cost.",
+  title: "Profit & loss report", subtitle: (period: string, range: string, by: string) => `${period} (${range}) · prepared by ${by}`,
+  tag: "en-US",
+};
+export type PnlPdfText = typeof PNL_PDF_EN;
+export function pnlPdf(p: Pnl, o: { company: string; period: string; range: string; by: string }, P: PnlPdfText = PNL_PDF_EN): PdfDoc {
+  const t = p.totals, m = (v: number) => new Intl.NumberFormat(P.tag, { style: "currency", currency: "USD" }).format(v || 0);
   const pct = (v: number | null) => (v == null ? "-" : `${v}%`);
   const neg = (v: number) => (v < 0 ? ("neg" as const) : undefined);
-  const groupCols = (first: string) => [{ label: first, width: 3.2 }, { label: "Jobs", width: 1, align: "right" as const }, { label: "Revenue", width: 1.8, align: "right" as const }, { label: "Costs", width: 1.8, align: "right" as const }, { label: "Profit", width: 1.8, align: "right" as const }, { label: "Margin", width: 1.1, align: "right" as const }];
+  const groupCols = (first: string) => [{ label: first, width: 3.2 }, { label: P.jobs, width: 1, align: "right" as const }, { label: P.revenue, width: 1.8, align: "right" as const }, { label: P.costs, width: 1.8, align: "right" as const }, { label: P.profit, width: 1.8, align: "right" as const }, { label: P.margin, width: 1.1, align: "right" as const }];
   const groupRows = (g: PnlGroup[]): PdfRow[] => g.map((x) => ({ cells: [x.name, String(x.jobs), m(x.revenue), m(x.costs), { text: m(x.profit), tone: neg(x.profit) }, pct(x.margin)] }));
   const share = (v: number) => (t.revenue > 0 ? `${Math.round((v / t.revenue) * 100)}%` : "-");
   const blocks: PdfBlock[] = [
     { type: "kpis", items: [
-      { label: "Revenue (before tax)", value: m(t.revenue) }, { label: "Costs", value: m(t.costs) },
-      { label: t.profit >= 0 ? "Profit" : "Loss", value: m(t.profit), tone: t.profit < 0 ? "neg" : "pos" }, { label: "Margin", value: pct(t.margin) },
-      { label: "Jobs that lost money", value: `${t.lossJobs} · ${m(t.lossAmount)}`, tone: t.lossJobs ? "neg" : undefined },
+      { label: P.revenueBT, value: m(t.revenue) }, { label: P.costs, value: m(t.costs) },
+      { label: t.profit >= 0 ? P.profit : P.loss, value: m(t.profit), tone: t.profit < 0 ? "neg" : "pos" }, { label: P.margin, value: pct(t.margin) },
+      { label: P.lossJobs, value: `${t.lossJobs} · ${m(t.lossAmount)}`, tone: t.lossJobs ? "neg" : undefined },
     ] },
-    { type: "heading", text: "Summary" }, { type: "bullets", items: p.findings },
-    { type: "heading", text: "Where the money went" },
-    { type: "table", columns: [{ label: "Concept", width: 6 }, { label: "Amount", width: 2, align: "right" }, { label: "% of revenue", width: 1.4, align: "right" }], rows: [
-      { cells: ["Revenue (before tax)", m(t.revenue), share(t.revenue)] }, { cells: ["- Labor", m(t.labor), share(t.labor)] },
-      { cells: ["- Materials (at cost)", m(t.materials), share(t.materials)] }, { cells: ["- Expenses linked to invoices", m(t.expenses), share(t.expenses)] },
-      { cells: [t.profit >= 0 ? "Profit" : "Loss", { text: m(t.profit), tone: t.profit < 0 ? "neg" : "pos" }, pct(t.margin)], style: "result" },
+    { type: "heading", text: P.summary }, { type: "bullets", items: p.findings },
+    { type: "heading", text: P.where },
+    { type: "table", columns: [{ label: P.concept, width: 6 }, { label: P.amount, width: 2, align: "right" }, { label: P.pctRevenue, width: 1.4, align: "right" }], rows: [
+      { cells: [P.revenueBT, m(t.revenue), share(t.revenue)] }, { cells: [P.labor, m(t.labor), share(t.labor)] },
+      { cells: [P.materials, m(t.materials), share(t.materials)] }, { cells: [P.expenses, m(t.expenses), share(t.expenses)] },
+      { cells: [t.profit >= 0 ? P.profit : P.loss, { text: m(t.profit), tone: t.profit < 0 ? "neg" : "pos" }, pct(t.margin)], style: "result" },
     ] },
   ];
-  if (p.byType.length) blocks.push({ type: "heading", text: "By job type" }, { type: "table", columns: groupCols("Job type"), rows: groupRows(p.byType) });
-  if (p.byPerson.length) blocks.push({ type: "heading", text: "By collaborator" }, { type: "table", columns: groupCols("Collaborator"), rows: groupRows(p.byPerson) },
-    { type: "note", text: "A job with several collaborators counts in full for each of them." });
-  blocks.push({ type: "heading", text: "Every job, from the biggest loss to the biggest profit" }, {
+  if (p.byType.length) blocks.push({ type: "heading", text: P.byType }, { type: "table", columns: groupCols(P.jobType), rows: groupRows(p.byType) });
+  if (p.byPerson.length) blocks.push({ type: "heading", text: P.byPerson }, { type: "table", columns: groupCols(P.collaborator), rows: groupRows(p.byPerson) },
+    { type: "note", text: P.severalNote });
+  blocks.push({ type: "heading", text: P.every }, {
     type: "table",
-    columns: [{ label: "Job", width: 3.6 }, { label: "Date", width: 1, align: "right" }, { label: "Revenue", width: 1.5, align: "right" }, { label: "Labor", width: 1.4, align: "right" }, { label: "Materials", width: 1.4, align: "right" }, { label: "Expenses", width: 1.4, align: "right" }, { label: "Profit", width: 1.5, align: "right" }, { label: "Margin", width: 1, align: "right" }],
+    columns: [{ label: P.job, width: 3.6 }, { label: P.date, width: 1, align: "right" }, { label: P.revenue, width: 1.5, align: "right" }, { label: P.laborCol, width: 1.4, align: "right" }, { label: P.materialsCol, width: 1.4, align: "right" }, { label: P.expensesCol, width: 1.4, align: "right" }, { label: P.profit, width: 1.5, align: "right" }, { label: P.margin, width: 1, align: "right" }],
     rows: [
       ...p.jobs.map((j): PdfRow => ({ cells: [
-        { text: `${j.number} · ${j.customer || "No customer"}`, sub: [j.type, j.techs.join(", "), ...j.reasons].filter(Boolean).join(" · ") },
-        shortDay(j.when), m(j.revenue), m(j.labor), m(j.materials), m(j.expenses), { text: m(j.profit), tone: neg(j.profit) }, pct(j.margin)] })),
-      { cells: [`Total · ${t.jobs} jobs`, "", m(t.revenue), m(t.labor), m(t.materials), m(t.expenses), { text: m(t.profit), tone: neg(t.profit) }, pct(t.margin)], style: "total" },
+        { text: `${j.number} · ${j.customer || P.noCustomer}`, sub: [j.type, j.techs.join(", "), ...j.reasons].filter(Boolean).join(" · ") },
+        shortDay(j.when, P.tag), m(j.revenue), m(j.labor), m(j.materials), m(j.expenses), { text: m(j.profit), tone: neg(j.profit) }, pct(j.margin)] })),
+      { cells: [P.total(t.jobs), "", m(t.revenue), m(t.labor), m(t.materials), m(t.expenses), { text: m(t.profit), tone: neg(t.profit) }, pct(t.margin)], style: "total" },
     ],
   });
-  blocks.push({ type: "note", text: "Revenue is the invoice before tax; without an invoice, the price on the job. Labor is on-site hours x pay rate. Materials are the parts on the job at cost." });
-  return { title: "Profit & loss report", subtitle: `${o.period} (${o.range}) · prepared by ${o.by}`, company: o.company, blocks, footer: o.range, fileName: pdfFileName("profit-and-loss", o.company, o.range) };
+  blocks.push({ type: "note", text: P.footNote });
+  return { title: P.title, subtitle: P.subtitle(o.period, o.range, o.by), company: o.company, blocks, footer: o.range, fileName: pdfFileName("profit-and-loss", o.company, o.range) };
 }
 
 // ---------- Ganancia de un trabajo (job_profit, dueño y manager) ----------
@@ -396,7 +432,7 @@ export const PAY_LABEL: Record<string, string> = { hourly: "Hourly", per_job: "P
 
 export const qty = (v: number) => (Number.isInteger(v) ? String(v) : String(Math.round(v * 100) / 100));
 export const money0 = (v: number | null | undefined) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(v) || 0);
-export const shortDay = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—");
+export const shortDay = (iso: string | null, tag = "en-US") => (iso ? new Date(iso).toLocaleDateString(tag, { month: "short", day: "numeric" }) : "—");
 
 export const needsReportSql = (e: { message?: string; code?: string } | null | undefined) =>
   Boolean(e && (e.code === "PGRST202" || e.code === "42883" || e.code === "42P01" || /does not exist|Could not find/.test(e.message ?? "")));
