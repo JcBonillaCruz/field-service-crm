@@ -3,15 +3,16 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { FinPeriod, FinRange, REPORT_PERIODS, money } from "@/lib/finance-period";
-import { CompanyReport, RepBucket, RepExtras, changeText, companyReportPdf, findings, statement } from "@/lib/company-report";
+import { useTranslations } from "next-intl";
+import { FinPeriod, FinRange, REPORT_PERIODS } from "@/lib/finance-period";
+import { useFinTx } from "@/i18n/useFinTx";
+import { CompanyReport, RepBucket, RepExtras, RepL, RepTx, changeText, companyReportPdf, findings, statement } from "@/lib/company-report";
 import ExportModal from "@/components/customers/ExportModal";
 import PdfViewer from "@/components/ui/PdfViewer";
 import type { PdfDoc } from "@/lib/report-pdf";
 import { ExportIcon, Kpi, PeriodBar, PrintIcon, card, ghostBtn, tealBtn } from "@/components/finances/FinBits";
 
 const tone = (v: number) => (v < 0 ? "text-[#be123c]" : "text-[#15803d]");
-const BUCKET_TITLE: Partial<Record<FinPeriod, string>> = { month: "Week by week", quarter: "Month by month", year: "Month by month" };
 
 // Finances → Reports (Paso 5.10c): el reporte de toda la compañía. Dueño y manager.
 // Ingresos − costo de los trabajos = ganancia de los trabajos − gastos generales = ganancia real.
@@ -19,24 +20,32 @@ export default function CompanyReportView({ range, today, report: r, extras: x, 
   range: FinRange; today: string; report: CompanyReport; extras: RepExtras; buckets: RepBucket[];
   needsExpensesSql: boolean; needsPayrollSql: boolean; companyName: string; preparedBy: string;
 }) {
+  const t = useTranslations("compRep");
+  const fx = useFinTx();
+  const money = fx.money;
+  const L: RepL = { t: t as unknown as RepTx, money, cat: fx.cat };
+  const title = fx.finTitle(range), rangeLabel = fx.span(range.from, range.to), prevLabel = fx.prevTitle(range);
+  // Las etiquetas de cada pedazo del periodo en el idioma: semanas "15 – 21 nov", meses "noviembre"
+  const parts = buckets.map((b) => ({ ...b, label: range.period === "month" ? fx.spanShort(b.from, b.to) : fx.monthLong(b.from, false) }));
+  const bucketTitle = range.period === "month" ? t("weekByWeek") : t("monthByMonth");
   const router = useRouter();
   const [pending, start] = useTransition();
   const [exportOpen, setExportOpen] = useState(false);
   const [pdf, setPdf] = useState<PdfDoc | null>(null);
   const go = (p: FinPeriod, d: string) => start(() => router.push(`/dashboard/reports?p=${p}&d=${d}`));
   const q = `?p=${range.period === "quarter" || range.period === "year" ? "month" : range.period}&d=${range.from}`;
-  const lines = statement(r);
-  const notes = findings(r, x);
-  const vs = (now: number, before: number | undefined) => (x.prev && !x.prev.empty && before !== undefined && changeText(now, before) ? `${changeText(now, before)} vs ${x.prevLabel}` : "");
+  const lines = statement(r, L);
+  const notes = findings(r, x, L, prevLabel);
+  const vs = (now: number, before: number | undefined) => (x.prev && !x.prev.empty && before !== undefined && changeText(now, before) ? t("vs", { change: changeText(now, before), label: prevLabel }) : "");
   // La ganancia se compara en dólares (un % contra un mes en pérdida no dice nada)
-  const netVs = x.prev && !x.prev.empty && r.net !== x.prev.net ? `${money(Math.abs(r.net - x.prev.net))} ${r.net >= x.prev.net ? "more" : "less"} than ${x.prevLabel}` : "";
+  const netVs = x.prev && !x.prev.empty && r.net !== x.prev.net ? t("netVs", { amount: money(Math.abs(r.net - x.prev.net)), more: r.net >= x.prev.net ? "yes" : "no", label: prevLabel }) : "";
   const share = (v: number) => (r.income > 0 ? Math.max(0, Math.min(100, (v / r.income) * 100)) : 0);
   const bars = [
-    { label: "Materials", v: r.materials, color: "#2563eb" }, { label: "Labor paid", v: r.labor, color: "#f59e0b" },
-    ...(r.jobOther > 0 ? [{ label: "Other job costs", v: r.jobOther, color: "#7c3aed" }] : []),
-    { label: "General expenses", v: r.overheadTotal, color: "#64748b" },
-    ...(r.financingTotal > 0 ? [{ label: "Financed purchases", v: r.financingTotal, color: "#0891b2" }] : []),
-    { label: r.net >= 0 ? "Real profit" : "Real loss", v: r.net, color: r.net >= 0 ? "#16a34a" : "#e11d48" },
+    { label: t("materials"), v: r.materials, color: "#2563eb" }, { label: t("laborPaid"), v: r.labor, color: "#f59e0b" },
+    ...(r.jobOther > 0 ? [{ label: t("otherJobCosts"), v: r.jobOther, color: "#7c3aed" }] : []),
+    { label: t("general"), v: r.overheadTotal, color: "#64748b" },
+    ...(r.financingTotal > 0 ? [{ label: t("financedPurchases"), v: r.financingTotal, color: "#0891b2" }] : []),
+    { label: r.net >= 0 ? t("realProfit") : t("realLoss"), v: r.net, color: r.net >= 0 ? "#16a34a" : "#e11d48" },
   ];
   const side = (title: string, href: string, linkText: string, children: React.ReactNode) => (
     <section className={`${card} px-4 py-3.5`}>
@@ -53,31 +62,31 @@ export default function CompanyReportView({ range, today, report: r, extras: x, 
     <div className="min-h-[calc(100dvh-4rem)] bg-[#f4f6f8] px-3 pb-24 pt-4 lg:px-6 lg:pb-8 lg:pt-5">
       <div className="flex flex-wrap items-center gap-3">
         <div className="mr-auto min-w-0">
-          <h1 className="text-[22px] font-semibold tracking-tight text-[#0b1f3a]">Reports</h1>
-          <p className="text-[13px] text-slate-500">The whole company: what came in, what went out and what was really left.</p>
+          <h1 className="text-[22px] font-semibold tracking-tight text-[#0b1f3a]">{t("title")}</h1>
+          <p className="text-[13px] text-slate-500">{t("subtitle")}</p>
         </div>
-        <button type="button" onClick={() => setExportOpen(true)} className={ghostBtn}><ExportIcon />Export</button>
-        <button type="button" onClick={() => setPdf(companyReportPdf(r, x, buckets, { company: companyName, title: range.title, range: range.label, by: preparedBy || "the manager" }))} className={tealBtn}><PrintIcon />Print / PDF</button>
+        <button type="button" onClick={() => setExportOpen(true)} className={ghostBtn}><ExportIcon />{t("export")}</button>
+        <button type="button" onClick={() => setPdf(companyReportPdf(r, x, parts, { company: companyName, title, range: rangeLabel, by: preparedBy || t("theManager"), prevLabel }, L))} className={tealBtn}><PrintIcon />{t("printPdf")}</button>
       </div>
       <div className="mt-4"><PeriodBar periods={REPORT_PERIODS} range={range} today={today} onGo={go} /></div>
 
-      {needsExpensesSql && <p className="mt-4 rounded-xl border border-[#fcd38d] bg-[#fffbf3] px-4 py-3 text-[13px] text-[#92400e]">Expenses couldn&apos;t be read, so they count as $0 here. Run the Expenses SQL (Paso 3.36) in Supabase.</p>}
-      {needsPayrollSql && <p className="mt-4 rounded-xl border border-[#fcd38d] bg-[#fffbf3] px-4 py-3 text-[13px] text-[#92400e]">Run <b>paso-5.10c-payroll.sql</b> in Supabase to see here how much payroll is still owed.</p>}
+      {needsExpensesSql && <p className="mt-4 rounded-xl border border-[#fcd38d] bg-[#fffbf3] px-4 py-3 text-[13px] text-[#92400e]">{t("needsExpenses")}</p>}
+      {needsPayrollSql && <p className="mt-4 rounded-xl border border-[#fcd38d] bg-[#fffbf3] px-4 py-3 text-[13px] text-[#92400e]">{t.rich("needsPayroll", { b: (c) => <b>{c}</b> })}</p>}
 
       <div className={`transition-opacity duration-200 ${pending ? "opacity-60" : ""}`}>
         <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
-          <Kpi art="revenue" title="Income" value={money(r.income)} hint={vs(r.income, x.prev?.income) || "Invoices collected + Money In"} />
-          <Kpi art="parts" title="Cost of the jobs" value={money(r.jobCosts)} hint={`Materials ${money(r.materials)} · Labor ${money(r.labor)}`} />
-          <Kpi art="idle" title="General expenses" value={money(r.overheadTotal)} hint={r.overhead[0] ? `Biggest: ${r.overhead[0].label}` : "Rent, fuel, insurance…"} />
-          <Kpi art={r.net >= 0 ? "profit" : "value"} title={r.net >= 0 ? "Real profit" : "Real loss"} value={money(r.net)} hint={`${r.margin == null ? "No income in this period" : `${r.margin}% of income`}${netVs ? ` · ${netVs}` : ""}`} tone={tone(r.net)} />
+          <Kpi art="revenue" title={t("income")} value={money(r.income)} hint={vs(r.income, x.prev?.income) || t("kIncomeHint")} />
+          <Kpi art="parts" title={t("jobCosts")} value={money(r.jobCosts)} hint={t("kCostHint", { m: money(r.materials), l: money(r.labor) })} />
+          <Kpi art="idle" title={t("general")} value={money(r.overheadTotal)} hint={r.overhead[0] ? t("kBiggest", { label: fx.cat(r.overhead[0].label) }) : t("kGeneralHint")} />
+          <Kpi art={r.net >= 0 ? "profit" : "value"} title={r.net >= 0 ? t("realProfit") : t("realLoss")} value={money(r.net)} hint={`${r.margin == null ? t("noIncome") : t("pctOfIncome", { n: r.margin })}${netVs ? ` · ${netVs}` : ""}`} tone={tone(r.net)} />
         </div>
 
         <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
           <div className="min-w-0 space-y-4">
             <section className={`${card} overflow-hidden`}>
               <div className="border-b border-slate-100 px-4 py-3 lg:px-5">
-                <p className="text-[15px] font-semibold text-[#0b1f3a]">Income and expenses</p>
-                <p className="text-[12.5px] text-slate-500">{range.label} · money that really came in and went out</p>
+                <p className="text-[15px] font-semibold text-[#0b1f3a]">{t("incomeExpenses")}</p>
+                <p className="text-[12.5px] text-slate-500">{t("incomeExpensesSub", { range: rangeLabel })}</p>
               </div>
               <div className="px-2 pb-2 lg:px-3">
                 {lines.map((l, i) => l.kind === "head" ? (
@@ -98,8 +107,8 @@ export default function CompanyReportView({ range, today, report: r, extras: x, 
 
             {r.income > 0 && (
               <section className={`${card} px-4 py-3.5 lg:px-5`}>
-                <p className="text-[15px] font-semibold text-[#0b1f3a]">Where each dollar went</p>
-                <p className="text-[12.5px] text-slate-500">Each line as a part of the income.</p>
+                <p className="text-[15px] font-semibold text-[#0b1f3a]">{t("whereDollar")}</p>
+                <p className="text-[12.5px] text-slate-500">{t("whereDollarSub")}</p>
                 <ul className="mt-3 space-y-2.5">
                   {bars.map((b) => (
                     <li key={b.label} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 text-[13px] sm:grid-cols-[9.5rem_minmax(0,1fr)_auto]">
@@ -112,12 +121,12 @@ export default function CompanyReportView({ range, today, report: r, extras: x, 
               </section>
             )}
 
-            {buckets.length > 0 && (
+            {parts.length > 0 && (
               <section className={`${card} overflow-hidden`}>
-                <div className="border-b border-slate-100 px-4 py-3 lg:px-5"><p className="text-[15px] font-semibold text-[#0b1f3a]">{BUCKET_TITLE[range.period]}</p></div>
-                <div className="grid grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))] gap-x-3 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 lg:px-5"><span /><span className="text-right">Income</span><span className="text-right">Expenses</span><span className="text-right">Profit</span></div>
+                <div className="border-b border-slate-100 px-4 py-3 lg:px-5"><p className="text-[15px] font-semibold text-[#0b1f3a]">{bucketTitle}</p></div>
+                <div className="grid grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))] gap-x-3 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 lg:px-5"><span /><span className="text-right">{t("income")}</span><span className="text-right">{t("expenses")}</span><span className="text-right">{t("profit")}</span></div>
                 <ul className="divide-y divide-slate-100">
-                  {buckets.map((b) => (
+                  {parts.map((b) => (
                     <li key={b.from}>
                       <Link prefetch={false} href={`/dashboard/reports?p=${range.period === "month" ? "week" : "month"}&d=${b.from}`} className="grid grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))] items-center gap-x-3 px-4 py-2.5 text-[13.5px] tabular-nums transition-colors hover:bg-[#f6fbfa] lg:px-5">
                         <span className="truncate font-medium text-[#0b1f3a]">{b.label}</span><span className="truncate text-right text-slate-600">{money(b.income)}</span><span className="truncate text-right text-slate-600">{money(b.costs)}</span>
@@ -132,49 +141,53 @@ export default function CompanyReportView({ range, today, report: r, extras: x, 
 
           <div className="min-w-0 space-y-4">
             <section className={`${card} px-4 py-3.5`}>
-              <p className="text-[14px] font-semibold text-[#0b1f3a]">Summary for the owner</p>
+              <p className="text-[14px] font-semibold text-[#0b1f3a]">{t("ownerSummary")}</p>
               <ul className="mt-2 space-y-2">
                 {notes.map((f) => <li key={f} className="flex gap-2 text-[13px] leading-snug text-slate-600"><span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#14a39a]" />{f}</li>)}
               </ul>
             </section>
 
-            {x.payroll && side("Payroll for this period", `/dashboard/payroll${q}`, "Open Payroll", <div className="mt-1.5">
-              {pair(`Earned by ${x.payroll.people} ${x.payroll.people === 1 ? "person" : "people"}`, money(x.payroll.calculated))}
-              {pair("Already paid", <span className="text-[#15803d]">{money(x.payroll.paid)}</span>)}
-              {pair("Still owed", <span className={x.payroll.balance > 0.005 ? "text-[#be123c]" : ""}>{money(x.payroll.balance)}</span>)}
-              <p className="mt-1.5 text-[12px] leading-snug text-slate-400">Only what is marked as paid counts as an expense above.</p>
+            {x.payroll && side(t("payrollHead"), `/dashboard/payroll${q}`, t("openPayroll"), <div className="mt-1.5">
+              {pair(t("earnedBy", { n: x.payroll.people }), money(x.payroll.calculated))}
+              {pair(t("alreadyPaid"), <span className="text-[#15803d]">{money(x.payroll.paid)}</span>)}
+              {pair(t("stillOwed"), <span className={x.payroll.balance > 0.005 ? "text-[#be123c]" : ""}>{money(x.payroll.balance)}</span>)}
+              <p className="mt-1.5 text-[12px] leading-snug text-slate-400">{t("payrollNote")}</p>
             </div>)}
 
-            {x.jobs && side("Jobs finished in this period", "/dashboard/jobs/reports?tab=pnl", "Open in Jobs", <div className="mt-1.5">
-              {pair(`${x.jobs.jobs} job${x.jobs.jobs === 1 ? "" : "s"} · revenue before tax`, money(x.jobs.revenue))}
-              {pair("Labor by pay rate", money(x.jobs.labor))}
-              {pair("Parts at cost", money(x.jobs.materials))}
-              {pair(x.jobs.profit >= 0 ? "Profit by job" : "Loss by job", <span className={tone(x.jobs.profit)}>{money(x.jobs.profit)}</span>)}
-              <p className="mt-1.5 text-[12px] leading-snug text-slate-400">That report says how much each finished job left. This one says how much money really moved, so the two don&apos;t have to match.</p>
+            {x.jobs && side(t("jobsFinished"), "/dashboard/jobs/reports?tab=pnl", t("openJobs"), <div className="mt-1.5">
+              {pair(t("jobsRevenue", { n: x.jobs.jobs }), money(x.jobs.revenue))}
+              {pair(t("laborRate"), money(x.jobs.labor))}
+              {pair(t("partsCost"), money(x.jobs.materials))}
+              {pair(x.jobs.profit >= 0 ? t("profitByJob") : t("lossByJob"), <span className={tone(x.jobs.profit)}>{money(x.jobs.profit)}</span>)}
+              <p className="mt-1.5 text-[12px] leading-snug text-slate-400">{t("jobsNote")}</p>
             </div>)}
 
-            {x.financing && x.financing.count > 0 && side("Financed purchases", "/dashboard/financing", "Open Financing", <div className="mt-1.5">
-              {pair("Paid in this period", money(r.financingTotal))}
-              {pair(`Still owed on ${x.financing.count} purchase${x.financing.count === 1 ? "" : "s"}`, <span className="text-[#be123c]">{money(x.financing.owed)}</span>)}
-              {pair("Payments per month", money(x.financing.monthly))}
-              <p className="mt-1.5 text-[12px] leading-snug text-slate-400">{x.financing.overdue ? `${x.financing.overdue} payment${x.financing.overdue === 1 ? " is" : "s are"} past due. ` : ""}What is still owed is a debt, not an expense of this period.</p>
+            {x.financing && x.financing.count > 0 && side(t("financedPurchases"), "/dashboard/financing", t("openFinancing"), <div className="mt-1.5">
+              {pair(t("paidPeriod"), money(r.financingTotal))}
+              {pair(t("owedOn", { n: x.financing.count }), <span className="text-[#be123c]">{money(x.financing.owed)}</span>)}
+              {pair(t("perMonth"), money(x.financing.monthly))}
+              <p className="mt-1.5 text-[12px] leading-snug text-slate-400">{x.financing.overdue ? `${t("pastDue", { n: x.financing.overdue })} ` : ""}{t("debtNote")}</p>
             </div>)}
 
-            {side("Customers still owe", "/dashboard/invoices", "Invoices", <div className="mt-1.5">
-              {pair(`${x.receivableCount} open invoice${x.receivableCount === 1 ? "" : "s"}`, money(x.receivable))}
-              <p className="mt-1.5 text-[12px] leading-snug text-slate-400">Not counted as income until it&apos;s collected.</p>
+            {side(t("custOwe"), "/dashboard/invoices", t("invoices"), <div className="mt-1.5">
+              {pair(t("openInvoices", { n: x.receivableCount }), money(x.receivable))}
+              <p className="mt-1.5 text-[12px] leading-snug text-slate-400">{t("custOweNote")}</p>
             </div>)}
           </div>
         </div>
 
         <p className="mt-4 text-[12.5px] leading-relaxed text-slate-500">
-          Everything here comes from what is recorded in Finances: payments on <Link prefetch={false} href="/dashboard/invoices" className="font-semibold text-[#0f766e] hover:underline">Invoices</Link>, <Link prefetch={false} href="/dashboard/income" className="font-semibold text-[#0f766e] hover:underline">Money In</Link> and <Link prefetch={false} href="/dashboard/expenses" className="font-semibold text-[#0f766e] hover:underline">Expenses</Link>. An expense that isn&apos;t written there isn&apos;t counted.
+          {t.rich("footer", {
+            inv: (c) => <Link prefetch={false} href="/dashboard/invoices" className="font-semibold text-[#0f766e] hover:underline">{c}</Link>,
+            mi: (c) => <Link prefetch={false} href="/dashboard/income" className="font-semibold text-[#0f766e] hover:underline">{c}</Link>,
+            ex: (c) => <Link prefetch={false} href="/dashboard/expenses" className="font-semibold text-[#0f766e] hover:underline">{c}</Link>,
+          })}
         </p>
       </div>
 
       {pdf && <PdfViewer doc={pdf} onClose={() => setPdf(null)} />}
       <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} initialModule="Company report" defaultScope="view"
-        view={{ module: "Company report", label: range.title, ids: ["report"], columns: [], range: { from: range.from, to: range.to } }} />
+        view={{ module: "Company report", label: title, ids: ["report"], columns: [], range: { from: range.from, to: range.to } }} />
     </div>
   );
 }

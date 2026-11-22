@@ -3,6 +3,8 @@
 import SelectMenu from "@/components/ui/SelectMenu";
 import ReportArt, { ReportArtKind } from "@/components/jobs/reports/ReportArt";
 import type { FinPeriod, FinRange } from "@/lib/finance-period";
+import { useTranslations } from "next-intl";
+import { useFinTx } from "@/i18n/useFinTx";
 
 // Piezas compartidas por Finances → Payroll y Finances → Reports (Paso 5.10c)
 export const card = "rounded-2xl border border-slate-200 bg-white";
@@ -25,22 +27,24 @@ export function Kpi({ art, title, value, hint, tone = "text-[#0b1f3a]" }: { art:
 export function PeriodBar({ periods, range, today, onGo }: {
   periods: { value: FinPeriod; label: string }[]; range: FinRange; today: string; onGo: (period: FinPeriod, day: string) => void;
 }) {
+  const t = useTranslations("finBits");
+  const fx = useFinTx();
   const arrow = (dir: "prev" | "next") => (
-    <button type="button" aria-label={dir === "prev" ? "Previous period" : "Next period"} onClick={() => onGo(range.period, dir === "prev" ? range.prev : range.next)}
+    <button type="button" aria-label={dir === "prev" ? t("prev") : t("next")} onClick={() => onGo(range.period, dir === "prev" ? range.prev : range.next)}
       className="flex h-10 w-9 items-center justify-center text-slate-500 transition-colors hover:bg-[#e9f7f4] hover:text-[#0f766e]">
       <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={dir === "prev" ? "M12.5 5l-5 5 5 5" : "M7.5 5l5 5-5 5"} /></svg>
     </button>
   );
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <div className="w-[9.5rem]"><SelectMenu ariaLabel="Period" value={range.period} onChange={(v) => onGo(v as FinPeriod, today)} options={periods} /></div>
+      <div className="w-[9.5rem]"><SelectMenu ariaLabel={t("period")} value={range.period} onChange={(v) => onGo(v as FinPeriod, today)} options={fx.periods(periods)} /></div>
       <div className="flex h-10 items-center overflow-hidden rounded-xl border border-slate-200 bg-white">
         {arrow("prev")}
-        <span className="min-w-[9.5rem] px-1 text-center text-[13.5px] font-semibold tabular-nums text-[#0b1f3a]">{range.title}</span>
+        <span className="min-w-[9.5rem] px-1 text-center text-[13.5px] font-semibold tabular-nums text-[#0b1f3a]">{fx.finTitle(range)}</span>
         {arrow("next")}
       </div>
       {!range.isCurrent && (
-        <button type="button" onClick={() => onGo(range.period, today)} className="h-10 rounded-xl px-2.5 text-[13px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4]">Today</button>
+        <button type="button" onClick={() => onGo(range.period, today)} className="h-10 rounded-xl px-2.5 text-[13px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4]">{t("today")}</button>
       )}
     </div>
   );

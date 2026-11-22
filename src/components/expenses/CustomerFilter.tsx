@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { initials, softColor } from "@/lib/types";
 import type { PayerOption } from "@/components/expenses/ExpensesWorkspace";
@@ -9,6 +10,7 @@ import type { PayerOption } from "@/components/expenses/ExpensesWorkspace";
 const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 export default function CustomerFilter({ people, value, onChange }: { people: PayerOption[]; value: string | null; onChange: (id: string | null) => void }) {
+  const tr = useTranslations("payer");
   const [q, setQ] = useState("");
   const current = people.find((p) => p.id === value) ?? null;
   const list = useMemo(() => {
@@ -18,14 +20,14 @@ export default function CustomerFilter({ people, value, onChange }: { people: Pa
 
   return (
     <Popover className="relative">
-      <PopoverButton aria-label="Filter by customer" title="Filter by customer"
+      <PopoverButton aria-label={tr("filter")} title={tr("filter")}
         className={`group flex h-10 max-w-[11rem] items-center gap-2 rounded-lg border bg-white px-2.5 text-[14px] font-medium transition-all duration-150 hover:border-[#14a39a] focus:outline-none data-[open]:border-[#0f766e] sm:max-w-[15rem] sm:px-3 ${current ? "border-[#0f766e] text-[#0b1f3a]" : "border-slate-200 text-slate-600"}`}>
         {current ? (
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold" style={{ background: softColor(current.id).bg, color: softColor(current.id).text }}>{initials(current.display_name)}</span>
         ) : (
           <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] shrink-0 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><circle cx="12" cy="8" r="3.6" /><path d="M5 20a7 7 0 0 1 14 0" /></svg>
         )}
-        <span className={`truncate ${current ? "" : "hidden sm:inline"}`}>{current ? current.display_name : "All customers"}</span>
+        <span className={`truncate ${current ? "" : "hidden sm:inline"}`}>{current ? current.display_name : tr("all")}</span>
         <svg viewBox="0 0 20 20" className="hidden h-4 w-4 shrink-0 text-slate-400 transition-transform group-data-[open]:rotate-180 sm:block" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
       </PopoverButton>
       <PopoverPanel anchor={{ to: "bottom start", gap: 6 }} transition
@@ -34,7 +36,7 @@ export default function CustomerFilter({ people, value, onChange }: { people: Pa
           <>
             <div className="flex h-10 items-center gap-2 rounded-lg bg-slate-50 px-3">
               <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
-              <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search customers" className="min-w-0 flex-1 bg-transparent text-[15px] focus:outline-none" />
+              <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("search")} className="min-w-0 flex-1 bg-transparent text-[15px] focus:outline-none" />
             </div>
             <div className="mt-1.5 max-h-72 overflow-y-auto">
               <button type="button" onClick={() => { onChange(null); setQ(""); close(); }}
@@ -52,7 +54,7 @@ export default function CustomerFilter({ people, value, onChange }: { people: Pa
                   </button>
                 );
               })}
-              {list.length === 0 && <p className="px-3 py-3 text-[13px] text-slate-400">No customer matches “{q}”.</p>}
+              {list.length === 0 && <p className="px-3 py-3 text-[13px] text-slate-400">{tr("noMatch", { q })}</p>}
             </div>
           </>
         )}

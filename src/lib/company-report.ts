@@ -1,4 +1,4 @@
-import { FinPeriod, addDaysIso, money, r2, spanLabel, weekStartIso } from "@/lib/finance-period";
+import { FinPeriod, addDaysIso, r2, spanLabel, weekStartIso } from "@/lib/finance-period";
 import type { PnlTotals } from "@/lib/job-reports";
 import type { PayTotals } from "@/lib/payroll";
 import { PdfBlock, PdfDoc, PdfRow, PdfTone, pdfFileName } from "@/lib/report-pdf";
@@ -108,37 +108,43 @@ export function buildBuckets(src: RepSource, period: FinPeriod, from: string, to
   return cuts.map((c) => { const r = buildCompanyReport(src, c.from, c.to); return { ...c, income: r.income, costs: r.expenses, net: r.net }; });
 }
 
-// ---------- El estado de resultados, renglón por renglón (pantalla, hoja para imprimir y exportación usan lo mismo) ----------
+// ---------- Paso 6.2b: los textos llegan en el idioma de quien lo ve ----------
+// t = traductor del namespace "compRep" · money = formato de dinero del idioma · cat = nombre de una categoría guardada (en inglés) traducido
+export type RepTx = (key: string, values?: Record<string, string | number>) => string;
+export type RepL = { t: RepTx; money: (v: number | null | undefined) => string; cat: (name: string) => string };
+
+// ---------- El estado de resultados, renglón por renglón (pantalla, PDF y exportación usan lo mismo) ----------
 export type StLine = { kind: "head" | "line" | "sub" | "total" | "result"; label: string; amount?: number; pct?: number | null; hint?: string };
-export function statement(r: CompanyReport): StLine[] {
+export function statement(r: CompanyReport, L: RepL): StLine[] {
+  const { t } = L;
   const p = (v: number) => pctOf(v, r.income);
-  const out: StLine[] = [{ kind: "head", label: "Income" }];
-  out.push({ kind: "line", label: "Invoices collected", amount: r.invoices, hint: "Payments received on invoices in this period" });
-  if (r.salesTax > 0) out.push({ kind: "line", label: "− Sales tax inside those payments", amount: -r.salesTax, hint: "Not your money: it goes to the state" });
-  out.push({ kind: "line", label: "Money In", amount: r.moneyIn, hint: "Cash jobs, direct payments and everything recorded in Money In" });
-  r.moneyInBy.forEach((l) => out.push({ kind: "sub", label: l.label, amount: l.amount }));
-  out.push({ kind: "total", label: "Total income", amount: r.income, pct: r.income > 0 ? 100 : null });
+  const out: StLine[] = [{ kind: "head", label: t("income") }];
+  out.push({ kind: "line", label: t("invoicesCollected"), amount: r.invoices, hint: t("hInvoices") });
+  if (r.salesTax > 0) out.push({ kind: "line", label: t("salesTax"), amount: -r.salesTax, hint: t("hSalesTax") });
+  out.push({ kind: "line", label: t("moneyIn"), amount: r.moneyIn, hint: t("hMoneyIn") });
+  r.moneyInBy.forEach((l) => out.push({ kind: "sub", label: L.cat(l.label), amount: l.amount }));
+  out.push({ kind: "total", label: t("totalIncome"), amount: r.income, pct: r.income > 0 ? 100 : null });
 
-  out.push({ kind: "head", label: "Cost of the jobs" });
-  out.push({ kind: "line", label: "Materials", amount: r.materials, pct: p(r.materials), hint: "Expenses in Materials & Supplies or marked as Material" });
-  out.push({ kind: "line", label: "Labor paid", amount: r.labor, pct: p(r.labor), hint: "What was really paid: Payroll → Mark as paid, or a labor expense written by hand" });
-  if (r.laborEmployees > 0) out.push({ kind: "sub", label: "Direct employees (Payroll & Labor)", amount: r.laborEmployees });
-  if (r.laborSubs > 0) out.push({ kind: "sub", label: "Subcontractors", amount: r.laborSubs });
-  if (r.laborOther > 0) out.push({ kind: "sub", label: "Other labor / job pay", amount: r.laborOther });
-  if (r.jobOther > 0) out.push({ kind: "line", label: "Other costs charged to a customer", amount: r.jobOther, pct: p(r.jobOther), hint: "Expenses linked to a customer or an invoice" });
-  out.push({ kind: "total", label: "Total cost of the jobs", amount: r.jobCosts, pct: p(r.jobCosts) });
-  out.push({ kind: "result", label: r.grossProfit >= 0 ? "Profit from the jobs" : "Loss from the jobs", amount: r.grossProfit, pct: r.grossMargin });
+  out.push({ kind: "head", label: t("jobCosts") });
+  out.push({ kind: "line", label: t("materials"), amount: r.materials, pct: p(r.materials), hint: t("hMaterials") });
+  out.push({ kind: "line", label: t("laborPaid"), amount: r.labor, pct: p(r.labor), hint: t("hLabor") });
+  if (r.laborEmployees > 0) out.push({ kind: "sub", label: t("laborEmp"), amount: r.laborEmployees });
+  if (r.laborSubs > 0) out.push({ kind: "sub", label: t("subs"), amount: r.laborSubs });
+  if (r.laborOther > 0) out.push({ kind: "sub", label: t("laborOther"), amount: r.laborOther });
+  if (r.jobOther > 0) out.push({ kind: "line", label: t("jobOther"), amount: r.jobOther, pct: p(r.jobOther), hint: t("hJobOther") });
+  out.push({ kind: "total", label: t("totalJobCosts"), amount: r.jobCosts, pct: p(r.jobCosts) });
+  out.push({ kind: "result", label: r.grossProfit >= 0 ? t("jobProfit") : t("jobLoss"), amount: r.grossProfit, pct: r.grossMargin });
 
-  out.push({ kind: "head", label: "General expenses" });
-  if (!r.overhead.length) out.push({ kind: "line", label: "No general expenses recorded", amount: 0 });
-  r.overhead.forEach((l) => out.push({ kind: "line", label: l.label, amount: l.amount, pct: p(l.amount) }));
-  out.push({ kind: "total", label: "Total general expenses", amount: r.overheadTotal, pct: p(r.overheadTotal) });
+  out.push({ kind: "head", label: t("general") });
+  if (!r.overhead.length) out.push({ kind: "line", label: t("noGeneral"), amount: 0 });
+  r.overhead.forEach((l) => out.push({ kind: "line", label: L.cat(l.label), amount: l.amount, pct: p(l.amount) }));
+  out.push({ kind: "total", label: t("totalGeneral"), amount: r.overheadTotal, pct: p(r.overheadTotal) });
   if (r.financing.length) {
-    out.push({ kind: "head", label: "Payments on financed purchases" });
-    r.financing.forEach((l) => out.push({ kind: "line", label: l.label, amount: l.amount, pct: p(l.amount), hint: "Payments recorded in Financing in this period" }));
-    out.push({ kind: "total", label: "Total financed purchases", amount: r.financingTotal, pct: p(r.financingTotal) });
+    out.push({ kind: "head", label: t("financingHead") });
+    r.financing.forEach((l) => out.push({ kind: "line", label: l.label, amount: l.amount, pct: p(l.amount), hint: t("hFinancing") }));
+    out.push({ kind: "total", label: t("totalFinancing"), amount: r.financingTotal, pct: p(r.financingTotal) });
   }
-  out.push({ kind: "result", label: r.net >= 0 ? "Real profit of the company" : "Real loss of the company", amount: r.net, pct: r.margin });
+  out.push({ kind: "result", label: r.net >= 0 ? t("realProfitCo") : t("realLossCo"), amount: r.net, pct: r.margin });
   return out;
 }
 
@@ -153,62 +159,66 @@ export type RepExtras = {
 const change = (now: number, before: number) => (before === 0 ? null : Math.round(((now - before) / Math.abs(before)) * 100));
 export const changeText = (now: number, before: number) => { const c = change(now, before); return c == null ? "" : `${c > 0 ? "+" : ""}${c}%`; };
 
-export function findings(r: CompanyReport, x: RepExtras): string[] {
+// prevLabel: el nombre del periodo anterior ya en el idioma ("October 2026" / "octubre de 2026")
+export function findings(r: CompanyReport, x: RepExtras, L: RepL, prevLabel = x.prevLabel): string[] {
+  const { t, money } = L;
   const out: string[] = [];
-  if (r.empty) return ["Nothing was recorded in Finances for this period: no invoice payments, no Money In and no expenses."];
-  out.push(`${money(r.income)} came in and ${money(r.expenses)} went out: ${r.net >= 0 ? "a real profit" : "a real loss"} of ${money(Math.abs(r.net))}${r.margin != null ? ` (${r.margin}% of income)` : ""}.`);
+  if (r.empty) return [t("fEmpty")];
+  out.push(t("fNet", { in: money(r.income), out: money(r.expenses), loss: r.net >= 0 ? "no" : "yes", amt: money(Math.abs(r.net)), pct: r.margin == null ? "none" : String(r.margin) }));
   if (x.prev && !x.prev.empty) {
     const d = r2(r.net - x.prev.net);
-    out.push(`Compared with ${x.prevLabel}: income ${changeText(r.income, x.prev.income) || "from $0"}, expenses ${changeText(r.expenses, x.prev.expenses) || "from $0"}, and the profit is ${money(Math.abs(d))} ${d >= 0 ? "higher" : "lower"}.`);
+    out.push(t("fCompare", { prev: prevLabel, inc: changeText(r.income, x.prev.income) || t("fromZero"), exp: changeText(r.expenses, x.prev.expenses) || t("fromZero"), amt: money(Math.abs(d)), up: d >= 0 ? "yes" : "no" }));
   }
-  const big = [{ label: "Materials", amount: r.materials }, { label: "Labor", amount: r.labor }, ...r.overhead, ...r.financing].filter((l) => l.amount > 0).sort((a, b) => b.amount - a.amount)[0];
-  if (big && r.expenses > 0) out.push(`Biggest expense: ${big.label} (${money(big.amount)}, ${Math.round((big.amount / r.expenses) * 100)}% of everything spent).`);
-  if (r.income > 0 && r.overheadTotal > 0) out.push(`General expenses took ${Math.round((r.overheadTotal / r.income) * 100)}% of the income.`);
-  if (x.payroll && x.payroll.balance > 0.005) out.push(`Payroll for this period is not fully paid: ${money(x.payroll.balance)} still owed to ${x.payroll.unpaidPeople} ${x.payroll.unpaidPeople === 1 ? "person" : "people"}. After paying it, the profit would be ${money(r.net - x.payroll.balance)}.`);
-  if (x.payroll && x.payroll.noRate > 0) out.push(`${x.payroll.noRate} ${x.payroll.noRate === 1 ? "person has" : "people have"} no pay rate, so Payroll can't calculate what to pay them.`);
+  const big = [{ label: t("materials"), amount: r.materials }, { label: t("labor"), amount: r.labor }, ...r.overhead.map((l) => ({ ...l, label: L.cat(l.label) })), ...r.financing].filter((l) => l.amount > 0).sort((a, b) => b.amount - a.amount)[0];
+  if (big && r.expenses > 0) out.push(t("fBiggest", { label: big.label, amt: money(big.amount), pct: Math.round((big.amount / r.expenses) * 100) }));
+  if (r.income > 0 && r.overheadTotal > 0) out.push(t("fGeneral", { pct: Math.round((r.overheadTotal / r.income) * 100) }));
+  if (x.payroll && x.payroll.balance > 0.005) out.push(t("fPayroll", { amt: money(x.payroll.balance), n: x.payroll.unpaidPeople, after: money(r.net - x.payroll.balance) }));
+  if (x.payroll && x.payroll.noRate > 0) out.push(t("fNoRate", { n: x.payroll.noRate }));
   if (x.jobs && x.jobs.jobs > 0) {
-    out.push(`Jobs finished in this period: ${x.jobs.jobs}, with ${money(x.jobs.profit)} ${x.jobs.profit >= 0 ? "profit" : "loss"} by job (Jobs → Reports).${x.jobs.lossJobs ? ` ${x.jobs.lossJobs} lost money.` : ""}`);
-    if (x.jobs.materials > r.materials + 1) out.push(`Jobs used ${money(x.jobs.materials)} in parts at cost, but Expenses only shows ${money(r.materials)} in materials for this period. If those parts were bought now and the purchase isn't in Expenses, the real profit is lower.`);
+    out.push(t("fJobs", { n: x.jobs.jobs, amt: money(x.jobs.profit), loss: x.jobs.profit >= 0 ? "no" : "yes", lost: x.jobs.lossJobs }));
+    if (x.jobs.materials > r.materials + 1) out.push(t("fParts", { jobs: money(x.jobs.materials), exp: money(r.materials) }));
   }
-  if (r.financingTotal > 0) out.push(`${money(r.financingTotal)} went to payments on financed purchases (${r.financing.map((l) => l.label).join(", ")}).`);
-  if (x.financing && x.financing.owed > 0) out.push(`Still owed on ${x.financing.count} financed purchase${x.financing.count === 1 ? "" : "s"}: ${money(x.financing.owed)} (${money(x.financing.monthly)} per month).${x.financing.overdue ? ` ${x.financing.overdue} payment${x.financing.overdue === 1 ? " is" : "s are"} past due.` : ""} That debt is not subtracted from the profit above.`);
-  if (x.receivable > 0) out.push(`Customers still owe ${money(x.receivable)} on ${x.receivableCount} invoice${x.receivableCount === 1 ? "" : "s"}. That money is not counted here until it's collected.`);
+  if (r.financingTotal > 0) out.push(t("fFinPaid", { amt: money(r.financingTotal), names: r.financing.map((l) => l.label).join(", ") }));
+  if (x.financing && x.financing.owed > 0) out.push(t("fFinOwed", { n: x.financing.count, owed: money(x.financing.owed), monthly: money(x.financing.monthly), overdue: x.financing.overdue }));
+  if (x.receivable > 0) out.push(t("fOwe", { amt: money(x.receivable), n: x.receivableCount }));
   return out;
 }
 
 // ---------- El mismo reporte como PDF real (se ve en el visor, se imprime o se descarga) ----------
-export function companyReportPdf(r: CompanyReport, x: RepExtras, buckets: RepBucket[], o: { company: string; title: string; range: string; by: string }): PdfDoc {
+// buckets: con su etiqueta ya en el idioma
+export function companyReportPdf(r: CompanyReport, x: RepExtras, buckets: RepBucket[], o: { company: string; title: string; range: string; by: string; prevLabel: string }, L: RepL): PdfDoc {
+  const { t, money } = L;
   const tone = (v: number): PdfTone | undefined => (v < 0 ? "neg" : undefined);
   const pct = (v: number | null | undefined) => (v == null ? "" : `${v}%`);
-  const rows: PdfRow[] = statement(r).map((l) =>
+  const rows: PdfRow[] = statement(r, L).map((l) =>
     l.kind === "head" ? { cells: [l.label], style: "section" as const }
       : { cells: [l.label, { text: money(l.amount), tone: l.kind === "result" ? ((l.amount ?? 0) < 0 ? "neg" : "pos") : tone(l.amount ?? 0) }, pct(l.pct)], style: l.kind === "line" ? undefined : l.kind });
   const blocks: PdfBlock[] = [
     { type: "kpis", items: [
-      { label: "Income", value: money(r.income) }, { label: "Cost of the jobs", value: money(r.jobCosts) }, { label: "General expenses", value: money(r.overheadTotal) },
-      ...(r.financingTotal > 0 ? [{ label: "Financing", value: money(r.financingTotal) }] : []),
-      { label: r.net >= 0 ? "Real profit" : "Real loss", value: money(r.net), tone: r.net < 0 ? "neg" as const : "pos" as const }, { label: "Margin", value: r.margin == null ? "-" : `${r.margin}%` },
+      { label: t("income"), value: money(r.income) }, { label: t("jobCosts"), value: money(r.jobCosts) }, { label: t("general"), value: money(r.overheadTotal) },
+      ...(r.financingTotal > 0 ? [{ label: t("financing"), value: money(r.financingTotal) }] : []),
+      { label: r.net >= 0 ? t("realProfit") : t("realLoss"), value: money(r.net), tone: r.net < 0 ? "neg" as const : "pos" as const }, { label: t("margin"), value: r.margin == null ? "-" : `${r.margin}%` },
     ] },
-    { type: "heading", text: "Summary" }, { type: "bullets", items: findings(r, x) },
-    { type: "heading", text: "Income and expenses" },
-    { type: "table", columns: [{ label: "Concept", width: 6 }, { label: "Amount", width: 2, align: "right" }, { label: "% of income", width: 1.3, align: "right" }], rows },
+    { type: "heading", text: t("summary") }, { type: "bullets", items: findings(r, x, L, o.prevLabel) },
+    { type: "heading", text: t("incomeExpenses") },
+    { type: "table", columns: [{ label: t("concept"), width: 6 }, { label: t("amount"), width: 2, align: "right" }, { label: t("pctIncome"), width: 1.3, align: "right" }], rows },
   ];
-  if (buckets.length) blocks.push({ type: "heading", text: "Inside this period" }, {
-    type: "table", columns: [{ label: "", width: 3 }, { label: "Income", width: 2, align: "right" }, { label: "Expenses", width: 2, align: "right" }, { label: "Profit", width: 2, align: "right" }],
+  if (buckets.length) blocks.push({ type: "heading", text: t("inside") }, {
+    type: "table", columns: [{ label: "", width: 3 }, { label: t("income"), width: 2, align: "right" }, { label: t("expenses"), width: 2, align: "right" }, { label: t("profit"), width: 2, align: "right" }],
     rows: buckets.map((b) => ({ cells: [b.label, money(b.income), money(b.costs), { text: money(b.net), tone: tone(b.net) }] })),
   });
   if (x.payroll) {
     const g = (label: string, v: { people: number; calculated: number; paid: number; balance: number }, style?: "total"): PdfRow =>
       ({ cells: [label, String(v.people), money(v.calculated), money(v.paid), { text: money(v.balance), tone: style && v.balance > 0.005 ? "neg" : undefined }], style });
-    blocks.push({ type: "heading", text: "Payroll for this period" }, {
-      type: "table", columns: [{ label: "", width: 3 }, { label: "People", width: 1.2, align: "right" }, { label: "Earned", width: 2, align: "right" }, { label: "Paid", width: 2, align: "right" }, { label: "Still owed", width: 2, align: "right" }],
-      rows: [g("Direct employees", x.payroll.employees), g("Subcontractors", x.payroll.subs), g("Total", x.payroll, "total")],
+    blocks.push({ type: "heading", text: t("payrollHead") }, {
+      type: "table", columns: [{ label: "", width: 3 }, { label: t("people"), width: 1.2, align: "right" }, { label: t("earned"), width: 2, align: "right" }, { label: t("paid"), width: 2, align: "right" }, { label: t("stillOwed"), width: 2, align: "right" }],
+      rows: [g(t("directEmployees"), x.payroll.employees), g(t("subs"), x.payroll.subs), g(t("total"), x.payroll, "total")],
     });
   }
-  if (x.jobs && x.jobs.jobs > 0) blocks.push({ type: "heading", text: "Jobs finished in this period (Jobs > Reports)" }, {
-    type: "table", columns: [{ label: "Jobs", width: 2.4 }, { label: "Revenue before tax", width: 2, align: "right" }, { label: "Labor by pay rate", width: 2, align: "right" }, { label: "Parts at cost", width: 2, align: "right" }, { label: "Profit by job", width: 2, align: "right" }],
-    rows: [{ cells: [`${x.jobs.jobs}${x.jobs.lossJobs ? ` (${x.jobs.lossJobs} lost money)` : ""}`, money(x.jobs.revenue), money(x.jobs.labor), money(x.jobs.materials), { text: money(x.jobs.profit), tone: tone(x.jobs.profit) }] }],
+  if (x.jobs && x.jobs.jobs > 0) blocks.push({ type: "heading", text: t("jobsHead") }, {
+    type: "table", columns: [{ label: t("jobs"), width: 2.4 }, { label: t("revenueBT"), width: 2, align: "right" }, { label: t("laborRate"), width: 2, align: "right" }, { label: t("partsCost"), width: 2, align: "right" }, { label: t("profitByJob"), width: 2, align: "right" }],
+    rows: [{ cells: [x.jobs.lossJobs ? t("jobsLost", { n: x.jobs.jobs, lost: x.jobs.lossJobs }) : String(x.jobs.jobs), money(x.jobs.revenue), money(x.jobs.labor), money(x.jobs.materials), { text: money(x.jobs.profit), tone: tone(x.jobs.profit) }] }],
   });
-  blocks.push({ type: "note", text: "This report counts the money that really came in and went out in the period, as recorded in Finances: invoice payments, Money In and Expenses. Labor is what was paid (Payroll, Mark as paid), not the pay rate. Jobs > Reports shows the profit of each finished job, which is a different question, so the two numbers don't have to match." });
-  return { title: "Company report", subtitle: `${o.title} (${o.range}) · prepared by ${o.by}`, company: o.company, blocks, footer: o.range, fileName: pdfFileName("company-report", o.company, o.range) };
+  blocks.push({ type: "note", text: t("pdfNote") });
+  return { title: t("pdfTitle"), subtitle: t("pdfSubtitle", { title: o.title, range: o.range, by: o.by }), company: o.company, blocks, footer: o.range, fileName: pdfFileName("company-report", o.company, o.range) };
 }

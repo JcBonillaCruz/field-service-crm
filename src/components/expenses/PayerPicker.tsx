@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Combobox, ComboboxInput, ComboboxOption, ComboboxOptions } from "@headlessui/react";
 import { createClient } from "@/lib/supabase/client";
 import { formatPhone, initials, softColor } from "@/lib/types";
@@ -34,6 +35,7 @@ export default function PayerPicker({ companyId, people, customerId, name, onPic
   companyId: string; people: PayerOption[]; customerId: string | null; name: string; hint?: string;
   onPick: (c: PayerOption | null) => void; onType: (text: string) => void; onCreated: (c: PayerOption) => void;
 }) {
+  const t = useTranslations("payer");
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState<string | null>(null);
   const current = people.find((p) => p.id === customerId) ?? null;
@@ -41,7 +43,7 @@ export default function PayerPicker({ companyId, people, customerId, name, onPic
     const q = fold(query.trim());
     if (!q) return people.slice(0, 50);
     const terms = q.split(/\s+/);
-    return people.filter((p) => { const blob = fold(`${p.display_name} ${p.company_name ?? ""} ${p.email ?? ""} ${p.phone ?? ""}`); return terms.every((t) => blob.includes(t)); }).slice(0, 50);
+    return people.filter((p) => { const blob = fold(`${p.display_name} ${p.company_name ?? ""} ${p.email ?? ""} ${p.phone ?? ""}`); return terms.every((w) => blob.includes(w)); }).slice(0, 50);
   }, [people, query]);
   const exact = list.some((p) => fold(p.display_name) === fold(query.trim()));
 
@@ -57,10 +59,10 @@ export default function PayerPicker({ companyId, people, customerId, name, onPic
         <Dot name={current.display_name} seed={current.id} size={34} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[15px] font-semibold text-[#0b1f3a]">{current.display_name}</span>
-          <span className="block truncate text-[12px] text-slate-500">{[current.company_name !== current.display_name ? current.company_name : null, current.phone, current.email].filter(Boolean).join(" · ") || "Customer"}</span>
+          <span className="block truncate text-[12px] text-slate-500">{[current.company_name !== current.display_name ? current.company_name : null, current.phone, current.email].filter(Boolean).join(" · ") || t("customer")}</span>
         </span>
-        <span className="hidden rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#0f766e] sm:inline">Linked</span>
-        <button type="button" onClick={() => onPick(null)} aria-label="Change customer" title="Change"
+        <span className="hidden rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#0f766e] sm:inline">{t("linked")}</span>
+        <button type="button" onClick={() => onPick(null)} aria-label={t("change")} title={t("changeShort")}
           className="group flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-all hover:bg-[#fff1f2] hover:text-[#e11d48]">
           <svg viewBox="0 0 20 20" className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M5 5l10 10M15 5 5 15" /></svg>
         </button>
@@ -84,7 +86,7 @@ export default function PayerPicker({ companyId, people, customerId, name, onPic
             <div className="flex gap-2">
               <div className="relative min-w-0 flex-1">
                 <svg viewBox="0 0 20 20" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
-                <ComboboxInput autoComplete="off" placeholder="Search customers"
+                <ComboboxInput autoComplete="off" placeholder={t("search")}
                   displayValue={() => query || name}
                   onFocus={(e) => lift(e.currentTarget)}
                   onClick={(e) => lift(e.currentTarget)}
@@ -95,7 +97,7 @@ export default function PayerPicker({ companyId, people, customerId, name, onPic
               <button type="button" onClick={() => setCreating(typed)}
                 className="group flex shrink-0 items-center gap-1.5 rounded-lg border border-[#0f766e]/30 bg-[#e9f7f4] px-3 text-[14px] font-semibold text-[#0f766e] transition-all duration-150 hover:-translate-y-0.5 hover:border-[#0f766e] hover:shadow-sm active:scale-95">
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#0f766e] text-white transition-transform duration-200 group-hover:rotate-90"><svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><path d="M10 5v10M5 10h10" /></svg></span>
-                New<span className="hidden sm:inline"> customer</span>
+                {t("new")}<span className="hidden sm:inline"> {t("customerWord")}</span>
               </button>
             </div>
             {/* La lista abre HACIA ABAJO, dentro del formulario (no flota encima ni se va arriba) */}
@@ -105,10 +107,10 @@ export default function PayerPicker({ companyId, people, customerId, name, onPic
                 {typed && !exact && (
                   <ComboboxOption value={NEW} className="mb-1 flex cursor-pointer items-center gap-2.5 rounded-lg bg-[#f3fbf8] px-2.5 py-2.5 text-[14px] font-semibold text-[#0f766e] data-[focus]:bg-[#e3f4ef]">
                     <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#0f766e] text-white"><svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M10 5v10M5 10h10" /></svg></span>
-                    <span className="min-w-0 truncate">Create “{typed}” as a new customer</span>
+                    <span className="min-w-0 truncate">{t("createAs", { name: typed })}</span>
                   </ComboboxOption>
                 )}
-                {list.length === 0 && typed && <p className="px-3 py-2 text-[13px] text-slate-500">No customer named “{typed}” yet.</p>}
+                {list.length === 0 && typed && <p className="px-3 py-2 text-[13px] text-slate-500">{t("noNamed", { name: typed })}</p>}
                 {list.map((p) => (
                   <ComboboxOption key={p.id} value={p.id} className="group flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 data-[focus]:bg-[#eef8f5]">
                     <Dot name={p.display_name} seed={p.id} />
@@ -125,13 +127,14 @@ export default function PayerPicker({ companyId, people, customerId, name, onPic
           </>
         )}
       </Combobox>
-      <p className="mt-1 text-[12px] text-slate-400">{hint ?? <>Search your customers. Not there? Tap <b className="font-semibold text-[#0f766e]">New</b> to add it.</>}</p>
+      <p className="mt-1 text-[12px] text-slate-400">{hint ?? t.rich("hint", { b: (c) => <b className="font-semibold text-[#0f766e]">{c}</b> })}</p>
     </div>
   );
 }
 
 // Mini formulario: crea el cliente en Customers (misma función save_customer que el formulario completo)
 function QuickCustomer({ companyId, initial, onCancel, onSaved }: { companyId: string; initial: string; onCancel: () => void; onSaved: (c: PayerOption) => void }) {
+  const t = useTranslations("payer");
   const parts = initial.trim().split(/\s+/);
   const [type, setType] = useState<"residential" | "commercial">("residential");
   const [first, setFirst] = useState(parts[0] ?? "");
@@ -144,8 +147,8 @@ function QuickCustomer({ companyId, initial, onCancel, onSaved }: { companyId: s
   const display = (type === "commercial" && company.trim()) || [first.trim(), last.trim()].filter(Boolean).join(" ") || company.trim();
 
   async function save() {
-    if (!display) return setError(type === "commercial" ? "Enter the company or contact name." : "Enter the customer's name.");
-    if (email.trim() && !/^\S+@\S+\.\S+$/.test(email.trim())) return setError("That email doesn't look right.");
+    if (!display) return setError(type === "commercial" ? t("eCompany") : t("eName"));
+    if (email.trim() && !/^\S+@\S+\.\S+$/.test(email.trim())) return setError(t("eEmail"));
     setBusy(true); setError("");
     const s = createClient();
     const digits = phone.replace(/\D/g, "");
@@ -156,7 +159,7 @@ function QuickCustomer({ companyId, initial, onCancel, onSaved }: { companyId: s
       p_emails: email.trim() ? [{ label: "Main", email: email.trim().toLowerCase(), is_primary: true }] : [],
       p_addresses: [],
     });
-    if (e || !data) { setBusy(false); return setError("The customer couldn't be created. Try again."); }
+    if (e || !data) { setBusy(false); return setError(t("eCreate")); }
     await s.rpc("save_customer_extras", { p_customer_id: data, p_extras: { display_name: display } });
     setBusy(false);
     onSaved({ id: data as string, display_name: display, company_name: company.trim() || null, email: email.trim().toLowerCase() || null, phone: digits ? formatPhone(digits) : null });
@@ -165,28 +168,28 @@ function QuickCustomer({ companyId, initial, onCancel, onSaved }: { companyId: s
   return (
     <div data-payer className="scroll-mt-3 rounded-xl border border-[#bfe7de] bg-[#f6fbfa] p-3.5 animate-[bp-pop-in_0.25s_ease-out]">
       <div className="mb-3 flex items-center justify-between">
-        <p className="text-[14px] font-semibold text-[#0b1f3a]">New customer</p>
+        <p className="text-[14px] font-semibold text-[#0b1f3a]">{t("newCustomer")}</p>
         <div className="flex rounded-lg bg-white p-0.5 ring-1 ring-slate-200">
-          {(["residential", "commercial"] as const).map((t) => (
-            <button key={t} type="button" onClick={() => setType(t)}
-              className={`rounded-md px-2.5 py-1 text-[12.5px] font-semibold transition-colors ${type === t ? "bg-[#0f766e] text-white" : "text-slate-500 hover:text-[#0f766e]"}`}>
-              {t === "residential" ? "Residential" : "Commercial"}
+          {(["residential", "commercial"] as const).map((v) => (
+            <button key={v} type="button" onClick={() => setType(v)}
+              className={`rounded-md px-2.5 py-1 text-[12.5px] font-semibold transition-colors ${type === v ? "bg-[#0f766e] text-white" : "text-slate-500 hover:text-[#0f766e]"}`}>
+              {t(v)}
             </button>
           ))}
         </div>
       </div>
       <div className="grid gap-2.5 sm:grid-cols-2">
-        <input autoFocus onFocus={(e) => { const el = e.currentTarget; setTimeout(() => liftUp(el), 350); }} value={first} onChange={(e) => setFirst(e.target.value)} placeholder="First name" className={inputClass} />
-        <input value={last} onChange={(e) => setLast(e.target.value)} placeholder="Last name" className={inputClass} />
-        {type === "commercial" && <input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Company name" className={`${inputClass} sm:col-span-2`} />}
-        <input inputMode="tel" value={phone} onChange={(e) => setPhone(formatPhone(e.target.value))} placeholder="Phone (optional)" className={inputClass} />
-        <input inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (optional)" className={inputClass} />
+        <input autoFocus onFocus={(e) => { const el = e.currentTarget; setTimeout(() => liftUp(el), 350); }} value={first} onChange={(e) => setFirst(e.target.value)} placeholder={t("first")} className={inputClass} />
+        <input value={last} onChange={(e) => setLast(e.target.value)} placeholder={t("last")} className={inputClass} />
+        {type === "commercial" && <input value={company} onChange={(e) => setCompany(e.target.value)} placeholder={t("company")} className={`${inputClass} sm:col-span-2`} />}
+        <input inputMode="tel" value={phone} onChange={(e) => setPhone(formatPhone(e.target.value))} placeholder={t("phone")} className={inputClass} />
+        <input inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t("email")} className={inputClass} />
       </div>
       {error && <p role="alert" className="mt-2 text-[13px] text-red-600">{error}</p>}
       <div className="mt-3 flex items-center gap-2">
-        <button type="button" onClick={save} disabled={busy} className="whitespace-nowrap rounded-lg bg-[#0f766e] px-4 py-2 text-[14px] font-semibold text-white transition-transform hover:bg-[#0c5f59] active:scale-95 disabled:opacity-60">{busy ? "Creating..." : "Create customer"}</button>
-        <button type="button" onClick={onCancel} className="rounded-lg px-3 py-2 text-[14px] font-medium text-slate-500 hover:bg-white">Cancel</button>
-        <span className="ml-auto hidden truncate text-[12px] text-slate-400 sm:inline">Saved in Customers</span>
+        <button type="button" onClick={save} disabled={busy} className="whitespace-nowrap rounded-lg bg-[#0f766e] px-4 py-2 text-[14px] font-semibold text-white transition-transform hover:bg-[#0c5f59] active:scale-95 disabled:opacity-60">{busy ? t("creating") : t("create")}</button>
+        <button type="button" onClick={onCancel} className="rounded-lg px-3 py-2 text-[14px] font-medium text-slate-500 hover:bg-white">{t("cancel")}</button>
+        <span className="ml-auto hidden truncate text-[12px] text-slate-400 sm:inline">{t("savedIn")}</span>
       </div>
     </div>
   );

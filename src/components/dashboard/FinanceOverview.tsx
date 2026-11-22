@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import type { MobileStats } from "@/lib/dashboard-server";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
+import { useFinTx } from "@/i18n/useFinTx";
 import { useCountUp } from "@/components/dashboard/MobileWidgets";
 import DesktopInsights from "@/components/dashboard/DesktopInsights";
 
-const $ = (v: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(v || 0);
 const short = (v: number) => (Math.abs(v) >= 1000 ? `$${(v / 1000).toFixed(Math.abs(v) >= 10000 ? 0 : 1)}K` : `$${Math.round(v)}`);
 
 // Curva suave (Catmull-Rom → Bézier) por los puntos
@@ -37,6 +38,7 @@ const KPI_THEME: Record<"in" | "out" | "profit" | "owe", KpiTheme> = {
   owe: { bg: "linear-gradient(135deg,#fdf1e2 0%,#fff9f1 100%)", blob: "#f7dfbf", icon: "M4 6h16v12H4zM4 10h16M8 15h3", iconColor: "#c2410c" },
 };
 function Kpi({ label, value, sub, color, tone, series, theme, tip, delay = 0 }: { label: string; value: number; sub: string; color: string; tone: string; series: number[]; theme: KpiTheme; tip: string; delay?: number }) {
+  const $ = useFinTx().money0;
   const v = useCountUp(value, 1200);
   return (
     <div className="group relative animate-[bp-pop-in_0.5s_cubic-bezier(.2,.8,.2,1)_both]" style={{ animationDelay: `${delay}ms` }}>
@@ -65,7 +67,7 @@ function Kpi({ label, value, sub, color, tone, series, theme, tip, delay = 0 }: 
 // Anillo animado (margen, cobranza, cierre de cotizaciones): se puede hacer clic y te lleva a esa información
 function Ring({ pct, label, sub, color, href, cta }: { pct: number; label: string; sub: string; color: string; href: string; cta: string }) {
   const [p, setP] = useState(0);
-  useEffect(() => { const t = setTimeout(() => setP(Math.max(0, Math.min(1, pct))), 150); return () => clearTimeout(t); }, [pct]);
+  useEffect(() => { const k = setTimeout(() => setP(Math.max(0, Math.min(1, pct))), 150); return () => clearTimeout(k); }, [pct]);
   const r = 34, c = 2 * Math.PI * r;
   return (
     <Link prefetch={false} href={href} className="group -mx-2 flex items-center gap-4 rounded-2xl px-2 py-1.5 transition-all duration-200 hover:bg-slate-50 hover:shadow-[inset_0_0_0_1px_rgba(15,40,60,0.06)] active:scale-[0.99]">
@@ -92,10 +94,14 @@ function Ring({ pct, label, sub, color, href, cta }: { pct: number; label: strin
 const CAT_COLORS = ["#0f766e", "#e8713a", "#2563eb", "#7c3aed", "#f59e0b", "#be123c", "#64748b"];
 
 export default function FinanceOverview({ st }: { st: MobileStats }) {
+  const t = useTranslations("finOverview");
+  const fx = useFinTx();
+  const $ = fx.money0;
+  const months = st.months.map(fx.monName);
   const n = st.months.length;
   const [hover, setHover] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
-  useEffect(() => { const t = setTimeout(() => setMounted(true), 60); return () => clearTimeout(t); }, []);
+  useEffect(() => { const k = setTimeout(() => setMounted(true), 60); return () => clearTimeout(k); }, []);
   const profitM = st.receipts.map((r, i) => r - st.expenses[i]);
   const profitYtd = st.ytdReceived - st.ytdExpenses;
   const margin = st.ytdReceived > 0 ? profitYtd / st.ytdReceived : 0;
@@ -120,27 +126,27 @@ export default function FinanceOverview({ st }: { st: MobileStats }) {
   return (
     <section className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Kpi delay={0} theme={KPI_THEME.in} label="Received this year" value={st.ytdReceived} sub={`${$(st.receipts12)} in the last 12 months`} color="#14b8a6" tone="text-[#0f766e]" series={st.receipts}
-          tip={st.ytdReceived > 0 ? `This is all the money that came in this year (${$(st.ytdReceived)}): paid invoices plus Money In.` : "Record payments or Money In and your income shows up here."} />
-        <Kpi delay={80} theme={KPI_THEME.out} label="Spent this year" value={st.ytdExpenses} sub="Supplies, payroll, fuel…" color="#f97316" tone="text-[#e11d48]" series={st.expenses}
-          tip={st.ytdExpenses > 0 ? `Everything you spent this year (${$(st.ytdExpenses)}). Every dollar you save here goes straight to your profit.` : "Add your expenses to see what you really keep."} />
-        <Kpi delay={160} theme={KPI_THEME.profit} label="Net profit" value={profitYtd} sub={st.ytdReceived ? `${Math.round(margin * 100)}% margin` : "Add payments and expenses"} color="#0b1f3a" tone={profitYtd >= 0 ? "text-[#047857]" : "text-[#e11d48]"} series={profitM}
-          tip={profitYtd >= 0 ? `Nice work! This is what you really kept this year: ${$(profitYtd)} after expenses.` : `You're losing ${$(Math.abs(profitYtd))} this year: you spent more than you collected.`} />
-        <Kpi delay={240} theme={KPI_THEME.owe} label="Customers owe you" value={st.total} sub={`${$(st.overdue)} overdue`} color="#f59e0b" tone="text-[#b45309]" series={st.income}
-          tip={st.total > 0 ? `${$(st.total)} in unpaid invoices${st.overdue > 0 ? `, ${$(st.overdue)} already overdue. A friendly reminder usually gets you paid this week.` : ". Nothing is overdue yet."}` : "All caught up: no customer owes you money right now."} />
+        <Kpi delay={0} theme={KPI_THEME.in} label={t("received")} value={st.ytdReceived} sub={t("last12", { amt: $(st.receipts12) })} color="#14b8a6" tone="text-[#0f766e]" series={st.receipts}
+          tip={st.ytdReceived > 0 ? t("receivedTip", { amt: $(st.ytdReceived) }) : t("receivedEmpty")} />
+        <Kpi delay={80} theme={KPI_THEME.out} label={t("spent")} value={st.ytdExpenses} sub={t("spentSub")} color="#f97316" tone="text-[#e11d48]" series={st.expenses}
+          tip={st.ytdExpenses > 0 ? t("spentTip", { amt: $(st.ytdExpenses) }) : t("spentEmpty")} />
+        <Kpi delay={160} theme={KPI_THEME.profit} label={t("net")} value={profitYtd} sub={st.ytdReceived ? t("margin", { n: Math.round(margin * 100) }) : t("netEmpty")} color="#0b1f3a" tone={profitYtd >= 0 ? "text-[#047857]" : "text-[#e11d48]"} series={profitM}
+          tip={profitYtd >= 0 ? t("netTip", { amt: $(profitYtd) }) : t("lossTip", { amt: $(Math.abs(profitYtd)) })} />
+        <Kpi delay={240} theme={KPI_THEME.owe} label={t("owe")} value={st.total} sub={t("overdueSub", { amt: $(st.overdue) })} color="#f59e0b" tone="text-[#b45309]" series={st.income}
+          tip={st.total > 0 ? (st.overdue > 0 ? t("oweTipLate", { amt: $(st.total), late: $(st.overdue) }) : t("oweTip", { amt: $(st.total) })) : t("oweNone")} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-[15px] font-semibold text-[#0b1f3a]">Cash flow · last 12 months</p>
-              <p className="text-[12px] text-slate-500">What came in, what went out, and what you kept</p>
+              <p className="text-[15px] font-semibold text-[#0b1f3a]">{t("cashFlow")}</p>
+              <p className="text-[12px] text-slate-500">{t("cashFlowSub")}</p>
             </div>
             <div className="flex gap-4 text-[12px] text-slate-600">
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#14b8a6]" />Received</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#f97316]" />Spent</span>
-              <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 border-t-2 border-dashed border-[#0b1f3a]" />Profit</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#14b8a6]" />{t("lReceived")}</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#f97316]" />{t("lSpent")}</span>
+              <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 border-t-2 border-dashed border-[#0b1f3a]" />{t("lProfit")}</span>
             </div>
           </div>
           <div className="relative mt-3">
@@ -150,8 +156,8 @@ export default function FinanceOverview({ st }: { st: MobileStats }) {
                 <linearGradient id="bpExp" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#f97316" stopOpacity="0.16" /><stop offset="100%" stopColor="#f97316" stopOpacity="0" /></linearGradient>
                 <clipPath id="bpReveal"><rect x="0" y="0" height={H} width={mounted ? W : 0} style={{ transition: "width 1.4s cubic-bezier(.2,.8,.2,1)" }} /></clipPath>
               </defs>
-              {ticks.map((t, k) => (
-                <g key={k}><line x1={L} x2={W - R} y1={y(t)} y2={y(t)} stroke="#eef2f6" /><text x={L - 8} y={y(t) + 4} textAnchor="end" fontSize="11" fill="#94a3b8">{short(t)}</text></g>
+              {ticks.map((v, k) => (
+                <g key={k}><line x1={L} x2={W - R} y1={y(v)} y2={y(v)} stroke="#eef2f6" /><text x={L - 8} y={y(v) + 4} textAnchor="end" fontSize="11" fill="#94a3b8">{short(v)}</text></g>
               ))}
               <g clipPath="url(#bpReveal)">
                 <path d={area(st.receipts)} fill="url(#bpRec)" />
@@ -160,7 +166,7 @@ export default function FinanceOverview({ st }: { st: MobileStats }) {
                 <path d={line(st.expenses)} fill="none" stroke="#f97316" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
                 <path d={line(profitM)} fill="none" stroke="#0b1f3a" strokeWidth="1" strokeDasharray="4 4" />
               </g>
-              {st.months.map((m, i) => (
+              {months.map((m, i) => (
                 <g key={i}>
                   <text x={x(i)} y={H - 8} textAnchor="middle" fontSize="11" fill={hi === i ? "#0f766e" : "#94a3b8"} fontWeight={hi === i ? 700 : 400}>{m}</text>
                   <rect x={x(i) - (W - L - R) / (n - 1) / 2} y={T} width={(W - L - R) / (n - 1)} height={H - T - B} fill="transparent" onMouseEnter={() => setHover(i)} />
@@ -173,33 +179,33 @@ export default function FinanceOverview({ st }: { st: MobileStats }) {
             </svg>
             <div className="pointer-events-none absolute top-1 rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-[12px] shadow-lg backdrop-blur"
               style={{ left: `clamp(0px, calc(${(x(hi) / W) * 100}% - 70px), calc(100% - 150px))` }}>
-              <p className="font-semibold text-[#0b1f3a]">{st.months[hi]}</p>
-              <p className="text-[#0f766e]">Received {$(st.receipts[hi])}</p>
-              <p className="text-[#ea580c]">Spent {$(st.expenses[hi])}</p>
-              <p className={profitM[hi] >= 0 ? "font-semibold text-[#047857]" : "font-semibold text-[#e11d48]"}>Profit {$(profitM[hi])}</p>
+              <p className="font-semibold text-[#0b1f3a]">{months[hi]}</p>
+              <p className="text-[#0f766e]">{t("lReceived")} {$(st.receipts[hi])}</p>
+              <p className="text-[#ea580c]">{t("lSpent")} {$(st.expenses[hi])}</p>
+              <p className={profitM[hi] >= 0 ? "font-semibold text-[#047857]" : "font-semibold text-[#e11d48]"}>{t("lProfit")} {$(profitM[hi])}</p>
             </div>
           </div>
         </div>
 
         <div className="space-y-4">
           <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5">
-            <Ring href="/dashboard/expenses" cta="See where your money goes" pct={margin} label="Profit margin" sub={st.ytdReceived ? "Of what you collected this year, you kept this much" : "Shows once you record payments"} color={margin >= 0.3 ? "#10b981" : margin >= 0.15 ? "#f59e0b" : "#ef4444"} />
-            <Ring href="/dashboard/invoices" cta="Open invoices" pct={collect} label="Collection rate" sub="Paid vs invoiced, last 12 months" color="#14b8a6" />
-            <Ring href="/dashboard/quotes" cta="Open quotes" pct={win} label="Quote win rate" sub={decided ? `${st.quoteStats.accepted} won · ${st.quoteStats.declined} lost` : "Shows after customers answer quotes"} color="#6366f1" />
+            <Ring href="/dashboard/expenses" cta={t("rMarginCta")} pct={margin} label={t("rMargin")} sub={st.ytdReceived ? t("rMarginSub") : t("rMarginEmpty")} color={margin >= 0.3 ? "#10b981" : margin >= 0.15 ? "#f59e0b" : "#ef4444"} />
+            <Ring href="/dashboard/invoices" cta={t("rCollectCta")} pct={collect} label={t("rCollect")} sub={t("rCollectSub")} color="#14b8a6" />
+            <Ring href="/dashboard/quotes" cta={t("rWinCta")} pct={win} label={t("rWin")} sub={decided ? t("rWinSub", { won: st.quoteStats.accepted, lost: st.quoteStats.declined }) : t("rWinEmpty")} color="#6366f1" />
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <p className="text-[15px] font-semibold text-[#0b1f3a]">Where your money goes</p>
-            {totalCat === 0 ? <p className="mt-2 text-[13px] text-slate-500">Add expenses to see your spending by category.</p> : (
+            <p className="text-[15px] font-semibold text-[#0b1f3a]">{t("where")}</p>
+            {totalCat === 0 ? <p className="mt-2 text-[13px] text-slate-500">{t("whereEmpty")}</p> : (
               <div className="mt-3 flex items-center gap-4">
                 <svg viewBox="0 0 42 42" className="h-28 w-28 shrink-0 -rotate-90">
                   {st.expenseByCat.slice(0, 7).map(([name, v], k) => {
                     const frac = v / totalCat; const dash = `${frac * 100} ${100 - frac * 100}`; const off = -acc * 100; acc += frac;
-                    return <circle key={name} cx="21" cy="21" r="15.915" fill="none" stroke={CAT_COLORS[k % CAT_COLORS.length]} strokeWidth="6" strokeDasharray={dash} strokeDashoffset={off} style={{ transition: "stroke-dasharray 1s ease" }}><title>{`${name}: ${$(v)}`}</title></circle>;
+                    return <circle key={name} cx="21" cy="21" r="15.915" fill="none" stroke={CAT_COLORS[k % CAT_COLORS.length]} strokeWidth="6" strokeDasharray={dash} strokeDashoffset={off} style={{ transition: "stroke-dasharray 1s ease" }}><title>{`${fx.cat(name)}: ${$(v)}`}</title></circle>;
                   })}
                 </svg>
                 <ul className="min-w-0 flex-1 space-y-1.5 text-[12px]">
                   {st.expenseByCat.slice(0, 5).map(([name, v], k) => (
-                    <li key={name} className="flex items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: CAT_COLORS[k % CAT_COLORS.length] }} /><span className="min-w-0 flex-1 truncate text-slate-600">{name}</span><span className="font-semibold tabular-nums text-[#0b1f3a]">{Math.round((v / totalCat) * 100)}%</span></li>
+                    <li key={name} className="flex items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: CAT_COLORS[k % CAT_COLORS.length] }} /><span className="min-w-0 flex-1 truncate text-slate-600">{fx.cat(name)}</span><span className="font-semibold tabular-nums text-[#0b1f3a]">{Math.round((v / totalCat) * 100)}%</span></li>
                   ))}
                 </ul>
               </div>

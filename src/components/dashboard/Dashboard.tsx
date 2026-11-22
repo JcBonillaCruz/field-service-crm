@@ -10,6 +10,8 @@ import Link from "next/link";
 import { Role } from "@/lib/types";
 import BottomSheet from "@/components/customers/BottomSheet";
 import { AppsGrid } from "@/components/AppsMenu";
+import { useTranslations } from "next-intl";
+import { catKey, useFinTx } from "@/i18n/useFinTx";
 
 type Counts = { total: number; commercial: number; residential: number };
 const PERIODS = ["Last 3 Months","Last 12 Months","This Quarter","Previous Quarter","This Year","Previous Year","Year To Date","Quarter To Date"];
@@ -23,11 +25,15 @@ export default function Dashboard({ firstName, companyName, industry, role, coun
   firstName: string; companyName: string; industry: string; role: Role; counts: Counts; daysLeft: number; stats?: MobileStats | null;
   embedded?: boolean; // Paso 5.3f: dentro de la pestaña "Finances" del inicio (sin sus propias pestañas)
 }) {
-  const $ = (v: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(v || 0);
+  const t = useTranslations("mobileDash");
+  const td = useTranslations("dashFin");
+  const fx = useFinTx();
+  const $ = fx.money;
+  const pname = (p: string) => td(`dp.${catKey(p)}` as never);
   const st = stats;
   const [tab, setTab] = useState("Dashboard");
   // Deslizar con el dedo: Home → Announcements → Help
-  const names = TABS.map((t) => t.label);
+  const names = TABS.map((x) => x.label);
   const ti = names.indexOf(tab);
   const swipe = useSwipe(() => ti > 0 && setTab(names[ti - 1]), () => ti < names.length - 1 && setTab(names[ti + 1]));
   const [m, setM] = useState(false);
@@ -44,11 +50,11 @@ export default function Dashboard({ firstName, companyName, industry, role, coun
     <div className="min-h-full bg-[#f4f6f8]" {...(embedded ? {} : swipe)}>
       {/* Pestañas */}
       {!embedded && <div className="sticky top-16 z-10 flex gap-1 border-b border-slate-200 bg-white px-4">
-        {TABS.map(t=>(
-          <button key={t.label} type="button" onClick={()=>setTab(t.label)}
-            className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-3 text-sm transition-colors ${tab===t.label?"border-[#0f766e] font-semibold text-[#0f766e]":"border-transparent text-slate-500"}`}>
-            <svg viewBox="0 0 24 24" className={t.label==="Dashboard"?"h-5 w-5":"h-4 w-4"} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={t.icon}/></svg>
-            {t.label==="Dashboard" ? <span className="sr-only">Home</span> : t.label}
+        {TABS.map(x=>(
+          <button key={x.label} type="button" onClick={()=>setTab(x.label)}
+            className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-3 text-sm transition-colors ${tab===x.label?"border-[#0f766e] font-semibold text-[#0f766e]":"border-transparent text-slate-500"}`}>
+            <svg viewBox="0 0 24 24" className={x.label==="Dashboard"?"h-5 w-5":"h-4 w-4"} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={x.icon}/></svg>
+            {x.label==="Dashboard" ? <span className="sr-only">{t("home")}</span> : x.label==="All apps" ? t("allApps") : t("help")}
           </button>
         ))}
       </div>}
@@ -58,7 +64,7 @@ export default function Dashboard({ firstName, companyName, industry, role, coun
           {/* ══════ 1. Lo ganado en el año: Earned / Spent / Profit ══════ */}
           <div style={d(0)} className={`${fade(0)} mx-4 mt-5 space-y-3`}>
             {st ? <MobileHero st={st}/> : (
-              <div className="rounded-3xl border border-slate-200 bg-white px-6 py-6"><p className="text-sm text-slate-500">Received this year</p><p className="mt-1 text-[38px] font-bold text-[#0b1f3a]">$0.00</p></div>
+              <div className="rounded-3xl border border-slate-200 bg-white px-6 py-6"><p className="text-sm text-slate-500">{t("receivedYear")}</p><p className="mt-1 text-[38px] font-bold text-[#0b1f3a]">{$(0)}</p></div>
             )}
           </div>
 
@@ -66,15 +72,15 @@ export default function Dashboard({ firstName, companyName, industry, role, coun
           {st && <div style={d(1)} className={`${fade(1)} mx-4 mt-3`}><InsightsCard st={st} compact neutral tip={false}/></div>}
 
           {/* ══════ 3. Net Revenue ══════ */}
-          <SectionCard style={d(2)} className={fade(2)} title="Net Revenue" icon="M22 12h-4l-3 9L9 3l-3 9H2"
-            period={getPeriod("rev")} onPeriod={()=>setPeriodSheet("rev")}>
+          <SectionCard style={d(2)} className={fade(2)} title={td("netRevenueT")} icon="M22 12h-4l-3 9L9 3l-3 9H2"
+            period={pname(getPeriod("rev"))} onPeriod={()=>setPeriodSheet("rev")}>
             {st && st.revenue12 > 0 ? (
               <div className="rounded-2xl bg-[#f3fbf8] px-5 py-5">
-                <p className="text-sm text-slate-500">Payments received, last 12 months</p>
+                <p className="text-sm text-slate-500">{t("paymentsLast12")}</p>
                 <p className="mt-1 text-3xl font-bold text-[#0b1f3a]">{$(st.revenue12)}</p>
-                <MiniBars values={st.receipts} labels={st.months} color="#0f766e" mounted={m}/>
+                <MiniBars values={st.receipts} labels={st.months.map(fx.monName)} color="#0f766e" mounted={m}/>
               </div>
-            ) : <EmptyChart msg="Once you start to receive or record invoice payments, you can view your total revenue, minus refunds."/>}
+            ) : <EmptyChart msg={t("revEmpty")}/>}
           </SectionCard>
 
           {/* ══════ 4. Subscription Metrics (scroll) ══════ */}
@@ -82,47 +88,47 @@ export default function Dashboard({ firstName, companyName, industry, role, coun
             <div className="flex items-center justify-between px-4">
               <p className="flex items-center gap-2 text-lg font-semibold text-[#0b1f3a]">
                 <svg viewBox="0 0 24 24" className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-                Subscription Metrics
+                {t("subMetrics")}
               </p>
-              <button type="button" onClick={()=>setPeriodSheet("sub")} className="text-sm font-medium text-slate-500">{getPeriod("sub")} ▾</button>
+              <button type="button" onClick={()=>setPeriodSheet("sub")} className="text-sm font-medium text-slate-500">{pname(getPeriod("sub"))} ▾</button>
             </div>
             <div className="mt-4 flex gap-3 overflow-x-auto px-4 pb-1" style={{scrollbarWidth:"none"}}>
-              {([{l:"MRR",v:$(st?.mrr ?? 0)},{l:"Active Subscriptions",v:String(st?.activeSubs ?? 0)},{l:"ARPU",v:$(st?.arpu ?? 0)},{l:"Churn Rate",v:"0.00%"},{l:"LTV",v:$((st?.arpu ?? 0) * 12)}]).map(c=>(
+              {([{l:"MRR",v:$(st?.mrr ?? 0)},{l:td("activeSubs"),v:String(st?.activeSubs ?? 0)},{l:"ARPU",v:$(st?.arpu ?? 0)},{l:td("churn"),v:"0.00%"},{l:"LTV",v:$((st?.arpu ?? 0) * 12)}]).map(c=>(
                 <div key={c.l} className="w-56 shrink-0 rounded-2xl border border-slate-200 bg-white p-5">
                   <p className="text-sm font-semibold text-[#0b1f3a]">{c.l}</p>
                   <p className="mt-3 text-3xl font-bold text-[#0b1f3a]">{c.v}</p>
-                  <p className="mt-1 rounded-md bg-slate-50 px-2 py-0.5 text-xs text-slate-400 inline-block">0% Year on Year</p>
-                  <p className="mt-3 text-xs text-slate-400">No data found.</p>
+                  <p className="mt-1 rounded-md bg-slate-50 px-2 py-0.5 text-xs text-slate-400 inline-block">0% {td("yoy")}</p>
+                  <p className="mt-3 text-xs text-slate-400">{td("noData")}</p>
                 </div>
               ))}
             </div>
           </div>
 
           {/* ══════ 5. Subscription Summary ══════ */}
-          <SectionCard style={d(4)} className={fade(4)} title="Subscription Summary" icon="M9 12l2 2 4-4M12 22a10 10 0 1 0 0-20"
-            period={getPeriod("subsum")} onPeriod={()=>setPeriodSheet("subsum")}>
-            <EmptyChart msg="Create subscriptions to view essential metrics like the number of signups, activations, cancellations, and reactivations."/>
+          <SectionCard style={d(4)} className={fade(4)} title={td("subSummary")} icon="M9 12l2 2 4-4M12 22a10 10 0 1 0 0-20"
+            period={pname(getPeriod("subsum"))} onPeriod={()=>setPeriodSheet("subsum")}>
+            <EmptyChart msg={t("subEmpty")}/>
           </SectionCard>
 
           {/* ══════ 6. Income and Expense ══════ */}
-          <SectionCard style={d(5)} className={fade(5)} title="Income and Expense" icon="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
-            period={getPeriod("inc")} onPeriod={()=>setPeriodSheet("inc")}>
+          <SectionCard style={d(5)} className={fade(5)} title={td("incExp")} icon="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
+            period={pname(getPeriod("inc"))} onPeriod={()=>setPeriodSheet("inc")}>
             {st ? <MoneyChart st={st} mounted={m}/> : <BarChart mounted={m}/>}
             <div className="mt-4 grid grid-cols-3 text-center">
-              <div><p className="text-sm font-medium text-blue-600">Income</p><p className="mt-1 text-lg font-bold text-[#0b1f3a]">{$(st?.income12 ?? 0)}</p></div>
-              <div><p className="text-sm font-medium text-teal-600">Receipts</p><p className="mt-1 text-lg font-bold text-[#0b1f3a]">{$(st?.receipts12 ?? 0)}</p></div>
-              <div><p className="text-sm font-medium text-orange-500">Expense</p><p className="mt-1 text-lg font-bold text-[#0b1f3a]">{$((st?.expenses ?? []).reduce((a,b)=>a+b,0))}</p></div>
+              <div><p className="text-sm font-medium text-blue-600">{td("income")}</p><p className="mt-1 text-lg font-bold text-[#0b1f3a]">{$(st?.income12 ?? 0)}</p></div>
+              <div><p className="text-sm font-medium text-teal-600">{td("receipts")}</p><p className="mt-1 text-lg font-bold text-[#0b1f3a]">{$(st?.receipts12 ?? 0)}</p></div>
+              <div><p className="text-sm font-medium text-orange-500">{td("expenses")}</p><p className="mt-1 text-lg font-bold text-[#0b1f3a]">{$((st?.expenses ?? []).reduce((a,b)=>a+b,0))}</p></div>
             </div>
-            <Link prefetch={false} href="/dashboard/expenses" className="mt-4 flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-orange-300 py-2.5 text-sm font-medium text-orange-600 active:bg-orange-50">+ Add an expense</Link>
+            <Link prefetch={false} href="/dashboard/expenses" className="mt-4 flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-orange-300 py-2.5 text-sm font-medium text-orange-600 active:bg-orange-50">{t("addExpense")}</Link>
           </SectionCard>
 
           {/* ══════ 7. Project Summary ══════ */}
-          <SectionCard style={d(6)} className={fade(6)} title="Project Summary" icon="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2"
-            period={getPeriod("proj")} onPeriod={()=>setPeriodSheet("proj")}>
+          <SectionCard style={d(6)} className={fade(6)} title={t("projSummary")} icon="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2"
+            period={pname(getPeriod("proj"))} onPeriod={()=>setPeriodSheet("proj")}>
             <div className="rounded-2xl bg-[#eef6ff] px-6 py-10 text-center">
               <p className="text-5xl font-bold text-[#0b1f3a]">00:00</p>
-              <p className="mt-3 text-sm font-medium text-slate-500">Start Project Timer</p>
-              <p className="mt-2 text-xs text-slate-400">Track time on jobs once dispatch is ready.</p>
+              <p className="mt-3 text-sm font-medium text-slate-500">{t("timer")}</p>
+              <p className="mt-2 text-xs text-slate-400">{t("timerText")}</p>
             </div>
           </SectionCard>
 
@@ -132,14 +138,14 @@ export default function Dashboard({ firstName, companyName, industry, role, coun
 
       {tab === "All apps" && (
         <div className="mx-4 mt-5 rounded-3xl border border-slate-200 bg-white p-3 animate-[bp-fade_0.25s_ease-out]">
-          <p className="px-2 pb-1 pt-1 text-xs font-semibold uppercase tracking-wide text-slate-400">All apps</p>
+          <p className="px-2 pb-1 pt-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("allApps")}</p>
           <AppsGrid role={role} />
         </div>
       )}
-      {tab === "Help" && <EmptyTab title="Need help?" text="Documentation and support channels are coming soon."/>}
+      {tab === "Help" && <EmptyTab title={t("helpTitle")} text={t("helpText")}/>}
 
       {/* Period sheet */}
-      <BottomSheet open={!!periodSheet} onClose={()=>setPeriodSheet(null)} title="Select period">
+      <BottomSheet open={!!periodSheet} onClose={()=>setPeriodSheet(null)} title={t("selectPeriod")}>
         <ul className="space-y-1">
           {PERIODS.map(p=>{
             const active = periodSheet ? getPeriod(periodSheet)===p : false;
@@ -147,7 +153,7 @@ export default function Dashboard({ firstName, companyName, industry, role, coun
               <li key={p}>
                 <button type="button" onClick={()=>{if(periodSheet) setPeriods(prev=>({...prev,[periodSheet]:p})); setPeriodSheet(null);}}
                   className={`flex w-full items-center justify-between rounded-xl px-4 py-3.5 text-left text-[15px] ${active?"bg-[#f6fbfa] font-medium text-[#0b1f3a] border border-[#0f766e]":"text-slate-700 border border-transparent"}`}>
-                  {p}
+                  {pname(p)}
                   {active && <svg viewBox="0 0 20 20" className="h-5 w-5 text-[#0f766e]" fill="currentColor"><path d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0z"/></svg>}
                 </button>
               </li>

@@ -4,12 +4,14 @@ import FinanceOverview from "@/components/dashboard/FinanceOverview";
 import type { MobileStats } from "@/lib/dashboard-server";
 
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
+import { catKey, useFinTx } from "@/i18n/useFinTx";
 import Link from "next/link";
 import CompanyBadge from "@/components/CompanyBadge";
 import PeriodSelect from "@/components/dashboard/PeriodSelect";
 import { BarChart, Donut, LineChart, Series, autoEvery } from "@/components/dashboard/charts";
 import {
-  AGING, DEFAULT_PERIOD, DashboardData, EMPTY_DATA, MONTHS, Period, Range, SubEvent,
+  AGING, Bucket, DEFAULT_PERIOD, DashboardData, EMPTY_DATA, Period, Range, SubEvent,
   agingOf, bucketsOf, countBy, demoData, lastYear, periodRange, snapshotBy, subStats, sumBy, sumIn, topExpenses, yoy,
 } from "@/lib/dashboard-data";
 
@@ -27,10 +29,10 @@ const SUB_TYPES: { type: SubEvent["type"]; label: string; color: string }[] = [
   { type: "reactivation", label: "Reactivations", color: C.violet },
 ];
 const OPS = [
-  { label: "Jobs today", icon: "M9 6V4h6v2M4 6h16v13H4zM4 12h16" },
-  { label: "Technicians on the road", icon: "M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" },
-  { label: "Items low on stock", icon: "M21 8 12 3 3 8v8l9 5 9-5zM3 8l9 5 9-5M12 13v8" },
-  { label: "Unread messages", icon: "M21 12a8 8 0 0 1-11.6 7.1L4 20l1.1-4.6A8 8 0 1 1 21 12z" },
+  { key: "jobs", label: "Jobs today", icon: "M9 6V4h6v2M4 6h16v13H4zM4 12h16" },
+  { key: "road", label: "Technicians on the road", icon: "M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" },
+  { key: "stock", label: "Items low on stock", icon: "M21 8 12 3 3 8v8l9 5 9-5zM3 8l9 5 9-5M12 13v8" },
+  { key: "msgs", label: "Unread messages", icon: "M21 12a8 8 0 0 1-11.6 7.1L4 20l1.1-4.6A8 8 0 1 1 21 12z" },
 ];
 const FOOTER_SOON = ["Payments", "Jobs", "Dispatch", "Van inventory"];
 
@@ -49,14 +51,16 @@ export default function DesktopDashboard({ firstName, companyId, companyName, co
   useEffect(() => setNow(new Date()), []);
 
   const data = useMemo(() => (now && demo ? demoData(now) : real ?? EMPTY_DATA), [now, demo, real]);
+  const t = useTranslations("dashFin");
+  const fx = useFinTx();
   const money = useMemo(() => {
-    const f = new Intl.NumberFormat("en-US", { style: "currency", currency: data.currency });
+    const f = new Intl.NumberFormat(fx.tag, { style: "currency", currency: data.currency });
     return (v: number) => f.format(v);
-  }, [data.currency]);
+  }, [data.currency, fx.tag]);
 
   const per = (k: CardKey) => own[k] ?? period;
   const pick = (k: CardKey) => (p: Period) => setOwn((o) => ({ ...o, [k]: p }));
-  const go = (t: Tab) => { setTab(t); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const go = (k: Tab) => { setTab(k); window.scrollTo({ top: 0, behavior: "smooth" }); };
 
   return (
     <div className="min-h-full bg-white">
@@ -76,11 +80,11 @@ export default function DesktopDashboard({ firstName, companyId, companyName, co
           <Support onHelp={() => go("Help")} />
         </div>
         <div role="tablist" aria-label="Dashboard sections" className="relative flex h-12 items-end gap-8 px-8">
-          {TABS.map((t) => (
-            <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => setTab(t)}
-              className={`relative pb-3 text-[16px] font-medium transition-colors ${tab === t ? "text-[#0b1f3a]" : "text-slate-500 hover:text-[#0b1f3a]"}`}>
-              {t}
-              {tab === t && <span className="absolute inset-x-0 -bottom-px h-[3px] rounded-full bg-[#0f766e]" />}
+          {TABS.map((k) => (
+            <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+              className={`relative pb-3 text-[16px] font-medium transition-colors ${tab === k ? "text-[#0b1f3a]" : "text-slate-500 hover:text-[#0b1f3a]"}`}>
+              {k}
+              {tab === k && <span className="absolute inset-x-0 -bottom-px h-[3px] rounded-full bg-[#0f766e]" />}
             </button>
           ))}
         </div>
@@ -90,13 +94,13 @@ export default function DesktopDashboard({ firstName, companyId, companyName, co
         <div className="px-8 pb-4 pt-6">
           {demo && (
             <div className="mb-5 flex max-w-[1600px] items-center justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
-              <span>You’re viewing sample data. These numbers are examples, not your business.</span>
-              <Link prefetch={false} href="/dashboard" className="shrink-0 font-semibold underline-offset-2 hover:underline">Exit sample data</Link>
+              <span>{t("sample")}</span>
+              <Link prefetch={false} href="/dashboard" className="shrink-0 font-semibold underline-offset-2 hover:underline">{t("exitSample")}</Link>
             </div>
           )}
           <div className="inline-flex items-stretch rounded-lg border border-slate-200 bg-white">
-            <span className="flex items-center rounded-l-lg border-r border-slate-200 bg-slate-50 px-3.5 text-sm text-slate-600">Date Range</span>
-            <PeriodSelect variant="field" value={period} ariaLabel="Date range for every card"
+            <span className="flex items-center rounded-l-lg border-r border-slate-200 bg-slate-50 px-3.5 text-sm text-slate-600">{t("dateRange")}</span>
+            <PeriodSelect variant="field" value={period} ariaLabel={t("dateRangeAll")}
               onChange={(p) => { setPeriod(p); setOwn({}); }} />
           </div>
           {/* Resumen de finanzas: lo que entra, lo que sale, lo que te queda y consejos */}
@@ -128,10 +132,19 @@ function Cards({ now, data, money, per, pick }: {
   per: (k: CardKey) => Period;
   pick: (k: CardKey) => (p: Period) => void;
 }) {
-  const view = (k: CardKey) => { const r = periodRange(per(k), now); return { key: per(k), r, prev: lastYear(r), x: bucketsOf(r) }; };
-  const count = (n: number) => Math.round(n).toLocaleString("en-US");
+  const t = useTranslations("dashFin");
+  const fx = useFinTx();
+  // Paso 6.2b: las etiquetas de días y meses de las gráficas en el idioma
+  const mon = (d: Date) => d.toLocaleDateString(fx.tag, { month: "short" }).replace(".", "");
+  const relabel = (bs: Bucket[]): Bucket[] => bs.map((b) => b.label.length <= 2
+    ? { ...b, sub: mon(b.start), title: b.start.toLocaleDateString(fx.tag, { month: "short", day: "numeric", year: "numeric" }).replace(".", "") }
+    : { ...b, label: mon(b.start), title: `${mon(b.start)} ${b.start.getFullYear()}` });
+  const view = (k: CardKey) => { const r = periodRange(per(k), now); return { key: per(k), r, prev: lastYear(r), x: relabel(bucketsOf(r)) }; };
+  const count = (n: number) => Math.round(n).toLocaleString(fx.tag);
   const pct = (n: number) => `${n.toFixed(2)}%`;
-  const asOf = (d: Date) => `On ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  const asOf = (d: Date) => t("asOf", { date: `${mon(d)} ${d.getFullYear()}` });
+  const aging = AGING.map((a, i) => ({ label: i === 0 ? t("current") : a.label, title: t(`aging${i}` as never) }));
+  const SUBS = SUB_TYPES.map((s) => ({ ...s, label: t(`sub_${s.type}` as never) }));
   const sum = (a: number[]) => a.reduce((s, v) => s + (v || 0), 0);
   const hasSubs = data.mrr.length > 0 || data.activeSubs.length > 0;
 
@@ -139,107 +152,107 @@ function Cards({ now, data, money, per, pick }: {
   const rev = view("rev");
   const net = (r: Range) => sumIn(data.payments, r) - sumIn(data.refunds, r);
   const refunds = sumBy(data.refunds, rev.x, rev.r);
-  const revSeries: Series[] = [{ key: "rev", label: "Net revenue", color: C.teal, values: sumBy(data.payments, rev.x, rev.r).map((v, i) => Math.max(0, v - refunds[i])) }];
+  const revSeries: Series[] = [{ key: "rev", label: t("netRevenue"), color: C.teal, values: sumBy(data.payments, rev.x, rev.r).map((v, i) => Math.max(0, v - refunds[i])) }];
 
   // Receivables por días de atraso (siempre al día de hoy)
-  const aging = agingOf(data.openInvoices, now);
-  const recvTotal = sum(aging);
+  const agingV = agingOf(data.openInvoices, now);
+  const recvTotal = sum(agingV);
 
   const stat = (k: CardKey) => { const v = view(k); return { ...v, cur: subStats(data, v.r, now), old: subStats(data, v.prev, now) }; };
   const mrr = stat("mrr"), act = stat("active"), arpu = stat("arpu"), churn = stat("churn"), ltv = stat("ltv");
 
   const ss = view("subsum");
-  const subSeries: Series[] = SUB_TYPES.map((s) => ({ key: s.type, label: s.label, color: s.color, values: countBy(data.subEvents, s.type, ss.x, ss.r) }));
+  const subSeries: Series[] = SUBS.map((s) => ({ key: s.type, label: s.label, color: s.color, values: countBy(data.subEvents, s.type, ss.x, ss.r) }));
 
   const inc = view("inc");
   const incSeries: Series[] = [
-    { key: "inc", label: "Income", color: C.blue, values: sumBy(data.invoices, inc.x, inc.r) },
-    { key: "rec", label: "Receipts", color: C.teal, values: sumBy(data.payments, inc.x, inc.r) },
-    { key: "exp", label: "Expenses", color: C.amber, values: sumBy(data.expenses, inc.x, inc.r) },
+    { key: "inc", label: t("income"), color: C.blue, values: sumBy(data.invoices, inc.x, inc.r) },
+    { key: "rec", label: t("receipts"), color: C.teal, values: sumBy(data.payments, inc.x, inc.r) },
+    { key: "exp", label: t("expenses"), color: C.amber, values: sumBy(data.expenses, inc.x, inc.r) },
   ];
 
   const ex = view("exp");
-  const top = topExpenses(data.expenses, ex.r);
+  const top = topExpenses(data.expenses, ex.r).map((x) => ({ ...x, label: fx.cat(x.label) }));
 
   return (
     <div className="mt-6 max-w-[1600px] animate-[bp-fade_0.45s_ease-out] space-y-6">
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <Card title="Net Revenue" period={rev.key} onPeriod={pick("rev")}>
+        <Card title={t("netRevenueT")} period={rev.key} onPeriod={pick("rev")}>
           <Stat value={money(net(rev.r))} change={yoy(net(rev.r), net(rev.prev))} />
-          <BarChart x={rev.x} series={revSeries} format={money} label="Net revenue" animKey={rev.key} />
+          <BarChart x={rev.x} series={revSeries} format={money} label={t("netRevenue")} animKey={rev.key} />
         </Card>
-        <Card title="Receivable Summary">
+        <Card title={t("recvSummary")}>
           <div className="flex h-[88px] items-start justify-between gap-6">
             <div>
-              <p className="text-[15px] text-slate-500">Total Receivables</p>
+              <p className="text-[15px] text-slate-500">{t("totalRecv")}</p>
               <p className="mt-2 text-[28px] font-semibold leading-none tracking-tight tabular-nums text-[#0b1f3a]">{money(recvTotal)}</p>
             </div>
             <dl className="grid grid-cols-[auto_auto] items-center gap-x-4 gap-y-2.5 text-[15px]">
-              <dt className="flex items-center gap-2 text-slate-600"><Swatch c={C.teal} />Current</dt>
-              <dd className="text-right font-semibold tabular-nums text-[#0b1f3a]">{money(aging[0])}</dd>
-              <dt className="flex items-center gap-2 text-slate-600"><Swatch c={C.amber} />Overdue</dt>
-              <dd className="text-right font-semibold tabular-nums text-[#0b1f3a]">{money(recvTotal - aging[0])}</dd>
+              <dt className="flex items-center gap-2 text-slate-600"><Swatch c={C.teal} />{t("current")}</dt>
+              <dd className="text-right font-semibold tabular-nums text-[#0b1f3a]">{money(agingV[0])}</dd>
+              <dt className="flex items-center gap-2 text-slate-600"><Swatch c={C.amber} />{t("overdue")}</dt>
+              <dd className="text-right font-semibold tabular-nums text-[#0b1f3a]">{money(recvTotal - agingV[0])}</dd>
             </dl>
           </div>
-          <BarChart x={AGING} wide every={1} format={money} label="Receivables by days overdue"
-            series={[{ key: "aging", label: "Balance", color: C.amber, colors: [C.teal, C.amber, C.amber, C.amber, C.amber], values: aging }]} />
+          <BarChart x={aging} wide every={1} format={money} label={t("recvByDays")}
+            series={[{ key: "aging", label: t("balance"), color: C.amber, colors: [C.teal, C.amber, C.amber, C.amber, C.amber], values: agingV }]} />
         </Card>
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <Card title="MRR" period={mrr.key} onPeriod={pick("mrr")}>
           <Stat value={money(mrr.cur.mrr)} change={yoy(mrr.cur.mrr, mrr.old.mrr)} />
-          <LineChart x={mrr.x} area format={money} label="Monthly recurring revenue" animKey={mrr.key}
+          <LineChart x={mrr.x} area format={money} label={t("mrrLong")} animKey={mrr.key}
             series={[{ key: "mrr", label: "MRR", color: C.tealDark, values: snapshotBy(data.mrr, mrr.x, now) }]} />
         </Card>
         <div className="grid grid-cols-2 grid-rows-2 gap-6">
-          <Mini title="Active Subscriptions" period={act.key} onPeriod={pick("active")} has={hasSubs}
+          <Mini title={t("activeSubs")} period={act.key} onPeriod={pick("active")} has={hasSubs}
             value={count(act.cur.active)} change={yoy(act.cur.active, act.old.active)} last={count(act.old.active)} />
           <Mini title="ARPU" period={arpu.key} onPeriod={pick("arpu")} has={hasSubs}
             value={money(arpu.cur.arpu)} change={yoy(arpu.cur.arpu, arpu.old.arpu)} last={money(arpu.old.arpu)} />
-          <Mini title="Churn Rate" period={churn.key} onPeriod={pick("churn")} has={hasSubs} note={asOf(churn.cur.at)}
+          <Mini title={t("churn")} period={churn.key} onPeriod={pick("churn")} has={hasSubs} note={asOf(churn.cur.at)}
             value={pct(churn.cur.churn)} change={yoy(churn.cur.churn, churn.old.churn)} last={pct(churn.old.churn)} />
           <Mini title="LTV" period={ltv.key} onPeriod={pick("ltv")} has={hasSubs} note={asOf(ltv.cur.at)}
             value={money(ltv.cur.ltv)} change={yoy(ltv.cur.ltv, ltv.old.ltv)} last={money(ltv.old.ltv)} />
         </div>
       </div>
 
-      <Card title="Subscription Summary" period={ss.key} onPeriod={pick("subsum")}>
+      <Card title={t("subSummary")} period={ss.key} onPeriod={pick("subsum")}>
         <Legend items={subSeries.map((s) => ({ label: s.label, color: s.color, value: count(sum(s.values)) }))} />
         <LineChart x={ss.x} series={subSeries} format={count} integer emptyText={null} animKey={ss.key}
-          label="Signups, activations, cancellations and reactivations" />
+          label={t("subLabel")} />
       </Card>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <Card title="Income and Expense" period={inc.key} onPeriod={pick("inc")}>
-          <Legend items={incSeries.map((s) => ({ label: `Total ${s.label}`, color: s.color, value: money(sum(s.values)) }))} />
+        <Card title={t("incExp")} period={inc.key} onPeriod={pick("inc")}>
+          <Legend items={incSeries.map((s) => ({ label: t("totalOf", { label: s.label }), color: s.color, value: money(sum(s.values)) }))} />
           <BarChart x={inc.x} series={incSeries} format={money} every={autoEvery(inc.x.length, true)} animKey={inc.key}
-            label="Income, receipts and expenses" />
+            label={t("incExpLabel")} />
         </Card>
-        <Card title="Top Expenses" period={ex.key} onPeriod={pick("exp")} bodyClass="flex items-center justify-center p-6">
+        <Card title={t("topExp")} period={ex.key} onPeriod={pick("exp")} bodyClass="flex items-center justify-center p-6">
           {top.length > 0
-            ? <Donut items={top} colors={EXPENSE_COLORS} format={money} label="Top expenses by category" />
-            : <p className="text-[15px] text-slate-500">No expenses recorded for {ex.key.toLowerCase()}</p>}
+            ? <Donut items={top} colors={EXPENSE_COLORS} format={money} label={t("topExpLabel")} />
+            : <p className="text-[15px] text-slate-500">{t("noExpFor", { period: t(`dp.${catKey(ex.key)}` as never).toLowerCase() })}</p>}
         </Card>
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <Card title="Projects" bodyClass="flex min-h-[300px] flex-col items-center justify-center p-6 text-center">
-          <p className="text-[15px] font-medium text-[#0b1f3a]">Add projects to this watchlist</p>
-          <p className="mt-1.5 text-sm text-slate-500">Projects arrive with Jobs and Time tracking.</p>
+        <Card title={t("projects")} bodyClass="flex min-h-[300px] flex-col items-center justify-center p-6 text-center">
+          <p className="text-[15px] font-medium text-[#0b1f3a]">{t("projectsTitle")}</p>
+          <p className="mt-1.5 text-sm text-slate-500">{t("projectsText")}</p>
         </Card>
         {/* Resumen de la operación: cada módulo tendrá además su propio dashboard */}
-        <Card title="Operations" right={<SoonPill />}>
+        <Card title={t("operations")} right={<SoonPill />}>
           <div className="grid grid-cols-2 gap-3">
             {OPS.map((o) => (
-              <div key={o.label} className="rounded-lg border border-slate-100 bg-slate-50/70 p-4">
+              <div key={o.key} className="rounded-lg border border-slate-100 bg-slate-50/70 p-4">
                 <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#e9f7f4] text-[#0f766e]"><Icon d={o.icon} /></span>
                 <p className="mt-3 text-[22px] font-semibold leading-none text-slate-300">—</p>
-                <p className="mt-1.5 text-sm text-slate-600">{o.label}</p>
+                <p className="mt-1.5 text-sm text-slate-600">{t(`ops_${o.key}` as never)}</p>
               </div>
             ))}
           </div>
-          <p className="mt-4 text-[13px] leading-relaxed text-slate-500">Today’s numbers from Jobs, Dispatch, Van inventory and Messages appear here as each module launches.</p>
+          <p className="mt-4 text-[13px] leading-relaxed text-slate-500">{t("opsNote")}</p>
         </Card>
       </div>
     </div>
@@ -256,11 +269,12 @@ function Card({ title, period, onPeriod, right, children, bodyClass = "p-6", min
   bodyClass?: string;
   mini?: boolean;
 }) {
+  const t = useTranslations("dashFin");
   return (
     <section className={`flex min-w-0 flex-col rounded-xl border border-slate-200 bg-white ${mini ? "bp-mini" : ""}`}>
       <header className={`flex min-h-[56px] shrink-0 gap-x-3 gap-y-0.5 rounded-t-xl border-b border-slate-200 bg-[#f8fafb] px-5 py-2 ${mini ? "bp-mini-head" : "items-center justify-between"}`}>
         <h2 className="text-[15px] font-semibold text-[#0b1f3a]">{title}</h2>
-        {period && onPeriod ? <PeriodSelect value={period} onChange={onPeriod} ariaLabel={`${title} period`} /> : right}
+        {period && onPeriod ? <PeriodSelect value={period} onChange={onPeriod} ariaLabel={t("cardPeriod", { title })} /> : right}
       </header>
       <div className={`flex-1 ${bodyClass}`}>{children}</div>
     </section>
@@ -270,23 +284,25 @@ function Card({ title, period, onPeriod, right, children, bodyClass = "p-6", min
 function Mini({ title, period, onPeriod, value, note, change, has, last }: {
   title: string; period: Period; onPeriod: (p: Period) => void; value: string; note?: string; change: number; has: boolean; last: string;
 }) {
+  const t = useTranslations("dashFin");
   return (
     <Card mini title={title} period={period} onPeriod={onPeriod} bodyClass="flex flex-col p-5">
       <p className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
         <span className="text-[26px] font-semibold leading-none tracking-tight tabular-nums text-[#0b1f3a]">{value}</span>
         {note && <span className="text-sm text-slate-500">{note}</span>}
       </p>
-      <p className="mt-3.5 flex items-center gap-2 text-sm text-slate-500"><Change v={change} />Year on Year</p>
-      <p className="mt-auto pt-4 text-center text-[13px] text-slate-500">{has ? `Same period last year: ${last}` : "No data found."}</p>
+      <p className="mt-3.5 flex items-center gap-2 text-sm text-slate-500"><Change v={change} />{t("yoy")}</p>
+      <p className="mt-auto pt-4 text-center text-[13px] text-slate-500">{has ? t("lastYear", { v: last }) : t("noData")}</p>
     </Card>
   );
 }
 
 function Stat({ value, change }: { value: string; change: number }) {
+  const t = useTranslations("dashFin");
   return (
     <div className="h-[88px]">
       <p className="text-[28px] font-semibold leading-none tracking-tight tabular-nums text-[#0b1f3a]">{value}</p>
-      <p className="mt-3.5 flex items-center gap-2 text-sm text-slate-500"><Change v={change} />Year on Year</p>
+      <p className="mt-3.5 flex items-center gap-2 text-sm text-slate-500"><Change v={change} />{t("yoy")}</p>
     </div>
   );
 }
@@ -311,7 +327,7 @@ function Legend({ items }: { items: { label: string; color: string; value: strin
 }
 
 const Swatch = ({ c }: { c: string }) => <span className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ backgroundColor: c }} />;
-const SoonPill = () => <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-400">Soon</span>;
+const SoonPill = () => <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-400">{useTranslations("common")("soon")}</span>;
 const Icon = ({ d }: { d: string }) => (
   <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
 );

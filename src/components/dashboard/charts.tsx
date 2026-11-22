@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState } from "react";
 
 // Gráficas del dashboard de computadora: eje de dinero a la izquierda, fechas abajo, tooltip al pasar el mouse
@@ -112,7 +113,9 @@ type ChartProps = {
   animKey?: string;
 };
 
-export function BarChart({ x, series, format, label, height = 300, every, integer = false, emptyText = "No data found.", animKey, wide = false }: ChartProps & { wide?: boolean }) {
+export function BarChart({ x, series, format, label, height = 300, every, integer = false, emptyText: emptyArg, animKey, wide = false }: ChartProps & { wide?: boolean }) {
+  const t = useTranslations("charts");
+  const emptyText = emptyArg === undefined ? t("noData") : emptyArg;
   const [ref, w] = useWidth();
   const [hover, setHover] = useState<number | null>(null);
   const n = x.length, k = series.length;
@@ -128,7 +131,7 @@ export function BarChart({ x, series, format, label, height = 300, every, intege
 
   return (
     <div ref={ref} className="relative rounded-md" style={{ height }} tabIndex={live ? 0 : -1} role="group"
-      aria-label={`${label}. Use the arrow keys to read each value.`}
+      aria-label={t("aria", { label })}
       onKeyDown={(e) => live && keyNav(e, n, setHover)} onBlur={() => setHover(null)}>
       {w > 0 && (
         <svg width={w} height={height} className="block">
@@ -163,7 +166,9 @@ export function BarChart({ x, series, format, label, height = 300, every, intege
   );
 }
 
-export function LineChart({ x, series, format, label, height = 300, every, integer = false, emptyText = "No data found.", animKey, area = false }: ChartProps & { area?: boolean }) {
+export function LineChart({ x, series, format, label, height = 300, every, integer = false, emptyText: emptyArg, animKey, area = false }: ChartProps & { area?: boolean }) {
+  const t = useTranslations("charts");
+  const emptyText = emptyArg === undefined ? t("noData") : emptyArg;
   const [ref, w] = useWidth();
   const [hover, setHover] = useState<number | null>(null);
   const gid = useId().replace(/:/g, "");
@@ -188,7 +193,7 @@ export function LineChart({ x, series, format, label, height = 300, every, integ
 
   return (
     <div ref={ref} className="relative rounded-md" style={{ height }} tabIndex={live ? 0 : -1} role="group"
-      aria-label={`${label}. Use the arrow keys to read each value.`}
+      aria-label={t("aria", { label })}
       onKeyDown={(e) => live && keyNav(e, n, setHover)} onBlur={() => setHover(null)}>
       {w > 0 && (
         <svg width={w} height={height} className="block">
@@ -242,6 +247,7 @@ export function LineChart({ x, series, format, label, height = 300, every, integ
 }
 
 export function Donut({ items, colors, format, label }: { items: { label: string; value: number }[]; colors: string[]; format: (v: number) => string; label: string }) {
+  const t = useTranslations("charts");
   const [hover, setHover] = useState<number | null>(null);
   const sum = items.reduce((a, b) => a + b.value, 0) || 1;
   const size = 210, sw = 28, rad = (size - sw - 10) / 2, circ = 2 * Math.PI * rad;
@@ -264,7 +270,7 @@ export function Donut({ items, colors, format, label }: { items: { label: string
             return seg;
           })}
         </g>
-        <text x="50%" y="45%" textAnchor="middle" fontSize="12" fill="#64748b">{active ? active.label : "Total"}</text>
+        <text x="50%" y="45%" textAnchor="middle" fontSize="12" fill="#64748b">{active ? active.label : t("total")}</text>
         <text x="50%" y="57%" textAnchor="middle" fontSize="18" fontWeight="600" fill="#0b1f3a">{format(active ? active.value : sum)}</text>
       </svg>
       <ul className="min-w-0 flex-1 space-y-0.5">

@@ -29,7 +29,17 @@ export type PayJob = {
   type: string | null; materials: number;
   how: string;       // cómo se pagó este trabajo: "$400.00 fixed", "30% of the job"… (vacío si no cobra por trabajo)
   byType: boolean;   // se pagó con una regla de su tipo de trabajo
+  howSpec?: HowSpec; // Paso 6.2b: lo mismo como datos, para escribirlo en el idioma de quien lo ve
 };
+// Paso 6.2b: cómo se calculó cada cosa, como datos (las pantallas lo escriben en el idioma con basisText / flagText / howText)
+export type HowSpec = { k: "perJob"; rate: number } | { k: "pct"; pct: number } | { k: "rule"; kind: string; amount: number; base: string | null };
+export type BasisSpec =
+  | { k: "none" } | { k: "hourly"; reg: number; rate: number; ot: number; otRate: number } | { k: "perJob"; n: number; rate: number }
+  | { k: "percent"; pct: number; revenue: number; n: number } | { k: "salary"; rate: number; part: number }
+  | { k: "mix"; groups: { count: number; type: string | null; how: HowSpec; byType: boolean }[] };
+export type FlagSpec =
+  | { k: "noRate" } | { k: "over"; min: number } | { k: "noHours" } | { k: "estimated" } | { k: "jobsSql" } | { k: "stale" }
+  | { k: "other"; amount: number; spans: [string, string][] };
 export type PayDay = { key: string; minutes: number };
 export type PayStatus = "paid" | "partial" | "unpaid" | "none";
 export type PayRow = {
@@ -37,7 +47,7 @@ export type PayRow = {
   payType: PayType | null; rate: number | null; overtimeRate: number | null;
   minutes: number; regMinutes: number; otMinutes: number; overMinutes: number; days: PayDay[];
   jobs: PayJob[]; jobCount: number; jobRevenue: number; typeRules: number;
-  calculated: number; basis: string;
+  calculated: number; basis: string; basisSpec: BasisSpec; flagSpecs: FlagSpec[];
   paid: number; payments: PayrollPayment[]; otherPayments: PayrollPayment[]; balance: number; status: PayStatus;
   flags: string[];
 };
@@ -101,9 +111,9 @@ export function buildPayroll(o: {
     const perJob = payType === "per_job" || payType === "percent";
     const jobs = (jobsBy.get(uid) ?? []).map((j): PayJob => {
       const rule = perJob ? findRule(uid, j.job_id) : null;
-      if (rule) return { ...j, cost: typeCost(rule, j.revenue, j.materials), how: typeRuleText(rule), byType: true };
-      return payType === "per_job" ? { ...j, cost: r2(n(r)), how: `${money(r)} per job` }
-        : payType === "percent" ? { ...j, cost: r2(j.revenue * (n(r) / 100)), how: `${n(r)}% of the job` } : j;
+      if (rule) return { ...j, cost: typeCost(rule, j.revenue, j.materials), how: typeRuleText(rule), byType: true, howSpec: { k: "rule", kind: rule.pay_kind, amount: n(rule.amount), base: rule.percent_base ?? null } };
+      return payType === "per_job" ? { ...j, cost: r2(n(r)), how: `${money(r)} per job`, howSpec: { k: "perJob", rate: n(r) } }
+        : payType === "percent" ? { ...j, cost: r2(j.revenue * (n(r) / 100)), how: `${n(r)}% of the job`, howSpec: { k: "pct", pct: n(r) } } : j;
     }).sort((a, b) => (a.when ?? "").localeCompare(b.when ?? ""));
     const someByType = jobs.some((j) => j.byType);
     // "2 Installation ($400.00 fixed) + 3 Service call (30% of the job) + 1 at $80.00 per job"
@@ -115,32 +125,44 @@ export function buildPayroll(o: {
     const pctEstimated = jobs.some((j) => j.estimated && j.revenue > 0 && j.how.includes("%"));
     const jobRevenue = r2(jobs.reduce((a, j) => a + j.revenue, 0));
     const flags: string[] = [];
+    const flagSpecs: FlagSpec[] = [];
+    const flag = (f: FlagSpec, en: string) => { flagSpecs.push(f); flags.push(en); };
+    const mixSpec = (): BasisSpec => {
+      const g = new Map<string, { count: number; type: string | null; how: HowSpec; byType: boolean }>();
+      jobs.forEach((j) => { const k = j.byType ? `${j.type ?? "Job"} (${j.how})` : `at ${j.how}`; const x = g.get(k); if (x) x.count++; else if (j.howSpec) g.set(k, { count: 1, type: j.type, how: j.howSpec, byType: j.byType }); });
+      return { k: "mix", groups: Array.from(g.values()) };
+    };
+    let basisSpec: BasisSpec = { k: "none" };
     let calculated = 0, basis = "", regMinutes = minutes, otMinutes = 0, overMinutes = 0;
 
     if (!payType) {
       basis = "No pay rate saved";
-      if (minutes > 0 || jobs.length) flags.push("No pay rate: set it in Team → Edit so the amount is calculated.");
+      if (minutes > 0 || jobs.length) flag({ k: "noRate" }, "No pay rate: set it in Team → Edit so the amount is calculated.");
     } else if (payType === "hourly") {
       if (ot && over > 0) { otMinutes = over; regMinutes = minutes - over; } else overMinutes = over;
       calculated = r2((regMinutes / 60) * n(r) + (otMinutes / 60) * n(ot));
       basis = `${hoursText(regMinutes)} × ${money(r)}/h${otMinutes > 0 ? ` + ${hoursText(otMinutes)} overtime × ${money(ot)}/h` : ""}`;
-      if (overMinutes > 0) flags.push(`${hoursText(overMinutes)} over 40 in a week, paid at the regular rate (no overtime rate saved).`);
-      if (minutes <= 0) flags.push("No hours clocked in this period.");
+      basisSpec = { k: "hourly", reg: regMinutes, rate: n(r), ot: otMinutes, otRate: n(ot) };
+      if (overMinutes > 0) flag({ k: "over", min: overMinutes }, `${hoursText(overMinutes)} over 40 in a week, paid at the regular rate (no overtime rate saved).`);
+      if (minutes <= 0) flag({ k: "noHours" }, "No hours clocked in this period.");
     } else if (payType === "per_job") {
       calculated = r2(jobs.reduce((a, j) => a + j.cost, 0));
       basis = someByType ? mixBasis() : `${jobs.length} job${jobs.length === 1 ? "" : "s"} × ${money(r)}`;
-      if (pctEstimated) flags.push("Some jobs have no invoice yet: their % uses the estimated price.");
+      basisSpec = someByType ? mixSpec() : { k: "perJob", n: jobs.length, rate: n(r) };
+      if (pctEstimated) flag({ k: "estimated" }, "Some jobs have no invoice yet: their % uses the estimated price.");
     } else if (payType === "percent") {
       calculated = r2(jobs.reduce((a, j) => a + j.cost, 0));
       basis = someByType ? mixBasis() : `${n(r)}% of ${money(jobRevenue)} (${jobs.length} job${jobs.length === 1 ? "" : "s"})`;
-      if (pctEstimated) flags.push("Some jobs have no invoice yet: their % uses the estimated price.");
+      basisSpec = someByType ? mixSpec() : { k: "percent", pct: n(r), revenue: jobRevenue, n: jobs.length };
+      if (pctEstimated) flag({ k: "estimated" }, "Some jobs have no invoice yet: their % uses the estimated price.");
     } else {
       const part = SALARY_PART[o.period] ?? 12;
       calculated = r2(n(r) / part);
       basis = `${money(r)} per year ÷ ${part}`;
+      basisSpec = { k: "salary", rate: n(r), part };
     }
-    if ((payType === "per_job" || payType === "percent") && !jobsReady) flags.push("Jobs couldn't be read: run paso-5.10b-reports-manager.sql in Supabase.");
-    if (mine.some((e) => isStale(e, o.now) && inRange(o.dayKey(e.started_at)))) flags.push("A missed clock-out is not counted. Fix it in Timesheets.");
+    if ((payType === "per_job" || payType === "percent") && !jobsReady) flag({ k: "jobsSql" }, "Jobs couldn't be read: run paso-5.10b-reports-manager.sql in Supabase.");
+    if (mine.some((e) => isStale(e, o.now) && inRange(o.dayKey(e.started_at)))) flag({ k: "stale" }, "A missed clock-out is not counted. Fix it in Timesheets.");
 
     // Pagos de ESTE periodo (los que caen completos dentro). Los de otro periodo que se cruza solo se avisan.
     const payments = pays.filter((p) => p.period_from >= o.from && p.period_to <= o.to);
@@ -148,7 +170,7 @@ export function buildPayroll(o: {
     const paid = r2(payments.reduce((a, p) => a + n(p.amount), 0));
     const balance = r2(Math.max(0, calculated - paid));
     const status: PayStatus = paid > 0 && balance < 0.005 ? "paid" : paid > 0 ? "partial" : calculated > 0 ? "unpaid" : "none";
-    if (otherPayments.length) flags.push(`Also has ${money(otherPayments.reduce((a, p) => a + n(p.amount), 0))} paid for ${otherPayments.map((p) => spanLabel(p.period_from, p.period_to)).filter((v, i, l) => l.indexOf(v) === i).join(", ")}.`);
+    if (otherPayments.length) flag({ k: "other", amount: r2(otherPayments.reduce((a, p) => a + n(p.amount), 0)), spans: otherPayments.map((p): [string, string] => [p.period_from, p.period_to]).filter((v, i, l) => l.findIndex((x) => x[0] === v[0] && x[1] === v[1]) === i) }, `Also has ${money(otherPayments.reduce((a, p) => a + n(p.amount), 0))} paid for ${otherPayments.map((p) => spanLabel(p.period_from, p.period_to)).filter((v, i, l) => l.indexOf(v) === i).join(", ")}.`);
 
     // Sin tarifa y sin nada en el periodo: no sale (dueño u oficina que no cobra por aquí)
     if (!rate && minutes <= 0 && !jobs.length && !pays.length) return;
@@ -157,7 +179,7 @@ export function buildPayroll(o: {
       user_id: uid, name: m?.full_name ?? pays[0]?.person_name ?? "Former team member", member: m, workerType,
       payType, rate: r, overtimeRate: ot, minutes, regMinutes, otMinutes, overMinutes, days, jobs, jobCount: jobs.length, jobRevenue,
       typeRules: perJob ? rulesOf.get(uid) ?? 0 : 0,
-      calculated, basis, paid, payments, otherPayments, balance, status, flags,
+      calculated, basis, basisSpec, flagSpecs, paid, payments, otherPayments, balance, status, flags,
     });
   });
   rows.sort((a, b) => Number(a.workerType === "subcontractor") - Number(b.workerType === "subcontractor") || b.calculated - a.calculated || a.name.localeCompare(b.name));
@@ -175,29 +197,56 @@ export function buildPayroll(o: {
   };
 }
 
-export const rateText = (r: Pick<PayRow, "payType" | "rate" | "overtimeRate"> & { typeRules?: number }) =>
-  (!r.payType ? "No pay rate" : r.payType === "hourly" ? `${money(r.rate)}/h${r.overtimeRate ? ` · OT ${money(r.overtimeRate)}/h` : ""}`
-    : r.payType === "per_job" ? `${money(r.rate)} per job` : r.payType === "percent" ? `${n(r.rate)}% of the job` : `${money(r.rate)} per year`)
-  + (r.typeRules ? ` · ${r.typeRules} by job type` : "");
+// ---------- Paso 6.2b: los textos de Payroll en el idioma de quien lo ve ----------
+// t = traductor del namespace "payLib" · money = dinero en el idioma · span = rango de fechas en el idioma
+export type PayL = { t: (key: string, values?: Record<string, string | number>) => string; money: (v: number | null | undefined) => string; span: (from: string, to: string) => string };
+
+export function howText(h: HowSpec | undefined, L: PayL): string {
+  if (!h) return "";
+  if (h.k === "perJob") return L.t("howPerJob", { rate: L.money(h.rate) });
+  if (h.k === "pct") return L.t("howPct", { pct: h.pct });
+  return h.kind === "fixed" ? L.t("ruleFixed", { amt: L.money(h.amount) }) : h.base === "no_parts" ? L.t("rulePctNoParts", { pct: h.amount }) : L.t("howPct", { pct: h.amount });
+}
+export function basisText(r: Pick<PayRow, "basisSpec">, L: PayL): string {
+  const b = r.basisSpec, { t, money } = L;
+  switch (b.k) {
+    case "none": return t("bNone");
+    case "hourly": return b.ot > 0 ? t("bHourlyOt", { reg: hoursText(b.reg), rate: money(b.rate), ot: hoursText(b.ot), otRate: money(b.otRate) }) : t("bHourly", { reg: hoursText(b.reg), rate: money(b.rate) });
+    case "perJob": return t("bPerJob", { n: b.n, rate: money(b.rate) });
+    case "percent": return t("bPercent", { pct: b.pct, rev: money(b.revenue), n: b.n });
+    case "salary": return t("bSalary", { rate: money(b.rate), part: b.part });
+    case "mix": return b.groups.map((g) => (g.byType ? t("mixType", { c: g.count, type: g.type ?? t("job"), how: howText(g.how, L) }) : t("mixAt", { c: g.count, how: howText(g.how, L) }))).join(" + ");
+  }
+}
+export function flagText(f: FlagSpec, L: PayL): string {
+  if (f.k === "over") return L.t("fOver", { h: hoursText(f.min) });
+  if (f.k === "other") return L.t("fOther", { amt: L.money(f.amount), spans: f.spans.map(([a, b]) => L.span(a, b)).join(", ") });
+  return L.t(`f_${f.k}`);
+}
+export const rateText = (r: Pick<PayRow, "payType" | "rate" | "overtimeRate"> & { typeRules?: number }, L: PayL) =>
+  (!r.payType ? L.t("rNone") : r.payType === "hourly" ? `${L.t("rHourly", { rate: L.money(r.rate) })}${r.overtimeRate ? L.t("rOt", { rate: L.money(r.overtimeRate) }) : ""}`
+    : r.payType === "per_job" ? L.t("howPerJob", { rate: L.money(r.rate) }) : r.payType === "percent" ? L.t("howPct", { pct: n(r.rate) }) : L.t("rSalary", { rate: L.money(r.rate) }))
+  + (r.typeRules ? L.t("rByType", { n: r.typeRules }) : "");
 
 // La nómina del periodo como PDF real (para imprimir, firmar o mandar al contador)
-export function payrollPdf(p: Payroll, o: { company: string; range: string; by: string }): PdfDoc {
-  const t = p.totals;
-  const cols = [{ label: "Person", width: 3.6 }, { label: "Hours", width: 1, align: "right" as const }, { label: "Jobs", width: 0.8, align: "right" as const }, { label: "Earned", width: 1.6, align: "right" as const }, { label: "Paid", width: 1.6, align: "right" as const }, { label: "Still owed", width: 1.6, align: "right" as const }];
+// pay = forma de pago guardada (en inglés) escrita en el idioma
+export function payrollPdf(p: Payroll, o: { company: string; range: string; by: string }, L: PayL, pay: (m: string) => string = (m) => m): PdfDoc {
+  const t = p.totals, { money } = L, tx = L.t;
+  const cols = [{ label: tx("person"), width: 3.6 }, { label: tx("hours"), width: 1, align: "right" as const }, { label: tx("jobs"), width: 0.8, align: "right" as const }, { label: tx("earned"), width: 1.6, align: "right" as const }, { label: tx("paid"), width: 1.6, align: "right" as const }, { label: tx("stillOwed"), width: 1.6, align: "right" as const }];
   const line = (r: PayRow): PdfRow => ({ cells: [
-    { text: r.name, sub: [r.calculated > 0 ? r.basis : rateText(r), ...r.payments.map((x) => `Paid ${money(x.amount)} on ${String(x.paid_on).slice(0, 10)}${x.payment_mode ? ` (${x.payment_mode}${x.reference ? ` ${x.reference}` : ""})` : ""}`)].filter(Boolean).join(" · ") },
+    { text: r.name, sub: [r.calculated > 0 ? basisText(r, L) : rateText(r, L), ...r.payments.map((x) => tx("paidOn", { amt: money(x.amount), date: String(x.paid_on).slice(0, 10), how: x.payment_mode ? ` (${pay(x.payment_mode)}${x.reference ? ` ${x.reference}` : ""})` : "" }))].filter(Boolean).join(" · ") },
     r.minutes > 0 ? String(hoursOf(r.minutes)) : "-", r.jobCount ? String(r.jobCount) : "-", money(r.calculated), money(r.paid), { text: money(r.balance), tone: r.balance > 0.005 ? "neg" : undefined }] });
   const total = (label: string, g: PayGroup): PdfRow => ({ cells: [label, "", "", money(g.calculated), money(g.paid), { text: money(g.balance), tone: g.balance > 0.005 ? "neg" : undefined }], style: "total" });
   const emp = p.rows.filter((r) => r.workerType === "employee"), subs = p.rows.filter((r) => r.workerType === "subcontractor");
   const blocks: PdfBlock[] = [{ type: "kpis", items: [
-    { label: "Earned in this period", value: money(t.calculated) }, { label: "Already paid", value: money(t.paid), tone: "pos" },
-    { label: "Still to pay", value: money(t.balance), tone: t.balance > 0.005 ? "neg" : undefined }, { label: "Hours clocked", value: `${hoursOf(t.minutes)} h` },
+    { label: tx("earnedPeriod"), value: money(t.calculated) }, { label: tx("alreadyPaid"), value: money(t.paid), tone: "pos" },
+    { label: tx("stillToPay"), value: money(t.balance), tone: t.balance > 0.005 ? "neg" : undefined }, { label: tx("hoursClocked"), value: `${hoursOf(t.minutes)} h` },
   ] }];
-  if (emp.length) blocks.push({ type: "heading", text: `Direct employees (${emp.length})` }, { type: "table", columns: cols, rows: [...emp.map(line), total("Total direct employees", t.employees)] });
-  if (subs.length) blocks.push({ type: "heading", text: `Subcontractors (${subs.length})` }, { type: "table", columns: cols, rows: [...subs.map(line), total("Total subcontractors", t.subs)] });
-  if (!p.rows.length) blocks.push({ type: "bullets", items: ["Nothing to pay in this period."] });
-  blocks.push({ type: "note", text: "Hours come from Timesheets (clock in to clock out). Subcontractors are paid per finished job or by their percent of each job; when a job type has its own pay, that one is used. Taxes and deductions are not calculated in this report." });
-  return { title: "Payroll", subtitle: `${o.range} · prepared by ${o.by}`, company: o.company, blocks, footer: o.range, fileName: pdfFileName("payroll", o.company, o.range) };
+  if (emp.length) blocks.push({ type: "heading", text: tx("empHead", { n: emp.length }) }, { type: "table", columns: cols, rows: [...emp.map(line), total(tx("empTotal"), t.employees)] });
+  if (subs.length) blocks.push({ type: "heading", text: tx("subsHead", { n: subs.length }) }, { type: "table", columns: cols, rows: [...subs.map(line), total(tx("subsTotal"), t.subs)] });
+  if (!p.rows.length) blocks.push({ type: "bullets", items: [tx("nothing")] });
+  blocks.push({ type: "note", text: tx("pdfNote") });
+  return { title: tx("title"), subtitle: tx("subtitle", { range: o.range, by: o.by }), company: o.company, blocks, footer: o.range, fileName: pdfFileName("payroll", o.company, o.range) };
 }
 
 export const needsPayrollSql = (e: { message?: string; code?: string } | null | undefined) =>

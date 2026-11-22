@@ -7,9 +7,9 @@ import Link from "next/link";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions, Menu, MenuButton, MenuItem, MenuItems, Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { parseCsv } from "@/lib/csv";
 import { usePathname, useRouter } from "next/navigation";
-import { RANGES, RangeKey, short } from "@/lib/expense-range";
+import { RangeKey } from "@/lib/expense-range";
 import { createClient } from "@/lib/supabase/client";
-import { PAYMENT_MODES, fmtD, money, round2, today } from "@/lib/sales";
+import { round2, today } from "@/lib/sales";
 import { inputClass } from "@/components/customers/ui";
 import DatePicker from "@/components/ui/DatePicker";
 import SelectMenu from "@/components/ui/SelectMenu";
@@ -20,6 +20,8 @@ import PayerPicker from "@/components/expenses/PayerPicker";
 import { ProfitSummary } from "@/components/expenses/ProfitPanels";
 import CustomerFilter from "@/components/expenses/CustomerFilter";
 import { COST_TYPES, CostType, Profit, costTypeOf } from "@/lib/job-costing";
+import { useTranslations } from "next-intl";
+import { useFinTx } from "@/i18n/useFinTx";
 
 // =====================================================================
 // Libro de Finanzas: el mismo diseño sirve para Gastos (rojo) y Entradas de dinero (verde).
@@ -96,6 +98,18 @@ type Cfg = (typeof LEDGER)[LedgerKind];
 
 function catOf(cats: readonly Cat[], n: string) { return cats.find((c) => c.name === n) ?? cats[cats.length - 1]; }
 
+// Paso 6.2b: los textos de cada libro (Gastos / Entradas de dinero) en el idioma de quien lo ve
+function useLedgerTx(kind: LedgerKind) {
+  const t = useTranslations("ledger");
+  const fx = useFinTx();
+  const k = { kind };
+  return {
+    t, fx, k,
+    title: t("title", k), subtitle: t("subtitle", k), newLabel: t("newLabel", k), editLabel: t("editLabel", k), verb: t("verb", k),
+    partyLabel: t("partyLabel", k), partyPh: t("partyPh", k), modeLabel: t("modeLabel", k), empty: t("empty", k), sql: t("sql", k),
+  };
+}
+
 function CatIcon({ cats, name, size = 36 }: { cats: readonly Cat[]; name: string; size?: number }) {
   const c = catOf(cats, name);
   return (
@@ -117,17 +131,19 @@ function PeriodPicker({ range, onPick }: { range: { key: RangeKey; from: string;
     onPick("custom", `${mm}-01`, `${mm}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`);
   };
   const sub = "mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400";
+  const t = useTranslations("ledger");
+  const fx = useFinTx();
   return (
     <Popover className="min-w-0 flex-1 sm:max-w-xs">
       <PopoverButton className="group flex h-10 w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-left text-[14px] font-semibold text-[#0b1f3a] hover:border-[#14a39a] focus:outline-none data-[open]:border-[#0f766e]">
         <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4.5" width="14" height="12" rx="2" /><path d="M3 8h14M7 3v3M13 3v3" strokeLinecap="round" /></svg>
-        <span className="min-w-0 flex-1 truncate">{range.label}</span>
+        <span className="min-w-0 flex-1 truncate">{fx.rangeLabel(range)}</span>
         <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-data-[open]:rotate-180" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
       </PopoverButton>
       <PopoverPanel anchor="bottom start" transition className="z-[80] mt-1 max-h-[75vh] w-[min(20rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_16px_44px_rgba(15,40,60,0.18)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0">
         {({ close }) => (
           <>
-            {RANGES.filter((x) => x.key !== "custom").map((x) => (
+            {fx.ranges.filter((x) => x.key !== "custom").map((x) => (
               <button key={x.key} type="button" onClick={() => { onPick(x.key); close(); }}
                 className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-[14px] hover:bg-[#eef8f5] ${range.key === x.key ? "bg-[#d7f1eb] font-semibold text-[#0b3f3b]" : "text-slate-700"}`}>
                 {x.label}
@@ -136,28 +152,28 @@ function PeriodPicker({ range, onPick }: { range: { key: RangeKey; from: string;
             ))}
             <div className="mt-2 space-y-3 border-t border-slate-100 px-2 pb-2 pt-3">
               <div>
-                <p className={sub}>A specific month</p>
+                <p className={sub}>{t("aMonth")}</p>
                 <div className="flex gap-2">
                   <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className={`${inputClass} min-w-0 flex-1`} />
-                  <button type="button" onClick={() => { pickMonth(month); close(); }} className="shrink-0 rounded-lg border border-[#0f766e] px-3 text-[13px] font-semibold text-[#0f766e] hover:bg-[#f0faf7]">Show</button>
+                  <button type="button" onClick={() => { pickMonth(month); close(); }} className="shrink-0 rounded-lg border border-[#0f766e] px-3 text-[13px] font-semibold text-[#0f766e] hover:bg-[#f0faf7]">{t("show")}</button>
                 </div>
               </div>
               <div>
-                <p className={sub}>A specific date</p>
+                <p className={sub}>{t("aDate")}</p>
                 <div className="flex gap-2">
                   <input type="date" value={day} onChange={(e) => setDay(e.target.value)} className={`${inputClass} min-w-0 flex-1`} />
-                  <button type="button" disabled={!day} onClick={() => { onPick("custom", day, day); close(); }} className="shrink-0 rounded-lg border border-[#0f766e] px-3 text-[13px] font-semibold text-[#0f766e] hover:bg-[#f0faf7] disabled:opacity-40">Show</button>
+                  <button type="button" disabled={!day} onClick={() => { onPick("custom", day, day); close(); }} className="shrink-0 rounded-lg border border-[#0f766e] px-3 text-[13px] font-semibold text-[#0f766e] hover:bg-[#f0faf7] disabled:opacity-40">{t("show")}</button>
                 </div>
               </div>
               <div>
-                <p className={sub}>Date range</p>
+                <p className={sub}>{t("dateRange")}</p>
                 {/* Calendario nativo del celular/computadora (no se cierra el menú al elegir) */}
                 <div className="grid grid-cols-2 gap-2">
-                  <label className="block"><span className="mb-1 block text-[12px] text-slate-500">From</span><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={`${inputClass} w-full px-2`} /></label>
-                  <label className="block"><span className="mb-1 block text-[12px] text-slate-500">To</span><input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={`${inputClass} w-full px-2`} /></label>
+                  <label className="block"><span className="mb-1 block text-[12px] text-slate-500">{t("from")}</span><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={`${inputClass} w-full px-2`} /></label>
+                  <label className="block"><span className="mb-1 block text-[12px] text-slate-500">{t("to")}</span><input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={`${inputClass} w-full px-2`} /></label>
                 </div>
                 <button type="button" disabled={!from || !to} onClick={() => { onPick("custom", from, to); close(); }}
-                  className="mt-2 w-full rounded-lg bg-[#0f766e] py-2.5 text-[14px] font-semibold text-white hover:bg-[#0c5f59] disabled:opacity-50">Apply range</button>
+                  className="mt-2 w-full rounded-lg bg-[#0f766e] py-2.5 text-[14px] font-semibold text-white hover:bg-[#0c5f59] disabled:opacity-50">{t("applyRange")}</button>
               </div>
             </div>
           </>
@@ -173,6 +189,10 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
   financing?: FinBrief[]; today?: string; // Paso 5.12: compras a pagos abiertas (solo en Expenses, dueño y manager)
 }) {
   const cfg = LEDGER[kind];
+  const L = useLedgerTx(kind);
+  const { t, fx, k } = L;
+  const money = fx.money, fmtD = fx.fmtD;
+  const rangeLabel = fx.rangeLabel(range);
   const cats = cfg.cats;
   const router = useRouter();
   const pathname = usePathname();
@@ -195,19 +215,19 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
     list.forEach((r) => m.set(r.date, [...(m.get(r.date) ?? []), r]));
     return Array.from(m.entries());
   }, [list]);
-  const flash = (t: string) => { setToast(t); setTimeout(() => setToast(""), 2600); };
+  const flash = (m: string) => { setToast(m); setTimeout(() => setToast(""), 2600); };
   const [removing, setRemoving] = useState<string | null>(null);
   // Borrar directo desde la lista (con la advertencia de siempre)
   async function removeEntry(r: Entry) {
-    if (!(await confirmDelete({ title: `Delete this ${cfg.one} of ${money(r.amount)}?`, message: `${r.category}${r.party ? ` · ${r.party}` : ""} · ${fmtD(r.date)}. Once it's deleted, it can't be recovered.`,
+    if (!(await confirmDelete({ title: t("delRow", { ...k, amt: money(r.amount) }), message: t("delRowMsg", { what: `${fx.cat(r.category)}${r.party ? ` · ${r.party}` : ""} · ${fmtD(r.date)}` }),
       download: { filename: `${cfg.folder}-${r.date}`, data: r } }))) return;
     setRemoving(r.id);
     const s = createClient();
     if (r.receipt_path) await s.storage.from("sales-attachments").remove([r.receipt_path]);
     const { error } = await s.from(cfg.table).delete().eq("id", r.id);
     setRemoving(null);
-    if (error) return flash("It couldn't be deleted. Try again.");
-    router.refresh(); flash("Deleted.");
+    if (error) return flash(t("cantDelete"));
+    router.refresh(); flash(t("deleted"));
   }
   const amt = (v: number) => `${cfg.sign}${money(v)}`;
   const shownTotal = useCountUp(total, 1000); // el número grande sube hasta el total
@@ -227,9 +247,10 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
   function exportCsv() {
     const esc = (v: string | number | null) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const job = kind === "expense" && linkReady;
-    const csv = [["Date", "Category", cfg.partyCsv, "Amount", "Payment Mode", "Reference", "Notes", ...(linkReady ? ["Customer"] : []), ...(job ? ["Cost Type"] : [])].join(","),
-      ...list.map((r) => [r.date, r.category, r.party, Number(r.amount).toFixed(2), r.payment_mode, r.reference, r.notes,
-        ...(linkReady ? [r.customer_id ? nameOf.get(r.customer_id) ?? "" : ""] : []), ...(job ? [costTypeOf(r.cost_type).short] : [])].map(esc).join(","))].join("\n");
+    // Paso 6.2b: encabezados y valores en el idioma (la plantilla para importar sigue en inglés para que siempre se pueda leer)
+    const csv = [[t("cDate"), t("cCategory"), t("partyCsv", k), t("cAmount"), t("cMode"), t("cRef"), t("cNotes"), ...(linkReady ? [t("cCustomer")] : []), ...(job ? [t("cCostType")] : [])].map(esc).join(","),
+      ...list.map((r) => [r.date, fx.cat(r.category), r.party, Number(r.amount).toFixed(2), r.payment_mode ? fx.pay(r.payment_mode) : "", r.reference, r.notes,
+        ...(linkReady ? [r.customer_id ? nameOf.get(r.customer_id) ?? "" : ""] : []), ...(job ? [fx.costShort(r.cost_type)] : [])].map(esc).join(","))].join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
     a.download = `${cfg.folder}-${range.from}-to-${range.to}.csv`; a.click();
@@ -243,11 +264,12 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
   async function importCsv(file?: File) {
     if (!file) return;
     const data0 = parseCsv(await file.text());
-    if (data0.length < 2) return flash("The file is empty.");
+    if (data0.length < 2) return flash(t("fileEmpty"));
     const head = data0[0].map((h) => h.trim().toLowerCase());
     const col = (...names: string[]) => head.findIndex((h) => names.includes(h));
-    const ci = { date: col("date", "expense date", "income date"), cat: col("category"), party: col("vendor", "paid to", "payee", "from", "received from", "payer"), amount: col("amount", "total"), mode: col("payment mode", "paid with", "received by"), ref: col("reference", "reference#"), notes: col("notes", "description") };
-    if (ci.amount < 0) return flash("The file needs an Amount column.");
+    // También acepta los encabezados en español (los de "Exportar")
+    const ci = { date: col("date", "expense date", "income date", "fecha"), cat: col("category", "categoría", "categoria"), party: col("vendor", "paid to", "payee", "from", "received from", "payer", "proveedor / pagado a", "recibido de", "proveedor", "de"), amount: col("amount", "total", "monto"), mode: col("payment mode", "paid with", "received by", "forma de pago"), ref: col("reference", "reference#", "referencia"), notes: col("notes", "description", "notas") };
+    if (ci.amount < 0) return flash(t("needsAmount"));
     const toISO = (v: string) => { const t = v.trim(); if (/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0, 10); const m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(t); if (m) return `${m[3].length === 2 ? "20" + m[3] : m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`; return today(); };
     const data = data0.slice(1).filter((r) => r.some((c) => c.trim())).map((r) => ({
       company_id: companyId, created_by_name: actor, [cfg.dateCol]: ci.date >= 0 ? toISO(r[ci.date] ?? "") : today(),
@@ -255,11 +277,11 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
       amount: round2(Number(String(r[ci.amount] ?? "").replace(/[^0-9.]/g, ""))), payment_mode: ci.mode >= 0 ? r[ci.mode]?.trim() || null : null,
       reference: ci.ref >= 0 ? r[ci.ref]?.trim() || null : null, notes: ci.notes >= 0 ? r[ci.notes]?.trim() || null : null,
     })).filter((x) => Number(x.amount) > 0);
-    if (!data.length) return flash("No rows with an amount were found.");
-    if (!(await askConfirm({ title: `Import ${data.length} ${data.length === 1 ? cfg.one : cfg.many}?`, confirmLabel: "Import" }))) return;
+    if (!data.length) return flash(t("noRows"));
+    if (!(await askConfirm({ title: t("importQ", { ...k, n: data.length }), confirmLabel: t("import") }))) return;
     const { error } = await createClient().from(cfg.table).insert(data);
-    if (error) return flash(`The import failed. ${cfg.sql}`);
-    router.refresh(); flash(`${data.length} ${cfg.many} imported.`);
+    if (error) return flash(`${t("importFailed")} ${L.sql}`);
+    router.refresh(); flash(t("imported", { ...k, n: data.length }));
   }
 
   return (
@@ -267,29 +289,29 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
       <div className="px-3 pb-10 pt-4 lg:px-6 lg:pt-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight text-[#0b1f3a]">{cfg.title}</h1>
-            <p className="text-[14px] text-slate-500">{cfg.subtitle}</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-[#0b1f3a]">{L.title}</h1>
+            <p className="text-[14px] text-slate-500">{L.subtitle}</p>
           </div>
-          <NewButton label={cfg.newLabel} kind={kind} onClick={() => setEdit("new")} />
+          <NewButton label={L.newLabel} kind={kind} onClick={() => setEdit("new")} />
         </div>
-        {needsSql && <p className="mt-4 rounded-xl bg-[#fff7ef] px-4 py-3 text-sm text-[#9a3412]">{cfg.sql}</p>}
+        {needsSql && <p className="mt-4 rounded-xl bg-[#fff7ef] px-4 py-3 text-sm text-[#9a3412]">{L.sql}</p>}
 
         {/* Barra: periodo ▾ · buscar · ⋯ */}
         <div className="mt-5 flex items-center gap-2">
           <PeriodPicker key={`${range.key}-${range.from}-${range.to}`} range={range} onPick={go} />
           {linkReady && <CustomerFilter people={people} value={filterCustomer?.id ?? null} onChange={pickCustomer} />}
-          <button type="button" aria-label="Search" onClick={() => setSearchOpen((v) => !v)}
+          <button type="button" aria-label={t("search")} onClick={() => setSearchOpen((v) => !v)}
             className={`ml-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border bg-white ${searchOpen || q ? "border-[#0f766e] text-[#0f766e]" : "border-slate-200 text-slate-500"}`}>
             <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
           </button>
           <Menu>
-            <MenuButton aria-label="More" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 focus:outline-none data-[open]:border-[#14a39a]">
+            <MenuButton aria-label={t("more")} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 focus:outline-none data-[open]:border-[#14a39a]">
               <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor"><circle cx="4.5" cy="10" r="1.6" /><circle cx="10" cy="10" r="1.6" /><circle cx="15.5" cy="10" r="1.6" /></svg>
             </MenuButton>
             <MenuItems anchor="bottom end" transition className="z-[80] mt-1 w-56 rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_12px_40px_rgba(15,40,60,0.16)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
-              <MenuItem><button type="button" onClick={exportCsv} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-slate-700 data-[focus]:bg-[#e3f4ef]">Export this period (CSV)</button></MenuItem>
-              <MenuItem><button type="button" onClick={() => importRef.current?.click()} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-slate-700 data-[focus]:bg-[#e3f4ef]">Import from CSV</button></MenuItem>
-              <MenuItem><button type="button" onClick={templateCsv} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-slate-500 data-[focus]:bg-[#e3f4ef]">Download import template</button></MenuItem>
+              <MenuItem><button type="button" onClick={exportCsv} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-slate-700 data-[focus]:bg-[#e3f4ef]">{t("exportCsv")}</button></MenuItem>
+              <MenuItem><button type="button" onClick={() => importRef.current?.click()} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-slate-700 data-[focus]:bg-[#e3f4ef]">{t("importCsv")}</button></MenuItem>
+              <MenuItem><button type="button" onClick={templateCsv} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-slate-500 data-[focus]:bg-[#e3f4ef]">{t("template")}</button></MenuItem>
             </MenuItems>
           </Menu>
           <input ref={importRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { importCsv(e.target.files?.[0]); e.target.value = ""; }} />
@@ -297,8 +319,8 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
         {(searchOpen || q) && (
           <div className="mt-2 flex h-10 items-center gap-2 rounded-lg border border-[#0f766e] bg-white px-3 animate-[bp-fade_0.2s_ease-out]">
             <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
-            <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search ${cfg.partyLabel.toLowerCase()}, category or notes`} className="min-w-0 flex-1 bg-transparent text-[15px] focus:outline-none" />
-            {q && <button type="button" onClick={() => setQ("")} className="text-[13px] font-medium text-slate-400">Clear</button>}
+            <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("searchPh", k)} className="min-w-0 flex-1 bg-transparent text-[15px] focus:outline-none" />
+            {q && <button type="button" onClick={() => setQ("")} className="text-[13px] font-medium text-slate-400">{t("clear")}</button>}
           </div>
         )}
 
@@ -307,29 +329,29 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
           {filterCustomer && (
             <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_6px_20px_rgba(15,40,60,0.04)] animate-[bp-pop-in_0.35s_ease-out] sm:p-5">
               <div className="mb-3 flex flex-wrap items-center gap-2">
-                <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-500">Profitability</p>
+                <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-500">{t("profitability")}</p>
                 <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full bg-[#e9f7f4] py-1 pl-3 pr-1 text-[13.5px] font-semibold text-[#0b1f3a]">
                   <span className="truncate">{filterCustomer.display_name}</span>
-                  <button type="button" onClick={() => pickCustomer(null)} aria-label="Show all customers" title="Show all customers"
+                  <button type="button" onClick={() => pickCustomer(null)} aria-label={t("allCustomers")} title={t("allCustomers")}
                     className="group flex h-6 w-6 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-white hover:text-[#e11d48]">
                     <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M5 5l10 10M15 5 5 15" /></svg>
                   </button>
                 </span>
-                <span className="text-[12.5px] text-slate-400">{range.label}</span>
-                <Link prefetch={false} href={`/dashboard/customers/${filterCustomer.id}`} className="ml-auto text-[13px] font-semibold text-[#0f766e] hover:underline">Customer profile →</Link>
+                <span className="text-[12.5px] text-slate-400">{rangeLabel}</span>
+                <Link prefetch={false} href={`/dashboard/customers/${filterCustomer.id}`} className="ml-auto text-[13px] font-semibold text-[#0f766e] hover:underline">{t("customerProfile")}</Link>
               </div>
-              {profit && <ProfitSummary p={profit} period={range.label.toLowerCase()} />}
+              {profit && <ProfitSummary p={profit} period={rangeLabel.toLowerCase()} />}
             </div>
           )}
 
           {/* Celular: tarjeta interactiva (número que sube + paletas que se tocan + resumen) */}
           <div className="lg:hidden">
-            <LedgerMobileHero kind={kind} rows={list} range={range} total={shownTotal} realTotal={total} color={cfg.color} sign={cfg.sign} verb={cfg.verb} />
+            <LedgerMobileHero kind={kind} rows={list} range={{ ...range, label: rangeLabel }} total={shownTotal} realTotal={total} color={cfg.color} sign={cfg.sign} verb={L.verb} />
           </div>
 
           {/* Escritorio: tracker con barritas + resumen rápido */}
           <div className="mt-4 hidden gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_420px]">
-            <LedgerTracker kind={kind} rows={list} range={range} total={shownTotal} realTotal={total} color={cfg.color} sign={cfg.sign} verb={cfg.verb} title={kind === "income" ? "Money In tracker" : "Spending tracker"} />
+            <LedgerTracker kind={kind} rows={list} range={{ ...range, label: rangeLabel }} total={shownTotal} realTotal={total} color={cfg.color} sign={cfg.sign} verb={L.verb} title={t("tracker", k)} />
             <LedgerGlance kind={kind} rows={list} />
           </div>
 
@@ -337,9 +359,9 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
             <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white">
               {list.length === 0 ? (
                 <div className="px-6 py-16 text-center">
-                  <p className="text-lg font-semibold text-[#0b1f3a]">{q ? `No ${cfg.many} match your search` : `No ${cfg.many} for ${range.label.toLowerCase()}`}</p>
-                  <p className="mx-auto mt-1 max-w-sm text-[15px] text-slate-500">{cfg.empty}</p>
-                  <button type="button" onClick={() => setEdit("new")} className="mt-5 rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f59]">{cfg.newLabel}</button>
+                  <p className="text-lg font-semibold text-[#0b1f3a]">{q ? t("noMatch", k) : t("noneFor", { ...k, range: rangeLabel.toLowerCase() })}</p>
+                  <p className="mx-auto mt-1 max-w-sm text-[15px] text-slate-500">{L.empty}</p>
+                  <button type="button" onClick={() => setEdit("new")} className="mt-5 rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f59]">{L.newLabel}</button>
                 </div>
               ) : (
                 <div>
@@ -356,21 +378,21 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
                             <button type="button" onClick={() => setEdit(r)} className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-4 text-left active:bg-[#e9f7f4]">
                               <CatIcon cats={cats} name={r.category} />
                               <span className="min-w-0 flex-1">
-                                <span className="block truncate text-[15px] font-medium text-[#0b1f3a]">{r.category}</span>
+                                <span className="block truncate text-[15px] font-medium text-[#0b1f3a]">{fx.cat(r.category)}</span>
                                 <span className="flex min-w-0 items-center gap-1.5 text-[13px] text-slate-500">
                                   {kind === "expense" && r.cost_type && r.cost_type !== "other" && (
-                                    <span className="shrink-0 rounded-md px-1.5 py-px text-[10.5px] font-bold uppercase tracking-wide" style={{ background: costTypeOf(r.cost_type).soft, color: costTypeOf(r.cost_type).color }}>{costTypeOf(r.cost_type).short}</span>
+                                    <span className="shrink-0 rounded-md px-1.5 py-px text-[10.5px] font-bold uppercase tracking-wide" style={{ background: costTypeOf(r.cost_type).soft, color: costTypeOf(r.cost_type).color }}>{fx.costShort(r.cost_type)}</span>
                                   )}
                                   {kind === "expense" && r.customer_id && nameOf.get(r.customer_id) && !filterCustomer && (
                                     <span className="max-w-[45%] shrink-0 truncate rounded-md bg-[#e9f7f4] px-1.5 py-px text-[11.5px] font-semibold text-[#0f766e]">{nameOf.get(r.customer_id)}</span>
                                   )}
-                                  <span className="truncate">{[r.party, r.payment_mode, r.notes].filter(Boolean).join(" · ") || "—"}</span>
+                                  <span className="truncate">{[r.party, r.payment_mode ? fx.pay(r.payment_mode) : null, r.notes].filter(Boolean).join(" · ") || "—"}</span>
                                 </span>
                               </span>
                               <span className="shrink-0 pl-2 font-semibold tabular-nums text-[#0b1f3a]">{amt(r.amount)}</span>
                             </button>
                             {/* Borrar directo (papelera roja con la tapa que se levanta) */}
-                            <button type="button" onClick={() => removeEntry(r)} aria-label={`Delete this ${cfg.one}`} title="Delete"
+                            <button type="button" onClick={() => removeEntry(r)} aria-label={t("delThis", k)} title={t("delete")}
                               className="group/trash mx-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#fff1f2] hover:text-[#e11d48] active:scale-90">
                               <svg viewBox="0 0 24 24" className="h-[19px] w-[19px]" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                 <path className="origin-[18px_6px] transition-transform duration-300 group-hover/trash:-translate-y-[1.5px] group-hover/trash:-rotate-[20deg]" d="M4 6.5h16M9.5 6.5V4.8c0-.7.6-1.3 1.3-1.3h2.4c.7 0 1.3.6 1.3 1.3v1.7" />
@@ -390,7 +412,7 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
             {byCat.length > 0 && (
               <div className="h-fit rounded-2xl border border-slate-200 bg-white p-4 lg:p-5">
                 <div className="mb-3 flex items-center justify-between">
-                  <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-500">By category</p>
+                  <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-500">{t("byCategory")}</p>
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">{byCat.length}</span>
                 </div>
                 <ul className="space-y-3.5">
@@ -403,7 +425,7 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
                           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-110 group-hover:-rotate-6" style={{ background: `${c1}18`, color: c1 }}>
                             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d={catOf(cats, name).icon} /></svg>
                           </span>
-                          <span className="flex-1 truncate text-slate-700">{name}</span>
+                          <span className="flex-1 truncate text-slate-700">{fx.cat(name)}</span>
                           <span className="text-[11.5px] font-semibold tabular-nums" style={{ color: c1 }}>{Math.round(share * 100)}%</span>
                           <span className="font-semibold tabular-nums text-[#0b1f3a]">{amt(v)}</span>
                         </div>
@@ -422,7 +444,7 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
         </div>
       </div>
 
-      <ExpenseModal cfg={cfg} open={edit !== null} expense={edit === "new" ? null : edit} onClose={() => setEdit(null)} companyId={companyId} actor={actor}
+      <ExpenseModal cfg={cfg} kind={kind} open={edit !== null} expense={edit === "new" ? null : edit} onClose={() => setEdit(null)} companyId={companyId} actor={actor}
         people={people} onPersonCreated={(c) => setPeople((p) => [...p, c].sort((a, b) => a.display_name.localeCompare(b.display_name)))} linkReady={linkReady}
         defaultCustomer={filterCustomer?.id ?? null}
         onSaved={(m) => { setEdit(null); router.refresh(); flash(m); }} />
@@ -462,12 +484,15 @@ function NewButton({ label, kind, onClick }: { label: string; kind: LedgerKind; 
 
 // Paso 5.12 · Compras a pagos dentro de Expenses: qué cuota viene y si entra sola
 function FinancingPanel({ list, today }: { list: FinBrief[]; today: string }) {
-  const d = (iso: string | null) => (iso ? fmtD(iso) : "—");
+  const t = useTranslations("ledger");
+  const fx = useFinTx();
+  const money = fx.money;
+  const d = (iso: string | null) => (iso ? fx.fmtD(iso) : "—");
   return (
     <div className="h-fit rounded-2xl border border-slate-200 bg-white p-4 lg:p-5">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-500">Financed purchases</p>
-        <Link prefetch={false} href="/dashboard/financing" className="text-[12.5px] font-semibold text-[#0f766e] hover:underline">Open Financing</Link>
+        <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-500">{t("financed")}</p>
+        <Link prefetch={false} href="/dashboard/financing" className="text-[12.5px] font-semibold text-[#0f766e] hover:underline">{t("openFinancing")}</Link>
       </div>
       <ul className="space-y-3">
         {list.map((f) => (
@@ -478,16 +503,16 @@ function FinancingPanel({ list, today }: { list: FinBrief[]; today: string }) {
             <span className="min-w-0 flex-1">
               <span className="flex items-baseline gap-2"><span className="min-w-0 flex-1 truncate text-[14px] font-medium text-[#0b1f3a]">{f.name}</span><span className="shrink-0 text-[14px] font-semibold tabular-nums text-[#0b1f3a]">{money(f.monthly)}</span></span>
               {f.needsManual ? (
-                <Link prefetch={false} href="/dashboard/financing" className="mt-0.5 block text-[12.5px] font-semibold text-[#be123c] hover:underline">{f.next_due && f.next_due < today ? `Payment of ${d(f.next_due)} is not recorded` : "Payment due today"} · Record it →</Link>
+                <Link prefetch={false} href="/dashboard/financing" className="mt-0.5 block text-[12.5px] font-semibold text-[#be123c] hover:underline">{f.next_due && f.next_due < today ? t("notRecorded", { date: d(f.next_due) }) : t("dueToday")} · {t("recordIt")}</Link>
               ) : (
-                <span className="mt-0.5 block text-[12.5px] text-slate-500">Next payment {d(f.next_due)} · {f.auto ? "added here by itself" : "record it in Financing"}</span>
+                <span className="mt-0.5 block text-[12.5px] text-slate-500">{t("nextPay", { date: d(f.next_due) })} · {f.auto ? t("addedItself") : t("recordInFin")}</span>
               )}
-              <span className="block text-[12px] text-slate-400">Still owed {money(f.owed)}</span>
+              <span className="block text-[12px] text-slate-400">{t("stillOwed", { amt: money(f.owed) })}</span>
             </span>
           </li>
         ))}
       </ul>
-      <p className="mt-3 border-t border-slate-100 pt-3 text-[12px] leading-relaxed text-slate-500">Each monthly payment shows up in this list on its date, in the category of the purchase. The total owed is debt, so it is not counted as an expense until it is paid.</p>
+      <p className="mt-3 border-t border-slate-100 pt-3 text-[12px] leading-relaxed text-slate-500">{t("finNote")}</p>
     </div>
   );
 }
@@ -495,10 +520,12 @@ function FinancingPanel({ list, today }: { list: FinBrief[]; today: string }) {
 // Tipo de costo sugerido por la categoría (se puede cambiar con un toque)
 const guessType = (cat: string): CostType => (/material|supplies|equipment|tools/i.test(cat) ? "material" : /payroll|labor|subcontract/i.test(cat) ? "labor" : "other");
 
-function ExpenseModal({ cfg, open, expense, onClose, companyId, actor, onSaved, people, onPersonCreated, linkReady, defaultCustomer }: {
-  cfg: Cfg; open: boolean; expense: Entry | null; onClose: () => void; companyId: string; actor: string; onSaved: (msg: string) => void;
+function ExpenseModal({ cfg, kind, open, expense, onClose, companyId, actor, onSaved, people, onPersonCreated, linkReady, defaultCustomer }: {
+  cfg: Cfg; kind: LedgerKind; open: boolean; expense: Entry | null; onClose: () => void; companyId: string; actor: string; onSaved: (msg: string) => void;
   people: PayerOption[]; onPersonCreated: (c: PayerOption) => void; linkReady: boolean; defaultCustomer: string | null;
 }) {
+  const L = useLedgerTx(kind);
+  const { t, fx, k } = L;
   const isIncome = cfg.table === "other_income";
   const jobCosting = !isIncome && linkReady; // gastos ligados a cliente / trabajo (SQL paso-job-costing)
   const [customerId, setCustomerId] = useState<string | null>(null);
@@ -554,12 +581,12 @@ function ExpenseModal({ cfg, open, expense, onClose, companyId, actor, onSaved, 
 
   async function save() {
     const a = round2(Number(amount.replace(/[^0-9.]/g, "")));
-    if (!a || a <= 0) return setError("Enter the amount.");
+    if (!a || a <= 0) return setError(t("eAmount"));
     setBusy(true); setError("");
     const s = createClient();
     let receipt: { receipt_path?: string; receipt_name?: string } = {};
     if (file) {
-      if (file.size > 10 * 1024 * 1024) { setBusy(false); return setError("The receipt must be 10 MB or smaller."); }
+      if (file.size > 10 * 1024 * 1024) { setBusy(false); return setError(t("eReceipt")); }
       const path = `${companyId}/${cfg.folder}/${Date.now()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;
       const up = await s.storage.from("sales-attachments").upload(path, file);
       if (!up.error) receipt = { receipt_path: path, receipt_name: file.name };
@@ -575,15 +602,15 @@ function ExpenseModal({ cfg, open, expense, onClose, companyId, actor, onSaved, 
     let { error: e } = await write(link ? { ...row, ...link } : row);
     if (e && link && /customer_id|doc_id|cost_type/i.test(e.message)) ({ error: e } = await write(row));
     setBusy(false);
-    if (e) return setError(`It couldn't be saved. ${cfg.sql}`);
-    onSaved(expense ? "Saved." : `${cfg.one[0].toUpperCase()}${cfg.one.slice(1)} added.`);
+    if (e) return setError(`${t("cantSave")} ${L.sql}`);
+    onSaved(expense ? t("saved") : t("added", k));
   }
   async function remove() {
-    if (!expense || !(await confirmDelete({ title: `Delete this ${cfg.one}?`, download: { filename: `${cfg.folder}-${expense.date}`, data: expense } }))) return;
+    if (!expense || !(await confirmDelete({ title: t("delThisQ", k), download: { filename: `${cfg.folder}-${expense.date}`, data: expense } }))) return;
     const s = createClient();
     if (expense.receipt_path) await s.storage.from("sales-attachments").remove([expense.receipt_path]);
     await s.from(cfg.table).delete().eq("id", expense.id);
-    onSaved("Deleted.");
+    onSaved(t("deleted"));
   }
   async function openReceipt() {
     if (!expense?.receipt_path) return;
@@ -592,100 +619,100 @@ function ExpenseModal({ cfg, open, expense, onClose, companyId, actor, onSaved, 
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={expense ? cfg.editLabel : cfg.newLabel} width="max-w-xl"
+    <Modal open={open} onClose={onClose} title={expense ? L.editLabel : L.newLabel} width="max-w-xl"
       footer={<>
-        <button type="button" onClick={save} disabled={busy} className={btnPrimary}>{busy ? "Saving..." : "Save"}</button>
-        <button type="button" onClick={onClose} className={btnGhost}>Cancel</button>
-        {expense && <button type="button" onClick={remove} className="ml-auto text-sm font-medium text-red-600 hover:underline">Delete</button>}
+        <button type="button" onClick={save} disabled={busy} className={btnPrimary}>{busy ? t("saving") : t("save")}</button>
+        <button type="button" onClick={onClose} className={btnGhost}>{t("cancel")}</button>
+        {expense && <button type="button" onClick={remove} className="ml-auto text-sm font-medium text-red-600 hover:underline">{t("delete")}</button>}
         {error && <p role="alert" className="w-full text-sm text-red-600">{error}</p>}
       </>}>
       <div className="space-y-4">
         <div>
-          <p className="mb-1.5 text-sm font-medium text-slate-700">Category</p>
+          <p className="mb-1.5 text-sm font-medium text-slate-700">{t("category")}</p>
           <Listbox value={isCustom ? "Other" : cat} onChange={onCategory}>
             <ListboxButton className="group flex w-full items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left text-[15px] hover:border-[#14a39a] focus:outline-none data-[open]:border-[#0f766e] data-[open]:bg-white">
-              <CatIcon cats={cats} name={isCustom ? "Other" : cat} size={30} /><span className="flex-1 text-[#0b1f3a]">{isCustom ? "Other" : cat}</span>
+              <CatIcon cats={cats} name={isCustom ? "Other" : cat} size={30} /><span className="flex-1 text-[#0b1f3a]">{fx.cat(isCustom ? "Other" : cat)}</span>
               <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-400 transition-transform group-data-[open]:rotate-180" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
             </ListboxButton>
             <ListboxOptions anchor="bottom start" transition className="z-[100] mt-1 max-h-72 w-[var(--button-width)] overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_16px_44px_rgba(15,40,60,0.16)] transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
               {cats.map((c) => (
                 <ListboxOption key={c.name} value={c.name} className="group flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-[14px] text-slate-700 data-[focus]:bg-[#eef8f5] data-[selected]:bg-[#d7f1eb] data-[selected]:font-semibold data-[selected]:text-[#0b3f3b]">
-                  <CatIcon cats={cats} name={c.name} size={28} />{c.name}
+                  <CatIcon cats={cats} name={c.name} size={28} />{fx.cat(c.name)}
                 </ListboxOption>
               ))}
             </ListboxOptions>
           </Listbox>
           {(isCustom || cat === "Other") && (
-            <input autoFocus value={custom} onChange={(e) => setCustom(e.target.value.slice(0, 40))} placeholder="What was it? e.g. Storage unit, Parking"
+            <input autoFocus value={custom} onChange={(e) => setCustom(e.target.value.slice(0, 40))} placeholder={t("customPh")}
               className={`${inputClass} mt-2 animate-[bp-fade_0.2s_ease-out]`} />
           )}
         </div>
         {jobCosting && (
           <div className="space-y-3 rounded-2xl border border-slate-200 bg-[#fbfcfd] p-3.5">
             <div>
-              <p className="mb-1.5 text-sm font-medium text-slate-700">Type of cost</p>
+              <p className="mb-1.5 text-sm font-medium text-slate-700">{t("costType")}</p>
               <div className="grid grid-cols-3 gap-1.5 rounded-xl bg-slate-100 p-1">
-                {COST_TYPES.map((t) => {
-                  const on = costType === t.value;
+                {COST_TYPES.map((ct) => {
+                  const on = costType === ct.value;
                   return (
-                    <button key={t.value} type="button" onClick={() => { setCostType(t.value); setTypeTouched(true); }} aria-pressed={on}
+                    <button key={ct.value} type="button" onClick={() => { setCostType(ct.value); setTypeTouched(true); }} aria-pressed={on}
                       className={`flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1.5 py-1.5 text-[12.5px] font-semibold transition-all duration-150 active:scale-95 sm:flex-row sm:gap-1.5 sm:px-2 sm:py-2 sm:text-[13.5px] ${on ? "bg-white shadow-[0_2px_8px_rgba(15,40,60,0.10)]" : "text-slate-500 hover:text-slate-700"}`}
-                      style={on ? { color: t.color } : undefined}>
-                      <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={t.icon} /></svg>
-                      <span className="truncate">{t.value === "labor" ? <><span className="sm:hidden">Labor</span><span className="hidden sm:inline">{t.label}</span></> : t.label}</span>
+                      style={on ? { color: ct.color } : undefined}>
+                      <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={ct.icon} /></svg>
+                      <span className="truncate">{ct.value === "labor" ? <><span className="sm:hidden">{fx.costShort("labor")}</span><span className="hidden sm:inline">{fx.cost("labor")}</span></> : fx.cost(ct.value)}</span>
                     </button>
                   );
                 })}
               </div>
             </div>
             <div className="min-w-0">
-              <p className="mb-1.5 text-sm font-medium text-slate-700">Customer / job <span className="font-normal text-slate-400">(optional)</span></p>
+              <p className="mb-1.5 text-sm font-medium text-slate-700">{t("customerJob")} <span className="font-normal text-slate-400">({t("optional")})</span></p>
               <PayerPicker companyId={companyId} people={people} customerId={customerId} name={custName}
-                hint="Assign it to a customer to see how much each customer really leaves you."
+                hint={t("customerHint")}
                 onPick={(c) => { setCustomerId(c?.id ?? null); setCustName(c?.display_name ?? ""); setDocId(null); }}
-                onType={(t) => { setCustName(t); setCustomerId(null); setDocId(null); }}
+                onType={(v) => { setCustName(v); setCustomerId(null); setDocId(null); }}
                 onCreated={(c) => { onPersonCreated(c); setCustomerId(c.id); setCustName(c.display_name); setDocId(null); }} />
             </div>
             {customerId && (
               <div className="animate-[bp-fade_0.2s_ease-out]">
-                <p className="mb-1.5 text-sm font-medium text-slate-700">Invoice / job <span className="font-normal text-slate-400">(optional)</span></p>
-                <SelectMenu value={docId ?? ""} ariaLabel="Invoice or job" onChange={(v) => setDocId(v || null)}
-                  options={[{ value: "", label: jobs.length ? "Not tied to an invoice" : "This customer has no invoices yet" },
-                    ...jobs.map((j) => ({ value: j.id, label: `${j.number} · ${fmtD(j.doc_date)} · ${money(j.total)}` }))]} />
+                <p className="mb-1.5 text-sm font-medium text-slate-700">{t("invoiceJob")} <span className="font-normal text-slate-400">({t("optional")})</span></p>
+                <SelectMenu value={docId ?? ""} ariaLabel={t("invoiceJob")} onChange={(v) => setDocId(v || null)}
+                  options={[{ value: "", label: jobs.length ? t("notTied") : t("noInvoices") },
+                    ...jobs.map((j) => ({ value: j.id, label: `${j.number} · ${fx.fmtD(j.doc_date)} · ${fx.money(j.total)}` }))]} />
               </div>
             )}
           </div>
         )}
         <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 [&>*]:min-w-0">
-          <label className="block"><span className="mb-1.5 block text-sm font-medium text-red-600">Amount*</span>
+          <label className="block"><span className="mb-1.5 block text-sm font-medium text-red-600">{t("amountReq")}</span>
             <div className="flex"><span className="flex items-center rounded-l-lg border border-r-0 border-slate-200 bg-slate-100 px-3 text-sm text-slate-600">USD</span>
               <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="0.00" className={`${inputClass} rounded-l-none`} /></div></label>
-          <div><span className="mb-1.5 block text-sm font-medium text-slate-700">Date</span><DatePicker value={date} onChange={setDate} /></div>
+          <div><span className="mb-1.5 block text-sm font-medium text-slate-700">{t("date")}</span><DatePicker value={date} onChange={setDate} /></div>
           {isIncome ? (
-            <div className="sm:col-span-2"><span className="mb-1.5 block text-sm font-medium text-slate-700">{cfg.partyLabel}</span>
+            <div className="sm:col-span-2"><span className="mb-1.5 block text-sm font-medium text-slate-700">{L.partyLabel}</span>
               <PayerPicker companyId={companyId} people={people} customerId={customerId} name={vendor}
                 onPick={(c) => { setCustomerId(c?.id ?? null); setVendor(c?.display_name ?? ""); }}
-                onType={(t) => { setVendor(t); setCustomerId(null); }}
+                onType={(v) => { setVendor(v); setCustomerId(null); }}
                 onCreated={(c) => { onPersonCreated(c); setCustomerId(c.id); setVendor(c.display_name); }} /></div>
           ) : (
-            <label className="block"><span className="mb-1.5 block text-sm font-medium text-slate-700">{cfg.partyLabel}</span>
-              <input value={vendor} onChange={(e) => setVendor(e.target.value)} placeholder={cfg.partyPh} className={inputClass} /></label>
+            <label className="block"><span className="mb-1.5 block text-sm font-medium text-slate-700">{L.partyLabel}</span>
+              <input value={vendor} onChange={(e) => setVendor(e.target.value)} placeholder={L.partyPh} className={inputClass} /></label>
           )}
-          <div><span className="mb-1.5 block text-sm font-medium text-slate-700">{cfg.modeLabel}</span>
-            <SelectMenu value={mode} options={PAYMENT_MODES.map((m) => ({ value: m, label: m }))} onChange={setMode} ariaLabel="Payment mode" /></div>
-          <label className="block"><span className="mb-1.5 block text-sm font-medium text-slate-700">Reference#</span>
-            <input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Receipt or check #" className={inputClass} /></label>
-          <div><span className="mb-1.5 block text-sm font-medium text-slate-700">Receipt</span>
+          <div><span className="mb-1.5 block text-sm font-medium text-slate-700">{L.modeLabel}</span>
+            <SelectMenu value={mode} options={fx.payModes} onChange={setMode} ariaLabel={L.modeLabel} /></div>
+          <label className="block"><span className="mb-1.5 block text-sm font-medium text-slate-700">{t("reference")}</span>
+            <input value={ref} onChange={(e) => setRef(e.target.value)} placeholder={t("refPh")} className={inputClass} /></label>
+          <div><span className="mb-1.5 block text-sm font-medium text-slate-700">{t("receipt")}</span>
             <input ref={input} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => { setFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
             <button type="button" onClick={() => input.current?.click()} className="flex w-full items-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-2.5 text-left text-sm text-slate-600 hover:border-[#14a39a]">
               <svg viewBox="0 0 24 24" className="h-4 w-4 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 7h3l2-3h6l2 3h3v13H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" strokeLinejoin="round" /></svg>
-              <span className="truncate">{file ? file.name : expense?.receipt_name ? "Replace photo / PDF" : "Take photo or upload"}</span>
+              <span className="truncate">{file ? file.name : expense?.receipt_name ? t("replace") : t("takePhoto")}</span>
             </button>
-            {expense?.receipt_path && !file && <button type="button" onClick={openReceipt} className="mt-1 text-[13px] font-medium text-[#0f766e] hover:underline">View receipt ({expense.receipt_name})</button>}
+            {expense?.receipt_path && !file && <button type="button" onClick={openReceipt} className="mt-1 text-[13px] font-medium text-[#0f766e] hover:underline">{t("viewReceipt", { name: expense.receipt_name ?? "" })}</button>}
           </div>
         </div>
-        <label className="block"><span className="mb-1.5 block text-sm font-medium text-slate-700">Notes</span>
-          <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="What was it for?" className={inputClass} /></label>
+        <label className="block"><span className="mb-1.5 block text-sm font-medium text-slate-700">{t("notes")}</span>
+          <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t("notesPh")} className={inputClass} /></label>
       </div>
     </Modal>
   );

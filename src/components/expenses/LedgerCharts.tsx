@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { money } from "@/lib/sales";
+import { useTranslations } from "next-intl";
+import { useFinTx } from "@/i18n/useFinTx";
 import type { Entry, LedgerKind } from "@/components/expenses/ExpensesWorkspace";
 
 // =====================================================================
@@ -12,15 +13,16 @@ import type { Entry, LedgerKind } from "@/components/expenses/ExpensesWorkspace"
 const pad = (n: number) => String(n).padStart(2, "0");
 const toD = (s: string) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
 const key = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const WD = ["S", "M", "T", "W", "T", "F", "S"];
-const whole = (v: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: v >= 100 ? 0 : 2 }).format(v || 0);
+// Paso 6.2b: nombres de días y meses en el idioma de quien lo ve
+const monOf = (d: Date, tag: string) => d.toLocaleDateString(tag, { month: "short" }).replace(".", "");
+const whole = (v: number, tag = "en-US") => new Intl.NumberFormat(tag, { style: "currency", currency: "USD", maximumFractionDigits: v >= 100 ? 0 : 2 }).format(v || 0);
 const short$ = (v: number) => (v >= 1000 ? `$${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}K` : `$${Math.round(v)}`);
 
 type Bucket = { from: string; to: string; label: string; long: string; value: number; count: number };
 type Unit = "day" | "week" | "month" | "year";
 
-function buildBuckets(rows: Entry[], from: string, to: string): { unit: Unit; buckets: Bucket[] } {
+function buildBuckets(rows: Entry[], from: string, to: string, tag: string): { unit: Unit; buckets: Bucket[] } {
+  const es = tag.startsWith("es");
   let a = toD(from), b = toD(to);
   // "All time": la gráfica empieza en el mes del primer registro y termina en el último (no desde el año 2000)
   if (b.getTime() - a.getTime() > 400 * 86400000 && rows.length) {
@@ -36,18 +38,18 @@ function buildBuckets(rows: Entry[], from: string, to: string): { unit: Unit; bu
   if (days <= 10) {
     unit = "day";
     for (let d = new Date(a); d <= b; d.setDate(d.getDate() + 1))
-      out.push({ from: key(d), to: key(d), label: WD[d.getDay()], long: d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" }), value: 0, count: 0 });
+      out.push({ from: key(d), to: key(d), label: d.toLocaleDateString(tag, { weekday: "narrow" }).toUpperCase(), long: d.toLocaleDateString(tag, { weekday: "long", month: "short", day: "numeric" }), value: 0, count: 0 });
   } else if (days <= 62) {
     unit = "week";
     for (let d = new Date(a); d <= b; d.setDate(d.getDate() + 7)) {
       const e = new Date(d); e.setDate(e.getDate() + 6); if (e > b) e.setTime(b.getTime());
-      out.push({ from: key(d), to: key(e), label: `${d.getDate()}`, long: `${MON[d.getMonth()]} ${d.getDate()} – ${e.getMonth() !== d.getMonth() ? MON[e.getMonth()] + " " : ""}${e.getDate()}`, value: 0, count: 0 });
+      out.push({ from: key(d), to: key(e), label: `${d.getDate()}`, long: es ? `${d.getDate()}${e.getMonth() !== d.getMonth() ? " " + monOf(d, tag) : ""} – ${e.getDate()} ${monOf(e, tag)}` : `${monOf(d, tag)} ${d.getDate()} – ${e.getMonth() !== d.getMonth() ? monOf(e, tag) + " " : ""}${e.getDate()}`, value: 0, count: 0 });
     }
   } else if (months <= 24) {
     unit = "month";
     for (let d = new Date(a.getFullYear(), a.getMonth(), 1); d <= b; d.setMonth(d.getMonth() + 1)) {
       const e = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-      out.push({ from: key(d), to: key(e), label: MON[d.getMonth()].slice(0, 3), long: `${MON[d.getMonth()]} ${d.getFullYear()}`, value: 0, count: 0 });
+      out.push({ from: key(d), to: key(e), label: monOf(d, tag).slice(0, 3), long: `${monOf(d, tag)} ${d.getFullYear()}`, value: 0, count: 0 });
     }
   } else {
     unit = "year";
@@ -66,7 +68,10 @@ export function LedgerTracker({ kind, rows, range, total, realTotal, color, sign
   kind: LedgerKind; rows: Entry[]; range: { from: string; to: string; label: string }; total: number; realTotal: number; color: string; sign: string; verb: string; title: string;
 }) {
   const th = THEME[kind];
-  const { unit, buckets } = useMemo(() => buildBuckets(rows, range.from, range.to), [rows, range.from, range.to]);
+  const t = useTranslations("ledgerCharts");
+  const fx = useFinTx();
+  const money = fx.money;
+  const { unit, buckets } = useMemo(() => buildBuckets(rows, range.from, range.to, fx.tag), [rows, range.from, range.to, fx.tag]);
   const max = Math.max(1, ...buckets.map((b) => b.value));
   const peak = buckets.reduce((p, b, i) => (b.value > buckets[p].value ? i : p), 0);
   const [hover, setHover] = useState<number | null>(null);
@@ -75,7 +80,6 @@ export function LedgerTracker({ kind, rows, range, total, realTotal, color, sign
   const hi = hover ?? peak;
   const used = buckets.filter((b) => b.count > 0).length;
   const avg = buckets.length ? realTotal / buckets.length : 0;
-  const per = unit === "day" ? "day" : unit;
   const many = buckets.length > 14;
 
   return (
@@ -87,7 +91,7 @@ export function LedgerTracker({ kind, rows, range, total, realTotal, color, sign
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-[22px] font-semibold tracking-tight text-[#0b1f3a]">{title}</p>
-          <p className="text-[13px] text-slate-500">{verb} by {per} · {range.label}. Hover a bar to see that {per}.</p>
+          <p className="text-[13px] text-slate-500">{t("sub", { verb, unit, range: range.label })}</p>
         </div>
       </div>
 
@@ -95,10 +99,10 @@ export function LedgerTracker({ kind, rows, range, total, realTotal, color, sign
         {/* Número grande */}
         <div className="pb-2">
           <p className="text-[42px] font-bold leading-none tracking-tight tabular-nums" style={{ color }}>{sign}{money(total)}</p>
-          <p className="mt-2 text-[13px] leading-snug text-slate-500">{rows.length} {rows.length === 1 ? "entry" : "entries"} in {used} {used === 1 ? per : `${per}s`}</p>
+          <p className="mt-2 text-[13px] leading-snug text-slate-500">{t("countIn", { n: rows.length, used, unit })}</p>
           <div className="mt-4 space-y-1.5 text-[12.5px]">
-            <p className="flex justify-between gap-2"><span className="text-slate-500">Avg per {per}</span><span className="font-semibold tabular-nums text-[#0b1f3a]">{money(avg)}</span></p>
-            <p className="flex justify-between gap-2"><span className="text-slate-500">Best {per}</span><span className="truncate font-semibold text-[#0b1f3a]">{buckets[peak]?.value ? buckets[peak].long : "—"}</span></p>
+            <p className="flex justify-between gap-2"><span className="text-slate-500">{t("avgPer", { unit })}</span><span className="font-semibold tabular-nums text-[#0b1f3a]">{money(avg)}</span></p>
+            <p className="flex justify-between gap-2"><span className="text-slate-500">{t("best", { unit })}</span><span className="truncate font-semibold text-[#0b1f3a]">{buckets[peak]?.value ? buckets[peak].long : "—"}</span></p>
           </div>
         </div>
 
@@ -132,8 +136,8 @@ export function LedgerTracker({ kind, rows, range, total, realTotal, color, sign
               );
             })}
           </div>
-          {hover !== null && <p className="pointer-events-none absolute right-0 top-0 text-[12px] font-medium text-slate-500 animate-[bp-fade_0.2s_ease-out]">{buckets[hover].long} · {buckets[hover].count} {buckets[hover].count === 1 ? "entry" : "entries"}</p>}
-          {max > 1 && hover === null && <p className="pointer-events-none absolute right-0 top-0 text-[12px] text-slate-400">Top: {short$(max)}</p>}
+          {hover !== null && <p className="pointer-events-none absolute right-0 top-0 text-[12px] font-medium text-slate-500 animate-[bp-fade_0.2s_ease-out]">{buckets[hover].long} · {t("entries", { n: buckets[hover].count })}</p>}
+          {max > 1 && hover === null && <p className="pointer-events-none absolute right-0 top-0 text-[12px] text-slate-400">{t("top", { v: short$(max) })}</p>}
         </div>
       </div>
     </div>
@@ -148,18 +152,20 @@ export function LedgerGlance({ kind, rows }: { kind: LedgerKind; rows: Entry[] }
   const avg = amounts.length ? total / amounts.length : 0;
   const parties = new Set(rows.map((r) => (r.party || "").trim().toLowerCase()).filter(Boolean)).size;
   const [on, setOn] = useState(false);
-  useEffect(() => { setOn(false); const t = setTimeout(() => setOn(true), 120); return () => clearTimeout(t); }, [rows.length, total]);
+  const t = useTranslations("ledgerCharts");
+  const fx = useFinTx();
+  useEffect(() => { setOn(false); const k = setTimeout(() => setOn(true), 120); return () => clearTimeout(k); }, [rows.length, total]);
   const TICKS = 14;
   const cols: { label: string; value: string; fill: number; color: string; tip: string }[] = [
-    { label: "Entries", value: String(rows.length), fill: Math.min(1, rows.length / TICKS), color: kind === "income" ? "#0f766e" : "#e11d48", tip: "How many you recorded" },
-    { label: "Average", value: whole(avg), fill: largest ? avg / largest : 0, color: "#e8713a", tip: "Average vs. the largest one" },
-    { label: "Largest", value: whole(largest), fill: total ? largest / total : 0, color: "#0b1f3a", tip: "Share of the total" },
+    { label: t("entriesLabel"), value: String(rows.length), fill: Math.min(1, rows.length / TICKS), color: kind === "income" ? "#0f766e" : "#e11d48", tip: t("tipEntries") },
+    { label: t("average"), value: whole(avg, fx.tag), fill: largest ? avg / largest : 0, color: "#e8713a", tip: t("tipAverage") },
+    { label: t("largest"), value: whole(largest, fx.tag), fill: total ? largest / total : 0, color: "#0b1f3a", tip: t("tipLargest") },
   ];
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,40,60,0.05)]">
       <div className="flex items-center justify-between">
-        <p className="text-[18px] font-semibold tracking-tight text-[#0b1f3a]">At a glance</p>
-        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11.5px] font-semibold text-slate-500">{parties} {kind === "income" ? (parties === 1 ? "payer" : "payers") : (parties === 1 ? "vendor" : "vendors")}</span>
+        <p className="text-[18px] font-semibold tracking-tight text-[#0b1f3a]">{t("glance")}</p>
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11.5px] font-semibold text-slate-500">{t("parties", { n: parties, kind })}</span>
       </div>
       <div className="mt-5 grid grid-cols-3 gap-3">
         {cols.map((c, ci) => (
@@ -178,7 +184,7 @@ export function LedgerGlance({ kind, rows }: { kind: LedgerKind; rows: Entry[] }
           </div>
         ))}
       </div>
-      <p className="mt-4 text-[12px] leading-snug text-slate-400">Colored lines show each number compared to the period: count, average vs. largest, and largest vs. total.</p>
+      <p className="mt-4 text-[12px] leading-snug text-slate-400">{t("glanceNote")}</p>
     </div>
   );
 }
@@ -191,7 +197,10 @@ export function LedgerMobileHero({ kind, rows, range, total, realTotal, color, s
   kind: LedgerKind; rows: Entry[]; range: { from: string; to: string; label: string }; total: number; realTotal: number; color: string; sign: string; verb: string;
 }) {
   const th = THEME[kind];
-  const { unit, buckets } = useMemo(() => buildBuckets(rows, range.from, range.to), [rows, range.from, range.to]);
+  const t = useTranslations("ledgerCharts");
+  const fx = useFinTx();
+  const money = fx.money;
+  const { unit, buckets } = useMemo(() => buildBuckets(rows, range.from, range.to, fx.tag), [rows, range.from, range.to, fx.tag]);
   const max = Math.max(1, ...buckets.map((b) => b.value));
   const peak = buckets.reduce((p, b, i) => (b.value > buckets[p].value ? i : p), 0);
   const [sel, setSel] = useState<number | null>(null);
@@ -201,7 +210,6 @@ export function LedgerMobileHero({ kind, rows, range, total, realTotal, color, s
   const amounts = rows.map((r) => Number(r.amount) || 0);
   const largest = amounts.length ? Math.max(...amounts) : 0;
   const avg = amounts.length ? realTotal / amounts.length : 0;
-  const per = unit === "day" ? "day" : unit;
   const tight = buckets.length > 8;
   const b = buckets[hi];
 
@@ -223,9 +231,9 @@ export function LedgerMobileHero({ kind, rows, range, total, realTotal, color, s
 
         {/* Lo que tocaste (o la mejor semana) */}
         <div key={hi} className="mt-3 inline-flex max-w-full items-center gap-2 rounded-full bg-[#0b1f3a] py-1 pl-1 pr-3 text-[12.5px] text-white shadow-md animate-[bp-pop-in_0.25s_ease-out]">
-          <span className="rounded-full bg-white/15 px-2 py-0.5 font-semibold">{sel === null ? `Best ${per}` : b?.long}</span>
+          <span className="rounded-full bg-white/15 px-2 py-0.5 font-semibold">{sel === null ? t("best", { unit }) : b?.long}</span>
           <span className="truncate font-semibold tabular-nums">{money(b?.value ?? 0)}</span>
-          {sel === null && b?.value ? <span className="truncate text-white/60">{b.long}</span> : <span className="shrink-0 text-white/60">{b?.count ?? 0} {(b?.count ?? 0) === 1 ? "entry" : "entries"}</span>}
+          {sel === null && b?.value ? <span className="truncate text-white/60">{b.long}</span> : <span className="shrink-0 text-white/60">{t("entries", { n: b?.count ?? 0 })}</span>}
         </div>
 
         {/* Barras que se tocan: una por semana (o día / mes), con su fecha abajo */}
@@ -233,7 +241,7 @@ export function LedgerMobileHero({ kind, rows, range, total, realTotal, color, s
           {buckets.map((x, i) => {
             const on = i === hi;
             const h = x.value > 0 ? Math.max(10, (x.value / max) * 100) : 0;
-            const lab = unit === "week" ? x.long.replace(/[A-Za-z]+\s/g, "").replace(/\s/g, "") : x.label;
+            const lab = unit === "week" ? `${Number(x.from.slice(8))}–${Number(x.to.slice(8))}` : x.label;
             return (
               <button key={x.from} type="button" onClick={() => setSel(sel === i ? null : i)} aria-label={`${x.long}: ${money(x.value)}`} aria-pressed={on}
                 className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1.5 active:scale-95">
@@ -250,7 +258,7 @@ export function LedgerMobileHero({ kind, rows, range, total, realTotal, color, s
 
       {/* Resumen rápido */}
       <div className="relative mt-4 grid grid-cols-3 divide-x divide-slate-100 border-t border-slate-100 bg-slate-50/60">
-        {([["Entries", String(rows.length)], ["Average", whole(avg)], ["Largest", whole(largest)]] as const).map(([l, v], i) => (
+        {([[t("entriesLabel"), String(rows.length)], [t("average"), whole(avg, fx.tag)], [t("largest"), whole(largest, fx.tag)]] as const).map(([l, v], i) => (
           <div key={l} className="px-3 py-3 text-center animate-[bp-fade_0.4s_ease-out_both]" style={{ animationDelay: `${200 + i * 80}ms` }}>
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{l}</p>
             <p className="mt-0.5 truncate text-[15px] font-bold tabular-nums text-[#0b1f3a]">{v}</p>
