@@ -4,6 +4,8 @@ import { useState } from "react";
 import BottomSheet from "@/components/customers/BottomSheet";
 import { SORTS } from "@/lib/customer-list";
 import { sheetItem } from "@/components/ui/sheet";
+import { useTranslations } from "next-intl";
+import { useCustTx } from "@/i18n/useCustTx";
 
 export default function MobileSortSheet({
   open, onClose, sort, dir, onApply, options = SORTS,
@@ -15,6 +17,10 @@ export default function MobileSortSheet({
   dir: "asc" | "desc";
   onApply: (sort: string, dir: "asc" | "desc") => void;
 }) {
+  const t = useTranslations("custUi");
+  const cx = useCustTx();
+  // Las opciones de clientes se traducen aquí; las de otros módulos ya llegan traducidas
+  const lab = (s: { value: string; label: string }) => (options === SORTS ? cx.sort(s.value) : s.label);
   const [sel, setSel] = useState(sort);
   const [selDir, setSelDir] = useState<"asc" | "desc">(dir);
 
@@ -23,15 +29,16 @@ export default function MobileSortSheet({
     else { setSel(value); setSelDir(value === "created" || value === "updated" || value === "date" ? "desc" : "asc"); }
   }
 
-  const current = options.find((s) => s.value === sel)?.label ?? "Name";
+  const cur = options.find((s) => s.value === sel);
+  const current = cur ? lab(cur) : cx.sort("name");
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="Sort by"
+    <BottomSheet open={open} onClose={onClose} title={t("sortBy")}
       footer={
         <div className="flex items-center justify-between gap-3">
-          <div className="text-sm text-slate-500">Sort selected: <span className="font-semibold text-[#0b1f3a]">{current}</span> ({selDir === "asc" ? "Ascending" : "Descending"})</div>
+          <div className="text-sm text-slate-500">{t("sortSelected")} <span className="font-semibold text-[#0b1f3a]">{current}</span> ({selDir === "asc" ? t("asc") : t("desc")})</div>
           <button type="button" onClick={() => onApply(sel, selDir)}
-            className="rounded-lg bg-[#0f766e] px-6 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f58]">Sort</button>
+            className="rounded-lg bg-[#0f766e] px-6 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f58]">{t("sort")}</button>
         </div>
       }>
       <ul className="space-y-0.5">
@@ -45,11 +52,11 @@ export default function MobileSortSheet({
                   <span className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${active ? "border-[#0f766e]" : "border-slate-300"}`}>
                     {active && <span className="h-2.5 w-2.5 rounded-full bg-[#0f766e]" />}
                   </span>
-                  <span className={active ? "font-medium text-[#0b1f3a]" : "text-slate-700"}>{s.label}</span>
+                  <span className={active ? "font-medium text-[#0b1f3a]" : "text-slate-700"}>{lab(s)}</span>
                 </span>
                 {active && (
                   <span className="flex items-center gap-1 text-sm font-medium text-[#0f766e]">
-                    {selDir === "asc" ? "Ascending" : "Descending"}
+                    {selDir === "asc" ? t("asc") : t("desc")}
                     <svg viewBox="0 0 20 20" className={`h-4 w-4 ${selDir === "desc" ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 15V5m0 0-4 4m4-4 4 4" strokeLinecap="round" strokeLinejoin="round" /></svg>
                   </span>
                 )}
@@ -60,7 +67,7 @@ export default function MobileSortSheet({
       </ul>
       <p className="mt-4 flex items-start gap-2 rounded-xl bg-[#eef6ff] px-4 py-3 text-sm text-slate-600">
         <svg viewBox="0 0 20 20" className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" fill="currentColor"><path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm0 4a1 1 0 110 2 1 1 0 010-2zm1 8H9v-5h2z" /></svg>
-        Tap the selected option again to switch between ascending and descending.
+        {t("sortTip")}
       </p>
     </BottomSheet>
   );

@@ -1,10 +1,12 @@
 "use client";
 
 import { Address } from "@/lib/customers";
-import { cleanPostal, postalLabel, postalPlaceholder, stateLabel, subdivisions } from "@/lib/geo";
+import { cleanPostal, postalPlaceholder, subdivisions } from "@/lib/geo";
 import { CountrySelect, StateSelect } from "@/components/customers/CountrySelect";
 import { useNoFill } from "@/components/customers/noFill";
 import { inputClass, labelClass } from "@/components/customers/ui";
+import { useTranslations } from "next-intl";
+import { useCustTx } from "@/i18n/useCustTx";
 
 export default function AddressFields({
   value,
@@ -17,6 +19,8 @@ export default function AddressFields({
   idPrefix: string;
   hideLabel?: boolean;
 }) {
+  const t = useTranslations("custForm");
+  const cx = useCustTx();
   const noFill = useNoFill();
   const states = subdivisions(value.country);
   const set = (k: keyof Address) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -26,37 +30,37 @@ export default function AddressFields({
     <div className="grid gap-3 sm:grid-cols-6">
       {!hideLabel && <div className="sm:col-span-3">
         <label htmlFor={`${idPrefix}-label`} className={labelClass}>
-          Name for this address <span className="font-normal text-slate-400">(optional)</span>
+          {t("addrName")} <span className="font-normal text-slate-400">({t("optional")})</span>
         </label>
         <input id={`${idPrefix}-label`} value={value.label} onChange={set("label")} {...noFill(`${idPrefix}-a1`)}
-          placeholder="e.g. Home, Main office, Store #2" className={inputClass} />
+          placeholder={t("addrNamePh")} className={inputClass} />
       </div>}
       <div className={hideLabel ? "sm:col-span-6" : "sm:col-span-3"}>
-        <label htmlFor={`${idPrefix}-country`} className={labelClass}>Country</label>
+        <label htmlFor={`${idPrefix}-country`} className={labelClass}>{t("country")}</label>
         <CountrySelect id={`${idPrefix}-country`} value={value.country}
           onChange={(country) => onChange({ ...value, country, state: country === value.country ? value.state : "", zip: cleanPostal(country, value.zip) })} />
       </div>
       <div className="sm:col-span-4">
-        <label htmlFor={`${idPrefix}-street`} className={labelClass}>Street address</label>
+        <label htmlFor={`${idPrefix}-street`} className={labelClass}>{t("street")}</label>
         <input id={`${idPrefix}-street`} value={value.street} onChange={set("street")} {...noFill(`${idPrefix}-a2`)}
-          placeholder={value.country === "US" ? "1200 Elm St" : "Street and number"} className={inputClass} />
+          placeholder={value.country === "US" ? "1200 Elm St" : t("streetPh")} className={inputClass} />
       </div>
       <div className="sm:col-span-2">
         <label htmlFor={`${idPrefix}-unit`} className={labelClass}>
-          Unit <span className="font-normal text-slate-400">(optional)</span>
+          {t("unit")} <span className="font-normal text-slate-400">({t("optional")})</span>
         </label>
         <input id={`${idPrefix}-unit`} value={value.unit} onChange={set("unit")} {...noFill(`${idPrefix}-a3`)}
-          placeholder="Apt 4B" className={inputClass} />
+          placeholder={t("unitPh")} className={inputClass} />
       </div>
       <div className="sm:col-span-2">
-        <label htmlFor={`${idPrefix}-city`} className={labelClass}>City</label>
+        <label htmlFor={`${idPrefix}-city`} className={labelClass}>{t("city")}</label>
         <input id={`${idPrefix}-city`} value={value.city} onChange={set("city")} {...noFill(`${idPrefix}-a4`)}
           placeholder={value.country === "US" ? "Carrollton" : ""} className={inputClass} />
       </div>
       <div className="sm:col-span-2">
         <label htmlFor={`${idPrefix}-state`} className={labelClass}>
-          {stateLabel(value.country)}
-          {states.length === 0 && <span className="font-normal text-slate-400"> (optional)</span>}
+          {cx.stateLabel(value.country)}
+          {states.length === 0 && <span className="font-normal text-slate-400"> ({t("optional")})</span>}
         </label>
         {states.length > 0 ? (
           <StateSelect id={`${idPrefix}-state`} country={value.country} value={value.state}
@@ -68,7 +72,7 @@ export default function AddressFields({
       </div>
       <div className="sm:col-span-2">
         <label htmlFor={`${idPrefix}-zip`} className={labelClass}>
-          {postalLabel(value.country)} <span className="font-normal text-slate-400">(optional)</span>
+          {cx.postalLabel(value.country)} <span className="font-normal text-slate-400">({t("optional")})</span>
         </label>
         <input id={`${idPrefix}-zip`} value={value.zip} {...noFill(`${idPrefix}-a6`)}
           inputMode={["US", "MX", "ES"].includes(value.country) ? "numeric" : "text"}

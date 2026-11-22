@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/client";
 import { Address, EMPTY_ADDRESS, addressError, addressLine, cityLine, cleanAddress, countryLine, mapsUrl } from "@/lib/customers";
 import AddressFields from "@/components/customers/AddressFields";
 import { primaryButton, secondaryButton } from "@/components/customers/ui";
+import { useTranslations } from "next-intl";
+import { useCustTx } from "@/i18n/useCustTx";
 
 export default function AddressManager({
   customerId,
@@ -17,6 +19,8 @@ export default function AddressManager({
   companyId: string;
   addresses: (Address & { id: string })[];
 }) {
+  const t = useTranslations("custForm");
+  const cx = useCustTx();
   const router = useRouter();
   const [editingId, setEditingId] = useState<string | "new" | null>(null);
   const [draft, setDraft] = useState<Address>(EMPTY_ADDRESS);
@@ -37,7 +41,7 @@ export default function AddressManager({
 
   async function save() {
     const msg = addressError(draft);
-    if (msg) return setError(msg);
+    if (msg) return setError(cx.err(msg));
     setBusy(true);
     const supabase = createClient();
     const data = cleanAddress(draft);
@@ -51,7 +55,7 @@ export default function AddressManager({
         : await supabase.from("customer_addresses").update(data).eq("id", editingId!);
 
     setBusy(false);
-    if (error) return setError("The address couldn't be saved. Try again.");
+    if (error) return setError(t("addrSaveFail"));
     setEditingId(null);
     router.refresh();
   }
@@ -64,7 +68,7 @@ export default function AddressManager({
   }
 
   async function remove(id: string) {
-    if (!(await confirmDelete({ title: "Delete this address?" }))) return;
+    if (!(await confirmDelete({ title: t("addrDel") }))) return;
     await createClient().from("customer_addresses").delete().eq("id", id);
     router.refresh();
   }
@@ -75,12 +79,12 @@ export default function AddressManager({
       <label className="mt-4 flex items-center gap-2 text-sm text-slate-600">
         <input type="checkbox" checked={draft.is_primary} onChange={(e) => setDraft({ ...draft, is_primary: e.target.checked })}
           className="h-4 w-4 accent-[#0f766e]" />
-        Primary address
+        {t("primaryAddr")}
       </label>
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
       <div className="mt-4 flex gap-3">
-        <button type="button" onClick={save} disabled={busy} className={primaryButton}>{busy ? "Saving..." : "Save address"}</button>
-        <button type="button" onClick={() => setEditingId(null)} className={secondaryButton}>Cancel</button>
+        <button type="button" onClick={save} disabled={busy} className={primaryButton}>{busy ? t("saving") : t("saveAddr")}</button>
+        <button type="button" onClick={() => setEditingId(null)} className={secondaryButton}>{t("cancel")}</button>
       </div>
     </div>
   );
@@ -96,9 +100,9 @@ export default function AddressManager({
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium text-slate-800">{a.label || "Service address"}</p>
+                    <p className="font-medium text-slate-800">{a.label || t("serviceAddr")}</p>
                     {a.is_primary && (
-                      <span className="rounded-full bg-[#d6f3ec] px-2 py-0.5 text-xs font-medium text-[#0f766e]">Primary</span>
+                      <span className="rounded-full bg-[#d6f3ec] px-2 py-0.5 text-xs font-medium text-[#0f766e]">{t("primary")}</span>
                     )}
                   </div>
                   <p className="mt-1 text-sm text-slate-600">{addressLine(a)}</p>
@@ -107,15 +111,15 @@ export default function AddressManager({
                 </div>
                 <a href={mapsUrl(a)} target="_blank" rel="noopener noreferrer"
                   className="shrink-0 text-sm font-semibold text-[#0f766e] hover:underline">
-                  Open in Maps
+                  {t("openMaps")}
                 </a>
               </div>
               <div className="mt-3 flex flex-wrap gap-4 text-sm">
-                <button type="button" onClick={() => startEdit(a)} className="font-medium text-slate-600 hover:text-slate-900">Edit</button>
+                <button type="button" onClick={() => startEdit(a)} className="font-medium text-slate-600 hover:text-slate-900">{t("edit")}</button>
                 {!a.is_primary && (
-                  <button type="button" onClick={() => makePrimary(a.id)} className="font-medium text-slate-600 hover:text-slate-900">Make primary</button>
+                  <button type="button" onClick={() => makePrimary(a.id)} className="font-medium text-slate-600 hover:text-slate-900">{t("makePrimary")}</button>
                 )}
-                <button type="button" onClick={() => remove(a.id)} className="font-medium text-red-600 hover:underline">Delete</button>
+                <button type="button" onClick={() => remove(a.id)} className="font-medium text-red-600 hover:underline">{t("delete")}</button>
               </div>
             </li>
           )
@@ -123,14 +127,14 @@ export default function AddressManager({
       </ul>
 
       {addresses.length === 0 && editingId !== "new" && (
-        <p className="text-sm text-slate-500">No service addresses yet.</p>
+        <p className="text-sm text-slate-500">{t("noAddr")}</p>
       )}
 
       {editingId === "new" ? (
         <div className="mt-3">{editor}</div>
       ) : (
         <button type="button" onClick={startNew} className="mt-4 text-sm font-semibold text-[#0f766e] hover:underline">
-          + Add address
+          {t("addAddr")}
         </button>
       )}
     </div>

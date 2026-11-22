@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { Address, Customer, Email, Phone, canManageCustomers } from "@/lib/customers";
@@ -25,11 +26,12 @@ export default async function EditCustomerPage({ params }: { params: { id: strin
     supabase.from("customer_addresses").select("id, label, street, unit, city, state, zip, country, is_primary").eq("customer_id", c.id).order("created_at"),
   ]);
 
+  const t = await getTranslations("custPages");
   return (
     <section className="min-h-[calc(100vh-4rem)] bg-white">
       <div className="border-b border-slate-200 px-5 py-5 sm:px-8">
         <Link prefetch={false} href={`/dashboard/customers/${c.id}`} className="text-sm font-medium text-slate-500 hover:text-slate-800">&larr; {c.display_name}</Link>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-[#0b1f3a]">Edit Customer</h1>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-[#0b1f3a]">{t("editTitle")}</h1>
       </div>
       <div className="px-5 pt-6 sm:px-8">
       <CustomerForm companyId={current.id} customer={c}

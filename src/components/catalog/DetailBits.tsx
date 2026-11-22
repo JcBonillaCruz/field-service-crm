@@ -2,9 +2,15 @@
 
 import Link from "next/link";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
+import { useLocale, useTranslations } from "next-intl";
+import { intlTag } from "@/i18n/config";
+
+const useWhen = () => { const tag = intlTag(useLocale()); return (v: string) => new Date(v).toLocaleString(tag, { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }); };
 
 // Lápiz animado (crece y se inclina al pasar el mouse)
-export function PencilButton({ href, label = "Edit", withText = false }: { href: string; label?: string; withText?: boolean }) {
+export function PencilButton({ href, label: labelIn, withText = false }: { href: string; label?: string; withText?: boolean }) {
+  const tc = useTranslations("common");
+  const label = labelIn ?? tc("edit");
   return (
     <Link prefetch={false} href={href} aria-label={label} title={label}
       className={`group/edit flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-[#14a39a] hover:bg-[#e9f7f4] hover:text-[#0f766e] hover:shadow-md active:translate-y-0 ${withText ? "h-9 px-3 text-sm font-medium" : "h-9 w-9"}`}>
@@ -19,8 +25,9 @@ export function PencilButton({ href, label = "Edit", withText = false }: { href:
 
 // X que gira y se pone roja
 export function CloseButton({ href, red = false }: { href: string; red?: boolean }) {
+  const tc = useTranslations("common");
   return (
-    <Link prefetch={false} href={href} aria-label="Close" title="Close"
+    <Link prefetch={false} href={href} aria-label={tc("close")} title={tc("close")}
       className={`group/x flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-red-50 hover:text-red-600 ${red ? "text-red-500" : "text-slate-500"}`}>
       <svg viewBox="0 0 20 20" className="h-5 w-5 transition-transform duration-300 group-hover/x:rotate-90" fill="currentColor" aria-hidden="true">
         <path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" />
@@ -31,7 +38,9 @@ export function CloseButton({ href, red = false }: { href: string; red?: boolean
 
 export type MenuAction = { label: string; onClick?: () => void; href?: string; danger?: boolean; icon?: string };
 
-export function MoreMenu({ actions, label = "More", dots = false }: { actions: MenuAction[]; label?: string; dots?: boolean }) {
+export function MoreMenu({ actions, label: labelIn, dots = false }: { actions: MenuAction[]; label?: string; dots?: boolean }) {
+  const t = useTranslations("detailBits");
+  const label = labelIn ?? t("more");
   return (
     <Menu>
       <MenuButton className={`flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 data-[open]:border-[#14a39a] data-[open]:bg-[#e9f7f4] data-[open]:text-[#0f766e] ${dots ? "w-9 justify-center" : "px-3"}`} aria-label={label}>
@@ -71,13 +80,13 @@ export const ICONS = {
   on: "M10 17.5a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15zM6.8 10.2l2.2 2.2 4.2-4.6",
 };
 
-export function Tabs({ tabs, active, onChange }: { tabs: string[]; active: string; onChange: (t: string) => void }) {
+export function Tabs({ tabs, active, onChange, label }: { tabs: string[]; active: string; onChange: (t: string) => void; label?: (t: string) => string }) {
   return (
     <div role="tablist" className="flex gap-7 overflow-x-auto overflow-y-hidden border-b border-slate-200 px-5 [scrollbar-width:none] sm:px-7 [&::-webkit-scrollbar]:hidden">
       {tabs.map((t) => (
         <button key={t} type="button" role="tab" aria-selected={active === t} onClick={() => onChange(t)}
           className={`relative shrink-0 py-3 text-[15px] transition-colors ${active === t ? "font-semibold text-[#0f766e]" : "text-slate-600 hover:text-[#0b1f3a]"}`}>
-          {t}
+          {label ? label(t) : t}
           <span className={`absolute inset-x-0 bottom-0 h-[3px] rounded-full bg-[#0f766e] transition-transform duration-200 ${active === t ? "scale-x-100" : "scale-x-0"}`} />
         </button>
       ))}
@@ -101,23 +110,25 @@ export function HistoryTable({ rows, fallbackCreated }: {
   rows: { id: string; action: string; actor_name: string | null; changes: string[] | null; created_at: string }[];
   fallbackCreated: string;
 }) {
+  const t = useTranslations("detailBits");
+  const when = useWhen();
   const list = rows.length ? rows : [{ id: "c", action: "created", actor_name: null, changes: null, created_at: fallbackCreated }];
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[560px] text-sm">
         <thead>
           <tr className="border-b border-slate-200 bg-[#fafbfc] text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-            <th className="w-64 px-5 py-2.5">Date</th><th className="px-5 py-2.5">Details</th>
+            <th className="w-64 px-5 py-2.5">{t("date")}</th><th className="px-5 py-2.5">{t("details")}</th>
           </tr>
         </thead>
         <tbody>
           {list.map((h) => (
             <tr key={h.id} className="border-b border-slate-100 transition-colors hover:bg-[#f6fbfa]">
               <td className="px-5 py-3 text-slate-500">
-                {new Date(h.created_at).toLocaleString("en-US", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                {when(h.created_at)}
               </td>
               <td className="px-5 py-3 text-slate-700">
-                {h.action} by <span className="italic text-slate-500">- {h.actor_name || "a team member"}</span>
+                {t.has(`act.${h.action.replace(/\W/g, "")}` as never) ? t(`act.${h.action.replace(/\W/g, "")}` as never) : h.action} <span className="italic text-slate-500">- {h.actor_name || t("someoneLower")}</span>
                 {h.changes && h.changes.length > 0 && <span className="ml-2 text-xs text-slate-400">({h.changes.join(", ")})</span>}
               </td>
             </tr>
@@ -130,6 +141,8 @@ export function HistoryTable({ rows, fallbackCreated }: {
 
 // Línea de tiempo (como el historial de Zoho en el celular): puntito, línea hacia abajo, otro puntito
 export function Timeline({ rows }: { rows: { id: string; title: string; who: string | null; when: string; note?: string }[] }) {
+  const t = useTranslations("detailBits");
+  const when = useWhen();
   return (
     <ol className="relative">
       {rows.map((r, i) => (
@@ -140,8 +153,8 @@ export function Timeline({ rows }: { rows: { id: string; title: string; who: str
             <p className="text-[15px] text-[#0b1f3a]">{r.title}</p>
             {r.note && <p className="mt-0.5 text-[13px] text-slate-500">{r.note}</p>}
             <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[13px] text-slate-500">
-              <span>{r.who || "A team member"}</span><span className="h-3.5 w-px bg-slate-300" />
-              <span>{new Date(r.when).toLocaleString("en-US", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+              <span>{r.who || t("someone")}</span><span className="h-3.5 w-px bg-slate-300" />
+              <span>{when(r.when)}</span>
             </p>
           </div>
         </li>

@@ -8,19 +8,35 @@ import { downloadCsv, parseCsv } from "@/lib/csv";
 import { ImportRow, SAMPLE_ROWS, TARGETS, TARGET_LABEL, autoMap, buildRow } from "@/lib/customer-import";
 import SearchSelect, { SelectOption } from "@/components/ui/SearchSelect";
 import { primaryButton, secondaryButton } from "@/components/customers/ui";
+import { useTranslations } from "next-intl";
 
 const MAX_ROWS = 5000;
 const CHUNK = 200;
-const STEPS = ["Upload file", "Map fields", "Review & import"];
+const STEPS = ["step1", "step2", "step3"];
 
-const TARGET_OPTIONS: SelectOption[] = [
-  { value: "", label: "Don't import", group: "Skip" },
-  ...TARGETS.map((t) => ({ value: t.key, label: t.label, group: t.group })),
-];
+// Paso 6.2b2: el nombre de cada campo de BrightPro en el idioma (la clave del campo no cambia)
+type Tr = (k: string, v?: Record<string, string | number>) => string;
+function targetName(key: string, t: Tr): string {
+  let m = /^(phone|phoneLabel|email|emailLabel):(\d+)$/.exec(key);
+  if (m) return t(`f_${m[1]}`, { n: m[2] });
+  m = /^addr(\d+):(\w+)$/.exec(key);
+  if (m) return `${t("f_address", { n: m[1] })} · ${t(`a_${m[2]}`)}`;
+  return t(`f_${key}`);
+}
+function targetGroup(g: string, t: Tr): string {
+  const m = /^Address (\d+)$/.exec(g);
+  return m ? t("f_address", { n: m[1] }) : t(`g_${g}`);
+}
 
 type Result = { imported: number; skipped: number; errors: { row: number; message: string }[] };
 
 export default function CustomerImport({ companyId }: { companyId: string }) {
+  const t = useTranslations("custImport");
+  const tr = t as unknown as Tr;
+  const TARGET_OPTIONS: SelectOption[] = useMemo(() => [
+    { value: "", label: t("dontImport"), group: t("g_Skip") },
+    ...TARGETS.map((x) => ({ value: x.key, label: targetName(x.key, tr), group: targetGroup(x.group, tr), search: x.label })),
+  ], [t]); // eslint-disable-line react-hooks/exhaustive-deps
   const router = useRouter();
   const fileInput = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState(0);
@@ -36,12 +52,12 @@ export default function CustomerImport({ companyId }: { companyId: string }) {
 
   async function readFile(file: File) {
     setError("");
-    if (!/\.(csv|txt)$/i.test(file.name)) return setError("Choose a .csv file. In Excel or Google Sheets use File → Download → CSV.");
-    if (file.size > 5 * 1024 * 1024) return setError("The file is larger than 5 MB.");
+    if (!/\.(csv|txt)$/i.test(file.name)) return setError(t("eCsv"));
+    if (file.size > 5 * 1024 * 1024) return setError(t("e5mb"));
     const all = parseCsv(await file.text());
-    if (all.length < 2) return setError("The file needs a header row and at least one customer.");
-    if (all.length - 1 > MAX_ROWS) return setError(`The file has ${all.length - 1} rows. Import at most ${MAX_ROWS} at a time.`);
-    const h = all[0].map((x, i) => x.trim() || `Column ${i + 1}`);
+    if (all.length < 2) return setError(t("eEmpty"));
+    if (all.length - 1 > MAX_ROWS) return setError(t("eTooMany", { n: all.length - 1, max: MAX_ROWS }));
+    const h = all[0].map((x, i) => x.trim() || t("columnN", { n: i + 1 }));
     setFileName(file.name);
     setHeaders(h);
     setRows(all.slice(1));
@@ -73,12 +89,12 @@ export default function CustomerImport({ companyId }: { companyId: string }) {
       if (error || !data) {
         setProgress(null);
         setResult(total.imported ? total : null);
-        return setError("The import stopped because of a connection problem. Customers already imported were kept.");
+        return setError(t("eStopped"));
       }
       const d = data as Result;
       total.imported += d.imported;
       total.skipped += d.skipped;
-      total.errors.push(...d.errors.map((e) => ({ row: e.row, message: /email/i.test(e.message) ? "Invalid email" : "Couldn't save this row" })));
+      total.errors.push(...d.errors.map((e) => ({ row: e.row, message: /email/i.test(e.message) ? t("badEmail") : t("badRow") })));
       setProgress(Math.min(100, Math.round(((i + chunk.length) / ready.length) * 100)));
     }
     total.errors.sort((a, b) => a.row - b.row);
@@ -100,25 +116,25 @@ export default function CustomerImport({ companyId }: { companyId: string }) {
             <path d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0z" />
           </svg>
         </div>
-        <h2 className="mt-4 text-xl font-semibold text-[#0b1f3a]">Import finished</h2>
+        <h2 className="mt-4 text-xl font-semibold text-[#0b1f3a]">{t("finished")}</h2>
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          <Stat n={result.imported} label="Imported" tone="ok" />
-          <Stat n={result.skipped} label="Skipped (already exist)" />
-          <Stat n={result.errors.length} label="Not imported" tone={result.errors.length ? "bad" : undefined} />
+          <Stat n={result.imported} label={t("imported")} tone="ok" />
+          <Stat n={result.skipped} label={t("skipped")} />
+          <Stat n={result.errors.length} label={t("notImported")} tone={result.errors.length ? "bad" : undefined} />
         </div>
         {result.errors.length > 0 && (
           <div className="mt-5 max-h-56 overflow-y-auto rounded-xl border border-slate-200">
             {result.errors.map((e, i) => (
               <p key={i} className="border-b border-slate-100 px-4 py-2 text-sm text-slate-600 last:border-0">
-                <span className="font-medium text-slate-800">Row {e.row}:</span> {e.message}
+                <span className="font-medium text-slate-800">{t("rowN", { n: e.row })}</span> {e.message}
               </p>
             ))}
           </div>
         )}
         {error && <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
         <div className="mt-6 flex flex-wrap gap-3">
-          <Link prefetch={false} href="/dashboard/customers" className={primaryButton}>Go to customers</Link>
-          <button type="button" onClick={reset} className={secondaryButton}>Import another file</button>
+          <Link prefetch={false} href="/dashboard/customers" className={primaryButton}>{t("goCustomers")}</Link>
+          <button type="button" onClick={reset} className={secondaryButton}>{t("another")}</button>
         </div>
       </div>
     );
@@ -133,7 +149,7 @@ export default function CustomerImport({ companyId }: { companyId: string }) {
             <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${i < step ? "bg-[#0f766e] text-white" : i === step ? "bg-[#d6f3ec] text-[#0f766e] ring-2 ring-[#14a39a]/40" : "bg-slate-100 text-slate-400"}`}>
               {i < step ? "✓" : i + 1}
             </span>
-            <span className={`hidden sm:inline ${i === step ? "font-semibold text-[#0b1f3a]" : "text-slate-500"}`}>{s}</span>
+            <span className={`hidden sm:inline ${i === step ? "font-semibold text-[#0b1f3a]" : "text-slate-500"}`}>{t(s as never)}</span>
             {i < STEPS.length - 1 && <span className="mx-1 h-px w-6 bg-slate-200 sm:w-10" />}
           </li>
         ))}
@@ -150,8 +166,8 @@ export default function CustomerImport({ companyId }: { companyId: string }) {
             <svg viewBox="0 0 24 24" className="h-10 w-10 text-[#14a39a]" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
               <path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            <span className="mt-3 font-semibold text-[#0b1f3a]">Drag your CSV file here or click to choose it</span>
-            <span className="mt-1 text-sm text-slate-500">Up to {MAX_ROWS.toLocaleString()} customers · 5 MB max</span>
+            <span className="mt-3 font-semibold text-[#0b1f3a]">{t("drag")}</span>
+            <span className="mt-1 text-sm text-slate-500">{t("limits", { max: MAX_ROWS })}</span>
           </button>
           <input ref={fileInput} type="file" accept=".csv,text/csv" className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) readFile(f); e.target.value = ""; }} />
@@ -159,15 +175,15 @@ export default function CustomerImport({ companyId }: { companyId: string }) {
           {error && <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
           <div className="mt-6 rounded-xl bg-[#f6fbfa] p-4 text-sm text-slate-600">
-            <p className="font-medium text-[#0b1f3a]">Tips</p>
+            <p className="font-medium text-[#0b1f3a]">{t("tips")}</p>
             <ul className="mt-2 list-disc space-y-1 pl-5">
-              <li>Files exported from Zoho, QuickBooks, Excel or Google Sheets work. We match the columns for you.</li>
-              <li>A customer can have several phones, emails and addresses in the same row.</li>
-              <li>Phones from other countries should start with + and the country code (e.g. +52).</li>
+              <li>{t("tip1")}</li>
+              <li>{t("tip2")}</li>
+              <li>{t("tip3")}</li>
             </ul>
             <button type="button" onClick={() => downloadCsv("brightpro-customers-sample.csv", SAMPLE_ROWS)}
               className="mt-3 font-semibold text-[#0f766e] hover:underline">
-              Download sample CSV
+              {t("sample")}
             </button>
           </div>
         </div>
@@ -177,14 +193,14 @@ export default function CustomerImport({ companyId }: { companyId: string }) {
       {step === 1 && (
         <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-base font-semibold text-[#0b1f3a]">Map your columns</h2>
-            <p className="text-sm text-slate-500">{fileName} · {rows.length} rows</p>
+            <h2 className="text-base font-semibold text-[#0b1f3a]">{t("mapTitle")}</h2>
+            <p className="text-sm text-slate-500">{fileName} · {t("rows", { n: rows.length })}</p>
           </div>
-          <p className="mt-1 text-sm text-slate-500">We matched what we could. Check each column and choose where it goes in BrightPro.</p>
+          <p className="mt-1 text-sm text-slate-500">{t("mapIntro")}</p>
 
           <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
             <div className="hidden grid-cols-[1fr_1.4fr_1.2fr] gap-4 bg-slate-50/70 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:grid">
-              <span>Column in your file</span><span>Example</span><span>BrightPro field</span>
+              <span>{t("colFile")}</span><span>{t("colExample")}</span><span>{t("colField")}</span>
             </div>
             <ul className="divide-y divide-slate-100">
               {headers.map((h, i) => {
@@ -193,11 +209,11 @@ export default function CustomerImport({ companyId }: { companyId: string }) {
                 return (
                   <li key={i} className="grid gap-2 px-4 py-3 sm:grid-cols-[1fr_1.4fr_1.2fr] sm:items-center sm:gap-4">
                     <span className="truncate font-medium text-slate-800">{h}</span>
-                    <span className="truncate text-sm text-slate-500">{example || <span className="text-slate-300">empty</span>}</span>
+                    <span className="truncate text-sm text-slate-500">{example || <span className="text-slate-300">{t("empty")}</span>}</span>
                     <div>
-                      <SearchSelect value={mapping[i]} options={TARGET_OPTIONS} ariaLabel={`Field for ${h}`}
+                      <SearchSelect value={mapping[i]} options={TARGET_OPTIONS} ariaLabel={t("fieldFor", { h })}
                         onChange={(v) => setMapping((m) => m.map((x, j) => (j === i ? v : x)))} />
-                      {dup && <p className="mt-1 text-xs text-red-600">Also used by another column</p>}
+                      {dup && <p className="mt-1 text-xs text-red-600">{t("dupCol")}</p>}
                     </div>
                   </li>
                 );
@@ -205,12 +221,12 @@ export default function CustomerImport({ companyId }: { companyId: string }) {
             </ul>
           </div>
 
-          {!hasName && <p className="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">Map at least one name column (First name, Last name, Full name or Company name).</p>}
+          {!hasName && <p className="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">{t("needName")}</p>}
 
           <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
-            <button type="button" onClick={reset} className={secondaryButton}>Back</button>
+            <button type="button" onClick={reset} className={secondaryButton}>{t("back")}</button>
             <button type="button" disabled={!hasName || duplicates.length > 0} onClick={() => setStep(2)} className={primaryButton}>
-              Continue
+              {t("continue")}
             </button>
           </div>
         </div>
@@ -219,17 +235,17 @@ export default function CustomerImport({ companyId }: { companyId: string }) {
       {/* Paso 3: revisar */}
       {step === 2 && (
         <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
-          <h2 className="text-base font-semibold text-[#0b1f3a]">Review</h2>
+          <h2 className="text-base font-semibold text-[#0b1f3a]">{t("review")}</h2>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <Stat n={ready.length} label="Ready to import" tone="ok" />
-            <Stat n={warned.length} label="With small issues" />
-            <Stat n={invalid.length} label="Will be skipped" tone={invalid.length ? "bad" : undefined} />
+            <Stat n={ready.length} label={t("ready")} tone="ok" />
+            <Stat n={warned.length} label={t("small")} />
+            <Stat n={invalid.length} label={t("willSkip")} tone={invalid.length ? "bad" : undefined} />
           </div>
 
           <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200">
             <table className="w-full min-w-[640px] text-sm">
               <thead className="bg-slate-50/70 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                <tr><th className="px-4 py-2.5">Row</th><th className="px-4 py-2.5">Name</th><th className="px-4 py-2.5">Phone</th><th className="px-4 py-2.5">Email</th><th className="px-4 py-2.5">City</th><th className="px-4 py-2.5">Notes</th></tr>
+                <tr><th className="px-4 py-2.5">{t("row")}</th><th className="px-4 py-2.5">{t("name")}</th><th className="px-4 py-2.5">{t("phone")}</th><th className="px-4 py-2.5">{t("email")}</th><th className="px-4 py-2.5">{t("city")}</th><th className="px-4 py-2.5">{t("notes")}</th></tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {built.slice(0, 8).map((r) => (
@@ -245,14 +261,14 @@ export default function CustomerImport({ companyId }: { companyId: string }) {
               </tbody>
             </table>
           </div>
-          {built.length > 8 && <p className="mt-2 text-xs text-slate-400">Showing the first 8 of {built.length} rows.</p>}
+          {built.length > 8 && <p className="mt-2 text-xs text-slate-400">{t("first8", { n: built.length })}</p>}
 
           {(invalid.length > 0 || warned.length > 0) && (
             <details className="mt-4 rounded-xl border border-slate-200 px-4 py-3 text-sm">
-              <summary className="cursor-pointer font-medium text-slate-700">See all issues ({invalid.length + warned.length})</summary>
+              <summary className="cursor-pointer font-medium text-slate-700">{t("allIssues", { n: invalid.length + warned.length })}</summary>
               <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
                 {[...invalid, ...warned].sort((a, b) => a.row - b.row).map((r) => (
-                  <p key={r.row} className="text-slate-600"><span className="font-medium text-slate-800">Row {r.row}:</span> {r.error ?? r.warnings.join(" · ")}</p>
+                  <p key={r.row} className="text-slate-600"><span className="font-medium text-slate-800">{t("rowN", { n: r.row })}</span> {r.error ?? r.warnings.join(" · ")}</p>
                 ))}
               </div>
             </details>
@@ -260,10 +276,10 @@ export default function CustomerImport({ companyId }: { companyId: string }) {
 
           <label className="mt-5 flex items-start gap-3 text-sm text-slate-700">
             <input type="checkbox" checked={skipDuplicates} onChange={(e) => setSkipDuplicates(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#0f766e]" />
-            <span>Skip customers that already exist <span className="text-slate-500">(same name)</span></span>
+            <span>{t("skipDup")} <span className="text-slate-500">({t("sameName")})</span></span>
           </label>
 
-          <p className="mt-4 text-xs text-slate-400">Mapped fields: {mapping.filter(Boolean).map((m) => TARGET_LABEL.get(m)).join(", ")}</p>
+          <p className="mt-4 text-xs text-slate-400">{t("mapped")} {mapping.filter(Boolean).map((m) => (TARGET_LABEL.has(m) ? targetName(m, tr) : m)).join(", ")}</p>
 
           {error && <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
@@ -272,14 +288,14 @@ export default function CustomerImport({ companyId }: { companyId: string }) {
               <div className="h-2 overflow-hidden rounded-full bg-slate-100">
                 <div className="h-full rounded-full bg-[#14a39a] transition-all" style={{ width: `${progress}%` }} />
               </div>
-              <p className="mt-2 text-sm text-slate-500">Importing… {progress}%</p>
+              <p className="mt-2 text-sm text-slate-500">{t("importing")} {progress}%</p>
             </div>
           )}
 
           <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
-            <button type="button" disabled={progress !== null} onClick={() => setStep(1)} className={secondaryButton}>Back</button>
+            <button type="button" disabled={progress !== null} onClick={() => setStep(1)} className={secondaryButton}>{t("back")}</button>
             <button type="button" disabled={progress !== null || ready.length === 0} onClick={runImport} className={primaryButton}>
-              {progress !== null ? "Importing…" : `Import ${ready.length} ${ready.length === 1 ? "customer" : "customers"}`}
+              {progress !== null ? t("importing") : t("importN", { n: ready.length })}
             </button>
           </div>
         </div>
@@ -291,7 +307,7 @@ export default function CustomerImport({ companyId }: { companyId: string }) {
 function Stat({ n, label, tone }: { n: number; label: string; tone?: "ok" | "bad" }) {
   return (
     <div className={`rounded-xl border px-4 py-3 ${tone === "ok" ? "border-[#14a39a]/30 bg-[#f6fbfa]" : tone === "bad" ? "border-red-200 bg-red-50/60" : "border-slate-200"}`}>
-      <p className={`text-2xl font-semibold ${tone === "ok" ? "text-[#0f766e]" : tone === "bad" ? "text-red-600" : "text-[#0b1f3a]"}`}>{n.toLocaleString()}</p>
+      <p className={`text-2xl font-semibold ${tone === "ok" ? "text-[#0f766e]" : tone === "bad" ? "text-red-600" : "text-[#0b1f3a]"}`}>{n.toLocaleString("en-US")}</p>
       <p className="text-sm text-slate-500">{label}</p>
     </div>
   );

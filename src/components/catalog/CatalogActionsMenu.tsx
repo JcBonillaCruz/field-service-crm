@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 // Menú "..." de la lista (Sort by, Import, Export, Preferences, Refresh, Reset Column Width)
 const Ico = ({ d }: { d: string }) => (
@@ -47,6 +48,7 @@ function Flyout({ g, side, onDone }: { g: Extract<ActionGroup, { kind: "sub" }>;
 }
 
 export default function CatalogActionsMenu({ groups, side = "left" }: { groups: ActionGroup[]; side?: "left" | "right" }) {
+  const t = useTranslations("catalog");
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -59,7 +61,7 @@ export default function CatalogActionsMenu({ groups, side = "left" }: { groups: 
 
   return (
     <div ref={wrap} className="relative">
-      <button type="button" aria-label="More actions" aria-expanded={open} onClick={() => setOpen((v) => !v)}
+      <button type="button" aria-label={t("moreActions")} aria-expanded={open} onClick={() => setOpen((v) => !v)}
         className={`flex h-10 w-10 items-center justify-center rounded-lg border transition-colors ${open ? "border-[#14a39a] bg-[#e9f7f4] text-[#0f766e]" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>
         <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor" aria-hidden="true"><circle cx="4.5" cy="10" r="1.6" /><circle cx="10" cy="10" r="1.6" /><circle cx="15.5" cy="10" r="1.6" /></svg>
       </button>

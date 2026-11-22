@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 
 // Sección plegable (acordeón), estilo Zoho pero con nuestros colores
 export default function Accordion({
@@ -53,7 +54,9 @@ export default function Accordion({
   );
 }
 
-export function PencilLink({ href, label = "Edit" }: { href: string; label?: string }) {
+export function PencilLink({ href, label: labelIn }: { href: string; label?: string }) {
+  const t = useTranslations("custUi");
+  const label = labelIn ?? t("edit");
   return (
     <a href={href} aria-label={label} title={label}
       className="group/edit flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-400 transition-all duration-200 ease-out hover:scale-110 hover:bg-[#e9f7f4] hover:text-[#0f766e]">

@@ -11,10 +11,13 @@ import SearchSelect, { Check, Chevron, optionClass, panelClass } from "@/compone
 import { inputClass } from "@/components/customers/ui";
 import { FormHeader, FormRow, SaveBar, SectionTitle } from "@/components/catalog/FormBits";
 import { readItemPrefs } from "@/lib/item-prefs";
-
-const ACCOUNT_OPTIONS = ACCOUNTS.map((a) => ({ value: a, label: a }));
+import { useTranslations } from "next-intl";
+import { useViewTx } from "@/i18n/useViewTx";
 
 export default function ItemForm({ companyId, item, clone, scannedSku }: { companyId: string; item?: Item; clone?: Item; scannedSku?: string }) {
+  const t = useTranslations("itemForm");
+  const vx = useViewTx("items");
+  const ACCOUNT_OPTIONS = ACCOUNTS.map((a) => ({ value: a, label: vx.account(a) }));
   const router = useRouter();
   const src = item ?? clone;
   const fileRef = useRef<HTMLInputElement>(null);
@@ -50,31 +53,31 @@ export default function ItemForm({ companyId, item, clone, scannedSku }: { compa
 
   async function upload(file?: File) {
     if (!file) return;
-    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) return setError("Use a PNG, JPG or WEBP image.");
-    if (file.size > 5 * 1024 * 1024) return setError("The image must be 5 MB or smaller.");
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) return setError(t("eImgType"));
+    if (file.size > 5 * 1024 * 1024) return setError(t("eImgSize"));
     setUploading(true); setError("");
     const supabase = createClient();
     const path = `${companyId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${file.name.split(".").pop() || "png"}`;
     const { error: upErr } = await supabase.storage.from("item-images").upload(path, file);
     setUploading(false);
-    if (upErr) return setError("The image couldn't be uploaded. Try again.");
+    if (upErr) return setError(t("eImgUp"));
     setImage(supabase.storage.from("item-images").getPublicUrl(path).data.publicUrl);
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const amount = Number(price.replace(/[^0-9.]/g, ""));
-    if (!name.trim()) return setError("Enter the item name.");
-    if (!price.trim() || Number.isNaN(amount)) return setError("Enter the selling price.");
-    if (requireSku && !sku.trim()) return setError("Enter the SKU (your Preferences require it).");
+    if (!name.trim()) return setError(t("eName"));
+    if (!price.trim() || Number.isNaN(amount)) return setError(t("ePrice"));
+    if (requireSku && !sku.trim()) return setError(t("eSkuPref"));
     const tracking = track && type === "goods";
-    if (tracking && !sku.trim()) return setError("Items that track inventory need a SKU / barcode.");
+    if (tracking && !sku.trim()) return setError(t("eSkuInv"));
     const costNum = Number(cost.replace(/[^0-9.]/g, "") || 0);
     setSaving(true); setError("");
     const supabase = createClient();
     if (!item && warnDup) {
       const { data: dup } = await supabase.from("items").select("id").eq("company_id", companyId).ilike("name", name.trim()).limit(1);
-      if (dup?.length && !(await askConfirm({ title: `An item named "${name.trim()}" already exists`, message: "Do you want to save it anyway?", confirmLabel: "Save anyway" }))) { setSaving(false); return; }
+      if (dup?.length && !(await askConfirm({ title: t("dupTitle", { name: name.trim() }), message: t("dupMsg"), confirmLabel: t("dupOk") }))) { setSaving(false); return; }
     }
     const row = {
       name: name.trim(), item_type: type, unit: unit.trim() || null, sku: sku.trim() || null, image_url: image || null,
@@ -87,60 +90,60 @@ export default function ItemForm({ companyId, item, clone, scannedSku }: { compa
       : await supabase.from("items").insert({ ...row, company_id: companyId }).select("id").single();
     if (dbErr || !saved) {
       setSaving(false);
-      if (dbErr?.code === "23505") return setError("Another inventory item already uses this SKU / barcode.");
-      if (dbErr?.message?.includes("SKU_REQUIRED")) return setError("Items that track inventory need a SKU / barcode.");
-      if (dbErr?.message?.includes("track_inventory") || dbErr?.message?.includes("cost_price")) return setError("Run the SQL for Paso 4.1 (Inventory) first.");
-      return setError("The item couldn't be saved. Try again.");
+      if (dbErr?.code === "23505") return setError(t("eSkuDup"));
+      if (dbErr?.message?.includes("SKU_REQUIRED")) return setError(t("eSkuInv"));
+      if (dbErr?.message?.includes("track_inventory") || dbErr?.message?.includes("cost_price")) return setError(t("eSql"));
+      return setError(t("eSave"));
     }
     await bustCache("catalog"); router.push(`/dashboard/items/${saved.id}`);
     router.refresh();
   }
 
   async function remove() {
-    if (!item || !(await confirmDelete({ title: `Delete "${item.name}"?`, download: { filename: item.name, data: item } }))) return;
+    if (!item || !(await confirmDelete({ title: t("delQ", { name: item.name }), download: { filename: item.name, data: item } }))) return;
     const { error: dbErr } = await createClient().from("items").delete().eq("id", item.id);
-    if (dbErr) return setError("The item couldn't be deleted.");
+    if (dbErr) return setError(t("eDel"));
     await bustCache("catalog"); router.replace("/dashboard/items");
     router.refresh();
   }
 
   return (
     <form onSubmit={submit} noValidate autoComplete="off" className="flex min-h-[calc(100vh-4rem)] flex-col bg-white">
-      <FormHeader title={item ? "Edit Item" : clone ? "Clone Item" : "New Item"} closeHref={back} />
+      <FormHeader title={item ? t("editTitle") : clone ? t("cloneTitle") : t("newTitle")} closeHref={back} />
 
       <div className="flex-1">
         {/* Datos principales + imagen (como Zoho) */}
         <div className="border-b border-slate-200 bg-[#fafbfc] px-5 py-6 sm:px-8">
           <div className="flex max-w-[1100px] flex-col gap-8 lg:flex-row">
             <div className="min-w-0 flex-1 space-y-5">
-              <FormRow label="Name" htmlFor="it-name" required width="max-w-[560px]" hint="The name of the item as it will appear on quotes and invoices.">
+              <FormRow label={t("name")} htmlFor="it-name" required width="max-w-[560px]" hint={t("nameHint")}>
                 <input id="it-name" autoFocus value={name} onChange={(e) => { setName(e.target.value); setError(""); }} className={inputClass} />
               </FormRow>
-              <FormRow label="Type" hint="Choose Goods for parts and equipment you sell or install. Choose Service for labor, visits and maintenance plans.">
+              <FormRow label={t("type")} hint={t("typeHint")}>
                 <div className="flex gap-6 py-1.5">
-                  {(["goods", "service"] as ItemType[]).map((t) => (
-                    <label key={t} className="flex cursor-pointer items-center gap-2 text-[15px] text-slate-700">
-                      <input type="radio" name="item-type" checked={type === t} onChange={() => setType(t)} className="h-4 w-4 accent-[#0f766e]" />
-                      {t === "goods" ? "Goods" : "Service"}
+                  {(["goods", "service"] as ItemType[]).map((it) => (
+                    <label key={it} className="flex cursor-pointer items-center gap-2 text-[15px] text-slate-700">
+                      <input type="radio" name="item-type" checked={type === it} onChange={() => setType(it)} className="h-4 w-4 accent-[#0f766e]" />
+                      {vx.choice(it, it)}
                     </label>
                   ))}
                 </div>
               </FormRow>
-              <FormRow label="Unit" htmlFor="it-unit" hint="The item will be measured in terms of this unit (e.g. each, hour, visit, ton).">
+              <FormRow label={t("unit")} htmlFor="it-unit" hint={t("unitHint")}>
                 <Combobox immediate value={unit} onChange={(v: string | null) => v != null && setUnit(v)}>
                   <div className="relative">
-                    <ComboboxInput id="it-unit" autoComplete="off" placeholder="Select or type to add" displayValue={(v: string) => v}
+                    <ComboboxInput id="it-unit" autoComplete="off" placeholder={t("unitPh")} displayValue={(v: string) => vx.unit(v)}
                       onChange={(e) => setUnit(e.target.value)} className={`${inputClass} pr-10`} />
-                    <ComboboxButton aria-label="Show units" className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400"><Chevron /></ComboboxButton>
+                    <ComboboxButton aria-label={t("showUnits")} className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400"><Chevron /></ComboboxButton>
                   </div>
                   <ComboboxOptions anchor="bottom start" transition className={`${panelClass} w-[var(--input-width)]`}>
-                    {unitOptions.map((u) => <ComboboxOption key={u} value={u} className={optionClass}><span>{u}</span><Check /></ComboboxOption>)}
+                    {unitOptions.map((u) => <ComboboxOption key={u} value={u} className={optionClass}><span>{vx.unit(u)}</span><Check /></ComboboxOption>)}
                   </ComboboxOptions>
                 </Combobox>
               </FormRow>
-              <FormRow label="SKU" htmlFor="it-sku" required={track && type === "goods"} hint="The Stock Keeping Unit of the item. For parts, use the barcode that comes on the box. Optional for services.">
+              <FormRow label="SKU" htmlFor="it-sku" required={track && type === "goods"} hint={t("skuHint")}>
                 <input id="it-sku" value={sku} onChange={(e) => setSku(e.target.value)} className={inputClass} />
-                {scannedSku && !item && <p className="mt-1.5 text-[13px] text-[#0f766e]">Scanned code — it isn&apos;t in your catalog yet.</p>}
+                {scannedSku && !item && <p className="mt-1.5 text-[13px] text-[#0f766e]">{t("scanned")}</p>}
               </FormRow>
             </div>
 
@@ -153,15 +156,15 @@ export default function ItemForm({ companyId, item, clone, scannedSku }: { compa
                   <>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={image} alt="" className="h-full w-full object-contain p-3" />
-                    <button type="button" onClick={() => setImage("")} className="absolute right-2 top-2 rounded-md bg-white/90 px-2 py-1 text-xs font-medium text-red-600 shadow-sm hover:bg-white">Remove</button>
+                    <button type="button" onClick={() => setImage("")} className="absolute right-2 top-2 rounded-md bg-white/90 px-2 py-1 text-xs font-medium text-red-600 shadow-sm hover:bg-white">{t("remove")}</button>
                   </>
                 ) : (
                   <>
                     <svg viewBox="0 0 24 24" className="h-10 w-10 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <rect x="3" y="4" width="18" height="16" rx="3" /><circle cx="15.5" cy="9.5" r="1.8" /><path d="m4 17 5-5 4 4 2.5-2.5L20 18" />
                     </svg>
-                    <p className="mt-3 text-sm text-slate-500">{uploading ? "Uploading..." : "Drag image here or"}</p>
-                    {!uploading && <button type="button" onClick={() => fileRef.current?.click()} className="text-sm font-medium text-[#2563eb] hover:underline">Browse images</button>}
+                    <p className="mt-3 text-sm text-slate-500">{uploading ? t("uploading") : t("dragHere")}</p>
+                    {!uploading && <button type="button" onClick={() => fileRef.current?.click()} className="text-sm font-medium text-[#2563eb] hover:underline">{t("browse")}</button>}
                   </>
                 )}
               </div>
@@ -171,21 +174,21 @@ export default function ItemForm({ companyId, item, clone, scannedSku }: { compa
 
         {/* Información de venta */}
         <div className="px-5 py-7 sm:px-8">
-          <SectionTitle>Sales Information</SectionTitle>
+          <SectionTitle>{t("salesInfo")}</SectionTitle>
           <div className="grid max-w-[1100px] gap-5 xl:grid-cols-2 xl:gap-x-10">
-            <FormRow label="Selling Price" htmlFor="it-price" required width="max-w-[340px]" hint="The rate at which you're going to sell this item.">
+            <FormRow label={t("price")} htmlFor="it-price" required width="max-w-[340px]" hint={t("priceHint")}>
               <div className="flex">
                 <span className="flex items-center rounded-l-lg border border-r-0 border-slate-200 bg-slate-100 px-3 text-sm text-slate-600">USD</span>
                 <input id="it-price" inputMode="decimal" value={price} placeholder="0.00"
                   onChange={(e) => { setPrice(e.target.value.replace(/[^0-9.]/g, "")); setError(""); }} className={`${inputClass} rounded-l-none`} />
               </div>
             </FormRow>
-            <FormRow label="Account" htmlFor="it-account" required width="max-w-[340px]" hint="All sales transactions for this item will be tracked under this account in your reports.">
-              <SearchSelect id="it-account" ariaLabel="Account" value={account} options={ACCOUNT_OPTIONS} onChange={setAccount} />
+            <FormRow label={t("account")} htmlFor="it-account" required width="max-w-[340px]" hint={t("accountHint")}>
+              <SearchSelect id="it-account" ariaLabel={t("account")} value={account} options={ACCOUNT_OPTIONS} onChange={setAccount} />
             </FormRow>
-            <FormRow label="Description" htmlFor="it-desc" alignTop width="max-w-[460px]" hint="Shows under the item name on quotes and invoices.">
+            <FormRow label={t("desc")} htmlFor="it-desc" alignTop width="max-w-[460px]" hint={t("descHint")}>
               <textarea id="it-desc" rows={3} value={description} onChange={(e) => setDescription(e.target.value)}
-                placeholder="Shows on quotes and invoices" className={inputClass} />
+                placeholder={t("descPh")} className={inputClass} />
             </FormRow>
           </div>
         </div>
@@ -193,30 +196,30 @@ export default function ItemForm({ companyId, item, clone, scannedSku }: { compa
         {/* Inventario: solo para productos físicos (Goods). Los servicios no llevan stock ni SKU obligatorio. */}
         {type === "goods" && (
           <div className="border-t border-slate-100 px-5 py-7 sm:px-8">
-            <SectionTitle>Inventory</SectionTitle>
+            <SectionTitle>{t("inventory")}</SectionTitle>
             <div className="grid max-w-[1100px] gap-5 xl:grid-cols-2 xl:gap-x-10">
-              <FormRow label="Track Inventory" hint="Turn this on for parts and products you keep in stock. They appear in the Inventory app, where you add stock and your team scans them.">
-                <button type="button" role="switch" aria-checked={track} onClick={() => setTrack((t) => !t)}
+              <FormRow label={t("track")} hint={t("trackHint")}>
+                <button type="button" role="switch" aria-checked={track} onClick={() => setTrack((v) => !v)}
                   className="group flex items-center gap-3 py-1.5 text-left">
                   <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${track ? "bg-[#0f766e]" : "bg-slate-300"}`}>
                     <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all duration-200 group-active:scale-90 ${track ? "left-[22px]" : "left-0.5"}`} />
                   </span>
-                  <span className="text-[15px] text-slate-700">{track ? "Tracked in Inventory" : "Not tracked"}</span>
+                  <span className="text-[15px] text-slate-700">{track ? t("tracked") : t("notTracked")}</span>
                 </button>
               </FormRow>
-              <FormRow label="Cost Price" htmlFor="it-cost" width="max-w-[340px]" hint="What you pay for one unit. Used for the inventory value and job costing.">
+              <FormRow label={t("cost")} htmlFor="it-cost" width="max-w-[340px]" hint={t("costHint")}>
                 <div className="flex">
                   <span className="flex items-center rounded-l-lg border border-r-0 border-slate-200 bg-slate-100 px-3 text-sm text-slate-600">USD</span>
                   <input id="it-cost" inputMode="decimal" value={cost} placeholder="0.00" onChange={(e) => setCost(e.target.value.replace(/[^0-9.]/g, ""))} className={`${inputClass} rounded-l-none`} />
                 </div>
               </FormRow>
             </div>
-            {track && <p className="mt-4 max-w-[640px] text-[13.5px] text-slate-500">Add stock, set low stock alerts and photos from the <a href="/dashboard/inventory" className="font-medium text-[#0f766e] hover:underline">Inventory app</a>.</p>}
+            {track && <p className="mt-4 max-w-[640px] text-[13.5px] text-slate-500">{t.rich("invNote", { a: (c) => <a href="/dashboard/inventory" className="font-medium text-[#0f766e] hover:underline">{c}</a> })}</p>}
           </div>
         )}
       </div>
 
-      <SaveBar saving={saving} cancelHref={back} error={error} onDelete={item ? remove : undefined} deleteLabel="Delete item" />
+      <SaveBar saving={saving} cancelHref={back} error={error} onDelete={item ? remove : undefined} deleteLabel={t("delete")} />
     </form>
   );
 }

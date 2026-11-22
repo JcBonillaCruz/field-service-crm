@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
+import { useLocale, useTranslations } from "next-intl";
+import { intlTag } from "@/i18n/config";
 
-const DOW = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+// 4 ene 2026 era domingo: de ahí salen los nombres cortos de los días en el idioma de quien lo ve
+const dow = (tag: string) => Array.from({ length: 7 }, (_, i) => new Date(2026, 0, 4 + i).toLocaleDateString(tag, { weekday: "short" }).replace(".", "").slice(0, 2));
 const pad = (n: number) => String(n).padStart(2, "0");
 const toStr = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const fromStr = (s: string) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
@@ -19,6 +22,9 @@ export default function DatePicker({
   minDate?: string; // "yyyy-mm-dd": los días anteriores salen apagados (como Zoho)
   id?: string;
 }) {
+  const t = useTranslations("datePicker");
+  const tag = intlTag(useLocale());
+  const DOW = dow(tag);
   const [cursor, setCursor] = useState(() => (value ? fromStr(value) : new Date()));
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
@@ -28,12 +34,13 @@ export default function DatePicker({
   for (let i = 0; i < startDay; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
   const today = toStr(new Date());
-  const monthName = cursor.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const mn = cursor.toLocaleDateString(tag, { month: "long", year: "numeric" });
+  const monthName = mn.charAt(0).toUpperCase() + mn.slice(1);
 
   return (
     <Popover className="relative">
       <PopoverButton id={id} className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[15px] focus:border-[#0f766e] focus:bg-white focus:outline-none data-[open]:border-[#0f766e] data-[open]:bg-white">
-        <span className={value ? "text-slate-800" : "text-slate-400"}>{value ? display(value) : placeholder}</span>
+        <span className={value ? "text-slate-800" : "text-slate-400"}>{value ? display(value) : placeholder === "mm/dd/yyyy" ? t("ph") : placeholder}</span>
         <svg viewBox="0 0 20 20" className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="4" width="14" height="13" rx="2" /><path d="M3 8h14M7 2v3M13 2v3" strokeLinecap="round" /></svg>
       </PopoverButton>
       <PopoverPanel anchor="bottom start" transition
@@ -43,16 +50,16 @@ export default function DatePicker({
             <div className="flex items-center justify-between px-1 pb-2">
               <span className="text-sm font-semibold text-[#0b1f3a]">{monthName}</span>
               <div className="flex gap-1">
-                <button type="button" aria-label="Previous month" onClick={() => setCursor(new Date(year, month - 1, 1))} className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
+                <button type="button" aria-label={t("prev")} onClick={() => setCursor(new Date(year, month - 1, 1))} className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
                   <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 15 7 10l5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 </button>
-                <button type="button" aria-label="Next month" onClick={() => setCursor(new Date(year, month + 1, 1))} className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
+                <button type="button" aria-label={t("next")} onClick={() => setCursor(new Date(year, month + 1, 1))} className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
                   <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="m8 5 5 5-5 5" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 </button>
               </div>
             </div>
             <div className="grid grid-cols-7 text-center text-[11px] font-medium text-slate-400">
-              {DOW.map((d) => <span key={d} className="py-1">{d}</span>)}
+              {DOW.map((d, i) => <span key={i} className="py-1">{d}</span>)}
             </div>
             <div className="grid grid-cols-7 gap-0.5">
               {cells.map((d, i) => {
@@ -70,8 +77,8 @@ export default function DatePicker({
               })}
             </div>
             <div className="mt-2 flex items-center justify-between px-1 text-sm">
-              <button type="button" onClick={() => { onChange(""); close(); }} className="font-medium text-slate-500 hover:text-slate-800">Clear</button>
-              <button type="button" onClick={() => { const t = toStr(new Date()); onChange(t); setCursor(new Date()); close(); }} className="font-medium text-[#0f766e]">Today</button>
+              <button type="button" onClick={() => { onChange(""); close(); }} className="font-medium text-slate-500 hover:text-slate-800">{t("clear")}</button>
+              <button type="button" onClick={() => { const td = toStr(new Date()); onChange(td); setCursor(new Date()); close(); }} className="font-medium text-[#0f766e]">{t("today")}</button>
             </div>
           </>
         )}

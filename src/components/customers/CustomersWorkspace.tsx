@@ -12,11 +12,14 @@ import BottomSheet from "@/components/customers/BottomSheet";
 import MobileSortSheet from "@/components/customers/MobileSortSheet";
 import { cityLine } from "@/lib/customers";
 import { listColors } from "@/lib/types";
-import { ListRow, MOBILE_FILTERS, VIEWS, filterLabel, filterSortCustomers, readListParams } from "@/lib/customer-list";
+import { ListRow, MOBILE_FILTERS, VIEWS, filterSortCustomers, readListParams } from "@/lib/customer-list";
 import { sheetItem } from "@/components/ui/sheet";
 import RowActions from "@/components/ui/RowActions";
 import { confirmDelete } from "@/lib/confirm";
 import { createClient } from "@/lib/supabase/client";
+import { useTranslations } from "next-intl";
+import { useCustTx } from "@/i18n/useCustTx";
+import { useFmt } from "@/i18n/useFmt";
 
 const dash = <span className="text-slate-300">—</span>;
 const COLS = "md:grid-cols-[2fr_1.6fr_2fr_1.3fr_1.4fr]";
@@ -34,6 +37,8 @@ export default function CustomersWorkspace({
   canExport: boolean;
   children: React.ReactNode;
 }) {
+  const t = useTranslations("customers");
+  const cx = useCustTx();
   const pathname = usePathname();
   const router = useRouter();
   const sp = useSearchParams();
@@ -92,7 +97,7 @@ export default function CustomersWorkspace({
               <div className="min-w-0">
                 <Menu>
                   <MenuButton className={`group flex items-center gap-2 font-semibold tracking-tight text-[#0b1f3a] focus:outline-none ${selectedId ? "text-lg" : "text-2xl sm:text-3xl"}`}>
-                    <span className="truncate">{view.label}</span>
+                    <span className="truncate">{cx.view(view.value)}</span>
                     <svg viewBox="0 0 20 20" className="h-5 w-5 shrink-0 text-[#0f766e] transition-transform group-data-[open]:rotate-180" fill="currentColor" aria-hidden="true">
                       <path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" />
                     </svg>
@@ -103,7 +108,7 @@ export default function CustomersWorkspace({
                       <MenuItem key={v.value}>
                         <button type="button" onClick={() => switchView(v.value)}
                           className="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-slate-700 data-[focus]:bg-[#d7f1eb] data-[focus]:text-[#0b1f3a]">
-                          {v.label}
+                          {cx.view(v.value)}
                           {v.value === view.value && (
                             <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#0f766e]" fill="currentColor" aria-hidden="true">
                               <path d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0z" />
@@ -114,16 +119,16 @@ export default function CustomersWorkspace({
                     ))}
                   </MenuItems>
                 </Menu>
-                {!selectedId && <p className="mt-0.5 text-sm text-slate-500">{list.length} {list.length === 1 ? "customer" : "customers"}</p>}
+                {!selectedId && <p className="mt-0.5 text-sm text-slate-500">{t("count", { n: list.length })}</p>}
               </div>
 
               <div className="flex shrink-0 items-center gap-2">
                 {selectedId ? (
-                  <Link prefetch={false} href="/dashboard/customers/new" aria-label="New customer" className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#0f766e] text-white hover:bg-[#0c5f58]">
+                  <Link prefetch={false} href="/dashboard/customers/new" aria-label={t("newCustomer")} className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#0f766e] text-white hover:bg-[#0c5f58]">
                     <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 4v12M4 10h12" strokeLinecap="round" /></svg>
                   </Link>
                 ) : (
-                  <Link prefetch={false} href="/dashboard/customers/new" className="rounded-lg bg-[#0f766e] px-4 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f58]">+ New</Link>
+                  <Link prefetch={false} href="/dashboard/customers/new" className="rounded-lg bg-[#0f766e] px-4 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f58]">{t("new")}</Link>
                 )}
                 <CustomersActionsMenu params={params} basePath={pathname} canImport={canImport} canExport={canExport} onExport={() => setExportOpen(true)} submenuSide={selectedId ? "right" : "left"} />
               </div>
@@ -133,26 +138,26 @@ export default function CustomersWorkspace({
           {/* ====== Móvil ====== */}
           <div className="lg:hidden px-4 pt-5 pb-2">
             <div className="flex items-center justify-between gap-2">
-              <h1 className="text-2xl font-semibold tracking-tight text-[#0b1f3a]">Customers</h1>
+              <h1 className="text-2xl font-semibold tracking-tight text-[#0b1f3a]">{t("title")}</h1>
               <div className="flex items-center gap-0.5">
-                <button type="button" aria-label="Search" onClick={() => setMSearchOpen((v) => !v)}
+                <button type="button" aria-label={t("search")} onClick={() => setMSearchOpen((v) => !v)}
                   className={`flex h-10 w-10 items-center justify-center rounded-lg ${mSearchOpen ? "bg-[#e9f7f4] text-[#0f766e]" : "text-slate-600 active:bg-slate-100"}`}>
                   <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
                 </button>
-                <button type="button" aria-label="Sort" onClick={() => setMSheet("sort")} className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100">
+                <button type="button" aria-label={t("sortAria")} onClick={() => setMSheet("sort")} className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100">
                   <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M8 4v16m0 0-3-3m3 3 3-3M13 6h8M13 11h5M13 16h3" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 </button>
-                <button type="button" aria-label="More" onClick={() => setMSheet("more")} className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100">
+                <button type="button" aria-label={t("more")} onClick={() => setMSheet("more")} className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 active:bg-slate-100">
                   <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor"><circle cx="4.5" cy="10" r="1.6" /><circle cx="10" cy="10" r="1.6" /><circle cx="15.5" cy="10" r="1.6" /></svg>
                 </button>
               </div>
             </div>
             <div className="mt-3 flex items-center justify-between">
               <button type="button" onClick={() => setMSheet("filter")} className="flex items-center gap-1.5 border-b-2 border-[#0f766e] pb-0.5 text-[15px] font-semibold text-[#0f766e]">
-                {filterLabel(params.view)}
+                {cx.view(params.view)}
                 <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
               </button>
-              <span className="text-xs text-slate-500">{list.length} {list.length === 1 ? "customer" : "customers"}</span>
+              <span className="text-xs text-slate-500">{t("count", { n: list.length })}</span>
             </div>
           </div>
 
@@ -180,7 +185,7 @@ export default function CustomersWorkspace({
               </ul>
               <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white md:block">
                 <div className={`hidden gap-4 border-b border-slate-100 bg-slate-50/70 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500 md:grid ${COLS}`}>
-                  <span>Name</span><span>Company name</span><span>Email</span><span>Phone</span><span>Location</span>
+                  <span>{t("cName")}</span><span>{t("cCompany")}</span><span>{t("cEmail")}</span><span>{t("cPhone")}</span><span>{t("cLocation")}</span>
                 </div>
                 <ul className="divide-y divide-slate-100">
                   {list.map((c, i) => <WideRow key={c.id} c={c} color={colors[i]} />)}
@@ -198,15 +203,15 @@ export default function CustomersWorkspace({
 
       {/* Botón flotante (móvil) — solo en la lista de clientes */}
       {onList && (
-        <Link prefetch={false} href="/dashboard/customers/new" aria-label="New customer"
+        <Link prefetch={false} href="/dashboard/customers/new" aria-label={t("newCustomer")}
           className="fixed bottom-6 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#0f766e] text-white shadow-lg shadow-[#0f766e]/30 transition-transform active:scale-95 lg:hidden">
           <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
         </Link>
       )}
 
       {/* Hoja: Filtro (móvil) */}
-      <BottomSheet open={mSheet === "filter"} onClose={() => setMSheet(null)} title="Filter">
-        <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Default filters</p>
+      <BottomSheet open={mSheet === "filter"} onClose={() => setMSheet(null)} title={t("filter")}>
+        <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t("defaultFilters")}</p>
         <ul className="space-y-0.5">
           {MOBILE_FILTERS.map((v) => {
             const active = v.value === params.view;
@@ -214,7 +219,7 @@ export default function CustomersWorkspace({
               <li key={v.value}>
                 <button type="button" onClick={() => { switchView(v.value); setMSheet(null); }}
                   className={sheetItem(active)}>
-                  {v.label}
+                  {cx.view(v.value)}
                   {active && (
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0f766e] text-white">
                       <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><path d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0z" /></svg>
@@ -233,19 +238,19 @@ export default function CustomersWorkspace({
       )}
 
       {/* Hoja: Más información (móvil) */}
-      <BottomSheet open={mSheet === "more"} onClose={() => setMSheet(null)} title="More information">
+      <BottomSheet open={mSheet === "more"} onClose={() => setMSheet(null)} title={t("moreInfo")}>
         <div className="space-y-4">
           <div className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3.5">
-            <span className="text-slate-700">Total customers</span>
+            <span className="text-slate-700">{t("total")}</span>
             <span className="text-lg font-semibold text-[#0b1f3a]">{list.length}</span>
           </div>
           <button type="button" onClick={() => { setMSheet(null); setExportOpen(true); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[15px] text-slate-700 transition-all hover:bg-[#f6fbfa] active:scale-[0.98] active:bg-[#e9f7f4]">
-            <svg viewBox="0 0 20 20" className="h-5 w-5 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M10 12V3m0 0L6.5 6.5M10 3l3.5 3.5M4 14v1.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V14" strokeLinecap="round" strokeLinejoin="round" /></svg>Export customers (CSV or Excel)
+            <svg viewBox="0 0 20 20" className="h-5 w-5 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M10 12V3m0 0L6.5 6.5M10 3l3.5 3.5M4 14v1.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V14" strokeLinecap="round" strokeLinejoin="round" /></svg>{t("exportCsv")}
           </button>
           <Link prefetch={false} href="/dashboard/customers/import" onClick={() => setMSheet(null)} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[15px] text-slate-700 transition-all hover:bg-[#f6fbfa] active:scale-[0.98] active:bg-[#e9f7f4]">
-            <svg viewBox="0 0 20 20" className="h-5 w-5 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M10 3v9m0 0-3.5-3.5M10 12l3.5-3.5M4 14v1.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V14" strokeLinecap="round" strokeLinejoin="round" /></svg>Import customers (CSV)
+            <svg viewBox="0 0 20 20" className="h-5 w-5 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M10 3v9m0 0-3.5-3.5M10 12l3.5-3.5M4 14v1.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V14" strokeLinecap="round" strokeLinejoin="round" /></svg>{t("importCsv")}
           </Link>
-          <p className="px-1 text-[13px] text-slate-500">Your data is always yours: download or bring it in any time.</p>
+          <p className="px-1 text-[13px] text-slate-500">{t("dataYours")}</p>
         </div>
       </BottomSheet>
 
@@ -254,17 +259,18 @@ export default function CustomersWorkspace({
   );
 }
 
-function subtitle(c: ListRow) {
+function subtitle(c: ListRow, type: (v: string) => string) {
   const person = [c.first_name, c.last_name].filter(Boolean).join(" ");
-  if (c.customer_type === "commercial") return c.company_name || person || "Commercial";
-  return "Residential";
+  if (c.customer_type === "commercial") return c.company_name || person || type("commercial");
+  return type("residential");
 }
 
 // Celular: solo el nombre principal (la compañía si es comercial, sin repetir el del dueño) y el correo
-const usd = (v: number) => v.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
 // Celular: fila compacta (avatar + nombre principal + correo) con Receivables y Unused credits debajo
 function MobileRow({ c, m, color }: { c: ListRow; m?: { receivable: number; credit: number }; color?: string }) {
+  const t = useTranslations("customers");
+  const usd = useFmt().usd;
   const name = c.customer_type === "commercial" && c.company_name ? c.company_name : c.display_name;
   const rec = m?.receivable ?? 0, cred = m?.credit ?? 0;
   return (
@@ -274,17 +280,17 @@ function MobileRow({ c, m, color }: { c: ListRow; m?: { receivable: number; cred
           <Avatar name={name} url={null} seed={c.id} size={40} color={color} />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[15.5px] font-semibold text-[#0b1f3a]">{name}</span>
-            <span className="block truncate text-[13.5px] text-slate-500">{c.email || "No email"}</span>
+            <span className="block truncate text-[13.5px] text-slate-500">{c.email || t("noEmail")}</span>
           </span>
           <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate-300" fill="currentColor"><path d="M7.3 5.3a1 1 0 0 1 1.4 0l4 4a1 1 0 0 1 0 1.4l-4 4a1 1 0 0 1-1.4-1.4L10.6 10 7.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
         </span>
         <span className="ml-[52px] mt-1.5 grid grid-cols-2">
           <span className="py-1">
-            <span className="block text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Receivables</span>
+            <span className="block text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">{t("receivables")}</span>
             <span className={`block text-[14px] font-semibold tabular-nums ${rec > 0 ? "text-[#e8713a]" : "text-[#0b1f3a]"}`}>{usd(rec)}</span>
           </span>
           <span className="py-1">
-            <span className="block text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Unused credits</span>
+            <span className="block text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">{t("credits")}</span>
             <span className={`block text-[14px] font-semibold tabular-nums ${cred > 0 ? "text-[#0f766e]" : "text-[#0b1f3a]"}`}>{usd(cred)}</span>
           </span>
         </span>
@@ -294,6 +300,7 @@ function MobileRow({ c, m, color }: { c: ListRow; m?: { receivable: number; cred
 }
 
 function CompactRow({ c, active, color }: { c: ListRow; active: boolean; color?: string }) {
+  const cx = useCustTx();
   return (
     <li className="group relative">
       <Link prefetch={false} href={`/dashboard/customers/${c.id}`}
@@ -301,7 +308,7 @@ function CompactRow({ c, active, color }: { c: ListRow; active: boolean; color?:
         <Avatar name={c.display_name} url={null} seed={c.id} size={38} color={color} />
         <span className="min-w-0 flex-1 pr-8">
           <span className={`block truncate font-medium ${active ? "text-[#0f766e]" : "text-[#0b1f3a]"}`}>{c.display_name}</span>
-          <span className="block truncate text-xs text-slate-500">{subtitle(c)}</span>
+          <span className="block truncate text-xs text-slate-500">{subtitle(c, cx.type)}</span>
         </span>
       </Link>
       <QuickEdit id={c.id} name={c.display_name} className="right-2" compact />
@@ -313,6 +320,7 @@ function WideRow({ c, color }: { c: ListRow; color?: string }) {
   const primary = c.customer_addresses.find((a) => a.is_primary) ?? c.customer_addresses[0];
   const more = c.customer_addresses.length - 1;
   const person = [c.first_name, c.last_name].filter(Boolean).join(" ");
+  const cx = useCustTx();
   return (
     <li className="group relative">
       <Link prefetch={false} href={`/dashboard/customers/${c.id}`}
@@ -321,7 +329,7 @@ function WideRow({ c, color }: { c: ListRow; color?: string }) {
           <Avatar name={c.display_name} url={null} seed={c.id} size={36} color={color} />
           <span className="min-w-0">
             <span className="block truncate font-medium text-[#0f766e]">{c.customer_type === "commercial" && person ? person : c.display_name}</span>
-            <span className="block text-xs text-slate-500">{c.customer_type === "commercial" ? "Commercial" : "Residential"}</span>
+            <span className="block text-xs text-slate-500">{cx.type(c.customer_type)}</span>
           </span>
         </span>
         <span className="truncate pl-12 text-sm text-slate-700 md:pl-0">{c.company_name || <span className="hidden md:inline">{dash}</span>}</span>
@@ -339,13 +347,14 @@ function WideRow({ c, color }: { c: ListRow; color?: string }) {
 
 // Botones rápidos al pasar el mouse por la fila: editar y eliminar (con la alerta de siempre)
 function QuickEdit({ id, name, className, compact = false }: { id: string; name: string; className: string; compact?: boolean }) {
+  const t = useTranslations("customers");
   const router = useRouter();
   const pathname = usePathname();
   async function remove() {
-    if (!(await confirmDelete({ title: `Delete ${name}?`, message: "The customer and all their addresses will be deleted and can't be recovered.",
+    if (!(await confirmDelete({ title: t("delTitle", { name }), message: t("delMsg"),
       download: { filename: name, data: async () => (await createClient().from("customers").select("*, customer_addresses(*)").eq("id", id).maybeSingle()).data } }))) return;
     const { error } = await createClient().from("customers").delete().eq("id", id);
-    if (error) return alert("The customer couldn't be deleted. It may be used in a quote or invoice.");
+    if (error) return alert(t("delFail"));
     if (pathname.includes(id)) router.replace("/dashboard/customers");
     router.refresh();
   }
@@ -357,21 +366,22 @@ function QuickEdit({ id, name, className, compact = false }: { id: string; name:
 }
 
 function EmptyState({ filtered }: { filtered: boolean }) {
+  const t = useTranslations("customers");
   return (
     <div className="px-5 pb-10 sm:px-8">
       <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
         {filtered ? (
           <>
-            <p className="font-semibold text-[#0b1f3a]">No customers found</p>
-            <p className="mt-1 text-sm text-slate-500">Try a different search or view.</p>
+            <p className="font-semibold text-[#0b1f3a]">{t("noneFound")}</p>
+            <p className="mt-1 text-sm text-slate-500">{t("tryOther")}</p>
           </>
         ) : (
           <>
-            <p className="font-semibold text-[#0b1f3a]">No customers yet</p>
-            <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500">Add your first customer, or bring all of them at once from a CSV file.</p>
+            <p className="font-semibold text-[#0b1f3a]">{t("noneYet")}</p>
+            <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500">{t("noneYetText")}</p>
             <div className="mt-6 flex flex-wrap justify-center gap-3">
-              <Link prefetch={false} href="/dashboard/customers/new" className="rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f58]">+ New customer</Link>
-              <Link prefetch={false} href="/dashboard/customers/import" className="rounded-lg border border-slate-200 bg-white px-5 py-2.5 text-[15px] font-medium text-slate-700 hover:bg-slate-50">Import from CSV</Link>
+              <Link prefetch={false} href="/dashboard/customers/new" className="rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f58]">{t("newCustomerBtn")}</Link>
+              <Link prefetch={false} href="/dashboard/customers/import" className="rounded-lg border border-slate-200 bg-white px-5 py-2.5 text-[15px] font-medium text-slate-700 hover:bg-slate-50">{t("importFromCsv")}</Link>
             </div>
           </>
         )}

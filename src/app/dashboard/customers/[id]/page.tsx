@@ -14,10 +14,13 @@ import { CustomerProfitPanel } from "@/components/expenses/ProfitPanels";
 import SiteEquipment from "@/components/jobs/forms/SiteEquipment";
 import { cityLine } from "@/lib/customers";
 import { canManageJobs } from "@/lib/jobs";
-import { Plan, dayText, freqLabel, loadPlans, planState, whenText } from "@/lib/maintenance";
+import { Plan, loadPlans } from "@/lib/maintenance";
+import CustomerPlansList from "@/components/customers/CustomerPlansList";
+import { getLocale, getTranslations } from "next-intl/server";
+import { intlTag } from "@/i18n/config";
 
-const TABS = ["Overview", "Comments", "Transactions", "Mails", "Statement"];
-const MOBILE_TABS = ["Details", "Transactions", "Comments"];
+const TABS = ["overview", "comments", "transactions", "mails", "statement"];
+const MOBILE_TABS = ["details", "transactions", "comments"];
 
 export default async function CustomerPage({
   params, searchParams,
@@ -27,6 +30,10 @@ export default async function CustomerPage({
 }) {
   const { supabase, current } = await getSession();
   if (!current) redirect("/dashboard");
+  // Paso 6.2b2: textos en el idioma de quien lo ve
+  const [t, tl, locale] = await Promise.all([getTranslations("custDetail"), getTranslations("custLib"), getLocale()]);
+  const tag = intlTag(locale);
+  const lk = (g: string, v: string) => { const k = `${g}.${v.replace(/[^A-Za-z0-9]/g, "")}`; return tl.has(k as never) ? tl(k as never) : v; };
   if (!canManageCustomers(current.role)) return <NoAccess />;
 
   const { data: customer } = await supabase
@@ -59,9 +66,10 @@ export default async function CustomerPage({
   const callMobile = phones.find((p) => /mobile|cell|celular|m[oó]vil/i.test(p.label));
   const callWork = phones.find((p) => p !== callMobile && /office|work|main|trabajo|oficina/i.test(p.label)) ?? phones.find((p) => p !== callMobile) ?? null;
   const primaryEmail = emails.find((e) => e.is_primary) ?? emails[0] ?? null;
-  const since = new Date(c.created_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-  const money = (v: number) => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: c.currency || "USD" }).format(v); } catch { return `$${v.toFixed(2)}`; } };
-  const sinceShort = new Date(c.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const since = new Date(c.created_at).toLocaleDateString(tag, { month: "long", day: "numeric", year: "numeric" });
+  const money = (v: number) => { try { return new Intl.NumberFormat(tag, { style: "currency", currency: c.currency || "USD" }).format(v); } catch { return `$${v.toFixed(2)}`; } };
+  const sinceShort = new Date(c.created_at).toLocaleDateString(tag, { month: "short", day: "numeric", year: "numeric" });
+  const typeLabel = lk("type", c.customer_type);
 
   return (
     <div className="flex min-h-full flex-col">
@@ -69,14 +77,14 @@ export default async function CustomerPage({
       {/* Barra de la ficha */}
       <div className="lg:sticky lg:top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
-          <Link prefetch={false} href="/dashboard/customers" aria-label="Back to customers" className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 lg:hidden">
+          <Link prefetch={false} href="/dashboard/customers" aria-label={t("back")} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 lg:hidden">
             <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 15 7 10l5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </Link>
           <Avatar name={c.display_name} url={null} seed={c.id} size={40} />
           <div className="min-w-0">
             <h1 className="truncate text-lg font-semibold tracking-tight text-[#0b1f3a] sm:text-xl">{c.display_name}</h1>
             <p className="truncate text-xs text-slate-500">
-              {c.customer_type === "commercial" ? "Commercial" : "Residential"}{c.customer_type === "commercial" && contact ? ` · ${contact}` : ""}
+              {typeLabel}{c.customer_type === "commercial" && contact ? ` · ${contact}` : ""}
             </p>
           </div>
         </div>
@@ -85,30 +93,30 @@ export default async function CustomerPage({
 
       {/* Pestañas — escritorio (5) */}
       <div className="hidden lg:sticky lg:top-[65px] z-10 lg:flex gap-1 overflow-x-auto border-b border-slate-200 bg-white px-4 sm:px-6">
-        {TABS.map((t, i) => i === 0 ? (
-          <span key={t} className="whitespace-nowrap border-b-2 border-[#0f766e] px-3 py-3 text-sm font-semibold text-[#0f766e]">{t}</span>
+        {TABS.map((k, i) => i === 0 ? (
+          <span key={k} className="whitespace-nowrap border-b-2 border-[#0f766e] px-3 py-3 text-sm font-semibold text-[#0f766e]">{t(`tab_${k}` as never)}</span>
         ) : (
-          <span key={t} title="Coming soon" className="flex items-center gap-1.5 whitespace-nowrap px-3 py-3 text-sm text-slate-400">
-            {t}<span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium">Soon</span>
+          <span key={k} title={t("comingSoon")} className="flex items-center gap-1.5 whitespace-nowrap px-3 py-3 text-sm text-slate-400">
+            {t(`tab_${k}` as never)}<span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium">{t("soon")}</span>
           </span>
         ))}
       </div>
       {/* Pestañas — móvil (3, como Zoho) */}
       <div className="grid grid-cols-3 border-b border-slate-200 bg-white lg:hidden">
-        {MOBILE_TABS.map((t, i) => i === 0 ? (
-          <span key={t} className="relative flex items-center justify-center py-3 text-[13px] font-semibold uppercase tracking-wide text-[#0f766e]">
-            {t}<span className="absolute inset-x-3 bottom-0 h-[3px] rounded-full bg-[#0f766e]" />
+        {MOBILE_TABS.map((k, i) => i === 0 ? (
+          <span key={k} className="relative flex items-center justify-center py-3 text-[13px] font-semibold uppercase tracking-wide text-[#0f766e]">
+            {t(`tab_${k}` as never)}<span className="absolute inset-x-3 bottom-0 h-[3px] rounded-full bg-[#0f766e]" />
           </span>
         ) : (
-          <span key={t} title="Coming soon" className="flex min-w-0 flex-col items-center justify-center py-2 text-[13px] uppercase tracking-wide text-slate-400">
-            <span className="truncate">{t}</span><span className="text-[9px] font-medium normal-case leading-tight">Soon</span>
+          <span key={k} title={t("comingSoon")} className="flex min-w-0 flex-col items-center justify-center py-2 text-[13px] uppercase tracking-wide text-slate-400">
+            <span className="truncate">{t(`tab_${k}` as never)}</span><span className="text-[9px] font-medium normal-case leading-tight">{t("soon")}</span>
           </span>
         ))}
       </div>
 
       <div className="min-w-0 flex-1 px-3 py-4 sm:px-6 sm:py-6">
         {searchParams.warn === "addresses" && (
-          <p className="mb-5 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">The customer was saved, but the addresses weren&apos;t. Add them again below.</p>
+          <p className="mb-5 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">{t("warnAddr")}</p>
         )}
 
         <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(340px,400px)_minmax(0,1fr)]">
@@ -122,24 +130,24 @@ export default async function CustomerPage({
               <div className="hidden lg:block">
               <dl className="space-y-3 text-sm">
                 <div>
-                  <dt className="text-slate-500">{phones.length > 1 ? "Phones" : "Phone"}</dt>
-                  {phones.length === 0 && <dd className="mt-0.5 text-slate-400">Not added</dd>}
+                  <dt className="text-slate-500">{phones.length > 1 ? t("phones") : t("phone")}</dt>
+                  {phones.length === 0 && <dd className="mt-0.5 text-slate-400">{t("notAdded")}</dd>}
                   {phones.map((p) => (
                     <dd key={p.id} className="mt-1 flex flex-wrap items-center gap-x-2">
                       <a href={phoneHref(p)} className="font-medium text-[#0f766e] hover:underline">{phoneDisplay(p)}</a>
-                      <span className="text-xs text-slate-500">{p.label}</span>
-                      {p.is_primary && phones.length > 1 && <span className="rounded-full bg-[#d6f3ec] px-2 py-0.5 text-[11px] font-medium text-[#0f766e]">Primary</span>}
+                      <span className="text-xs text-slate-500">{lk("phone", p.label)}</span>
+                      {p.is_primary && phones.length > 1 && <span className="rounded-full bg-[#d6f3ec] px-2 py-0.5 text-[11px] font-medium text-[#0f766e]">{t("primary")}</span>}
                     </dd>
                   ))}
                 </div>
                 <div>
-                  <dt className="text-slate-500">{emails.length > 1 ? "Emails" : "Email"}</dt>
-                  {emails.length === 0 && <dd className="mt-0.5 text-slate-400">Not added</dd>}
+                  <dt className="text-slate-500">{emails.length > 1 ? t("emails") : t("email")}</dt>
+                  {emails.length === 0 && <dd className="mt-0.5 text-slate-400">{t("notAdded")}</dd>}
                   {emails.map((e) => (
                     <dd key={e.id} className="mt-1 flex flex-wrap items-center gap-x-2">
                       <a href={`mailto:${e.email}`} className="break-all font-medium text-[#0f766e] hover:underline">{e.email}</a>
-                      <span className="text-xs text-slate-500">{e.label}</span>
-                      {e.is_primary && emails.length > 1 && <span className="rounded-full bg-[#d6f3ec] px-2 py-0.5 text-[11px] font-medium text-[#0f766e]">Primary</span>}
+                      <span className="text-xs text-slate-500">{lk("email", e.label)}</span>
+                      {e.is_primary && emails.length > 1 && <span className="rounded-full bg-[#d6f3ec] px-2 py-0.5 text-[11px] font-medium text-[#0f766e]">{t("primary")}</span>}
                     </dd>
                   ))}
                 </div>
@@ -166,70 +174,56 @@ export default async function CustomerPage({
                   )}
                 </div>
                 <div className="mt-5 flex items-start justify-around gap-2 border-t border-slate-100 pt-5">
-                  <CallButton label="Mobile" href={callMobile ? phoneHref(callMobile) : undefined} kind="mobile" />
-                  <CallButton label="Work Phone" href={callWork ? phoneHref(callWork) : undefined} kind="phone" />
-                  <CallButton label="Email" href={primaryEmail ? `mailto:${primaryEmail.email}` : undefined} kind="mail" />
+                  <CallButton label={t("mobile")} href={callMobile ? phoneHref(callMobile) : undefined} kind="mobile" />
+                  <CallButton label={t("workPhone")} href={callWork ? phoneHref(callWork) : undefined} kind="phone" />
+                  <CallButton label={t("email")} href={primaryEmail ? `mailto:${primaryEmail.email}` : undefined} kind="mail" />
                 </div>
               </div>
 
             </div>
 
-            <Accordion flat title="Address" count={addresses.length}>
+            <Accordion flat title={t("address")} count={addresses.length}>
               <AddressManager customerId={c.id} companyId={current.id} addresses={addresses} />
             </Accordion>
 
             {/* Paso 5.5: equipos guardados en cada Job Site (marca, modelo, serie y garantía) */}
-            <Accordion flat title="Equipment">
+            <Accordion flat title={t("equipment")}>
               <SiteEquipment variant="customer" companyId={current.id} customerId={c.id}
-                sites={addresses.map((a, i) => ({ id: a.id, label: a.label || [a.street, cityLine(a)].filter(Boolean).join(", ") || `Address ${i + 1}` }))} />
+                sites={addresses.map((a, i) => ({ id: a.id, label: a.label || [a.street, cityLine(a)].filter(Boolean).join(", ") || t("addressN", { n: i + 1 }) }))} />
             </Accordion>
 
             {/* Paso 5.11: planes de mantenimiento del cliente */}
             {!planList.needsSql && (
-              <Accordion flat title="Maintenance plans" count={plans.length}
-                action={<Link prefetch={false} href={`/dashboard/jobs/plans/new?customer=${c.id}`} className="rounded-lg px-2 py-1 text-[12.5px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4]">+ New plan</Link>}>
-                {plans.length === 0 ? <p className="text-sm text-slate-500">No plan yet. A plan books this customer&apos;s recurring visits by itself.</p> : (
-                  <ul className="divide-y divide-slate-100">
-                    {plans.map((p) => { const st = planState(p); return (
-                      <li key={p.id}>
-                        <Link prefetch={false} href={`/dashboard/jobs/plans/${p.id}`} className="flex items-center gap-3 py-2.5 transition-colors hover:bg-[#f6fbfa]">
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-medium text-[#0b1f3a]">{p.name}</span>
-                            <span className="block truncate text-xs text-slate-500">{freqLabel(p)} · {p.next_visit ? `Next visit ${whenText(p.next_visit)}` : p.status === "active" && p.next_due ? `Next visit ${dayText(p.next_due)}` : "No visit booked"}</span>
-                          </span>
-                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${st.cls}`}>{st.label}</span>
-                        </Link>
-                      </li>
-                    ); })}
-                  </ul>
-                )}
+              <Accordion flat title={t("plans")} count={plans.length}
+                action={<Link prefetch={false} href={`/dashboard/jobs/plans/new?customer=${c.id}`} className="rounded-lg px-2 py-1 text-[12.5px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4]">{t("newPlan")}</Link>}>
+                <CustomerPlansList plans={plans} />
               </Accordion>
             )}
 
-            <Accordion flat title="Other Details" action={<PencilLink href={editHref} />}>
+            <Accordion flat title={t("otherDetails")} action={<PencilLink href={editHref} />}>
               <dl className="grid grid-cols-[minmax(0,10rem)_1fr] gap-x-4 gap-y-3 text-sm">
-                <dt className="text-slate-500">Customer Type</dt><dd className="text-slate-800">{c.customer_type === "commercial" ? "Commercial" : "Residential"}</dd>
-                <dt className="text-slate-500">Default Currency</dt><dd className="text-slate-800">{c.currency || "USD"}</dd>
-                <dt className="text-slate-500">Payment Terms</dt><dd className="text-slate-800">{c.payment_terms || "Due on Receipt"}</dd>
-                <dt className="text-slate-500">Portal Status</dt>
-                <dd className={c.portal_enabled ? "text-[#0f766e]" : "text-red-500"}>{c.portal_enabled ? "Enabled" : "Disabled"}</dd>
-                <dt className="text-slate-500">Customer Language</dt><dd className="text-slate-800">{c.language || "English"}</dd>
-                {c.billing_attention && <><dt className="text-slate-500">Billing attention</dt><dd className="text-slate-800">{c.billing_attention}</dd></>}
-                {c.shipping_attention && <><dt className="text-slate-500">Shipping attention</dt><dd className="text-slate-800">{c.shipping_attention}</dd></>}
+                <dt className="text-slate-500">{t("custType")}</dt><dd className="text-slate-800">{typeLabel}</dd>
+                <dt className="text-slate-500">{t("currency")}</dt><dd className="text-slate-800">{c.currency || "USD"}</dd>
+                <dt className="text-slate-500">{t("terms")}</dt><dd className="text-slate-800">{lk("term", c.payment_terms || "Due on Receipt")}</dd>
+                <dt className="text-slate-500">{t("portal")}</dt>
+                <dd className={c.portal_enabled ? "text-[#0f766e]" : "text-red-500"}>{c.portal_enabled ? t("enabled") : t("disabled")}</dd>
+                <dt className="text-slate-500">{t("lang")}</dt><dd className="text-slate-800">{lk("lang", c.language || "English")}</dd>
+                {c.billing_attention && <><dt className="text-slate-500">{t("billAttn")}</dt><dd className="text-slate-800">{c.billing_attention}</dd></>}
+                {c.shipping_attention && <><dt className="text-slate-500">{t("shipAttn")}</dt><dd className="text-slate-800">{c.shipping_attention}</dd></>}
               </dl>
             </Accordion>
 
-            <Accordion flat title="Contact Persons">
-              <p className="py-2 text-center text-sm text-slate-400">No contact persons found.</p>
+            <Accordion flat title={t("contacts")}>
+              <p className="py-2 text-center text-sm text-slate-400">{t("noContacts")}</p>
             </Accordion>
 
-            <Accordion flat title="Remarks" action={<PencilLink href={editHref} />}>
-              <p className="whitespace-pre-wrap text-sm text-slate-600">{c.notes || <span className="text-slate-400">No remarks.</span>}</p>
+            <Accordion flat title={t("remarks")} action={<PencilLink href={editHref} />}>
+              <p className="whitespace-pre-wrap text-sm text-slate-600">{c.notes || <span className="text-slate-400">{t("noRemarks")}</span>}</p>
             </Accordion>
 
-            <Accordion flat title="Record Info" defaultOpen={false}>
+            <Accordion flat title={t("recordInfo")} defaultOpen={false}>
               <dl className="grid grid-cols-[minmax(0,10rem)_1fr] gap-x-4 gap-y-3 text-sm">
-                <dt className="text-slate-500">Customer since</dt><dd className="text-slate-800">{since}</dd>
+                <dt className="text-slate-500">{t("since")}</dt><dd className="text-slate-800">{since}</dd>
               </dl>
             </Accordion>
 
@@ -244,13 +238,13 @@ export default async function CustomerPage({
           <div className="min-w-0 space-y-6">
           {profit && <CustomerProfitPanel p={profit} customerId={c.id} currency={c.currency || "USD"} />}
           <div className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
-            <p className="text-sm text-slate-500">Payment due period</p>
-            <p className="mt-0.5 text-[15px] text-[#0b1f3a]">{c.payment_terms || "Due on Receipt"}</p>
-            <h2 className="mt-6 text-base font-semibold text-[#0b1f3a]">Receivables</h2>
+            <p className="text-sm text-slate-500">{t("duePeriod")}</p>
+            <p className="mt-0.5 text-[15px] text-[#0b1f3a]">{lk("term", c.payment_terms || "Due on Receipt")}</p>
+            <h2 className="mt-6 text-base font-semibold text-[#0b1f3a]">{t("receivables")}</h2>
             <div className="mt-3 overflow-x-auto">
               <table className="w-full min-w-[420px] text-sm">
                 <thead><tr className="border-y border-slate-200 bg-[#f8fafb] text-left text-xs font-semibold text-slate-500">
-                  <th className="px-4 py-2.5">Currency</th><th className="px-4 py-2.5 text-right">Outstanding receivables</th><th className="px-4 py-2.5 text-right">Unused credits</th>
+                  <th className="px-4 py-2.5">{t("currency")}</th><th className="px-4 py-2.5 text-right">{t("outstanding")}</th><th className="px-4 py-2.5 text-right">{t("credits")}</th>
                 </tr></thead>
                 <tbody><tr className="border-b border-slate-100">
                   <td className="px-4 py-3 text-slate-800">{CURRENCIES.find((x) => x.value === (c.currency || "USD"))?.label ?? c.currency}</td>
@@ -261,18 +255,18 @@ export default async function CustomerPage({
             </div>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
-            <h2 className="text-base font-semibold text-[#0b1f3a]">Activity</h2>
+            <h2 className="text-base font-semibold text-[#0b1f3a]">{t("activity")}</h2>
             <ol className="mt-5 space-y-5">
               <li className="relative flex gap-4 pl-1">
                 <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[#14a39a] ring-4 ring-[#e9f7f4]" />
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-[#0b1f3a]">Customer created</p>
+                  <p className="text-sm font-medium text-[#0b1f3a]">{t("created")}</p>
                   <p className="text-xs text-slate-500">{sinceShort}</p>
                 </div>
               </li>
             </ol>
             <div className="mt-6 rounded-xl bg-[#f6fbfa] px-4 py-5 text-center">
-              <p className="text-sm text-slate-500">Quotes, invoices and payments for this customer will show up here once you start creating them.</p>
+              <p className="text-sm text-slate-500">{t("activityEmpty")}</p>
             </div>
           </div>
           </div>

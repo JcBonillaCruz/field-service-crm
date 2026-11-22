@@ -9,6 +9,8 @@ import { ACCOUNTS, cleanCode } from "@/lib/catalog";
 import { CatalogModule, MODULE_INFO } from "@/lib/catalog-views";
 import SelectMenu from "@/components/ui/SelectMenu";
 import { FormHeader, InfoIcon, Tip } from "@/components/catalog/FormBits";
+import { useTranslations } from "next-intl";
+import { useViewTx } from "@/i18n/useViewTx";
 
 type Target = { key: string; label: string; required?: boolean; aliases: string[]; tip: string };
 
@@ -49,9 +51,14 @@ function toDate(s: string): string | null {
 }
 
 export default function CatalogImport({ module, companyId }: { module: CatalogModule; companyId: string }) {
+  const t = useTranslations("catImport");
+  const tc = useTranslations("common");
+  const vx = useViewTx(module);
   const router = useRouter();
   const base = MODULE_INFO[module].base;
   const targets = TARGETS[module as "items" | "coupons"];
+  const tl = (x: Target) => t(`tg.${module}.${x.key}` as never);
+  const tt = (x: Target) => t(`tg.${module}.${x.key}Tip` as never);
   const fileRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [fileName, setFileName] = useState("");
@@ -64,19 +71,19 @@ export default function CatalogImport({ module, companyId }: { module: CatalogMo
 
   async function read(file?: File) {
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) return setError("The file must be 5 MB or smaller.");
+    if (file.size > 5 * 1024 * 1024) return setError(t("eSize"));
     const rows = parseCsv(await file.text());
-    if (rows.length < 2) return setError("The file has no rows to import.");
+    if (rows.length < 2) return setError(t("eEmpty"));
     const h = rows[0].map((x) => x.trim());
     const auto: Record<string, string> = {};
-    targets.forEach((t) => { const i = h.findIndex((x) => t.aliases.includes(norm(x))); if (i >= 0) auto[t.key] = String(i); });
+    targets.forEach((g) => { const i = h.findIndex((x) => g.aliases.includes(norm(x))); if (i >= 0) auto[g.key] = String(i); });
     setFileName(file.name); setHead(h); setBody(rows.slice(1)); setMap(auto); setError(""); setStep(2);
   }
   const get = (r: string[], k: string) => (map[k] != null && map[k] !== "" ? (r[Number(map[k])] ?? "").trim() : "");
 
   async function run() {
-    const missing = targets.filter((t) => t.required && !map[t.key]);
-    if (missing.length) return setError(`Choose a column for: ${missing.map((m) => m.label).join(", ")}.`);
+    const missing = targets.filter((g) => g.required && !map[g.key]);
+    if (missing.length) return setError(t("eMissing", { list: missing.map((m) => tl(m)).join(", ") }));
     setBusy(true); setError("");
     const supabase = createClient();
     const skipped: string[] = [];
@@ -85,7 +92,7 @@ export default function CatalogImport({ module, companyId }: { module: CatalogMo
       if (module === "items") {
         const rows = body.map((r, i) => {
           const name = get(r, "name"); const rate = num(get(r, "rate"));
-          if (!name || Number.isNaN(rate)) { skipped.push(`Row ${i + 2}: missing name or price`); return null; }
+          if (!name || Number.isNaN(rate)) { skipped.push(t("skipItem", { n: i + 2 })); return null; }
           const acc = get(r, "account");
           return {
             company_id: companyId, name, selling_price: Math.round(rate * 100) / 100,
@@ -110,7 +117,7 @@ export default function CatalogImport({ module, companyId }: { module: CatalogMo
         const rows = body.map((r, i) => {
           const name = get(r, "name"); const code = cleanCode(get(r, "code")); const pid = byName.get(get(r, "product").toLowerCase());
           const value = num(get(r, "value")); const percent = /perc|%/i.test(get(r, "by"));
-          if (!name || !code || !pid || !(value > 0) || (percent && value > 100)) { skipped.push(`Row ${i + 2}: check name, code, product and discount`); return null; }
+          if (!name || !code || !pid || !(value > 0) || (percent && value > 100)) { skipped.push(t("skipCoupon", { n: i + 2 })); return null; }
           const red = get(r, "redemption").toLowerCase();
           const rtype = red.includes("unlim") ? "unlimited" : red.includes("cycle") ? "limited_cycles" : "one_time";
           const cycles = num(get(r, "cycles"));
@@ -123,13 +130,13 @@ export default function CatalogImport({ module, companyId }: { module: CatalogMo
         }).filter(notNull);
         for (const row of rows) {
           const { error: e } = await supabase.from("coupons").insert(row);
-          if (e) skipped.push(`${(row as { code: string }).code}: ${e.code === "23505" ? "code already exists" : "couldn't be saved"}`);
+          if (e) skipped.push(`${(row as { code: string }).code}: ${e.code === "23505" ? t("codeExists") : t("notSaved")}`);
           else ok++;
         }
       }
       setResult({ ok, skipped }); setStep(3); await bustCache("catalog"); router.refresh();
     } catch {
-      setError(`The import stopped after ${ok} rows. Did you run the SQL for Paso 3.24?`);
+      setError(t("eStopped", { n: ok }));
     }
     setBusy(false);
   }
@@ -141,7 +148,7 @@ export default function CatalogImport({ module, companyId }: { module: CatalogMo
 
   const Steps = (
     <ol className="mb-8 flex flex-wrap items-center gap-3 text-sm">
-      {["Upload file", "Map fields", "Done"].map((s, i) => (
+      {[t("s1"), t("s2"), t("s3")].map((s, i) => (
         <li key={s} className="flex items-center gap-3">
           <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold transition-colors ${step > i ? "bg-[#0f766e] text-white" : "bg-slate-100 text-slate-500"}`}>{i + 1}</span>
           <span className={step === i + 1 ? "font-semibold text-[#0b1f3a]" : "text-slate-500"}>{s}</span>
@@ -153,7 +160,7 @@ export default function CatalogImport({ module, companyId }: { module: CatalogMo
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] flex-col bg-white">
-      <FormHeader title={`Import ${MODULE_INFO[module].plural}`} closeHref={base} />
+      <FormHeader title={t("title", { x: vx.many, lx: vx.many.toLowerCase() })} closeHref={base} />
       <div className="flex-1 px-5 py-8 sm:px-8">
         <div className="max-w-[880px]">
           {Steps}
@@ -163,29 +170,29 @@ export default function CatalogImport({ module, companyId }: { module: CatalogMo
               <button type="button" onClick={() => fileRef.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); read(e.dataTransfer.files?.[0]); }}
                 className="flex w-full flex-col items-center rounded-2xl border-2 border-dashed border-slate-300 bg-[#fafbfc] px-6 py-14 text-center transition-colors hover:border-[#14a39a] hover:bg-[#f0faf7]">
                 <svg viewBox="0 0 24 24" className="h-11 w-11 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 15V4m0 0-4 4m4-4 4 4M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" /></svg>
-                <span className="mt-3 text-[15px] font-semibold text-[#0b1f3a]">Drag your CSV file here or click to choose it</span>
-                <span className="mt-1 text-sm text-slate-500">Works with files exported from Zoho, Excel or Google Sheets (max 5 MB).</span>
+                <span className="mt-3 text-[15px] font-semibold text-[#0b1f3a]">{t("drop")}</span>
+                <span className="mt-1 text-sm text-slate-500">{t("dropHelp")}</span>
               </button>
-              <button type="button" onClick={sample} className="mt-4 text-sm font-medium text-[#2563eb] hover:underline">Download a sample file</button>
+              <button type="button" onClick={sample} className="mt-4 text-sm font-medium text-[#2563eb] hover:underline">{t("sample")}</button>
             </>
           )}
           {step === 2 && (
             <>
-              <p className="mb-5 text-[15px] text-slate-600"><span className="font-medium text-[#0b1f3a]">{fileName}</span> · {body.length} rows. Match each field with a column of your file.</p>
+              <p className="mb-5 text-[15px] text-slate-600"><span className="font-medium text-[#0b1f3a]">{fileName}</span> · {t("rowsMatch", { n: body.length })}</p>
               <div className="overflow-hidden rounded-xl border border-slate-200">
-                <div className="grid grid-cols-2 bg-[#fafbfc] px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500"><span>BrightPro field</span><span>Column in your file</span></div>
-                {targets.map((t) => (
-                  <div key={t.key} className="grid grid-cols-2 items-center gap-4 border-t border-slate-100 px-5 py-2.5">
-                    <Tip text={t.tip}><span className={`flex cursor-help items-center gap-1.5 text-[15px] ${t.required ? "text-red-600" : "text-slate-700"}`}><span className="border-b border-dotted border-current">{t.label}{t.required && "*"}</span><InfoIcon /></span></Tip>
-                    <SelectMenu ariaLabel={t.label} value={map[t.key] ?? ""} placeholder="Don't import"
-                      options={[{ value: "", label: "Don't import" }, ...head.map((h, i) => ({ value: String(i), label: h || `Column ${i + 1}` }))]}
-                      onChange={(v) => setMap((m) => ({ ...m, [t.key]: v }))} />
+                <div className="grid grid-cols-2 bg-[#fafbfc] px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500"><span>{t("bpField")}</span><span>{t("yourCol")}</span></div>
+                {targets.map((g) => (
+                  <div key={g.key} className="grid grid-cols-2 items-center gap-4 border-t border-slate-100 px-5 py-2.5">
+                    <Tip text={tt(g)}><span className={`flex cursor-help items-center gap-1.5 text-[15px] ${g.required ? "text-red-600" : "text-slate-700"}`}><span className="border-b border-dotted border-current">{tl(g)}{g.required && "*"}</span><InfoIcon /></span></Tip>
+                    <SelectMenu ariaLabel={tl(g)} value={map[g.key] ?? ""} placeholder={t("dont")}
+                      options={[{ value: "", label: t("dont") }, ...head.map((h, i) => ({ value: String(i), label: h || t("colN", { n: i + 1 }) }))]}
+                      onChange={(v) => setMap((m) => ({ ...m, [g.key]: v }))} />
                   </div>
                 ))}
               </div>
               <div className="mt-6 flex flex-wrap items-center gap-3">
-                <button type="button" onClick={run} disabled={busy} className="rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f59] disabled:opacity-60">{busy ? "Importing..." : `Import ${body.length} rows`}</button>
-                <button type="button" onClick={() => setStep(1)} className="rounded-lg border border-slate-200 px-5 py-2.5 text-[15px] font-medium text-slate-700 hover:bg-slate-50">Back</button>
+                <button type="button" onClick={run} disabled={busy} className="rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f59] disabled:opacity-60">{busy ? t("importing") : t("importN", { n: body.length })}</button>
+                <button type="button" onClick={() => setStep(1)} className="rounded-lg border border-slate-200 px-5 py-2.5 text-[15px] font-medium text-slate-700 hover:bg-slate-50">{tc("back")}</button>
                 {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
               </div>
             </>
@@ -195,14 +202,14 @@ export default function CatalogImport({ module, companyId }: { module: CatalogMo
               <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#e9f7f4] text-[#0f766e]">
                 <svg viewBox="0 0 20 20" className="h-7 w-7" fill="currentColor"><path d="M16.7 5.3a1 1 0 0 1 0 1.4l-8 8a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L8 12.6l7.3-7.3a1 1 0 0 1 1.4 0z" /></svg>
               </span>
-              <p className="mt-4 text-lg font-semibold text-[#0b1f3a]">{result.ok} {result.ok === 1 ? "record" : "records"} imported</p>
+              <p className="mt-4 text-lg font-semibold text-[#0b1f3a]">{t("imported", { n: result.ok })}</p>
               {result.skipped.length > 0 && (
                 <div className="mx-auto mt-4 max-w-md rounded-xl bg-amber-50 px-4 py-3 text-left text-sm text-amber-800">
-                  <p className="font-medium">{result.skipped.length} skipped:</p>
+                  <p className="font-medium">{t("skipped", { n: result.skipped.length })}</p>
                   <ul className="mt-1 max-h-40 list-disc overflow-y-auto pl-5">{result.skipped.slice(0, 50).map((s) => <li key={s}>{s}</li>)}</ul>
                 </div>
               )}
-              <button type="button" onClick={() => router.push(base)} className="mt-6 rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f59]">Go to {MODULE_INFO[module].plural}</button>
+              <button type="button" onClick={() => router.push(base)} className="mt-6 rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white hover:bg-[#0c5f59]">{t("goTo", { x: vx.many, lx: vx.many.toLowerCase() })}</button>
             </div>
           )}
         </div>

@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ListParams, SORTS } from "@/lib/customer-list";
+import { useTranslations } from "next-intl";
+import { useCustTx } from "@/i18n/useCustTx";
 
 const Ico = ({ d }: { d: string }) => (
   <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
@@ -57,6 +59,8 @@ export default function CustomersActionsMenu({
   onExport: () => void;    // abre el pop-up de exportar
   submenuSide?: "left" | "right";
 }) {
+  const t = useTranslations("custUi");
+  const cx = useCustTx();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
@@ -85,7 +89,7 @@ export default function CustomersActionsMenu({
 
   return (
     <div ref={wrap} className="relative">
-      <button type="button" aria-label="More actions" onClick={() => setOpen((v) => !v)}
+      <button type="button" aria-label={t("moreActions")} onClick={() => setOpen((v) => !v)}
         className={`flex h-[42px] w-[42px] items-center justify-center rounded-lg border bg-white text-slate-600 hover:bg-slate-50 focus:outline-none ${open ? "border-[#0f766e] text-[#0f766e]" : "border-slate-200"}`}>
         <svg viewBox="0 0 20 20" className="h-5 w-5" fill="currentColor" aria-hidden="true">
           <circle cx="4.5" cy="10" r="1.6" /><circle cx="10" cy="10" r="1.6" /><circle cx="15.5" cy="10" r="1.6" />
@@ -95,14 +99,14 @@ export default function CustomersActionsMenu({
       {open && (
         <div className={`absolute right-0 z-50 mt-2 w-56 origin-top ${panel}`}>
           {/* Sort by */}
-          <Flyout side={submenuSide} icon="M7 4v12m0 0-3-3m3 3 3-3M13 16V4m0 0-3 3m3-3 3 3" label="Sort by">
-            <p className={heading}>Sort by</p>
+          <Flyout side={submenuSide} icon="M7 4v12m0 0-3-3m3 3 3-3M13 16V4m0 0-3 3m3-3 3 3" label={t("sortBy")}>
+            <p className={heading}>{t("sortBy")}</p>
             {SORTS.map((s) => {
               const active = params.sort === s.value;
               return (
                 <button key={s.value} type="button" onClick={() => applySort(s.value)}
                   className={`${parentRow} ${active ? "font-semibold text-[#0f766e]" : ""}`}>
-                  {s.label}
+                  {cx.sort(s.value)}
                   {active && (
                     <svg viewBox="0 0 20 20" className={`h-4 w-4 ${params.dir === "desc" ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
                       <path d="M10 15V5m0 0-4 4m4-4 4 4" strokeLinecap="round" strokeLinejoin="round" />
@@ -114,21 +118,21 @@ export default function CustomersActionsMenu({
           </Flyout>
 
           {canImport && (
-            <Flyout side={submenuSide} icon="M10 3v10m0 0-4-4m4 4 4-4M4 15v1a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-1" label="Import">
-              <p className={heading}>Import</p>
+            <Flyout side={submenuSide} icon="M10 3v10m0 0-4-4m4 4 4-4M4 15v1a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-1" label={t("import")}>
+              <p className={heading}>{t("import")}</p>
               <Link prefetch={false} href="/dashboard/customers/import" className={row} onClick={() => setOpen(false)}>
                 <Ico d="M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
-                Import customers
+                {t("importCustomers")}
               </Link>
             </Flyout>
           )}
 
           {canExport && (
-            <Flyout side={submenuSide} icon="M10 13V3m0 0L6 7m4-4 4 4M4 15v1a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-1" label="Export">
-              <p className={heading}>Export</p>
+            <Flyout side={submenuSide} icon="M10 13V3m0 0L6 7m4-4 4 4M4 15v1a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-1" label={t("export")}>
+              <p className={heading}>{t("export")}</p>
               <button type="button" onClick={() => { onExport(); setOpen(false); }} className={row}>
                 <Ico d="M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
-                Export customers…
+                {t("exportCustomers")}
               </button>
             </Flyout>
           )}
@@ -136,7 +140,7 @@ export default function CustomersActionsMenu({
           <div className="my-1.5 h-px bg-slate-100" />
           <button type="button" onClick={() => { router.refresh(); setOpen(false); }} className={row}>
             <Ico d="M16 10a6 6 0 1 1-1.8-4.3M16 4v3.5h-3.5" />
-            Refresh list
+            {t("refresh")}
           </button>
         </div>
       )}

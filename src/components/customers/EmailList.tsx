@@ -4,6 +4,8 @@ import { EMAIL_LABELS, Email, emailError, newEmail } from "@/lib/customers";
 import LabelPicker from "@/components/customers/LabelPicker";
 import { useNoFill } from "@/components/customers/noFill";
 import { inputClass } from "@/components/customers/ui";
+import { useTranslations } from "next-intl";
+import { useCustTx } from "@/i18n/useCustTx";
 
 export default function EmailList({
   emails,
@@ -14,6 +16,8 @@ export default function EmailList({
   onChange: (list: Email[]) => void;
   showErrors: boolean;
 }) {
+  const t = useTranslations("custForm");
+  const cx = useCustTx();
   const noFill = useNoFill();
   const update = (i: number, e: Email) => onChange(emails.map((x, j) => (j === i ? e : x)));
 
@@ -27,27 +31,27 @@ export default function EmailList({
     <div>
       <ul className="space-y-3">
         {emails.map((e, i) => {
-          const err = showErrors ? emailError(e) : "";
+          const err = showErrors ? cx.err(emailError(e)) : "";
           return (
             <li key={i}>
               <div className="grid grid-cols-[1fr_auto] items-center gap-2 sm:grid-cols-[9.5rem_1fr_auto]">
                 <div className="col-span-2 sm:col-span-1">
-                  <LabelPicker id={`email-label-${i}`} ariaLabel={`Email ${i + 1} label`} options={EMAIL_LABELS}
+                  <LabelPicker id={`email-label-${i}`} ariaLabel={t("emailLabelN", { n: i + 1 })} options={EMAIL_LABELS} display={cx.emailLabel}
                     value={e.label} onChange={(label) => update(i, { ...e, label })} />
                 </div>
                 <input id={`email-${i}`} type="text" inputMode="email" autoCapitalize="none" spellCheck={false}
-                  aria-label={`Email ${i + 1}`} value={e.email} placeholder="name@email.com"
+                  aria-label={t("emailN", { n: i + 1 })} value={e.email} placeholder="name@email.com"
                   {...noFill(`em${i}`)}
                   onChange={(ev) => update(i, { ...e, email: ev.target.value.replace(/\s/g, "") })}
                   className={`${inputClass} col-span-2 sm:col-span-1 ${err ? "border-red-300" : ""}`} />
                 <div className="col-span-2 flex items-center justify-between gap-4 sm:col-span-1 sm:justify-end">
-                  <label className="flex items-center gap-1.5 text-sm text-slate-600" title="Primary email">
+                  <label className="flex items-center gap-1.5 text-sm text-slate-600" title={t("primaryEmail")}>
                     <input type="radio" name="primary-email" checked={e.is_primary}
                       onChange={() => onChange(emails.map((x, j) => ({ ...x, is_primary: j === i })))}
                       className="h-4 w-4 accent-[#0f766e]" />
-                    <span className="sm:sr-only">Primary</span>
+                    <span className="sm:sr-only">{t("primary")}</span>
                   </label>
-                  <button type="button" onClick={() => remove(i)} aria-label={`Remove email ${i + 1}`} title="Remove"
+                  <button type="button" onClick={() => remove(i)} aria-label={t("removeEmailN", { n: i + 1 })} title={t("remove")}
                     className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600">
                     <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
                       <path d="m5 5 10 10M15 5 5 15" strokeLinecap="round" />
@@ -62,7 +66,7 @@ export default function EmailList({
       </ul>
       <button type="button" onClick={() => onChange([...emails, newEmail(emails.length === 0)])}
         className="mt-3 text-sm font-semibold text-[#0f766e] hover:underline">
-        + Add another email
+        {t("addEmail")}
       </button>
     </div>
   );

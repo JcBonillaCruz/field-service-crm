@@ -18,11 +18,10 @@ import SelectMenu from "@/components/ui/SelectMenu";
 import SearchSelect, { Check, Chevron, optionClass, panelClass } from "@/components/ui/SearchSelect";
 import { useNoFill } from "@/components/customers/noFill";
 import { inputClass, primaryButton, secondaryButton } from "@/components/customers/ui";
+import { useTranslations } from "next-intl";
+import { useCustTx } from "@/i18n/useCustTx";
 
 // Formulario de cliente con el mismo diseño de Zoho: etiqueta a la izquierda, campo a la derecha, pestañas abajo
-const SALUTATION_OPTIONS = [{ value: "", label: "Salutation" }, ...SALUTATIONS.map((s) => ({ value: s, label: s }))];
-const LANGUAGE_OPTIONS = LANGUAGES.map((l) => ({ value: l, label: l }));
-const TERM_OPTIONS = PAYMENT_TERMS.map((t) => ({ value: t, label: t }));
 const sameAddress = (a: Address, b: Address) =>
   (["street", "unit", "city", "state", "zip", "country"] as const).every((k) => a[k].trim() === b[k].trim());
 
@@ -35,6 +34,11 @@ export default function CustomerForm({
   initialEmails?: Email[];
   initialAddresses?: Address[];
 }) {
+  const t = useTranslations("custForm");
+  const cx = useCustTx();
+  const SALUTATION_OPTIONS = [{ value: "", label: t("salutation") }, ...SALUTATIONS.map((s) => ({ value: s, label: s }))];
+  const LANGUAGE_OPTIONS = LANGUAGES.map((l) => ({ value: l, label: cx.lang(l) }));
+  const TERM_OPTIONS = PAYMENT_TERMS.map((x) => ({ value: x, label: cx.term(x) }));
   const router = useRouter();
   const noFill = useNoFill();
   const editing = Boolean(customer);
@@ -65,12 +69,12 @@ export default function CustomerForm({
   const [saving, setSaving] = useState(false);
 
   const TABS: { id: string; label: string; soon?: boolean }[] = [
-    { id: "other", label: "Other Details" },
-    { id: "address", label: "Address" },
-    { id: "sites", label: "Job Sites" },
-    { id: "contacts", label: "Contact Persons", soon: true },
-    { id: "custom", label: "Custom Fields", soon: true },
-    { id: "remarks", label: "Remarks" },
+    { id: "other", label: t("tOther") },
+    { id: "address", label: t("tAddress") },
+    { id: "sites", label: t("tSites") },
+    { id: "contacts", label: t("tContacts"), soon: true },
+    { id: "custom", label: t("tCustom"), soon: true },
+    { id: "remarks", label: t("tRemarks") },
   ];
 
   // Sugerencias del Display Name (como Zoho): Mr. Juan Bonilla, Juan Bonilla, Bonilla, Juan, Carlos AC
@@ -84,21 +88,21 @@ export default function CustomerForm({
   const clear = () => setError("");
 
   function validate() {
-    if (type === "residential" && !firstName.trim() && !lastName.trim()) return "Enter the customer's name.";
-    if (type === "commercial" && !companyName.trim()) return "Enter the company name.";
-    if (!shownDisplay.trim()) return "Choose or type a display name.";
-    if (phones.some((p) => phoneError(p))) return "Check the phone numbers marked in red.";
-    if (emails.some((e) => emailError(e))) return "Check the emails marked in red.";
+    if (type === "residential" && !firstName.trim() && !lastName.trim()) return t("eName");
+    if (type === "commercial" && !companyName.trim()) return t("eCompany");
+    if (!shownDisplay.trim()) return t("eDisplay");
+    if (phones.some((p) => phoneError(p))) return t("ePhones");
+    if (emails.some((e) => emailError(e))) return t("eEmails");
     {
       const checks: [Address, string, string][] = [
-        [billing, "address", "Billing address: "],
-        [shipping, "address", "Shipping address: "],
-        ...sites.map((s, i): [Address, string, string] => [s, "sites", `Job site ${i + 1}: `]),
+        [billing, "address", `${t("billingAddr")}: `],
+        [shipping, "address", `${t("shippingAddr")}: `],
+        ...sites.map((s, i): [Address, string, string] => [s, "sites", `${t("siteNCap", { n: i + 1 })}: `]),
       ];
-      for (const [a, t, prefix] of checks) {
+      for (const [a, tb, prefix] of checks) {
         if (addressIsEmpty(a)) continue;
         const msg = addressError(a);
-        if (msg) { setTab(t); return prefix + msg; }
+        if (msg) { setTab(tb); return prefix + cx.err(msg); }
       }
     }
     return "";
@@ -132,7 +136,7 @@ export default function CustomerForm({
     });
     if (error || !data) {
       setSaving(false);
-      return setError(editing ? "The changes couldn't be saved. Try again." : "The customer couldn't be saved. Try again.");
+      return setError(editing ? t("eSaveChanges") : t("eSave"));
     }
 
     // Al editar: actualiza, agrega o borra direcciones directamente
@@ -146,7 +150,7 @@ export default function CustomerForm({
         const { error: aErr } = a.id
           ? await supabase.from("customer_addresses").update(row).eq("id", a.id)
           : await supabase.from("customer_addresses").insert({ ...row, customer_id: data, company_id: companyId });
-        if (aErr) { setSaving(false); return setError("The customer was saved, but an address couldn't be saved. Try again."); }
+        if (aErr) { setSaving(false); return setError(t("eAddrSave")); }
       }
     }
 
@@ -165,42 +169,42 @@ export default function CustomerForm({
       <input type="text" tabIndex={-1} aria-hidden="true" autoComplete="off" className="hidden" />
 
       <div className="space-y-5">
-        <Row label="Customer Type" hint="Residential for homes, Commercial for businesses and builders.">
-          <div className="flex flex-wrap gap-6 py-1.5" role="radiogroup" aria-label="Customer type">
-            {(["residential", "commercial"] as CustomerType[]).map((t) => (
-              <label key={t} className="flex cursor-pointer items-center gap-2 text-[15px] text-slate-700">
-                <input type="radio" name="customer-type" checked={type === t} onChange={() => { setType(t); clear(); }} className="h-4 w-4 accent-[#0f766e]" />
-                {t === "residential" ? "Residential" : "Commercial"}
+        <Row label={t("custType")} hint={t("custTypeHint")}>
+          <div className="flex flex-wrap gap-6 py-1.5" role="radiogroup" aria-label={t("custType")}>
+            {(["residential", "commercial"] as CustomerType[]).map((ct) => (
+              <label key={ct} className="flex cursor-pointer items-center gap-2 text-[15px] text-slate-700">
+                <input type="radio" name="customer-type" checked={type === ct} onChange={() => { setType(ct); clear(); }} className="h-4 w-4 accent-[#0f766e]" />
+                {cx.type(ct)}
               </label>
             ))}
           </div>
         </Row>
 
-        <Row label="Primary Contact" htmlFor="c-given" wide hint="The person you talk to.">
+        <Row label={t("primaryContact")} htmlFor="c-given" wide hint={t("primaryContactHint")}>
           <div className="grid gap-3 sm:grid-cols-[9rem_1fr_1fr]">
-            <SelectMenu id="c-salutation" ariaLabel="Salutation" value={salutation} options={SALUTATION_OPTIONS} onChange={(v) => { setSalutation(v); clear(); }} placeholder="Salutation" />
-            <input id="c-given" value={firstName} {...noFill("c2")} placeholder="First Name" onChange={(e) => { setFirstName(e.target.value); clear(); }} className={inputClass} />
-            <input id="c-family" value={lastName} {...noFill("c3")} placeholder="Last Name" onChange={(e) => { setLastName(e.target.value); clear(); }} className={inputClass} />
+            <SelectMenu id="c-salutation" ariaLabel={t("salutation")} value={salutation} options={SALUTATION_OPTIONS} onChange={(v) => { setSalutation(v); clear(); }} placeholder={t("salutation")} />
+            <input id="c-given" value={firstName} {...noFill("c2")} placeholder={t("firstName")} onChange={(e) => { setFirstName(e.target.value); clear(); }} className={inputClass} />
+            <input id="c-family" value={lastName} {...noFill("c3")} placeholder={t("lastName")} onChange={(e) => { setLastName(e.target.value); clear(); }} className={inputClass} />
           </div>
         </Row>
 
-        <Row label="Company Name" htmlFor="c-company">
-          <input id="c-company" value={companyName} {...noFill("c1")} placeholder={type === "commercial" ? "e.g. Carlos AC Builders" : ""}
+        <Row label={t("companyName")} htmlFor="c-company">
+          <input id="c-company" value={companyName} {...noFill("c1")} placeholder={type === "commercial" ? t("companyPh") : ""}
             onChange={(e) => { setCompanyName(e.target.value); clear(); }} className={inputClass} />
         </Row>
 
-        <Row label="Display Name" htmlFor="c-display" required hint="How this customer appears in lists, quotes and invoices.">
+        <Row label={t("displayName")} htmlFor="c-display" required hint={t("displayHint")}>
           <Combobox immediate value={shownDisplay} onChange={(v: string | null) => { if (v != null) { setDisplay(v); clear(); } }}>
             <div className="relative">
               <ComboboxInput id="c-display" autoComplete="off" data-lpignore="true" data-1p-ignore="true" spellCheck={false}
-                placeholder="Select or type to add" displayValue={(v: string) => v}
+                placeholder={t("selectOrType")} displayValue={(v: string) => v}
                 onChange={(e) => { setDisplay(e.target.value); clear(); }}
                 className={`${inputClass} pr-10`} />
-              <ComboboxButton aria-label="Show suggestions" className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600"><Chevron /></ComboboxButton>
+              <ComboboxButton aria-label={t("showSugg")} className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600"><Chevron /></ComboboxButton>
             </div>
             <ComboboxOptions anchor="bottom start" transition className={`${panelClass} w-[var(--input-width)]`}>
               {suggestions.length === 0
-                ? <div className="px-4 py-3 text-sm text-slate-500">Type the name or company above to see suggestions.</div>
+                ? <div className="px-4 py-3 text-sm text-slate-500">{t("suggHint")}</div>
                 : suggestions.map((s) => (
                   <ComboboxOption key={s} value={s} className={optionClass}><span className="truncate">{s}</span><Check /></ComboboxOption>
                 ))}
@@ -208,30 +212,30 @@ export default function CustomerForm({
           </Combobox>
         </Row>
 
-        <Row label="Email Address" wide alignTop hint="Use labels like Quotes or Invoices to know where each document goes.">
+        <Row label={t("emailAddr")} wide alignTop hint={t("emailHint")}>
           <EmailList emails={emails} showErrors={showErrors} onChange={(l) => { setEmails(l); clear(); }} />
         </Row>
 
-        <Row label="Phone" wide alignTop>
+        <Row label={t("phone")} wide alignTop>
           <PhoneList phones={phones} showErrors={showErrors} onChange={(l) => { setPhones(l); clear(); }} />
         </Row>
 
-        <Row label="Customer Language" htmlFor="c-language" hint="The language you use to talk to and send documents to this customer.">
-          <SearchSelect id="c-language" ariaLabel="Customer language" value={language} options={LANGUAGE_OPTIONS} onChange={setLanguage} placeholder="Search or choose" />
+        <Row label={t("custLang")} htmlFor="c-language" hint={t("custLangHint")}>
+          <SearchSelect id="c-language" ariaLabel={t("custLang")} value={language} options={LANGUAGE_OPTIONS} onChange={setLanguage} placeholder={t("searchOrChoose")} />
         </Row>
       </div>
 
       {/* ---------- Pestañas ---------- */}
       <div className="mt-10 flex gap-8 overflow-x-auto overflow-y-hidden border-b border-slate-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist">
-        {TABS.map((t) => t.soon ? (
-          <span key={t.id} title="Coming soon" className="flex shrink-0 items-center gap-1.5 whitespace-nowrap pb-3 text-[15px] text-slate-400">
-            {t.label}<span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium">Soon</span>
+        {TABS.map((x) => x.soon ? (
+          <span key={x.id} title={t("comingSoon")} className="flex shrink-0 items-center gap-1.5 whitespace-nowrap pb-3 text-[15px] text-slate-400">
+            {x.label}<span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium">{t("soon")}</span>
           </span>
         ) : (
-          <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
-            className={`relative shrink-0 whitespace-nowrap pb-3 text-[15px] transition-colors ${tab === t.id ? "font-semibold text-[#0b1f3a]" : "text-slate-500 hover:text-[#0b1f3a]"}`}>
-            {t.label}
-            {tab === t.id && <span className="absolute inset-x-0 bottom-0 h-[3px] rounded-full bg-[#0f766e]" />}
+          <button key={x.id} type="button" role="tab" aria-selected={tab === x.id} onClick={() => setTab(x.id)}
+            className={`relative shrink-0 whitespace-nowrap pb-3 text-[15px] transition-colors ${tab === x.id ? "font-semibold text-[#0b1f3a]" : "text-slate-500 hover:text-[#0b1f3a]"}`}>
+            {x.label}
+            {tab === x.id && <span className="absolute inset-x-0 bottom-0 h-[3px] rounded-full bg-[#0f766e]" />}
           </button>
         ))}
       </div>
@@ -239,25 +243,25 @@ export default function CustomerForm({
       <div className="py-7">
         {tab === "other" && (
           <div className="space-y-5">
-            <Row label="Currency" htmlFor="c-currency">
-              <SearchSelect id="c-currency" ariaLabel="Currency" value={currency} options={CURRENCIES} onChange={setCurrency} />
+            <Row label={t("currency")} htmlFor="c-currency">
+              <SearchSelect id="c-currency" ariaLabel={t("currency")} value={currency} options={CURRENCIES} onChange={setCurrency} />
             </Row>
-            <Row label="Payment Terms" htmlFor="c-terms" hint="When invoices for this customer are due.">
-              <SearchSelect id="c-terms" ariaLabel="Payment terms" value={terms} options={TERM_OPTIONS} onChange={setTerms} />
+            <Row label={t("terms")} htmlFor="c-terms" hint={t("termsHint")}>
+              <SearchSelect id="c-terms" ariaLabel={t("terms")} value={terms} options={TERM_OPTIONS} onChange={setTerms} />
             </Row>
-            <Row label="Enable Portal?" hint="The customer portal arrives with Quotes and Invoices.">
+            <Row label={t("portal")} hint={t("portalHint")}>
               <label className="flex cursor-pointer items-center gap-2.5 py-1.5 text-[15px] text-slate-700">
                 <input type="checkbox" checked={portal} onChange={(e) => setPortal(e.target.checked)} className="h-4 w-4 rounded accent-[#0f766e]" />
-                Allow portal access for this customer
+                {t("portalAllow")}
               </label>
             </Row>
-            <Row label="Documents" alignTop>
+            <Row label={t("documents")} alignTop>
               <span className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg border border-dashed border-slate-300 px-4 py-2.5 text-[15px] text-slate-400">
                 <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" /></svg>
-                Upload File
-                <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium">Soon</span>
+                {t("uploadFile")}
+                <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium">{t("soon")}</span>
               </span>
-              <p className="mt-1.5 text-[13px] text-slate-400">You’ll be able to upload up to 10 files, 10 MB each.</p>
+              <p className="mt-1.5 text-[13px] text-slate-400">{t("uploadHint")}</p>
             </Row>
           </div>
         )}
@@ -265,22 +269,22 @@ export default function CustomerForm({
         {tab === "address" && (
           <div className="grid max-w-[1040px] gap-x-14 gap-y-10 xl:grid-cols-2">
             <div>
-              <h3 className="mb-5 text-base font-semibold text-[#0b1f3a]">Billing Address</h3>
-              <label htmlFor="bill-attn" className="mb-1.5 block text-sm font-medium text-slate-700">Attention</label>
-              <input id="bill-attn" value={billAttn} {...noFill("b0")} placeholder="Who should receive it" onChange={(e) => setBillAttn(e.target.value)} className={`${inputClass} mb-3`} />
+              <h3 className="mb-5 text-base font-semibold text-[#0b1f3a]">{t("billingAddrT")}</h3>
+              <label htmlFor="bill-attn" className="mb-1.5 block text-sm font-medium text-slate-700">{t("attention")}</label>
+              <input id="bill-attn" value={billAttn} {...noFill("b0")} placeholder={t("attentionPh")} onChange={(e) => setBillAttn(e.target.value)} className={`${inputClass} mb-3`} />
               <AddressFields hideLabel idPrefix="bill" value={billing} onChange={(a) => { setBilling(a); clear(); }} />
             </div>
             <div>
               <h3 className="mb-5 flex flex-wrap items-center gap-x-2 text-base font-semibold text-[#0b1f3a]">
-                Shipping Address
+                {t("shippingAddrT")}
                 <button type="button" onClick={() => { setShipping({ ...billing, label: "Shipping address", is_primary: false }); setShipAttn(billAttn); clear(); }}
                   className="inline-flex items-center gap-1 text-sm font-medium text-[#2563eb] hover:underline">
                   <svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor" aria-hidden="true"><path d="M10 3a1 1 0 0 1 1 1v9.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-5 5a1 1 0 0 1-1.4 0l-5-5a1 1 0 1 1 1.4-1.4L9 13.6V4a1 1 0 0 1 1-1z" /></svg>
-                  Copy billing address
+                  {t("copyBilling")}
                 </button>
               </h3>
-              <label htmlFor="ship-attn" className="mb-1.5 block text-sm font-medium text-slate-700">Attention</label>
-              <input id="ship-attn" value={shipAttn} {...noFill("s0")} placeholder="Who should receive it" onChange={(e) => setShipAttn(e.target.value)} className={`${inputClass} mb-3`} />
+              <label htmlFor="ship-attn" className="mb-1.5 block text-sm font-medium text-slate-700">{t("attention")}</label>
+              <input id="ship-attn" value={shipAttn} {...noFill("s0")} placeholder={t("attentionPh")} onChange={(e) => setShipAttn(e.target.value)} className={`${inputClass} mb-3`} />
               <AddressFields hideLabel idPrefix="ship" value={shipping} onChange={(a) => { setShipping(a); clear(); }} />
             </div>
           </div>
@@ -288,7 +292,7 @@ export default function CustomerForm({
 
         {tab === "sites" && (
           <div className="max-w-4xl">
-            <p className="text-[15px] text-slate-600">Add every house or property you work at for this customer, like each home a builder sends you. Invoices can go to a specific job site instead of the office.</p>
+            <p className="text-[15px] text-slate-600">{t("sitesIntro")}</p>
             <div className="mt-5">
               <JobSitesEditor sites={sites} onChange={(l) => { setSites(l); clear(); }} defaultCountry={billing.country || "US"} defaultState={billing.state} />
             </div>
@@ -297,16 +301,16 @@ export default function CustomerForm({
 
         {tab === "remarks" && (
           <div className="max-w-3xl">
-            <label htmlFor="c-notes" className="mb-1.5 block text-sm font-medium text-slate-700">Remarks <span className="font-normal text-slate-400">(for internal use)</span></label>
-            <textarea id="c-notes" rows={5} value={notes} {...noFill("c4")} placeholder="Gate code, pets, best time to call..." onChange={(e) => setNotes(e.target.value)} className={inputClass} />
+            <label htmlFor="c-notes" className="mb-1.5 block text-sm font-medium text-slate-700">{t("tRemarks")} <span className="font-normal text-slate-400">({t("internal")})</span></label>
+            <textarea id="c-notes" rows={5} value={notes} {...noFill("c4")} placeholder={t("remarksPh")} onChange={(e) => setNotes(e.target.value)} className={inputClass} />
           </div>
         )}
       </div>
 
       {/* ---------- Barra fija para guardar (como Zoho) ---------- */}
       <div className="sticky bottom-0 z-10 -mx-5 flex flex-wrap items-center gap-3 border-t border-slate-200 bg-white px-5 py-3 sm:-mx-8 sm:px-8">
-        <button type="submit" disabled={saving} className={primaryButton}>{saving ? "Saving..." : editing ? "Save changes" : "Save"}</button>
-        <Link prefetch={false} href={editing && customer ? `/dashboard/customers/${customer.id}` : "/dashboard/customers"} className={secondaryButton}>Cancel</Link>
+        <button type="submit" disabled={saving} className={primaryButton}>{saving ? t("saving") : editing ? t("saveChanges") : t("save")}</button>
+        <Link prefetch={false} href={editing && customer ? `/dashboard/customers/${customer.id}` : "/dashboard/customers"} className={secondaryButton}>{t("cancel")}</Link>
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       </div>
     </form>

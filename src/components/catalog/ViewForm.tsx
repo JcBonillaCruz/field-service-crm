@@ -5,7 +5,9 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { CatalogModule, Criterion, FIELDS, MODULE_INFO, NO_VALUE_OPS, OPS, ViewDef, Visibility } from "@/lib/catalog-views";
-import { ROLE_LABEL, Role } from "@/lib/types";
+import { Role } from "@/lib/types";
+import { useTranslations } from "next-intl";
+import { useViewTx } from "@/i18n/useViewTx";
 import SearchSelect from "@/components/ui/SearchSelect";
 import SelectMenu from "@/components/ui/SelectMenu";
 import DatePicker from "@/components/ui/DatePicker";
@@ -17,6 +19,10 @@ const blank = (): Criterion => ({ field: "", op: "", value: "" });
 
 // "New View" como Zoho: nombre, favorito, criterios, columnas (arrastrar) y quién la ve
 export default function ViewForm({ module, companyId, view, from }: { module: CatalogModule; companyId: string; view?: ViewDef; from?: ViewDef }) {
+  const t = useTranslations("viewForm");
+  const tc = useTranslations("common");
+  const tr = useTranslations("roles");
+  const vx = useViewTx(module);
   const router = useRouter();
   const base = MODULE_INFO[module].base;
   const src = view ?? from;
@@ -35,10 +41,11 @@ export default function ViewForm({ module, companyId, view, from }: { module: Ca
   const [saving, setSaving] = useState(false);
 
   const available = useMemo(
-    () => fields.filter((f) => !selected.includes(f.key) && f.label.toLowerCase().includes(search.trim().toLowerCase())),
-    [fields, selected, search],
+    () => fields.filter((f) => !selected.includes(f.key) && vx.field(f.key, f.label).toLowerCase().includes(search.trim().toLowerCase())),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fields, selected, search, vx.locale],
   );
-  const label = (k: string) => fields.find((f) => f.key === k)?.label ?? k;
+  const label = (k: string) => vx.field(k, fields.find((f) => f.key === k)?.label ?? k);
 
   const setC = (i: number, patch: Partial<Criterion>) => setCriteria((l) => l.map((c, j) => (j === i ? { ...c, ...patch } : c)));
   const addAfter = (i: number) => setCriteria((l) => [...l.slice(0, i + 1), blank(), ...l.slice(i + 1)]);
@@ -56,9 +63,9 @@ export default function ViewForm({ module, companyId, view, from }: { module: Ca
   }
 
   async function save() {
-    if (!name.trim()) return setError("Enter a name for this view.");
+    if (!name.trim()) return setError(t("eName"));
     const clean = criteria.filter((c) => c.field && c.op && (NO_VALUE_OPS.has(c.op) || c.value !== ""));
-    if (criteria.some((c) => c.field && !c.op)) return setError("Choose a comparator for every criterion.");
+    if (criteria.some((c) => c.field && !c.op)) return setError(t("eOp"));
     setSaving(true); setError("");
     const row = {
       company_id: companyId, module, name: name.trim(), is_favorite: fav, criteria: clean, match,
@@ -68,32 +75,32 @@ export default function ViewForm({ module, companyId, view, from }: { module: Ca
     const { data, error: e } = view
       ? await db.update(row).eq("id", view.id).select("id").single()
       : await db.insert(row).select("id").single();
-    if (e || !data) { setSaving(false); return setError("The view couldn't be saved. Did you run the SQL for Paso 3.24?"); }
+    if (e || !data) { setSaving(false); return setError(t("eSave")); }
     try { localStorage.setItem(`bp-view-last:${module}:${companyId}`, data.id); } catch { /* */ }
     router.push(`${base}?view=${data.id}`);
     router.refresh();
   }
   async function remove() {
-    if (!view || !(await confirmDelete({ title: `Delete the view "${view.name}"?`, message: "Only this saved list view is removed. Your records stay as they are." }))) return;
+    if (!view || !(await confirmDelete({ title: t("delQ", { name: view.name }), message: t("delMsg") }))) return;
     await createClient().from("list_views").delete().eq("id", view.id);
     try { localStorage.removeItem(`bp-view-last:${module}:${companyId}`); } catch { /* */ }
     router.push(base);
     router.refresh();
   }
 
-  const fieldOptions = fields.map((f) => ({ value: f.key, label: f.label }));
+  const fieldOptions = fields.map((f) => ({ value: f.key, label: vx.field(f.key, f.label) }));
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] flex-col bg-white">
-      <FormHeader title={view ? "Edit View" : "New View"} closeHref={base} />
+      <FormHeader title={view ? t("editTitle") : t("newTitle")} closeHref={base} />
       <div className="flex-1">
         <div className="border-b border-slate-200 bg-[#fafbfc] px-5 py-6 sm:px-8">
-          <label htmlFor="vw-name" className="mb-1.5 block text-[15px] text-red-600">Name*</label>
+          <label htmlFor="vw-name" className="mb-1.5 block text-[15px] text-red-600">{t("name")}*</label>
           <div className="flex flex-wrap items-center gap-5">
             <input id="vw-name" autoFocus value={name} onChange={(e) => { setName(e.target.value); setError(""); }} className={`${inputClass} max-w-[560px]`} />
             <button type="button" onClick={() => setFav((v) => !v)} className="group/f flex items-center gap-2 text-[15px] text-slate-700">
               <svg viewBox="0 0 20 20" className={`h-5 w-5 transition-transform duration-200 group-hover/f:scale-125 ${fav ? "fill-[#f59e0b] text-[#f59e0b]" : "fill-none text-slate-400"}`} stroke="currentColor" strokeWidth="1.5"><path d="m10 2.8 2.2 4.5 5 .7-3.6 3.5.8 5L10 14.2l-4.5 2.3.9-5L2.8 8l5-.7z" strokeLinejoin="round" /></svg>
-              Mark as Favorite
+              {t("fav")}
             </button>
           </div>
         </div>
@@ -101,47 +108,47 @@ export default function ViewForm({ module, companyId, view, from }: { module: Ca
         <div className="space-y-10 px-5 py-8 sm:px-8">
           {/* Criterios */}
           <section>
-            <h2 className="mb-4 text-[17px] font-semibold text-[#0b1f3a]">Define the criteria <span className="font-normal text-slate-500">( if any )</span></h2>
+            <h2 className="mb-4 text-[17px] font-semibold text-[#0b1f3a]">{t("criteria")} <span className="font-normal text-slate-500">{t("ifAny")}</span></h2>
             <div className="space-y-3">
               {criteria.map((c, i) => {
                 const f = fields.find((x) => x.key === c.field);
-                const ops = f ? OPS[f.type] : [];
+                const ops = f ? OPS[f.type].map((o) => ({ ...o, label: vx.op(o.value, o.label) })) : [];
                 const needsValue = Boolean(c.op) && !NO_VALUE_OPS.has(c.op);
                 return (
                   <div key={i}>
                     {i > 0 && (
-                      <button type="button" onClick={() => setMatch((m) => (m === "all" ? "any" : "all"))} title="Click to switch between AND / OR"
+                      <button type="button" onClick={() => setMatch((m) => (m === "all" ? "any" : "all"))} title={t("andOrTip")}
                         className="mb-3 ml-1 rounded-md border border-[#14a39a]/50 bg-[#e9f7f4] px-2.5 py-0.5 text-xs font-semibold text-[#0f766e] transition-colors hover:bg-[#0f766e] hover:text-white">
-                        {match === "all" ? "AND" : "OR"}
+                        {match === "all" ? t("and") : t("or")}
                       </button>
                     )}
                     <div className="flex flex-wrap items-center gap-3">
                       <div className="flex w-full max-w-[18rem] items-stretch">
                         <span className="flex w-11 shrink-0 items-center justify-center rounded-l-lg border border-r-0 border-slate-200 bg-slate-100 text-sm text-slate-600">{i + 1}</span>
                         <div className="min-w-0 flex-1 [&_input]:rounded-l-none">
-                          <SearchSelect ariaLabel={`Field ${i + 1}`} value={c.field} placeholder="Select a field" options={fieldOptions}
+                          <SearchSelect ariaLabel={t("fieldN", { n: i + 1 })} value={c.field} placeholder={t("fieldPh")} options={fieldOptions}
                             onChange={(v) => setC(i, { field: v, op: OPS[fields.find((x) => x.key === v)!.type][0].value, value: "" })} />
                         </div>
                       </div>
                       <div className="w-full max-w-[13rem]">
-                        <SearchSelect ariaLabel={`Comparator ${i + 1}`} value={c.op} placeholder="Select a comparator" options={ops} onChange={(v) => setC(i, { op: v })} />
+                        <SearchSelect ariaLabel={t("opN", { n: i + 1 })} value={c.op} placeholder={t("opPh")} options={ops} onChange={(v) => setC(i, { op: v })} />
                       </div>
                       <div className="w-full max-w-[20rem]">
                         {f?.type === "choice" ? (
-                          <SelectMenu ariaLabel={`Value ${i + 1}`} value={c.value} placeholder="Select a value" options={f.choices ?? []} onChange={(v) => setC(i, { value: v })} />
+                          <SelectMenu ariaLabel={t("valueN", { n: i + 1 })} value={c.value} placeholder={t("valuePh")} options={(f.choices ?? []).map((ch) => ({ ...ch, label: vx.choice(ch.value, ch.label) }))} onChange={(v) => setC(i, { value: v })} />
                         ) : f?.type === "date" && needsValue ? (
                           <DatePicker value={c.value} onChange={(v) => setC(i, { value: v })} />
                         ) : (
-                          <input aria-label={`Value ${i + 1}`} value={c.value} disabled={!needsValue} inputMode={f?.type === "number" ? "decimal" : undefined}
+                          <input aria-label={t("valueN", { n: i + 1 })} value={c.value} disabled={!needsValue} inputMode={f?.type === "number" ? "decimal" : undefined}
                             onChange={(e) => setC(i, { value: f?.type === "number" ? e.target.value.replace(/[^0-9.-]/g, "") : e.target.value })}
                             className={`${inputClass} disabled:cursor-not-allowed disabled:opacity-60`} />
                         )}
                       </div>
                       <div className="flex items-center gap-1">
-                        <button type="button" onClick={() => addAfter(i)} aria-label="Add criterion below" className="group/a flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-[#e9f7f4] hover:text-[#0f766e]">
+                        <button type="button" onClick={() => addAfter(i)} aria-label={t("addBelow")} className="group/a flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-[#e9f7f4] hover:text-[#0f766e]">
                           <svg viewBox="0 0 20 20" className="h-5 w-5 transition-transform duration-200 group-hover/a:rotate-90" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>
                         </button>
-                        <button type="button" onClick={() => removeC(i)} aria-label="Remove criterion" className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600">
+                        <button type="button" onClick={() => removeC(i)} aria-label={t("removeC")} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600">
                           <svg viewBox="0 0 20 20" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h12M8 6V4.5h4V6M6 6l.7 10a1.5 1.5 0 0 0 1.5 1.4h3.6a1.5 1.5 0 0 0 1.5-1.4L14 6" /></svg>
                         </button>
                       </div>
@@ -152,20 +159,20 @@ export default function ViewForm({ module, companyId, view, from }: { module: Ca
             </div>
             <button type="button" onClick={() => setCriteria((l) => [...l, blank()])} className="mt-4 flex items-center gap-2 text-[15px] font-medium text-[#0f766e] hover:underline">
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#0f766e] text-white"><svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M10 5v10M5 10h10" /></svg></span>
-              Add Criterion
+              {t("addC")}
             </button>
           </section>
 
           {/* Columnas */}
           <section>
-            <h2 className="mb-4 text-[17px] font-semibold text-[#0b1f3a]">Columns Preference:</h2>
+            <h2 className="mb-4 text-[17px] font-semibold text-[#0b1f3a]">{t("columns")}</h2>
             <div className="grid max-w-[980px] overflow-hidden rounded-xl border border-slate-200 md:grid-cols-2">
               <div className="border-b border-slate-200 md:border-b-0 md:border-r">
-                <p className="border-b border-slate-100 bg-[#fafbfc] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Available Columns</p>
+                <p className="border-b border-slate-100 bg-[#fafbfc] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("available")}</p>
                 <div className="border-b border-slate-100 px-3 py-2">
                   <div className="flex items-center gap-2 rounded-lg px-2">
                     <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
-                    <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search" className="w-full bg-transparent py-1.5 text-sm focus:outline-none" />
+                    <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={tc("search")} className="w-full bg-transparent py-1.5 text-sm focus:outline-none" />
                   </div>
                 </div>
                 <ul className="h-80 overflow-y-auto py-1" onDragOver={(e) => e.preventDefault()} onDrop={() => { if (drag?.from === "sel") removeCol(drag.key); setDrag(null); setOverIdx(null); }}>
@@ -173,17 +180,17 @@ export default function ViewForm({ module, companyId, view, from }: { module: Ca
                     <li key={f.key} draggable onDragStart={() => setDrag({ key: f.key, from: "avail" })} onDragEnd={() => { setDrag(null); setOverIdx(null); }}
                       className="group/col flex cursor-grab items-center gap-3 px-4 py-2 text-[15px] text-slate-700 transition-colors hover:bg-[#d7f1eb] active:cursor-grabbing">
                       <Grip />
-                      <span className="flex-1">{f.label}</span>
-                      <button type="button" onClick={() => addCol(f.key)} aria-label={`Add ${f.label}`} className="rounded-md px-2 py-0.5 text-xs font-semibold text-[#0f766e] opacity-0 transition-opacity hover:bg-[#0f766e] hover:text-white group-hover/col:opacity-100">Add</button>
+                      <span className="flex-1">{vx.field(f.key, f.label)}</span>
+                      <button type="button" onClick={() => addCol(f.key)} aria-label={t("addX", { x: vx.field(f.key, f.label) })} className="rounded-md px-2 py-0.5 text-xs font-semibold text-[#0f766e] opacity-0 transition-opacity hover:bg-[#0f766e] hover:text-white group-hover/col:opacity-100">{tc("add")}</button>
                     </li>
                   ))}
-                  {available.length === 0 && <li className="px-4 py-6 text-center text-sm text-slate-400">No more columns</li>}
+                  {available.length === 0 && <li className="px-4 py-6 text-center text-sm text-slate-400">{t("noMore")}</li>}
                 </ul>
               </div>
               <div>
                 <p className="flex items-center gap-2 border-b border-slate-100 bg-[#fafbfc] px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <svg viewBox="0 0 20 20" className="h-4 w-4 text-[#16a34a]" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="10" cy="10" r="7.5" /><path d="m6.8 10.2 2.2 2.2 4.2-4.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                  Selected Columns
+                  {t("selectedCols")}
                 </p>
                 <ul className="h-[23.3rem] overflow-y-auto py-1" onDragOver={(e) => { e.preventDefault(); if (overIdx == null) setOverIdx(selected.length); }} onDrop={() => dropOnSelected(overIdx ?? selected.length)}>
                   {selected.map((k, i) => (
@@ -193,7 +200,7 @@ export default function ViewForm({ module, companyId, view, from }: { module: Ca
                       <Grip />
                       <span className="flex-1">{label(k)}{k === "name" && <span className="ml-0.5 text-red-500">*</span>}</span>
                       {k !== "name" && (
-                        <button type="button" onClick={() => removeCol(k)} aria-label={`Remove ${label(k)}`} className="flex h-6 w-6 items-center justify-center rounded-full text-slate-400 opacity-0 transition-all hover:bg-red-50 hover:text-red-600 group-hover/col:opacity-100">
+                        <button type="button" onClick={() => removeCol(k)} aria-label={t("removeX", { x: label(k) })} className="flex h-6 w-6 items-center justify-center rounded-full text-slate-400 opacity-0 transition-all hover:bg-red-50 hover:text-red-600 group-hover/col:opacity-100">
                           <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
                         </button>
                       )}
@@ -202,16 +209,16 @@ export default function ViewForm({ module, companyId, view, from }: { module: Ca
                 </ul>
               </div>
             </div>
-            <p className="mt-2 text-sm text-slate-400">Drag columns between the lists, or drag inside Selected Columns to change the order.</p>
+            <p className="mt-2 text-sm text-slate-400">{t("dragHelp")}</p>
           </section>
 
           {/* Visibilidad */}
           <section>
-            <h2 className="mb-4 text-[17px] font-semibold text-[#0b1f3a]">Visibility Preference</h2>
+            <h2 className="mb-4 text-[17px] font-semibold text-[#0b1f3a]">{t("visibility")}</h2>
             <div className="max-w-[980px] rounded-xl border border-slate-200 bg-[#fafbfc] px-5 py-5">
-              <p className="mb-3 text-[15px] text-slate-700">Share With</p>
+              <p className="mb-3 text-[15px] text-slate-700">{t("shareWith")}</p>
               <div className="flex flex-wrap gap-3">
-                {([["me", "Only Me", "Only you will see this view."], ["roles", "Only Selected Users & Roles", "People with the roles you choose will see this view."], ["everyone", "Everyone", "Everyone in this organization will see this view."]] as [Visibility, string, string][]).map(([v, l, tip]) => (
+                {([["me", t("vMe"), t("vMeTip")], ["roles", t("vRoles"), t("vRolesTip")], ["everyone", t("vAll"), t("vAllTip")]] as [Visibility, string, string][]).map(([v, l, tip]) => (
                   <Tip key={v} text={tip} side="top">
                     <label className={`flex cursor-pointer items-center gap-2.5 rounded-lg border bg-white px-4 py-2.5 text-[15px] transition-colors ${visibility === v ? "border-[#0f766e] text-[#0b1f3a] ring-2 ring-[#14a39a]/20" : "border-slate-200 text-slate-700 hover:border-[#14a39a]"}`}>
                       <input type="radio" name="visibility" checked={visibility === v} onChange={() => setVisibility(v)} className="h-4 w-4 accent-[#0f766e]" />
@@ -227,7 +234,7 @@ export default function ViewForm({ module, companyId, view, from }: { module: Ca
                     return (
                       <button key={r} type="button" onClick={() => setRoles((l) => (on ? l.filter((x) => x !== r) : [...l, r]))}
                         className={`rounded-full border px-3.5 py-1.5 text-sm transition-colors ${on ? "border-[#0f766e] bg-[#0f766e] text-white" : "border-slate-200 bg-white text-slate-600 hover:border-[#14a39a]"}`}>
-                        {ROLE_LABEL[r]}
+                        {tr(r)}
                       </button>
                     );
                   })}
@@ -239,10 +246,10 @@ export default function ViewForm({ module, companyId, view, from }: { module: Ca
       </div>
 
       <div className="sticky bottom-0 z-10 mt-6 flex flex-wrap items-center gap-3 border-t border-slate-200 bg-white px-5 py-3 sm:px-8">
-        <button type="button" onClick={save} disabled={saving} className="rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white transition-colors hover:bg-[#0c5f59] disabled:opacity-60">{saving ? "Saving..." : "Save"}</button>
-        <button type="button" onClick={() => router.push(base)} className="rounded-lg border border-slate-200 bg-white px-5 py-2.5 text-[15px] font-medium text-slate-700 hover:bg-slate-50">Cancel</button>
+        <button type="button" onClick={save} disabled={saving} className="rounded-lg bg-[#0f766e] px-5 py-2.5 text-[15px] font-semibold text-white transition-colors hover:bg-[#0c5f59] disabled:opacity-60">{saving ? tc("saving") : tc("save")}</button>
+        <button type="button" onClick={() => router.push(base)} className="rounded-lg border border-slate-200 bg-white px-5 py-2.5 text-[15px] font-medium text-slate-700 hover:bg-slate-50">{tc("cancel")}</button>
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-        {view && <button type="button" onClick={remove} className="ml-auto text-sm font-medium text-red-600 hover:underline">Delete view</button>}
+        {view && <button type="button" onClick={remove} className="ml-auto text-sm font-medium text-red-600 hover:underline">{t("delete")}</button>}
       </div>
     </div>
   );

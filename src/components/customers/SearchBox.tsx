@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 export default function SearchBox({ initial, autoFocus }: { initial: string; autoFocus?: boolean }) {
+  const tr = useTranslations("custUi");
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -25,9 +27,9 @@ export default function SearchBox({ initial, autoFocus }: { initial: string; aut
       <svg viewBox="0 0 20 20" className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
         <circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" />
       </svg>
-      <label htmlFor="customer-search" className="sr-only">Search customers</label>
+      <label htmlFor="customer-search" className="sr-only">{tr("searchCustomers")}</label>
       <input id="customer-search" value={q} onChange={(e) => setQ(e.target.value)} autoComplete="off" autoFocus={autoFocus}
-        placeholder="Search by name, phone or email"
+        placeholder={tr("searchPh")}
         className="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-11 pr-4 text-[15px] placeholder:text-slate-400 focus:border-[#0f766e] focus:outline-none focus:ring-4 focus:ring-[#14a39a]/15" />
     </div>
   );
