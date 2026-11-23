@@ -8,7 +8,8 @@ import { TechStock, qtyFmt } from "@/lib/inventory";
 // =====================================================================
 // Paso 6.12f · El técnico pide resurtido de su van → la oficina recibe el aviso
 // =====================================================================
-type Req = { id: string; items: { item_id: string; name: string; qty: number }[]; note: string | null; status: string; created_at: string; handled_by_name: string | null };
+type Req = { id: string; items: { item_id: string; name: string; qty: number }[]; note: string | null; status: string; created_at: string; handled_by_name: string | null;
+  fulfilled?: { short?: { name: string; qty: number }[] } | null }; // Paso 6.13: lo que no alcanzó
 
 export default function RestockRequest({ companyId, vanId, userName, stock, autoOpen, onSent }: {
   companyId: string; vanId: string; userName: string; stock: TechStock[]; autoOpen: boolean; onSent: (msg: string) => void;
@@ -25,7 +26,7 @@ export default function RestockRequest({ companyId, vanId, userName, stock, auto
   const need = (s: TechStock) => Math.max(0, (s.min_qty > 0 ? s.min_qty * 2 : 0) - s.qty);
 
   const load = useCallback(async () => {
-    const { data, error } = await createClient().from("inventory_restock_requests").select("id, items, note, status, created_at, handled_by_name")
+    const { data, error } = await createClient().from("inventory_restock_requests").select("*")
       .eq("company_id", companyId).eq("location_id", vanId).order("created_at", { ascending: false }).limit(5);
     setReqs(error ? [] : ((data ?? []) as Req[]));
   }, [companyId, vanId]);
@@ -63,7 +64,8 @@ export default function RestockRequest({ companyId, vanId, userName, stock, auto
         {pending && <span className="shrink-0 whitespace-nowrap rounded-full bg-amber-50 px-2.5 py-1 text-[12px] font-semibold text-amber-700 ring-1 ring-amber-200">{t("pending")}</span>}
       </button>
       {(reqs ?? []).filter((r) => r.status === "done").slice(0, 1).map((r) => (
-        <p key={r.id} className="mt-2 rounded-xl bg-emerald-50 px-3.5 py-2.5 text-[13px] text-emerald-800">{t("ready", { name: r.handled_by_name ?? "—" })}</p>
+        <p key={r.id} className="mt-2 rounded-xl bg-emerald-50 px-3.5 py-2.5 text-[13px] text-emerald-800">{t("ready", { name: r.handled_by_name ?? "—" })}
+          {r.fulfilled?.short?.length ? <span className="mt-0.5 block text-amber-800">{t("readyShort", { list: r.fulfilled.short.map((x) => `${x.name} ×${qtyFmt(Number(x.qty))}`).join(", ") })}</span> : null}</p>
       ))}
 
       {open && (

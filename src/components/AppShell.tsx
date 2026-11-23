@@ -92,10 +92,12 @@ const MANAGE: Role[] = ["owner", "manager", "office"];
 const INV = "/dashboard/inventory";
 const INVENTORY_NAV: NavItem[] = [
   { label: "Dashboard", href: `${INV}/dashboard`, roles: MANAGE, icon: "M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z", art: "dashboard" },
-  { label: "Items", href: INV, exclude: ["dashboard", "labels", "settings", "locations", "transfers", "movements", "counts", "history", "reports", "team"].map((x) => `${INV}/${x}`), addHref: `${INV}/new`, roles: MANAGE, icon: "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9" },
+  { label: "Items", href: INV, exclude: ["dashboard", "labels", "settings", "locations", "transfers", "movements", "counts", "history", "reports", "team", "purchasing", "van-history"].map((x) => `${INV}/${x}`), addHref: `${INV}/new`, roles: MANAGE, icon: "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9" },
   { label: "My Van", href: `${INV}/van`, roles: ["technician"], icon: "M3 7h11v9H3zM14 10h4l3 3v3h-7zM7 19a1.8 1.8 0 1 0 0-3.6A1.8 1.8 0 0 0 7 19zM17 19a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6z" },
   { label: "Scan", href: `${INV}/scan`, roles: ["technician"], icon: "M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 8v8M10 8v8M13 8v8M16.5 8v8" },
   { label: "Stock & Vans", href: `${INV}/locations`, addHref: `${INV}/locations?new=1`, addLabel: "Location", roles: MANAGE, icon: "M3 10.5 12 4l9 6.5V20H3zM8 20v-6h8v6M8 17h8", also: [`${INV}/transfers/new`, `${INV}/counts/new`] },
+  // Paso 6.14: compras (órdenes, por comprar, proveedores)
+  { label: "Purchasing", href: `${INV}/purchasing`, addHref: `${INV}/purchasing/new`, addLabel: "Order", roles: MANAGE, icon: "M3 4h2l2.4 10.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.7L21 8H6.2M9 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM17 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" },
   { label: "Labels", href: `${INV}/labels`, roles: MANAGE, icon: "M7 8V3h10v5M6 17H4V9h16v8h-2M7 14h10v7H7z" },
   { label: "History", href: `${INV}/history`, roles: MANAGE, icon: "M12 8v4l2.5 2.5M3.5 12a8.5 8.5 0 1 0 2.5-6M3 4v4h4", also: [`${INV}/movements`, `${INV}/transfers`, `${INV}/counts`], exclude: [`${INV}/transfers/new`, `${INV}/counts/new`] },
   { label: "Reports", href: `${INV}/reports`, roles: MANAGE, icon: "M4 4v16h16M8.5 16v-4M12.5 16V8M16.5 16v-6" },

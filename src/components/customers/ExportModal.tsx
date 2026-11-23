@@ -13,7 +13,7 @@ const MODULE_GROUPS: { group: string; items: string[] }[] = [
   { group: "Purchases", items: ["Expenses", "Recurring expenses"] },
   { group: "Finances", items: ["Company report", "Payroll"] },
   { group: "Projects", items: ["Projects", "Tasks", "Timesheets", "Team performance", "Unscanned parts", "Profit and loss"] },
-  { group: "Items & other", items: ["Items", "Coupons", "Inventory", "Price lists", "Exchange rates", "Taxes", "Users", "Documents"] },
+  { group: "Items & other", items: ["Items", "Coupons", "Inventory", "Van history", "Purchase orders", "Suppliers", "Price lists", "Exchange rates", "Taxes", "Users", "Documents"] },
 ];
 const ENDPOINTS: Record<string, string> = {
   Customers: "/dashboard/customers/export", Items: "/dashboard/items/export", Coupons: "/dashboard/coupons/export",
@@ -21,11 +21,15 @@ const ENDPOINTS: Record<string, string> = {
   Inventory: "/dashboard/inventory/export", Timesheets: "/dashboard/jobs/timesheets/export",
   "Team performance": "/dashboard/jobs/reports/export?kind=team", "Unscanned parts": "/dashboard/jobs/reports/export?kind=parts", "Profit and loss": "/dashboard/jobs/reports/export?kind=pnl",
   "Company report": "/dashboard/reports/export?kind=company", Payroll: "/dashboard/reports/export?kind=payroll",
+  // Paso 6.13 / 6.14
+  "Van history": "/dashboard/inventory/van-history/export", "Purchase orders": "/dashboard/inventory/purchasing/export?kind=orders",
+  Suppliers: "/dashboard/inventory/purchasing/export?kind=suppliers",
 };
 const ENABLED = new Set(Object.keys(ENDPOINTS));
-export type ExportModule = "Customers" | "Items" | "Coupons" | "Quotes" | "Invoices" | "Subscriptions" | "Inventory" | "Timesheets" | "Team performance" | "Unscanned parts" | "Profit and loss" | "Company report" | "Payroll";
+export type ExportModule = "Customers" | "Items" | "Coupons" | "Quotes" | "Invoices" | "Subscriptions" | "Inventory" | "Timesheets" | "Team performance" | "Unscanned parts" | "Profit and loss" | "Company report" | "Payroll" | "Van history" | "Purchase orders" | "Suppliers";
 // range: fechas de la vista (Timesheets exporta el periodo que tienes en pantalla)
-export type ExportView = { module: ExportModule; label: string; ids: string[]; columns: string[]; range?: { from: string; to: string } };
+// query (Paso 6.13): datos fijos que siempre viajan con el módulo (ej. la van de la ficha), con cualquier alcance
+export type ExportView = { module: ExportModule; label: string; ids: string[]; columns: string[]; range?: { from: string; to: string }; query?: string };
 
 const DECIMALS = ["1,234,567.89", "1234567.89", "1.234.567,89", "1,23,456.78"];
 
@@ -106,7 +110,9 @@ export default function ExportModal({ open, onClose, initialModule = "Customers"
     setBusy(true);
     try {
       const useView = records === "view" && view && view.module === module;
-      const res = await fetch(ENDPOINTS[module], {
+      const q = view?.module === module && view.query ? view.query : "";
+      const url0 = ENDPOINTS[module];
+      const res = await fetch(q ? `${url0}${url0.includes("?") ? `&${q.replace(/^\?/, "")}` : q}` : url0, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

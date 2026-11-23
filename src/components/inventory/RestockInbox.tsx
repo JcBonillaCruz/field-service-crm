@@ -5,11 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
-import { qtyFmt } from "@/lib/inventory";
+import { pingAlerts, qtyFmt } from "@/lib/inventory";
+import { Toast } from "@/components/sales/SalesBits";
 import { VanArt } from "@/components/inventory/InvArt";
 
 // =====================================================================
 // Paso 6.12f · Solicitudes de resurtido de los técnicos (Dashboard de inventario)
+// Paso 6.13 · "Enviar ahora": en un clic pasa del almacén a la van lo que pidió (lo que alcance),
+//             cierra la solicitud y le avisa al técnico. Lo que faltó queda en "Por comprar".
 // =====================================================================
 export type RestockRow = {
   id: string; location_id: string; requested_by_name: string | null; items: { item_id: string; name: string; qty: number }[]; note: string | null; created_at: string; van: string;
@@ -20,8 +23,28 @@ export default function RestockInbox({ rows, userName }: { rows: RestockRow[]; u
   const router = useRouter();
   const es = useLocale().startsWith("es");
   const [gone, setGone] = useState<string[]>([]);
+  const [busy, setBusy] = useState("");
+  const [toast, setToast] = useState("");
+  const [err, setErr] = useState<Record<string, string>>({});
   const list = rows.filter((r) => !gone.includes(r.id));
-  if (!list.length) return null;
+  if (!list.length) return toast ? <Toast text={toast} /> : null;
+  const say = (m: string) => { setToast(m); setTimeout(() => setToast(""), 3200); };
+  async function sendNow(r: RestockRow) {
+    setBusy(r.id); setErr((e) => ({ ...e, [r.id]: "" }));
+    const { data, error } = await createClient().rpc("inv_restock_fulfill", { p_request: r.id });
+    setBusy("");
+    if (error) {
+      const m = `${error.message} ${error.hint ?? ""}`;
+      return setErr((e) => ({ ...e, [r.id]: /NOTHING_TO_SEND/.test(m) ? t("eNothing") : /ALREADY_DONE/.test(m) ? t("eAlready") : /does not exist|Could not find/.test(m) ? t("eSql13") : t("eSend") }));
+    }
+    const res = (data ?? {}) as { sent?: { qty: number }[]; short?: { name: string; qty: number }[] };
+    setGone((g) => [...g, r.id]);
+    pingAlerts();
+    fetch("/api/inventory/restock-request", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: r.id, done: true }) }).catch(() => undefined);
+    const short = res.short ?? [];
+    say(short.length ? t("sentShort", { n: res.sent?.length ?? 0, list: short.map((s) => `${s.name} ×${qtyFmt(Number(s.qty))}`).join(", ") }) : t("sentAll", { n: res.sent?.length ?? 0 }));
+    router.refresh();
+  }
   const day = (iso: string) => new Date(iso).toLocaleString(es ? "es-US" : "en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   async function close(r: RestockRow, status: "done" | "cancelled") {
     setGone((g) => [...g, r.id]);
@@ -44,10 +67,16 @@ export default function RestockInbox({ rows, userName }: { rows: RestockRow[]; u
               <p className="truncate text-[15px] font-semibold text-[#0b1f3a]">{r.van}<span className="font-normal text-slate-500"> · {r.requested_by_name ?? "—"} · {day(r.created_at)}</span></p>
               <p className="mt-0.5 line-clamp-2 text-[13.5px] text-slate-600">{r.items.map((i) => `${i.name} ×${qtyFmt(Number(i.qty))}`).join(" · ")}</p>
               {r.note && <p className="mt-0.5 truncate text-[13px] italic text-slate-500">“{r.note}”</p>}
+              {err[r.id] && <p role="alert" className="mt-1 text-[13px] text-red-600">{err[r.id]}</p>}
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <Link prefetch={false} href={`/dashboard/inventory/transfers/new?to=${r.location_id}&restock=1`}
-                className="inline-flex h-10 items-center whitespace-nowrap rounded-lg bg-[#0f766e] px-3.5 text-[14px] font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-[#0c5f59]">{t("refill")}</Link>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <button type="button" disabled={busy === r.id} onClick={() => sendNow(r)}
+                className="group/s inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded-lg bg-[#0f766e] px-3.5 text-[14px] font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-[#0c5f59] disabled:opacity-60">
+                <svg viewBox="0 0 24 24" className="h-4 w-4 transition-transform duration-200 group-hover/s:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12h13M13 6l6 6-6 6" /></svg>
+                {busy === r.id ? t("sending") : t("sendNow")}
+              </button>
+              <Link prefetch={false} href={`/dashboard/inventory/transfers/new?to=${r.location_id}&request=${r.id}`} title={t("reviewHint")}
+                className="inline-flex h-10 items-center whitespace-nowrap rounded-lg border border-slate-200 px-3.5 text-[14px] font-semibold text-slate-700 transition-all hover:-translate-y-0.5 hover:border-[#14a39a] hover:text-[#0f766e]">{t("review")}</Link>
               <button type="button" onClick={() => close(r, "done")} className="inline-flex h-10 items-center whitespace-nowrap rounded-lg border border-slate-200 px-3.5 text-[14px] font-semibold text-slate-700 transition-all hover:-translate-y-0.5 hover:border-[#14a39a] hover:text-[#0f766e]">{t("done")}</button>
               <button type="button" onClick={() => close(r, "cancelled")} aria-label={t("dismiss")} className="group/x flex h-10 w-10 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600">
                 <svg viewBox="0 0 20 20" className="h-4 w-4 transition-transform duration-300 group-hover/x:rotate-90" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
@@ -56,6 +85,7 @@ export default function RestockInbox({ rows, userName }: { rows: RestockRow[]; u
           </li>
         ))}
       </ul>
+      <Toast text={toast} />
     </section>
   );
 }

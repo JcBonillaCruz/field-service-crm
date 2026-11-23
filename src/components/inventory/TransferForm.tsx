@@ -14,7 +14,8 @@ import { useInvTx } from "@/i18n/useInvTx";
 type Line = { item: InvItem; qty: string };
 
 // Nueva transferencia (resurtir una van): pantalla completa. Varios productos de una vez, todo o nada.
-export default function TransferForm({ companyId, items, stock, locations, initialTo, initialFrom, barcodes = {}, restock = false, kit = [] }: {
+export default function TransferForm({ companyId, items, stock, locations, initialTo, initialFrom, barcodes = {}, restock = false, kit = [], request, userName = "" }: {
+  request?: { id: string; lines: { item_id: string; qty: number }[] }; userName?: string; // Paso 6.13: solicitud del técnico
   barcodes?: Record<string, string>; companyId: string; items: InvItem[]; stock: InvStock[]; locations: InvLocation[]; initialTo?: string; initialFrom?: string;
   restock?: boolean; kit?: { item_id: string; par: number; min: number }[]; // Paso 6.12: "Restock" ya llega con la lista puesta
 }) {
@@ -46,7 +47,13 @@ export default function TransferForm({ companyId, items, stock, locations, initi
   const needOf = (id: string) => Math.max(1, (parOf(id) > 0 ? parOf(id) : minAt(id, to) * 2) - at(id, to));
   const addSuggested = () => suggested.forEach((i) => add(i, needOf(i.id)));
   const auto = useRef(false);
-  useEffect(() => { if (restock && !auto.current && suggested.length) { auto.current = true; addSuggested(); } }, [restock, suggested.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (restock && !request && !auto.current && suggested.length) { auto.current = true; addSuggested(); } }, [restock, suggested.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Paso 6.13: lo que pidió el técnico (hasta lo que haya en el origen)
+  useEffect(() => {
+    if (!request || auto.current) return;
+    auto.current = true;
+    request.lines.forEach((l) => { const it = items.find((i) => i.id === l.item_id); if (it && at(it.id, from) > 0) add(it, l.qty); });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -63,6 +70,16 @@ export default function TransferForm({ companyId, items, stock, locations, initi
     });
     if (err) { setSaving(false); return setError(ix.err(invError(err))); }
     pingAlerts();
+    if (request) {
+      // Cierra la solicitud y le avisa al técnico
+      const sent = lines.map((l) => ({ item_id: l.item.id, name: l.item.name, qty: Number(l.qty) }));
+      const short = request.lines.map((r) => ({ ...r, left: r.qty - (sent.find((x) => x.item_id === r.item_id)?.qty ?? 0) })).filter((r) => r.left > 0)
+        .map((r) => ({ item_id: r.item_id, name: items.find((i) => i.id === r.item_id)?.name ?? "", qty: r.left }));
+      const base = { status: "done", handled_by_name: userName || null, handled_at: new Date().toISOString() };
+      const up = await createClient().from("inventory_restock_requests").update({ ...base, from_location: from, fulfilled: { sent, short } }).eq("id", request.id);
+      if (up.error) await createClient().from("inventory_restock_requests").update(base).eq("id", request.id); // sin el SQL 6.13
+      fetch("/api/inventory/restock-request", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: request.id, done: true }) }).catch(() => undefined);
+    }
     router.push(`/dashboard/inventory/transfers?done=${lines.length}`); router.refresh();
   }
 

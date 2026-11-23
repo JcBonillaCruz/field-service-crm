@@ -12,6 +12,7 @@ import QuickAdjust from "@/components/inventory/QuickAdjust";
 import Link from "next/link";
 import { BarcodeSvg, QrSvg, downloadBarcodePng } from "@/components/inventory/Barcode";
 import ExtraCodes from "@/components/inventory/ExtraCodes";
+import ItemBuying from "@/components/inventory/purchasing/ItemBuying";
 import {
   InvCategory, InvItem, InvLocation, InvMovement, InvPhoto, InvStock, MOVE_LABEL, STATUS_META,
   invError, pingAlerts, qtyFmt, statusOf, usd,
@@ -185,6 +186,8 @@ export default function InventoryItemDetail({ companyId, item, stock, locations,
             {buying && buying.units_per_purchase > 1 && (
               <p className="mx-5 mt-3 rounded-xl bg-slate-50 px-4 py-2.5 text-[13.5px] text-slate-600">{t.rich("boughtBy", { pu: buying.purchase_unit || t("box"), n: buying.units_per_purchase, unit: item.unit ?? t("units"), b: (c) => <b>{c}</b> })}</p>
             )}
+            {/* Paso 6.14: proveedores, consumible y descontinuado */}
+            <ItemBuying companyId={companyId} item={item} unitsPer={buying?.units_per_purchase ?? 1} buyUnit={buying?.purchase_unit ?? null} />
 
             {/* Números */}
             <div className="grid grid-cols-2 gap-3 px-5 py-4 sm:grid-cols-4">

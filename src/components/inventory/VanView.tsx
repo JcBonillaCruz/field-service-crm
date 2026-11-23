@@ -55,6 +55,17 @@ export default function VanView({ companyId, userName = "", canRequest = true, a
             <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 8v8M10 8v8M13 8v8M16.5 8v8" /></svg>
             {t("scanUsed")}
           </Link>
+          {/* Paso 6.13: su historial (lo usado, lo recibido, conteos y lo no escaneado) — sin costos */}
+          <Link prefetch={false} href={`/dashboard/inventory/locations/${vans[0].id}?tab=used`}
+            className="group mt-3 flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-left transition-all hover:-translate-y-0.5 hover:border-[#14a39a] hover:shadow-[0_10px_24px_rgba(15,40,60,0.07)]">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#e9f7f4] text-[#0f766e] transition-transform duration-200 group-hover:scale-105">
+              <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 8v4l2.5 2.5M3.5 12a8.5 8.5 0 1 0 2.5-6M3 4v4h4" /></svg>
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[15.5px] font-semibold text-[#0b1f3a]">{t("history")}</span>
+              <span className="block truncate text-[12.5px] text-slate-500">{t("historyHint")}</span>
+            </span>
+          </Link>
           {canRequest && <RestockRequest companyId={companyId} vanId={vans[0].id} userName={userName} stock={stock} autoOpen={autoRequest} onSent={say} />}
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("search")}
             className="mt-4 h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-[15px] focus:border-[#0f766e] focus:outline-none focus:ring-4 focus:ring-[#14a39a]/15" />
