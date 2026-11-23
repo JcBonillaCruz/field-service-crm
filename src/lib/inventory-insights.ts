@@ -38,8 +38,11 @@ export function locationStats(items: InvItem[], stock: InvStock[], locations: In
   return out;
 }
 
-export type BuyRow = { item: InvItem; onHand: number; target: number; need: number; cost: number; places: string[] };
-// Lista de compras: meta de cada lugar = Carry del kit (vans) o 2× el mínimo (donde hay mínimo). Se compra lo que falta en total.
+export type BuyRow = { item: InvItem; whQty: number; vanQty: number; onHand: number; target: number; need: number; cost: number; places: string[] };
+// Lista de compras (Paso 6.12e): el almacén se compra al proveedor; las camionetas se resurten del almacén.
+//   meta de cada lugar = Carry del kit (camionetas) o 2× su mínimo (donde hay mínimo)
+//   comprar = lo que le falta al almacén + lo que les falta a las camionetas y el almacén no puede cubrir con lo que le sobra
+// Lo que trae una camioneta NO cuenta para el almacén (si el almacén está bajo, sale aquí).
 export function shoppingList(items: InvItem[], stock: InvStock[], locations: InvLocation[], kit: KitRow[] = []): BuyRow[] {
   const loc = new Map(locations.map((l) => [l.id, l]));
   const par = new Map(kit.map((k) => [k.item_id, k.par]));
@@ -47,21 +50,45 @@ export function shoppingList(items: InvItem[], stock: InvStock[], locations: Inv
   for (const it of items) {
     if (!it.is_active) continue;
     const mine = stock.filter((s) => s.item_id === it.id && loc.has(s.location_id));
-    let target = 0; const places: string[] = [];
+    let whShort = 0, whSurplus = 0, vanShort = 0, target = 0, whQty = 0, vanQty = 0;
+    const places: string[] = [];
+    const vansSeen = new Set<string>();
     for (const s of mine) {
       const l = loc.get(s.location_id)!;
+      const q = Math.max(0, s.qty);
       const t = l.kind === "van" && (par.get(it.id) ?? 0) > 0 ? par.get(it.id)! : s.min_qty > 0 ? s.min_qty * 2 : 0;
       target += t;
-      if (t > 0 && s.qty < t) places.push(l.name);
+      if (l.kind === "van") { vanQty += q; vansSeen.add(l.id); if (t > q) { vanShort += t - q; places.push(l.name); } }
+      else { whQty += q; if (t > q) { whShort += t - q; places.push(l.name); } else whSurplus += q - t; }
     }
-    // Vans del kit que todavía no tienen fila de stock de este producto
-    if ((par.get(it.id) ?? 0) > 0) for (const l of locations) if (l.kind === "van" && !mine.some((s) => s.location_id === l.id)) { target += par.get(it.id)!; places.push(l.name); }
-    const onHand = mine.reduce((a, s) => a + Math.max(0, s.qty), 0);
-    const lowSomewhere = mine.some((s) => s.min_qty > 0 && s.qty <= s.min_qty);
-    const need = Math.max(0, Math.ceil(target - onHand));
-    if (need > 0 && (lowSomewhere || onHand <= 0 || places.length)) rows.push({ item: it, onHand, target, need, cost: need * it.cost_price, places });
+    if ((par.get(it.id) ?? 0) > 0) for (const l of locations) if (l.kind === "van" && !vansSeen.has(l.id)) { target += par.get(it.id)!; vanShort += par.get(it.id)!; places.push(l.name); }
+    const need = Math.ceil(whShort + Math.max(0, vanShort - whSurplus));
+    if (need > 0) rows.push({ item: it, whQty, vanQty, onHand: whQty + vanQty, target, need, cost: need * it.cost_price, places });
   }
   return rows.sort((a, b) => b.cost - a.cost || a.item.name.localeCompare(b.item.name));
+}
+
+// Paso 6.12e: cada producto bajo (en o debajo de su mínimo) o agotado, por ubicación
+export type LowRow = { item: InvItem; loc: InvLocation; qty: number; min: number; out: boolean };
+export function lowRows(items: InvItem[], stock: InvStock[], locations: InvLocation[], kit: KitRow[] = []): LowRow[] {
+  const item = new Map(items.map((i) => [i.id, i]));
+  const loc = new Map(locations.map((l) => [l.id, l]));
+  const par = new Map(kit.map((k) => [k.item_id, k]));
+  const rows: LowRow[] = [];
+  for (const s of stock) {
+    const it = item.get(s.item_id), l = loc.get(s.location_id);
+    if (!it || !l || !it.is_active) continue;
+    const min = s.min_qty > 0 ? s.min_qty : l.kind === "van" ? par.get(it.id)?.min ?? 0 : 0;
+    if (min > 0 && s.qty <= min) rows.push({ item: it, loc: l, qty: s.qty, min, out: s.qty <= 0 });
+  }
+  // Productos que no tienen nada en ningún lado
+  for (const it of items) {
+    if (!it.is_active || rows.some((r) => r.item.id === it.id)) continue;
+    const total = stock.filter((s) => s.item_id === it.id).reduce((a, s) => a + s.qty, 0);
+    const home = locations.find((l) => l.is_default) ?? locations[0];
+    if (total <= 0 && home) rows.push({ item: it, loc: home, qty: 0, min: 0, out: true });
+  }
+  return rows.sort((a, b) => Number(b.out) - Number(a.out) || a.qty / Math.max(1, a.min) - b.qty / Math.max(1, b.min) || a.item.name.localeCompare(b.item.name));
 }
 
 export type RunOut = { item: InvItem; onHand: number; perDay: number; daysLeft: number };

@@ -178,7 +178,7 @@ export default function InvDashboard({ items, stock, locations, members, moves, 
                 {buy.slice(0, 6).map((r) => (
                   <li key={r.item.id}>
                     <Link prefetch={false} href={`${INV}/${r.item.id}`} className="flex items-center justify-between gap-3 px-5 py-2.5 text-[14px] transition-colors hover:bg-[#f6fbfa]">
-                      <span className="min-w-0"><span className="block truncate text-[#0b1f3a]">{r.item.name}</span><span className="block truncate text-[12px] text-slate-400">{t("haveNeed", { have: qtyFmt(r.onHand), need: qtyFmt(r.target) })}</span></span>
+                      <span className="min-w-0"><span className="block truncate text-[#0b1f3a]">{r.item.name}</span><span className="block truncate text-[12px] text-slate-400">{t("haveNeed", { have: qtyFmt(r.whQty), van: qtyFmt(r.vanQty) })}</span></span>
                       <span className="shrink-0 text-right"><b className="block tabular-nums text-[#0f766e]">+{qtyFmt(r.need)}</b><span className="block text-[12px] tabular-nums text-slate-500">{usd(r.cost)}</span></span>
                     </Link>
                   </li>

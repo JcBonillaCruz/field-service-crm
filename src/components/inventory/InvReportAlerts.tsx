@@ -1,11 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useInvTx } from "@/i18n/useInvTx";
 import { InvItem, InvLocation, InvMember, InvStock, KitRow, qtyFmt } from "@/lib/inventory";
-import { UseMove, locationStats, runningOut, shoppingList } from "@/lib/inventory-insights";
+import { UseMove, locationStats, lowRows, runningOut, shoppingList } from "@/lib/inventory-insights";
+import { buildCountPdf, openPdf } from "@/lib/count-pdf";
+import { downloadPost } from "@/components/inventory/CountSheetModal";
 import { CartArt, LowArt, OutArt } from "@/components/inventory/KpiArt";
 import { LocArt } from "@/components/inventory/InvArt";
 import { useFmt } from "@/components/inventory/PageBits";
@@ -16,30 +19,66 @@ import { useFmt } from "@/components/inventory/PageBits";
 const INV = "/dashboard/inventory";
 type Tab = "buy" | "soon" | "out";
 
-export default function InvReportAlerts({ items, stock, locations, members, kit, moves }: {
-  items: InvItem[]; stock: InvStock[]; locations: InvLocation[]; members: InvMember[]; kit: KitRow[]; moves: UseMove[];
+export default function InvReportAlerts({ items, stock, locations, members, kit, moves, company = "" }: {
+  items: InvItem[]; stock: InvStock[]; locations: InvLocation[]; members: InvMember[]; kit: KitRow[]; moves: UseMove[]; company?: string;
 }) {
   const t = useTranslations("invAlerts");
   const ix = useInvTx();
   const usd = ix.money;
+  const es = useLocale().startsWith("es");
   const { fmtDay } = useFmt();
   const [tab, setTab] = useState<Tab>("buy");
   const [open, setOpen] = useState<string | null>(null);
+  const [qty, setQty] = useState<Record<string, string>>({}); // cantidades a comprar ajustadas por el dueño
+  const [busy, setBusy] = useState("");
   const buy = useMemo(() => shoppingList(items, stock, locations, kit), [items, stock, locations, kit]);
-  const soon = useMemo(() => runningOut(items, stock, moves, 30), [items, stock, moves]);
-  const out = useMemo(() => items.filter((i) => i.is_active && stock.filter((s) => s.item_id === i.id).reduce((a, s) => a + s.qty, 0) <= 0), [items, stock]);
+  const low = useMemo(() => lowRows(items, stock, locations, kit), [items, stock, locations, kit]);
+  const usage = useMemo(() => runningOut(items, stock, moves, 30), [items, stock, moves]);
+  // Por agotarse: lo que está en o debajo de su mínimo (sin llegar a 0) + lo que al ritmo de uso dura 30 días o menos
+  const soon = useMemo(() => {
+    const rows = low.filter((r) => !r.out).map((r) => ({ key: `${r.item.id}${r.loc.id}`, item: r.item, where: r.loc.name, qty: r.qty, min: r.min, days: usage.find((u) => u.item.id === r.item.id)?.daysLeft ?? null }));
+    usage.forEach((u) => { if (!rows.some((r) => r.item.id === u.item.id)) rows.push({ key: u.item.id, item: u.item, where: t("allPlaces"), qty: u.onHand, min: 0, days: u.daysLeft }); });
+    return rows;
+  }, [low, usage, t]);
+  const out = useMemo(() => low.filter((r) => r.out), [low]);
   const stats = useMemo(() => locationStats(items, stock, locations, kit, moves), [items, stock, locations, kit, moves]);
   const vans = locations.filter((l) => l.kind === "van");
-  const buyTotal = buy.reduce((a, r) => a + r.cost, 0);
   const techOf = (id: string | null) => members.find((m) => m.user_id === id)?.full_name ?? null;
+  const buyQty = (r: { item: InvItem; need: number }) => { const v = qty[r.item.id]; return v === undefined ? r.need : Math.max(0, Number(v) || 0); };
+  const buyTotal = buy.reduce((a, r) => a + buyQty(r) * r.item.cost_price, 0);
+  const daysLabel = (d: number | null) => (d === null ? "—" : d <= 0 ? t("today") : t("days", { n: d }));
 
-  function csv() {
-    const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
-    const lines = [[t("cProduct"), "SKU", t("cHave"), t("cTarget"), t("cBuy"), t("cUnitCost"), t("cCost"), t("cFor")].map(esc).join(",")];
-    buy.forEach((r) => lines.push([r.item.name, r.item.sku ?? "", qtyFmt(r.onHand), qtyFmt(r.target), qtyFmt(r.need), r.item.cost_price.toFixed(2), r.cost.toFixed(2), r.places.join(" / ")].map((v) => esc(String(v))).join(",")));
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `shopping-list-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  // Lo que se ve en cada pestaña, listo para PDF y Excel
+  function table(k: Tab) {
+    if (k === "buy") return {
+      title: t("pdfBuy"), cols: [t("cProduct"), "SKU", t("cWh"), t("cVans"), t("cTarget"), t("cBuy"), t("cUnitCost"), t("cCost"), t("cFor")],
+      rows: buy.filter((r) => buyQty(r) > 0).map((r) => [r.item.name, r.item.sku ?? "", qtyFmt(r.whQty), qtyFmt(r.vanQty), qtyFmt(r.target), qtyFmt(buyQty(r)), usd(r.item.cost_price), usd(buyQty(r) * r.item.cost_price), r.places.join(", ")]),
+      total: usd(buyTotal),
+    };
+    if (k === "soon") return { title: t("pdfSoon"), cols: [t("cProduct"), "SKU", t("cWhere"), t("cHave"), t("cMin"), t("cDaysLeft")], rows: soon.map((r) => [r.item.name, r.item.sku ?? "", r.where, qtyFmt(r.qty), r.min ? qtyFmt(r.min) : "—", daysLabel(r.days)]), total: "" };
+    return { title: t("pdfOut"), cols: [t("cProduct"), "SKU", t("cWhere"), t("cMin"), t("cUnitCost")], rows: out.map((r) => [r.item.name, r.item.sku ?? "", r.loc.name, r.min ? qtyFmt(r.min) : "—", usd(r.item.cost_price)]), total: "" };
+  }
+  async function pdf(o: "portrait" | "landscape") {
+    const d = table(tab);
+    setBusy("pdf");
+    const widths = tab === "buy" ? [22, 11, 7, 7, 7, 7, 9, 9, o === "landscape" ? 18 : 12] : tab === "soon" ? [26, 12, 18, 8, 8, 10] : [28, 12, 20, 8, 10];
+    const right = (i: number) => (tab === "buy" ? i >= 2 && i <= 7 : tab === "soon" ? i >= 3 : i >= 3);
+    const bytes = await buildCountPdf({
+      company, title: d.title, subtitle: t("pdfSub", { date: fmtDay(new Date().toISOString()) }), orientation: o,
+      meta: [[t("mDate"), fmtDay(new Date().toISOString())], [t("mItems"), String(d.rows.length)], ...(d.total ? [[t("estimated"), d.total] as [string, string]] : [])],
+      columns: d.cols.map((c, i) => ({ label: c, w: widths[i], align: right(i) ? "right" as const : "left" as const })),
+      rows: d.rows.map((r) => ({ cells: r })),
+      sign: tab === "buy" ? [t("sApproved"), t("sOrdered"), t("sDate")] : undefined,
+      footer: `BrightPro · ${company}`, page: (n, total) => t("page", { n, total }),
+    });
+    openPdf(bytes, `${d.title}.pdf`);
+    setBusy("");
+  }
+  async function xlsx() {
+    const d = table(tab);
+    setBusy("xlsx");
+    await downloadPost("/dashboard/inventory/reports/export", { name: es ? { buy: "lista-de-compra", soon: "por-agotarse", out: "agotados" }[tab] : { buy: "shopping-list", soon: "running-out", out: "out-of-stock" }[tab], sheet: d.title, matrix: [d.cols, ...d.rows, ...(d.total ? [["", "", "", "", "", "", "", d.total]] : [])] }, "report.xlsx").catch(() => undefined);
+    setBusy("");
   }
 
   const tabs: { k: Tab; label: string; n: number; Art: (p: { size?: number }) => JSX.Element; tone: string }[] = [
@@ -47,6 +86,7 @@ export default function InvReportAlerts({ items, stock, locations, members, kit,
     { k: "soon", label: t("tSoon"), n: soon.length, Art: LowArt, tone: "bg-[#fff7e6] text-[#b45309]" },
     { k: "out", label: t("tOut"), n: out.length, Art: OutArt, tone: "bg-[#fff1f2] text-[#be123c]" },
   ];
+  const empty = tab === "buy" ? !buy.length : tab === "soon" ? !soon.length : !out.length;
 
   return (
     <div className="mt-5 space-y-5">
@@ -56,7 +96,7 @@ export default function InvReportAlerts({ items, stock, locations, members, kit,
           {tabs.map((x) => (
             <button key={x.k} type="button" onClick={() => setTab(x.k)} aria-pressed={tab === x.k}
               className={`group relative flex flex-col items-center gap-1 px-2 py-3 text-center transition-colors sm:flex-row sm:justify-center sm:gap-2.5 sm:py-4 ${tab === x.k ? "bg-[#f6fbfa]" : "hover:bg-slate-50"}`}>
-              <x.Art size={34} />
+              <span className="transition-transform duration-200 group-hover:scale-110"><x.Art size={34} /></span>
               <span className={`whitespace-nowrap text-[13.5px] sm:text-[15px] ${tab === x.k ? "font-semibold text-[#0b1f3a]" : "text-slate-600"}`}>{x.label}</span>
               <span className={`rounded-full px-2 py-0.5 text-[12px] font-semibold ${x.n ? x.tone : "bg-slate-100 text-slate-500"}`}>{x.n}</span>
               <span className={`absolute inset-x-0 bottom-0 h-[3px] bg-[#0f766e] transition-transform duration-200 ${tab === x.k ? "scale-x-100" : "scale-x-0"}`} />
@@ -64,39 +104,61 @@ export default function InvReportAlerts({ items, stock, locations, members, kit,
           ))}
         </div>
 
-        {tab === "buy" && (
-          buy.length === 0 ? <Empty text={t("buyNone")} /> : (
-            <>
-              <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
-                <p className="text-[13.5px] text-slate-500">{t("buyHint")}</p>
-                <div className="flex items-center gap-3">
-                  <span className="text-[15px] text-slate-600">{t("estimated")} <b className="tabular-nums text-[#0b1f3a]">{usd(buyTotal)}</b></span>
-                  <button type="button" onClick={csv} className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-200 px-3 text-[13px] font-semibold text-slate-700 transition-all hover:-translate-y-0.5 hover:border-[#14a39a] hover:text-[#0f766e]">
-                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>CSV
-                  </button>
-                </div>
-              </div>
-              <ItemTable head={[t("cProduct"), t("cHave"), t("cTarget"), t("cBuy"), t("cCost")]}
-                rows={buy.map((r) => ({ id: r.item.id, name: r.item.name, sub: r.places.length ? t("forX", { list: r.places.slice(0, 3).join(", ") }) : r.item.sku,
-                  cells: [qtyFmt(r.onHand), qtyFmt(r.target), <b key="b" className="text-[#0f766e]">+{qtyFmt(r.need)}</b>, usd(r.cost)] }))} />
-            </>
-          )
-        )}
-        {tab === "soon" && (
-          soon.length === 0 ? <Empty text={t("soonNone")} /> : (
-            <>
-              <p className="px-5 py-3 text-[13.5px] text-slate-500">{t("soonHint")}</p>
-              <ItemTable head={[t("cProduct"), t("cHave"), t("cPerWeek"), t("cDaysLeft")]}
-                rows={soon.map((r) => ({ id: r.item.id, name: r.item.name, sub: r.item.sku,
-                  cells: [qtyFmt(r.onHand), qtyFmt(Math.round(r.perDay * 7 * 10) / 10), <b key="d" className={r.daysLeft <= 7 ? "text-[#be123c]" : "text-[#b45309]"}>{r.daysLeft <= 0 ? t("today") : t("days", { n: r.daysLeft })}</b>] }))} />
-            </>
-          )
-        )}
-        {tab === "out" && (
-          out.length === 0 ? <Empty text={t("outNone")} /> : (
-            <ItemTable head={[t("cProduct"), t("cUnitCost")]} rows={out.map((i) => ({ id: i.id, name: i.name, sub: i.sku, cells: [usd(i.cost_price)] }))} />
-          )
-        )}
+        {/* Barra: explicación, total y descargas */}
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+          <p className="min-w-0 flex-1 basis-64 text-[13.5px] text-slate-500">{tab === "buy" ? t("buyHint") : tab === "soon" ? t("soonHint") : t("outHint")}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            {tab === "buy" && buy.length > 0 && <span className="mr-1 text-[15px] text-slate-600">{t("estimated")} <b className="tabular-nums text-[#0b1f3a]">{usd(buyTotal)}</b></span>}
+            <Menu>
+              <MenuButton disabled={empty || !!busy} className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-200 px-3 text-[13px] font-semibold text-slate-700 transition-all hover:-translate-y-0.5 hover:border-[#14a39a] hover:text-[#0f766e] disabled:opacity-50">
+                PDF<svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
+              </MenuButton>
+              <MenuItems anchor="bottom end" transition className="z-[80] mt-1 w-44 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
+                {(["portrait", "landscape"] as const).map((o) => (
+                  <MenuItem key={o}><button type="button" onClick={() => pdf(o)} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 data-[focus]:bg-[#e9f7f4] data-[focus]:text-[#0b1f3a]">{t(o)}</button></MenuItem>
+                ))}
+              </MenuItems>
+            </Menu>
+            <button type="button" onClick={xlsx} disabled={empty || !!busy} className="inline-flex h-9 items-center whitespace-nowrap rounded-lg border border-slate-200 px-3 text-[13px] font-semibold text-slate-700 transition-all hover:-translate-y-0.5 hover:border-[#14a39a] hover:text-[#0f766e] disabled:opacity-50">Excel</button>
+          </div>
+        </div>
+
+        {tab === "buy" && (buy.length === 0 ? <Empty text={t("buyNone")} /> : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-[14px]">
+              <thead><tr className="border-y border-slate-100 bg-[#fafbfc] text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-5 py-2.5 text-left">{t("cProduct")}</th><th className="px-3 py-2.5 text-right">{t("cWh")}</th><th className="px-3 py-2.5 text-right">{t("cVans")}</th>
+                <th className="px-3 py-2.5 text-right">{t("cTarget")}</th><th className="px-3 py-2.5 text-center">{t("cBuy")}</th><th className="px-5 py-2.5 text-right">{t("cCost")}</th>
+              </tr></thead>
+              <tbody>
+                {buy.map((r) => (
+                  <tr key={r.item.id} className="border-b border-slate-100 last:border-0 hover:bg-[#f6fbfa]">
+                    <td className="px-5 py-2.5"><Link prefetch={false} href={`${INV}/${r.item.id}`} className="block min-w-0"><span className="block truncate text-[#0b1f3a] hover:text-[#0f766e]">{r.item.name}</span><span className="block truncate text-[12px] text-slate-400">{t("forX", { list: r.places.slice(0, 3).join(", ") })}</span></Link></td>
+                    <td className={`px-3 py-2.5 text-right tabular-nums ${r.whQty <= 0 ? "font-semibold text-[#be123c]" : "text-slate-700"}`}>{qtyFmt(r.whQty)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-slate-500">{qtyFmt(r.vanQty)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-slate-500">{qtyFmt(r.target)}</td>
+                    <td className="px-3 py-2.5 text-center">
+                      <input inputMode="numeric" value={qty[r.item.id] ?? String(r.need)} aria-label={t("cBuy")} onFocus={(e) => e.currentTarget.select()}
+                        onChange={(e) => setQty((q) => ({ ...q, [r.item.id]: e.target.value.replace(/[^0-9]/g, "") }))}
+                        className="h-9 w-16 rounded-lg border border-slate-200 bg-[#f3fbf8] text-center text-[14.5px] font-semibold tabular-nums text-[#0f766e] focus:border-[#0f766e] focus:bg-white focus:outline-none focus:ring-4 focus:ring-[#14a39a]/15" />
+                    </td>
+                    <td className="px-5 py-2.5 text-right tabular-nums text-slate-700">{usd(buyQty(r) * r.item.cost_price)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+        {tab === "soon" && (soon.length === 0 ? <Empty text={t("soonNone")} /> : (
+          <ItemTable head={[t("cProduct"), t("cWhere"), t("cHave"), t("cMin"), t("cDaysLeft")]}
+            rows={soon.map((r) => ({ id: r.item.id, key: r.key, name: r.item.name, sub: r.item.sku,
+              cells: [<span key="w" className="whitespace-nowrap text-slate-600">{r.where}</span>, <b key="q" className="text-[#b45309]">{qtyFmt(r.qty)}</b>, r.min ? qtyFmt(r.min) : "—",
+                <span key="d" className={r.days !== null && r.days <= 7 ? "font-semibold text-[#be123c]" : "text-slate-600"}>{daysLabel(r.days)}</span>] }))} />
+        ))}
+        {tab === "out" && (out.length === 0 ? <Empty text={t("outNone")} /> : (
+          <ItemTable head={[t("cProduct"), t("cWhere"), t("cMin"), t("cUnitCost")]}
+            rows={out.map((r) => ({ id: r.item.id, key: `${r.item.id}${r.loc.id}`, name: r.item.name, sub: r.item.sku, cells: [<span key="w" className="whitespace-nowrap text-slate-600">{r.loc.name}</span>, r.min ? qtyFmt(r.min) : "—", usd(r.item.cost_price)] }))} />
+        ))}
       </section>
 
       {/* Cuánto le queda a cada técnico */}
@@ -157,7 +219,7 @@ export default function InvReportAlerts({ items, stock, locations, members, kit,
 
 const Empty = ({ text }: { text: string }) => <p className="px-5 py-10 text-center text-[14px] text-slate-500">{text}</p>;
 
-function ItemTable({ head, rows }: { head: string[]; rows: { id: string; name: string; sub: string | null; cells: React.ReactNode[] }[] }) {
+function ItemTable({ head, rows }: { head: string[]; rows: { id: string; key?: string; name: string; sub: string | null; cells: React.ReactNode[] }[] }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[460px] text-[14px]">
@@ -166,7 +228,7 @@ function ItemTable({ head, rows }: { head: string[]; rows: { id: string; name: s
         </tr></thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.id} className="border-b border-slate-100 last:border-0 hover:bg-[#f6fbfa]">
+            <tr key={r.key ?? r.id} className="border-b border-slate-100 last:border-0 hover:bg-[#f6fbfa]">
               <td className="px-5 py-2.5"><Link prefetch={false} href={`${INV}/${r.id}`} className="block min-w-0"><span className="block truncate text-[#0b1f3a] hover:text-[#0f766e]">{r.name}</span>{r.sub && <span className="block truncate text-[12px] text-slate-400">{r.sub}</span>}</Link></td>
               {r.cells.map((c, i) => <td key={i} className="whitespace-nowrap px-5 py-2.5 text-right tabular-nums text-slate-700">{c}</td>)}
             </tr>

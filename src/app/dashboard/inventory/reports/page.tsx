@@ -23,7 +23,7 @@ export default async function InventoryReportsPage({ searchParams }: { searchPar
   const gone = new Set(((rev.data ?? []) as { batch_id: string }[]).map((r) => r.batch_id));
   return (
     <ReportsView locations={locations} moves={moves.rows.filter((m) => !(m.kind === "count" && m.batch_id && gone.has(m.batch_id)))} days={days}>
-      <InvReportAlerts items={b.items} stock={b.stock} locations={b.locations} members={b.members} kit={kitOf(b.kit)} moves={b.moves} />
+      <InvReportAlerts items={b.items} stock={b.stock} locations={b.locations} members={b.members} kit={kitOf(b.kit)} moves={b.moves} company={current.name} />
     </ReportsView>
   );
 }

@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useInvTx } from "@/i18n/useInvTx";
 import { InvItem, InvLocation, InvMember, InvStock, KitRow, qtyFmt } from "@/lib/inventory";
-import { UseMove, locationStats } from "@/lib/inventory-insights";
+import { UseMove, locationStats, lowRows } from "@/lib/inventory-insights";
 import { LocArt, VanArt, WarehouseArt } from "@/components/inventory/InvArt";
 import { LowArt, ValueArt } from "@/components/inventory/KpiArt";
 import NewLocationModal from "@/components/inventory/NewLocationModal";
@@ -19,7 +19,7 @@ import { useFmt } from "@/components/inventory/PageBits";
 // =====================================================================
 const INV = "/dashboard/inventory";
 export type LocLite = InvLocation & { is_active?: boolean; vehicle?: { plate?: string; make?: string; model?: string; year?: string } | null; photo_url?: string | null; address?: { city?: string; state?: string } | null };
-type Filter = "all" | "warehouse" | "van" | "restock";
+type Filter = "all" | "warehouse" | "van" | "low";
 
 export default function StockVansBoard({ items, stock, locations, members, kit, moves, canEdit, compact = false }: {
   items: InvItem[]; stock: InvStock[]; locations: LocLite[]; members: InvMember[]; kit: KitRow[]; moves: UseMove[]; canEdit: boolean; compact?: boolean;
@@ -44,7 +44,7 @@ export default function StockVansBoard({ items, stock, locations, members, kit, 
   const shown = useMemo(() => {
     const term = q.trim().toLowerCase();
     return locations
-      .filter((l) => (f === "all" ? true : f === "restock" ? l.kind === "van" && (stats[l.id]?.low ?? 0) > 0 : l.kind === f))
+      .filter((l) => (f === "all" ? true : f === "low" ? (stats[l.id]?.low ?? 0) > 0 : l.kind === f))
       .filter((l) => !term || `${l.name} ${techOf(l.assigned_user_id) ?? ""} ${l.vehicle?.plate ?? ""}`.toLowerCase().includes(term))
       .sort((a, b) => Number(b.is_active !== false) - Number(a.is_active !== false) || (a.kind === b.kind ? Number(b.is_default) - Number(a.is_default) || a.name.localeCompare(b.name) : a.kind === "warehouse" ? -1 : 1));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -53,10 +53,13 @@ export default function StockVansBoard({ items, stock, locations, members, kit, 
   const total = active.reduce((a, l) => a + (stats[l.id]?.value ?? 0), 0);
   const lowAll = active.reduce((a, l) => a + (stats[l.id]?.low ?? 0), 0);
   const vansLow = active.filter((l) => l.kind === "van" && (stats[l.id]?.low ?? 0) > 0).length;
+  const alerts = useMemo(() => lowRows(items, stock, active, kit), [items, stock, active, kit]);
+  const locsLow = active.filter((l) => (stats[l.id]?.low ?? 0) > 0).length;
+  const pick = (k: Filter) => { setF(k); if (!compact) setTimeout(() => document.getElementById("sv-list")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); };
   const btn = "inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3.5 text-[14px] font-medium text-slate-700 transition-all hover:-translate-y-0.5 hover:border-[#14a39a] hover:text-[#0f766e]";
   const chips: { k: Filter; label: string; n?: number }[] = [
     { k: "all", label: t("fAll"), n: locations.length }, { k: "warehouse", label: t("fWh"), n: locations.filter((l) => l.kind === "warehouse").length },
-    { k: "van", label: t("fVans"), n: locations.filter((l) => l.kind === "van").length }, { k: "restock", label: t("fRestock"), n: vansLow },
+    { k: "van", label: t("fVans"), n: locations.filter((l) => l.kind === "van").length }, { k: "low", label: t("fLow"), n: alerts.length },
   ];
 
   return (
@@ -86,10 +89,11 @@ export default function StockVansBoard({ items, stock, locations, members, kit, 
       {/* Resumen */}
       {!compact && (
         <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
-          <Mini label={t("kWh")} value={String(active.filter((l) => l.kind === "warehouse").length)} Art={WarehouseArt} hint={t("kWhHint")} />
-          <Mini label={t("kVans")} value={String(active.filter((l) => l.kind === "van").length)} Art={VanArt} hint={active.some((l) => l.kind === "van" && !l.assigned_user_id) ? t("kVansNoTech") : t("kVansHint")} />
-          <Mini label={t("kValue")} value={usd(total)} Art={ValueArt} hint={t("kValueHint")} />
-          <Mini label={t("kLow")} value={String(lowAll)} Art={LowArt} warn={lowAll > 0} hint={vansLow ? t("kLowVans", { n: vansLow }) : t("kLowNone")} onClick={vansLow ? () => setF("restock") : undefined} />
+          <Mini label={t("kWh")} value={String(active.filter((l) => l.kind === "warehouse").length)} Art={WarehouseArt} hint={t("kWhHint")} active={f === "warehouse"} onClick={() => pick(f === "warehouse" ? "all" : "warehouse")} />
+          <Mini label={t("kVans")} value={String(active.filter((l) => l.kind === "van").length)} Art={VanArt} hint={active.some((l) => l.kind === "van" && !l.assigned_user_id) ? t("kVansNoTech") : t("kVansHint")} active={f === "van"} onClick={() => pick(f === "van" ? "all" : "van")} />
+          <Mini label={t("kValue")} value={usd(total)} Art={ValueArt} hint={t("kValueHint")} href={INV} />
+          <Mini label={t("kLow")} value={String(alerts.length)} Art={LowArt} warn={alerts.length > 0} active={f === "low"}
+            hint={alerts.length ? t("kLowWhere", { n: locsLow }) : t("kLowNone")} onClick={alerts.length ? () => pick(f === "low" ? "all" : "low") : undefined} />
         </div>
       )}
 
@@ -104,11 +108,40 @@ export default function StockVansBoard({ items, stock, locations, members, kit, 
           {chips.map((c) => (
             <button key={c.k} type="button" onClick={() => setF(c.k)} aria-pressed={f === c.k}
               className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 transition-colors ${f === c.k ? "bg-[#e9f7f4] font-semibold text-[#0b5e57]" : "text-slate-600 hover:text-[#0b1f3a]"}`}>
-              {c.label}{c.n ? <span className={`rounded-full px-1.5 text-[11px] font-semibold ${c.k === "restock" ? "bg-[#fff7e6] text-[#b45309]" : "bg-slate-100 text-slate-500"}`}>{c.n}</span> : null}
+              {c.label}{c.n ? <span className={`rounded-full px-1.5 text-[11px] font-semibold ${c.k === "low" ? "bg-[#fff7e6] text-[#b45309]" : "bg-slate-100 text-slate-500"}`}>{c.n}</span> : null}
             </button>
           ))}
         </div>
       </div>
+
+      {/* Paso 6.12e: todas las alertas (almacenes y camionetas) con su acción */}
+      {f === "low" && alerts.length > 0 && (
+        <section className="mt-4 overflow-hidden rounded-2xl border border-[#fcdca4] bg-white animate-[bp-fade_0.2s_ease-out]">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#fdecc8] bg-[#fffaf0] px-5 py-3.5">
+            <div className="flex items-center gap-2.5"><LowArt size={34} /><div><p className="text-[15.5px] font-semibold text-[#0b1f3a]">{t("alertsTitle", { n: alerts.length })}</p><p className="text-[12.5px] text-slate-500">{t("alertsHint")}</p></div></div>
+            <Link prefetch={false} href={`${INV}/reports`} className="inline-flex h-9 items-center whitespace-nowrap rounded-lg bg-[#0f766e] px-3.5 text-[13.5px] font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-[#0c5f59]">{t("buyList")}</Link>
+          </div>
+          <ul className="divide-y divide-slate-100">
+            {alerts.map((r) => (
+              <li key={`${r.item.id}${r.loc.id}`} className="flex flex-wrap items-center gap-3 px-5 py-2.5">
+                <LocArt kind={r.loc.kind} size={34} />
+                <Link prefetch={false} href={`${INV}/${r.item.id}`} className="min-w-0 flex-1 basis-40">
+                  <span className="block truncate text-[14.5px] font-medium text-[#0b1f3a] hover:text-[#0f766e]">{r.item.name}</span>
+                  <span className="block truncate text-[12.5px] text-slate-500">{r.loc.name}{r.loc.kind === "van" && techOf(r.loc.assigned_user_id) ? ` · ${techOf(r.loc.assigned_user_id)}` : ""}</span>
+                </Link>
+                <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[12.5px] font-semibold tabular-nums ring-1 ${r.out ? "bg-[#fff1f2] text-[#be123c] ring-[#fecdd3]" : "bg-[#fff7e6] text-[#b45309] ring-[#fcdca4]"}`}>
+                  {r.out ? t("outShort") : t("haveMin", { have: qtyFmt(r.qty), min: qtyFmt(r.min) })}
+                </span>
+                {r.loc.kind === "van" ? (
+                  <Link prefetch={false} href={`${INV}/transfers/new?to=${r.loc.id}&restock=1`} className="inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-lg border border-slate-200 px-3 text-[13px] font-semibold text-[#0f766e] hover:border-[#14a39a] hover:bg-[#e9f7f4]">{t("restock")}</Link>
+                ) : (
+                  <Link prefetch={false} href={`${INV}/${r.item.id}`} className="inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-lg border border-slate-200 px-3 text-[13px] font-semibold text-[#0f766e] hover:border-[#14a39a] hover:bg-[#e9f7f4]">{t("receive")}</Link>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Tarjetas */}
       {locations.length === 0 ? (
@@ -118,7 +151,7 @@ export default function StockVansBoard({ items, stock, locations, members, kit, 
           <p className="mt-1 max-w-md text-[14px] text-slate-500">{t("emptyText")}</p>
         </div>
       ) : (
-        <div className="mt-4 grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+        <div id="sv-list" className="mt-4 grid scroll-mt-4 gap-4 md:grid-cols-2 2xl:grid-cols-3">
           {shown.map((l) => {
             const s = stats[l.id];
             const tech = l.kind === "van" ? techOf(l.assigned_user_id) : null;
@@ -205,17 +238,18 @@ export default function StockVansBoard({ items, stock, locations, members, kit, 
   );
 }
 
-function Mini({ label, value, Art, hint, warn, onClick }: { label: string; value: string; Art: (p: { size?: number }) => JSX.Element; hint: string; warn?: boolean; onClick?: () => void }) {
-  const cls = `group block w-full rounded-2xl border border-slate-200 bg-white p-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(15,40,60,0.09)] lg:p-4 ${onClick ? "cursor-pointer" : ""}`;
+function Mini({ label, value, Art, hint, warn, onClick, href, active }: { label: string; value: string; Art: (p: { size?: number }) => JSX.Element; hint: string; warn?: boolean; onClick?: () => void; href?: string; active?: boolean }) {
+  const cls = `group block w-full rounded-2xl border bg-white p-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(15,40,60,0.09)] lg:p-4 ${active ? "border-[#0f766e] ring-2 ring-[#14a39a]/15" : "border-slate-200 hover:border-slate-300"} ${onClick || href ? "cursor-pointer" : ""}`;
   const body = (
     <>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0"><p className="truncate text-[12.5px] font-medium text-slate-500 lg:text-[13px]">{label}</p>
           <p className={`mt-1 truncate text-[16px] font-semibold tabular-nums sm:text-[22px] lg:text-[24px] ${warn ? "text-[#b45309]" : "text-[#0b1f3a]"}`}>{value}</p></div>
-        <span className="shrink-0"><Art size={44} /></span>
+        <span className="shrink-0 transition-transform duration-200 group-hover:scale-110"><Art size={44} /></span>
       </div>
-      <p className="mt-0.5 truncate text-[12.5px] text-slate-500">{hint}</p>
+      <p className="mt-0.5 flex items-center justify-between gap-2 text-[12.5px] text-slate-500"><span className="truncate">{hint}</span>{(onClick || href) && <span className="hidden shrink-0 font-semibold text-[#0f766e] group-hover:inline">→</span>}</p>
     </>
   );
-  return onClick ? <button type="button" onClick={onClick} className={cls}>{body}</button> : <div className={cls}>{body}</div>;
+  if (href) return <Link prefetch={false} href={href} className={cls}>{body}</Link>;
+  return onClick ? <button type="button" onClick={onClick} aria-pressed={active} className={cls}>{body}</button> : <div className={cls}>{body}</div>;
 }
