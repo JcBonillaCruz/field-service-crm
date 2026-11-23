@@ -25,17 +25,17 @@ import { OFF_COLOR, OFF_KINDS, OffKind, TimeOff, lastDay, overlaps } from "@/lib
 // Abre al instante: todo lo que necesita ya viene cargado con el calendario.
 // =====================================================================
 export type NewTab = "job" | "quote" | "off";
-export type NewSlot = { day: Date; startMin: number; endMin: number; techId: string | null; dragged: boolean };
+export type NewSlot = { day: Date; startMin: number; endMin: number; techId: string | null; dragged: boolean; unscheduled?: boolean };
 
 const TIMES = Array.from({ length: 96 }, (_, i) => i * 15);
 
 export default function NewItemModal({
   companyId, settings, types, tags, team, templates, customers, offs, visits, canQuote, offReady,
-  slot, tab: tab0, editOff, onClose, onSaved,
+  slot, tab: tab0, editOff, onClose, onSaved, showSlot = true,
 }: {
   companyId: string; settings: JobSettings; types: JobType[]; tags: JobTag[]; team: TeamMember[]; templates: ChecklistTemplate[];
   customers: PayerOption[]; offs: TimeOff[]; visits: CalVisit[]; canQuote: boolean; offReady: boolean;
-  slot: NewSlot; tab?: NewTab; editOff?: TimeOff | null;
+  slot: NewSlot; tab?: NewTab; editOff?: TimeOff | null; showSlot?: boolean; // fuera del calendario no se muestra día/hora arriba
   onClose: () => void; onSaved: (msg: string, date?: string) => void;
 }) {
   const t = useTranslations("newItem");
@@ -61,7 +61,7 @@ export default function NewItemModal({
 
   const s = atMinute(slot.day, slot.startMin), e = atMinute(slot.day, slot.endMin);
   const techName = slot.techId ? team.find((m) => m.user_id === slot.techId)?.full_name ?? null : null;
-  const jobDefaults = useMemo(() => ({ start: s.toISOString(), end: e.toISOString(), tech: slot.techId ?? undefined }),
+  const jobDefaults = useMemo(() => ({ start: s.toISOString(), end: e.toISOString(), tech: slot.techId ?? undefined, unscheduled: slot.unscheduled }),
     [slot]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const TABS: { id: NewTab; label: string }[] = editOff ? [{ id: "off", label: t("tabOff") }] : [
@@ -84,7 +84,7 @@ export default function NewItemModal({
               <h2 id="new-item-title" className="truncate text-[19px] font-semibold tracking-tight text-[#0b1f3a] sm:text-[21px]">
                 {editOff ? t("editOff") : t("title")}
               </h2>
-              {!editOff && (
+              {!editOff && showSlot && (
                 <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[12.5px] text-slate-500 sm:text-[13px]">
                   <span className="inline-flex items-center gap-1">
                     <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 text-[#0f766e]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="3" y="4" width="14" height="13" rx="2" /><path d="M3 8h14M7 2.5v3M13 2.5v3" /></svg>
