@@ -2,6 +2,7 @@ import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb } from "pdf
 import { TPL_ICONS, tplOf } from "@/lib/pdf-templates";
 import { AddressSnap, PdfSettings, SalesDoc, SalesLine, addressLines, balanceOf, discountSummary, num2, pdfOf, taxRows } from "@/lib/sales";
 import { DocLang, docDate, docMeta, docTitle, docTx } from "@/lib/doc-lang";
+import { depositAmount } from "@/lib/templates";
 
 export type PdfInput = {
   doc: SalesDoc; lines: SalesLine[]; companyName: string; logoUrl: string | null;
@@ -269,8 +270,17 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
     if (Number(doc.shipping) !== 0) rows.push({ k: doc.shipping_type === "percent" ? `${L.shipping} (${+Number(doc.shipping_value)}%)` : L.shipping, v: num2(doc.shipping) });
     if (Number(doc.adjustment) !== 0) rows.push({ k: doc.adjustment_label || L.adjustment, v: num2(doc.adjustment) });
     rows.push({ k: L.total, v: `$${num2(doc.total)}`, strong: true, shade: isQuote });
+    // Paso 6.10: depósito pedido en la cotización
+    const dep = isQuote ? depositAmount(Number(doc.total), doc.deposit_type, doc.deposit_value) : 0;
+    if (dep > 0) {
+      rows.push({ k: L.depositDue(doc.deposit_type === "percent" ? `${+Number(doc.deposit_value)}%` : ""), v: `$${num2(dep)}`, strong: true });
+      if (dep < Number(doc.total)) rows.push({ k: L.depositRest, v: num2(Number(doc.total) - dep) });
+    }
     if (!isQuote) {
-      if (Number(doc.amount_paid) > 0) rows.push({ k: L.paymentMade, v: `(-) ${num2(doc.amount_paid)}`, red: true });
+      // Paso 6.10: el depósito aplicado va en su propio renglón; "Payment Made" es solo lo demás
+      const depApplied = Math.min(Number(doc.amount_paid) || 0, Number(doc.deposit_applied) || 0);
+      if (depApplied > 0) rows.push({ k: L.depositApplied(""), v: `(-) ${num2(depApplied)}`, red: true });
+      if (Number(doc.amount_paid) - depApplied > 0.004) rows.push({ k: L.paymentMade, v: `(-) ${num2(Number(doc.amount_paid) - depApplied)}`, red: true });
       if (Number(doc.written_off) > 0) rows.push({ k: L.writtenOff, v: `(-) ${num2(doc.written_off)}` });
       rows.push({ k: L.balanceDue, v: `$${num2(balanceOf(doc))}`, strong: true, shade: true });
     }

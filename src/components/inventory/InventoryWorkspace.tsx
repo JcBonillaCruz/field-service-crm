@@ -30,7 +30,7 @@ type Row = InvItem & { rows: InvStock[]; total: number; status: StockStatus; val
 
 const BASE = "/dashboard/inventory";
 // Pantallas propias (solo menú + esa pantalla): no son productos
-const RESERVED = new Set(["new", "team", "scan", "settings", "locations", "transfers", "movements", "counts", "reports", "van", "usage", "labels"]);
+const RESERVED = new Set(["new", "team", "scan", "settings", "locations", "transfers", "movements", "counts", "reports", "van", "usage", "labels", "dashboard", "history"]);
 const ICON = {
   box: "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9",
   value: "M12 2.5v19M16.6 6.6c-.6-1.6-2.4-2.6-4.6-2.6-2.6 0-4.6 1.3-4.6 3.4 0 4.8 9.4 2.5 9.4 7.4 0 2.1-2.1 3.5-4.8 3.5-2.4 0-4.4-1.1-5-2.9",
@@ -342,6 +342,13 @@ export default function InventoryWorkspace({ companyId, needsSql, items, stock, 
       </div>
 
       {/* Celular: botón flotante + (como Customers / Items) */}
+      {/* Paso 6.12: Scan también flotante en el celular (arriba del +) */}
+      {!selectedId && (
+        <Link prefetch={false} href={`${BASE}/scan`} aria-label={t("scanBarcode")}
+          className="fixed bottom-24 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full border border-[#bfe6da] bg-white text-[#0f766e] shadow-lg shadow-slate-900/10 active:scale-95 lg:hidden">
+          <Svg d={ICON.scan} />
+        </Link>
+      )}
       {!selectedId && (
         <Link prefetch={false} href={`${BASE}/new`} aria-label={t("newItem")}
           className="fixed bottom-6 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#0f766e] text-white shadow-lg shadow-[#0f766e]/30 active:scale-95 lg:hidden">

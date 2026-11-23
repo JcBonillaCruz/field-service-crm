@@ -28,7 +28,7 @@ export async function processInventoryAlerts(db: SupabaseClient, companyId?: str
     const body = due.length === 1
       ? `${first.inventory_locations?.name ?? "Location"} has ${Number(first.qty)} left (alert at ${Number(first.min_qty)}). Time to restock.`
       : due.slice(0, 4).map((r) => `${r.items?.name ?? "Item"} · ${r.inventory_locations?.name ?? ""}: ${Number(r.qty)}`).join("\n");
-    sent += await pushToCompany(cid, { title, body, url: "/dashboard/inventory", tag: `low-stock-${cid}` });
+    sent += await pushToCompany(cid, { title, body, url: "/dashboard/inventory/dashboard", tag: `low-stock-${cid}` });
     await db.from("inventory_alerts").update({ last_notified_at: new Date().toISOString() }).in("id", due.map((r) => r.id));
   }
   return sent;

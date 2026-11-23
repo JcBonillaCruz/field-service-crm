@@ -20,6 +20,8 @@ import { useTranslations } from "next-intl";
 import { useJobsTx } from "@/i18n/useJobsTx";
 import { useJobError } from "@/i18n/useFmt";
 import { OFF_COLOR, TimeOff, lastDay, overlaps } from "@/lib/time-off";
+import { TemplateButton, TemplatePickerModal, useTemplates } from "@/components/templates/TemplatePicker";
+import { WorkTemplate, tplTotal } from "@/lib/templates";
 type Addr = { id: string; label: string | null; street: string | null; unit: string | null; city: string | null; state: string | null; zip: string | null; is_primary: boolean };
 type CheckRow = { id?: string; label: string; required: boolean; done?: boolean };
 export type JobFormInitial = {
@@ -135,6 +137,23 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
   function addTemplate(id: string) {
     const tp = templates.find((x) => x.id === id); if (!tp) return;
     setChecklist((l) => [...l, ...tp.items.filter((i) => i.label?.trim() && !l.some((x) => x.label === i.label)).map((i) => ({ label: i.label, required: i.required !== false }))]);
+  }
+
+  // Paso 6.10: plantilla de trabajo (tipo, título, detalles, duración, prioridad, checklist y estimado)
+  const tpls = useTemplates("job");
+  const [tplOpen, setTplOpen] = useState(false);
+  const [tplMsg, setTplMsg] = useState("");
+  function applyJobTemplate(tp: WorkTemplate) {
+    if (tp.job_type_id && types.some((x) => x.id === tp.job_type_id)) pickType(tp.job_type_id);
+    if (tp.duration_min && !editing) setEndMin(Math.min(24 * 60 - 15, startMin + tp.duration_min));
+    if (tp.title) setTitle(tp.title);
+    if (tp.job_details) setDescription((d) => (d.trim() ? `${d.trim()}\n${tp.job_details}` : tp.job_details ?? ""));
+    if (tp.priority) setPriority(tp.priority);
+    if (tp.checklist.length) setChecklist((l) => [...l, ...tp.checklist.filter((i) => i.label?.trim() && !l.some((x) => x.label === i.label)).map((i) => ({ label: i.label, required: i.required !== false }))]);
+    const total = tplTotal(tp);
+    if (total > 0) setEstimate(String(total));
+    setTplMsg(t("tplApplied", { name: tp.name }));
+    setTimeout(() => setTplMsg(""), 2600);
   }
 
   async function saveSite(): Promise<string | null> {
@@ -312,6 +331,12 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
             </FormRow>
           )}
 
+          <FormRow label={t("template")} hint={t("templateHint")} width="max-w-[560px]">
+            <div className="flex flex-wrap items-center gap-3">
+              <TemplateButton onClick={() => setTplOpen(true)} count={tpls.list?.length || undefined} />
+              {tplMsg && <span role="status" className="text-[13px] font-medium text-[#0f766e] animate-[bp-fade_0.2s_ease-out]">{tplMsg}</span>}
+            </div>
+          </FormRow>
           <FormRow label={t("type")} width="max-w-[340px]">
             <SelectMenu value={typeId} ariaLabel={t("type")} placeholder={t("chooseType")}
               options={[{ value: "", label: t("noType") }, ...activeTypes.map((x) => ({ value: x.id, label: `${x.name}${x.form_kind === "tune_up" ? t("tuneForm") : ""}` }))]} onChange={pickType} />
@@ -505,6 +530,7 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
         <SaveBar saving={saving} cancelHref={closeHref} error={error} saveLabel={editing ? tc("save") : t("createJob")}
           onDelete={editing && !initial?.cancelled_at && initial?.status !== "completed" ? () => setCancelAsk(true) : undefined} deleteLabel={t("cancelJob")} />
       )}
+      <TemplatePickerModal open={tplOpen} onClose={() => setTplOpen(false)} use="job" list={tpls.list} needsSql={tpls.needsSql} onPick={applyJobTemplate} manageHref="/dashboard/jobs/templates" />
     </form>
   );
 }

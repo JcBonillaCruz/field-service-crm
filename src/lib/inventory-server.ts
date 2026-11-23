@@ -86,3 +86,13 @@ export async function loadMembers(supabase: SupabaseClient, companyId: string) {
   const { data } = await supabase.rpc("inv_members", { p_company: companyId });
   return (data ?? []) as InvMember[];
 }
+
+// Paso 6.12: kit estándar de la van (Inventory → Settings) y datos extra de una ubicación
+export async function loadVanKit(supabase: SupabaseClient, companyId: string) {
+  const { data, error } = await supabase.from("inventory_settings").select("van_kit").eq("company_id", companyId).maybeSingle();
+  return { kit: error ? [] : (Array.isArray(data?.van_kit) ? data!.van_kit : []) as { item_id: string; par: number; min: number }[], kitSql: !error };
+}
+export async function loadLocationExtra(supabase: SupabaseClient, id: string) {
+  const { data, error } = await supabase.from("inventory_locations").select("vehicle, photo_url, photo_path, address, notes").eq("id", id).maybeSingle();
+  return { extra: (data ?? {}) as Record<string, unknown>, extraSql: !error };
+}

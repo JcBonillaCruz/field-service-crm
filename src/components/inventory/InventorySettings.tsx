@@ -6,15 +6,17 @@ import { createClient } from "@/lib/supabase/client";
 import { confirmDelete } from "@/lib/confirm";
 import { inputClass } from "@/components/customers/ui";
 import { Toast } from "@/components/sales/SalesBits";
-import { AlertFrequency, InvCategory } from "@/lib/inventory";
+import { AlertFrequency, InvCategory, InvItem } from "@/lib/inventory";
+import KitEditor, { KitRow } from "@/components/inventory/KitEditor";
 import { sheetItem } from "@/components/ui/sheet";
 import { useTranslations } from "next-intl";
 
 const FREQ: AlertFrequency[] = ["once", "daily", "weekly"];
 
 // Ajustes del inventario: categorías y avisos de stock bajo
-export default function InventorySettings({ companyId, categories, counts, needsSql, frequency, canEditAlerts }: {
+export default function InventorySettings({ companyId, categories, counts, needsSql, frequency, canEditAlerts, items = [], kit = null, barcodes }: {
   companyId: string; categories: InvCategory[]; counts: Record<string, number>; needsSql: boolean; frequency: AlertFrequency; canEditAlerts: boolean;
+  items?: InvItem[]; kit?: KitRow[] | null; barcodes?: Record<string, string>; // Paso 6.12: kit estándar (null = falta el SQL 6.12)
 }) {
   const t = useTranslations("invSettings");
   const tc = useTranslations("common");
@@ -27,6 +29,14 @@ export default function InventorySettings({ companyId, categories, counts, needs
     say(t("freqSaved"));
   }
   const router = useRouter();
+  const [kitRows, setKitRows] = useState<KitRow[]>(kit ?? []);
+  const [kitDirty, setKitDirty] = useState(false);
+  async function saveKit() {
+    if (!canEditAlerts) return setError(t("eRole"));
+    const { error: err } = await createClient().from("inventory_settings").upsert({ company_id: companyId, alert_frequency: freq, van_kit: kitRows, updated_at: new Date().toISOString() });
+    if (err) return setError(t("eSql"));
+    setKitDirty(false); say(t("kitSaved"));
+  }
   const [name, setName] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -123,6 +133,18 @@ export default function InventorySettings({ companyId, categories, counts, needs
         </div>
         <p className="border-t border-slate-100 px-5 py-3 text-[12.5px] text-slate-500">{t("phoneHint")}</p>
       </section>
+      {kit && (
+        <section id="kit" className="mt-5 scroll-mt-20 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="border-b border-slate-100 px-5 py-4">
+            <h2 className="text-[16px] font-semibold text-[#0b1f3a]">{t("kit")}</h2>
+            <p className="text-[13px] text-slate-500">{t("kitHint")}</p>
+          </div>
+          <div className="px-5 py-4">
+            <KitEditor items={items} rows={kitRows} barcodes={barcodes} onChange={(r) => { setKitRows(r); setKitDirty(true); }} />
+            {kitDirty && <button type="button" onClick={saveKit} className="mt-4 rounded-lg bg-[#0f766e] px-4 py-2.5 text-[15px] font-semibold text-white transition-colors hover:bg-[#0c5f59]">{t("saveKit")}</button>}
+          </div>
+        </section>
+      )}
       <Toast text={toast} />
     </div>
   );

@@ -28,6 +28,7 @@ type NavItem = {
   icon: string;
   roles?: Role[];
   exclude?: string[]; // rutas hijas que NO marcan este enlace como activo
+  also?: string[]; // otras rutas que también lo marcan como activo (Paso 6.12: History = movimientos, transferencias y conteos)
   children?: NavItem[]; // grupo plegable (ej. Product Catalog → Items, Coupons)
   art?: "dashboard"; // ícono a color (el mismo de la pestaña Dashboard del inicio)
 };
@@ -86,20 +87,21 @@ const QR_NAV: NavItem[] = [
 ];
 // Inventory: su propio menú. El técnico ve solo lo suyo (su van, escanear, su consumo).
 const MANAGE: Role[] = ["owner", "manager", "office"];
+// Paso 6.12: menú nuevo → Dashboard (primera pantalla) · Items (Scan como botón) · Stock & Vans (transferir, contar, resurtir dentro)
+// · Labels · History (movimientos, transferencias y conteos juntos) · Reports · Team · Settings
+const INV = "/dashboard/inventory";
 const INVENTORY_NAV: NavItem[] = [
-  { label: "Items", href: "/dashboard/inventory", exclude: ["/dashboard/inventory/scan", "/dashboard/inventory/labels", "/dashboard/inventory/settings", "/dashboard/inventory/locations", "/dashboard/inventory/transfers", "/dashboard/inventory/movements", "/dashboard/inventory/counts", "/dashboard/inventory/reports", "/dashboard/inventory/team"], addHref: "/dashboard/inventory/new", roles: MANAGE, icon: "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9" },
-  { label: "My Van", href: "/dashboard/inventory/van", roles: ["technician"], icon: "M3 7h11v9H3zM14 10h4l3 3v3h-7zM7 19a1.8 1.8 0 1 0 0-3.6A1.8 1.8 0 0 0 7 19zM17 19a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6z" },
-  { label: "Scan", href: "/dashboard/inventory/scan", roles: MANAGE, icon: "M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 8v8M10 8v8M13 8v8M16.5 8v8" },
-  { label: "Labels", href: "/dashboard/inventory/labels", roles: MANAGE, icon: "M7 8V3h10v5M6 17H4V9h16v8h-2M7 14h10v7H7z" },
-  { label: "Scan", href: "/dashboard/inventory/scan", roles: ["technician"], icon: "M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 8v8M10 8v8M13 8v8M16.5 8v8" },
-  { label: "Locations & Vans", href: "/dashboard/inventory/locations", addHref: "/dashboard/inventory/locations/new", addLabel: "Location", roles: MANAGE, icon: "M3 10.5 12 4l9 6.5V20H3zM8 20v-6h8v6M8 17h8" },
-  { label: "Transfers", href: "/dashboard/inventory/transfers", addHref: "/dashboard/inventory/transfers/new", roles: MANAGE, icon: "M4 8h13l-3-3M20 16H7l3 3" },
-  { label: "Movements", href: "/dashboard/inventory/movements", roles: MANAGE, icon: "M12 8v4l2.5 2.5M3.5 12a8.5 8.5 0 1 0 2.5-6M3 4v4h4" },
-  { label: "Counts", href: "/dashboard/inventory/counts", addHref: "/dashboard/inventory/counts/new", roles: MANAGE, icon: "M9 5h6M9 3h6v4H9zM6 5H5v16h14V5h-1M9 13l2 2 4-4" },
-  { label: "Reports", href: "/dashboard/inventory/reports", roles: MANAGE, icon: "M4 4v16h16M8.5 16v-4M12.5 16V8M16.5 16v-6" },
-  { label: "My Usage", href: "/dashboard/inventory/usage", roles: ["technician"], icon: "M4 4v16h16M8.5 16v-4M12.5 16V8M16.5 16v-6" },
-  { label: "Team", href: "/dashboard/inventory/team", addHref: "/dashboard/inventory/team/invite", addLabel: "Member", roles: ["owner", "manager"], icon: "M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6" },
-  { label: "Settings", href: "/dashboard/inventory/settings", roles: MANAGE, icon: "M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1M15 5v4M9 10v4M17 15v4" },
+  { label: "Dashboard", href: `${INV}/dashboard`, roles: MANAGE, icon: "M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z", art: "dashboard" },
+  { label: "Items", href: INV, exclude: ["dashboard", "labels", "settings", "locations", "transfers", "movements", "counts", "history", "reports", "team"].map((x) => `${INV}/${x}`), addHref: `${INV}/new`, roles: MANAGE, icon: "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9" },
+  { label: "My Van", href: `${INV}/van`, roles: ["technician"], icon: "M3 7h11v9H3zM14 10h4l3 3v3h-7zM7 19a1.8 1.8 0 1 0 0-3.6A1.8 1.8 0 0 0 7 19zM17 19a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6z" },
+  { label: "Scan", href: `${INV}/scan`, roles: ["technician"], icon: "M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 8v8M10 8v8M13 8v8M16.5 8v8" },
+  { label: "Stock & Vans", href: `${INV}/locations`, addHref: `${INV}/locations?new=1`, addLabel: "Location", roles: MANAGE, icon: "M3 10.5 12 4l9 6.5V20H3zM8 20v-6h8v6M8 17h8", also: [`${INV}/transfers/new`, `${INV}/counts/new`] },
+  { label: "Labels", href: `${INV}/labels`, roles: MANAGE, icon: "M7 8V3h10v5M6 17H4V9h16v8h-2M7 14h10v7H7z" },
+  { label: "History", href: `${INV}/history`, roles: MANAGE, icon: "M12 8v4l2.5 2.5M3.5 12a8.5 8.5 0 1 0 2.5-6M3 4v4h4", also: [`${INV}/movements`, `${INV}/transfers`, `${INV}/counts`], exclude: [`${INV}/transfers/new`, `${INV}/counts/new`] },
+  { label: "Reports", href: `${INV}/reports`, roles: MANAGE, icon: "M4 4v16h16M8.5 16v-4M12.5 16V8M16.5 16v-6" },
+  { label: "My Usage", href: `${INV}/usage`, roles: ["technician"], icon: "M4 4v16h16M8.5 16v-4M12.5 16V8M16.5 16v-6" },
+  { label: "Team", href: `${INV}/team`, addHref: `${INV}/team/invite`, addLabel: "Member", roles: ["owner", "manager"], icon: "M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6" },
+  { label: "Settings", href: `${INV}/settings`, roles: MANAGE, icon: "M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1M15 5v4M9 10v4M17 15v4" },
 ];
 // Jobs: calendario (Schedule) para la oficina; el técnico ve solo sus trabajos
 const JOBS_NAV: NavItem[] = [
@@ -109,6 +111,8 @@ const JOBS_NAV: NavItem[] = [
   { label: "Assign jobs", href: "/dashboard/jobs/assign", roles: MANAGE, icon: "M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2.5 15a5.5 5.5 0 0 1 11 0M14 12h7M18 9l3 3-3 3" },
   // Paso 5.11: planes de mantenimiento (visitas que se repiten y se crean solas)
   { label: "Maintenance plans", href: "/dashboard/jobs/plans", addHref: "/dashboard/jobs/plans/new", addLabel: "Plan", roles: MANAGE, icon: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 15a3 3 0 0 1 5.2-2M15 15a3 3 0 0 1-5.2 2M14.5 11.5V13H13M9.5 18.5V17H11" },
+  // Paso 6.10: plantillas de trabajo y cotización (Tune-up, cambio de capacitor…)
+  { label: "Templates", href: "/dashboard/jobs/templates", addHref: "/dashboard/jobs/templates/new", addLabel: "Template", roles: MANAGE, icon: "M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM9 8h6M9 12h6M9 16h3" },
   { label: "Confirmations", href: "/dashboard/jobs/confirmations", roles: MANAGE, icon: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 15l2.2 2.2L15.5 13" },
   { label: "Timesheets", href: "/dashboard/jobs/timesheets", roles: MANAGE, icon: "M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 9v4l2.5 1.5M9.5 2.5h5" },
   { label: "Reports", href: "/dashboard/jobs/reports", roles: MANAGE, icon: "M4 4v16h16M8.5 16v-4M12.5 16V8M16.5 16v-6" },
@@ -137,7 +141,7 @@ const appArt = (id: AppId, size: number) =>
 // Inicio de cada app (el técnico va directo a lo suyo)
 const appHome = (id: AppId, role: Role | null) =>
   role === "technician" ? (id === "inventory" ? "/dashboard/inventory/van" : "/dashboard/jobs/mine")
-    : id === "finance" ? "/dashboard" : id === "jobs" ? "/dashboard/jobs" : id === "inventory" ? "/dashboard/inventory" : "/dashboard/tools/qr";
+    : id === "finance" ? "/dashboard" : id === "jobs" ? "/dashboard/jobs" : id === "inventory" ? "/dashboard/inventory/dashboard" : "/dashboard/tools/qr";
 const GLOBAL_SETTINGS = "/dashboard/settings";
 const GLOBAL_TEAM = "/dashboard/team";
 const ACCOUNT = "/dashboard/account";
@@ -313,8 +317,9 @@ function NavList({ role, onNavigate, forApp, embedded = false }: { role: Role | 
   const items = NAV.filter(allowed).filter((i) => !(embedded && (i.href === GLOBAL_SETTINGS || i.label === "Team")))
     .map((i) => (i.children ? { ...i, children: i.children.filter(allowed) } : i));
   const excludes = new Map(NAV.filter((n) => n.exclude && n.href).map((n) => [n.href as string, n.exclude as string[]]));
+  const alsoOf = new Map(NAV.filter((n) => n.also && n.href).map((n) => [n.href as string, n.also as string[]]));
   const isActive = (href?: string) => Boolean(href && (href === "/dashboard" ? pathname === "/dashboard"
-    : pathname.startsWith(href) && !(excludes.get(href) ?? []).some((x) => pathname.startsWith(x))));
+    : (pathname.startsWith(href) || (alsoOf.get(href) ?? []).some((x) => pathname.startsWith(x))) && !(excludes.get(href) ?? []).some((x) => pathname.startsWith(x))));
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [appsOpen, setAppsOpen] = useState(false);
   const installApp = useInstallApp();

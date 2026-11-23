@@ -27,6 +27,9 @@ const EN = {
   subTotal: "Sub Total", discount: "Discount", tax: "Tax", shipping: "Shipping Charges", adjustment: "Adjustment", total: "Total",
   taxExempt: "Tax exempt", cert: (n: string) => `Certificate #${n}`,
   paymentMade: "Payment Made", writtenOff: "Written Off",
+  // Paso 6.10: depósitos
+  depositDue: (p: string) => (p ? `Deposit due on acceptance (${p})` : "Deposit due on acceptance"), depositRest: "Remaining after deposit",
+  depositApplied: (n: string) => (n ? `Deposit applied (${n})` : "Deposit applied"), depositLine: (n: string) => `Deposit for quote ${n}`, depositDesc: (p: string) => `${p} of the quote total`,
   notes: "Notes", termsConditions: "Terms & Conditions", thanks: "Thank you!",
   signedBy: "Accepted & signed by the customer", signatureOf: (n: string) => `Signature of ${n}`,
   receivedBy: "Received by (name & signature)", date: "Date", poweredBy: "POWERED BY",
@@ -65,6 +68,8 @@ const ES: Dict = {
   subTotal: "Subtotal", discount: "Descuento", tax: "Impuesto", shipping: "Cargos de envío", adjustment: "Ajuste", total: "Total",
   taxExempt: "Exento de impuesto", cert: (n: string) => `Certificado n.º ${n}`,
   paymentMade: "Pago recibido", writtenOff: "Saldo cancelado",
+  depositDue: (p: string) => (p ? `Depósito al aceptar (${p})` : "Depósito al aceptar"), depositRest: "Resta después del depósito",
+  depositApplied: (n: string) => (n ? `Depósito aplicado (${n})` : "Depósito aplicado"), depositLine: (n: string) => `Depósito de la cotización ${n}`, depositDesc: (p: string) => `${p} del total de la cotización`,
   notes: "Notas", termsConditions: "Términos y condiciones", thanks: "¡Gracias!",
   signedBy: "Aceptada y firmada por el cliente", signatureOf: (n: string) => `Firma de ${n}`,
   receivedBy: "Recibido por (nombre y firma)", date: "Fecha", poweredBy: "HECHO CON",

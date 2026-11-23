@@ -26,6 +26,8 @@ import { useTranslations } from "next-intl";
 import { useSalesTx } from "@/i18n/useSalesTx";
 import { DocTax, NO_TAX, SurchargePreset, TAX_COLS, TaxRate, TaxSetting, certExpired, rateLabel, resolveTax } from "@/lib/tax";
 import type { Surcharge } from "@/lib/sales";
+import { SaveTemplateModal, TemplateButton, TemplatePickerModal, useTemplates } from "@/components/templates/TemplatePicker";
+import { WorkTemplate, depositAmount, linesToTpl, tplToLines } from "@/lib/templates";
 
 type Addr = { id: string; label: string | null; street: string; unit: string | null; city: string; state: string | null; zip: string | null; country: string | null; is_primary: boolean } & TaxSetting;
 const snap = (a?: Addr | null): AddressSnap => (a ? { label: a.label, street: a.street, unit: a.unit, city: a.city, state: a.state, zip: a.zip, country: a.country } : null);
@@ -90,6 +92,13 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
   const [adjLabel, setAdjLabel] = useState(src?.adjustment_label ?? "Adjustment");
   const [adjustment, setAdjustment] = useState(String(src?.adjustment ?? ""));
   const [notes, setNotes] = useState(src ? src.notes ?? "" : settings.default_notes ?? "");
+  // Paso 6.10: depósito que pide la cotización (vacío o 0 = sin depósito)
+  const [depType, setDepType] = useState<"percent" | "flat">(src?.deposit_type === "flat" ? "flat" : "percent");
+  const [depValue, setDepValue] = useState(src?.deposit_type && Number(src.deposit_value) ? String(+Number(src.deposit_value)) : "");
+  const [tplOpen, setTplOpen] = useState(false);
+  const [saveTpl, setSaveTpl] = useState(false);
+  const [tplMsg, setTplMsg] = useState("");
+  const tpls = useTemplates("quote");
   const [tc, setTc] = useState(src ? src.terms ?? "" : settings.default_terms ?? "");
   const [files, setFiles] = useState<File[]>([]);
   const [simple, setSimple] = useState(false);
@@ -197,6 +206,19 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
   const addSurch = (x: Surcharge) => setSurch((l) => [...l, x]);
   const setSurchAt = (i: number, patch: Partial<Surcharge>) => setSurch((l) => l.map((x, j) => (j === i ? { ...x, ...patch } : x)));
 
+  // Paso 6.10: aplicar una plantilla (las líneas vacías se reemplazan; las que ya escribiste se quedan)
+  function applyTemplate(tp: WorkTemplate) {
+    const kept = lines.filter((l) => l.name.trim() || Number(l.rate) || l.item_id);
+    setLines([...kept, ...tplToLines(tp, kept.length)].map((l, i) => ({ ...l, position: i })));
+    if (tp.subject && !subject.trim()) { setSubject(tp.subject); setShowSubject(true); }
+    if (tp.notes && (!notes.trim() || notes === (settings.default_notes ?? ""))) setNotes(tp.notes);
+    if (tp.terms && !tc.trim()) { setTc(tp.terms); setShowTc(true); }
+    if (isQuote && tp.deposit_type && tp.deposit_value > 0) { setDepType(tp.deposit_type); setDepValue(String(+tp.deposit_value)); }
+    setTplMsg(t("tplApplied", { name: tp.name }));
+    setTimeout(() => setTplMsg(""), 2600);
+  }
+  const depAmount = isQuote ? depositAmount(totals.total, depType, Number(depValue) || 0) : 0;
+
   function onTerms(v: string) { setTerms(v); if (v !== "Custom") setDue(dueFromTerms(date, v)); }
   function onDate(d: string) { setDate(d); if (!isQuote && terms !== "Custom") setDue(dueFromTerms(d, terms)); }
 
@@ -239,15 +261,21 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
       ...(shipType === "percent" || (src && "shipping_type" in src) ? { shipping_type: shipType, shipping_value: Number(shipping) || 0 } : {}),
       adjustment: totals.adjustment, adjustment_label: adjLabel.trim() || "Adjustment", subtotal: totals.subtotal, total: totals.total,
       notes: notes.trim() || null, terms: tc.trim() || null, updated_at: now,
+      // Paso 6.10: depósito (solo si lo pidieron o ya estaba guardado; sin el SQL 6.10 se guarda sin él)
+      ...(isQuote && (Number(depValue) > 0 || src?.deposit_type) ? { deposit_type: Number(depValue) > 0 ? depType : null, deposit_value: Number(depValue) > 0 ? round2(Number(depValue)) : 0 } : {}),
     };
+    const noDep = (e: { message?: string } | null) => Boolean(e && /deposit_/i.test(e.message ?? ""));
+    const strip = (r: Record<string, unknown>) => { const { deposit_type: _a, deposit_value: _b, ...rest } = r; return rest; };
     let id = editing ? src!.id : "";
     if (editing) {
-      const { error: e } = await supabase.from("sales_docs").update({ ...row, number: num, ...(mode === "sent" && src!.status === "draft" ? { status: "sent", sent_at: now } : {}) }).eq("id", id);
+      const upd = { ...row, number: num, ...(mode === "sent" && src!.status === "draft" ? { status: "sent", sent_at: now } : {}) };
+      let { error: e } = await supabase.from("sales_docs").update(upd).eq("id", id);
+      if (noDep(e)) ({ error: e } = await supabase.from("sales_docs").update(strip(upd)).eq("id", id));
       if (e) { setSaving(""); return setError(e.code === "23505" ? t("eDup", { kind, num }) : t("eSave", { kind })); }
     } else {
-      const { data, error: e } = await supabase.from("sales_docs").insert({
-        ...row, company_id: companyId, kind, number: num, status: mode === "sent" ? "sent" : "draft", sent_at: mode === "sent" ? now : null, created_by_name: actor,
-      }).select("id").single();
+      const ins = { ...row, company_id: companyId, kind, number: num, status: mode === "sent" ? "sent" : "draft", sent_at: mode === "sent" ? now : null, created_by_name: actor };
+      let { data, error: e } = await supabase.from("sales_docs").insert(ins).select("id").single();
+      if (noDep(e)) ({ data, error: e } = await supabase.from("sales_docs").insert(strip(ins)).select("id").single());
       if (e || !data) { setSaving(""); return setError(e?.code === "23505" ? t("eDup", { kind, num }) : t("eSaveSql", { kind })); }
       id = data.id;
     }
@@ -405,6 +433,10 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
         {/* Artículos + totales */}
         <div className="px-5 py-6 sm:px-8 max-sm:mx-3 max-sm:mt-3 max-sm:rounded-2xl max-sm:border max-sm:border-slate-200 max-sm:bg-white max-sm:px-4 max-sm:shadow-[0_1px_4px_rgba(15,40,60,0.06)]">
           <div className="max-w-[1100px]">
+            <div className="mb-3 flex flex-wrap items-center gap-3">
+              <TemplateButton onClick={() => setTplOpen(true)} count={tpls.list?.length || undefined} />
+              {tplMsg && <span role="status" className="text-[13px] font-medium text-[#0f766e] animate-[bp-fade_0.2s_ease-out]">{tplMsg}</span>}
+            </div>
             <LineItems lines={lines} setLines={setLines} items={items} />
             <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
               <div>
@@ -501,6 +533,16 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
                   </div>
                 )}
                 <div className={`flex justify-between text-[18px] font-semibold text-[#0b1f3a] ${(!compactTotals || showSummary) ? "mt-4 border-t border-slate-200 pt-4" : ""}`}><span>{t("total")}</span><span className="tabular-nums">{num2(totals.total)}</span></div>
+                {/* Paso 6.10: depósito al aceptar (ej. 50% al aceptar y 50% al terminar) */}
+                {isQuote && (
+                  <div className="mt-4 space-y-1.5 border-t border-dashed border-slate-200 pt-4 text-[15px]">
+                    <TotRow label={t("deposit")}
+                      amount={<span className={depAmount > 0 ? "font-semibold text-[#0b1f3a]" : ""}>{num2(depAmount)}</span>}>
+                      <AmountKind value={depValue} onValue={setDepValue} kind={depType} onKind={setDepType} label={t("depositType")} />
+                    </TotRow>
+                    <p className="text-right text-[13px] text-slate-500">{depAmount > 0 ? t("depositRest", { amount: num2(round2(totals.total - depAmount)) }) : t("depositTip")}</p>
+                  </div>
+                )}
                 {compactTotals && (
                   <button type="button" onClick={() => setShowSummary((v) => !v)} className="mt-2 flex w-full items-center justify-end gap-1 text-sm font-medium text-[#2563eb]">
                     {showSummary ? t("hideSummary") : t("showSummary")}<svg viewBox="0 0 20 20" className={`h-4 w-4 transition-transform ${showSummary ? "rotate-180" : ""}`} fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
@@ -554,6 +596,7 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
             </MenuButton>
             <MenuItems anchor="top end" transition className="z-[80] mb-1 w-56 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
               <MenuItem><button type="button" onClick={() => submit("sent")} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 data-[focus]:bg-[#e9f7f4] data-[focus]:text-[#0b1f3a]">{t("saveSent")}</button></MenuItem>
+              {isQuote && <MenuItem><button type="button" onClick={() => setSaveTpl(true)} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 data-[focus]:bg-[#e9f7f4] data-[focus]:text-[#0b1f3a]">{t("saveTpl")}</button></MenuItem>}
             </MenuItems>
           </Menu>
         </div>
@@ -565,6 +608,10 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
 
       {taxReady && <NewRateModal open={newRate} onClose={() => setNewRate(false)} companyId={companyId} first={!taxRates.length}
         onSaved={(r) => { setTaxRates((l) => [...l, r]); setLastRate(r.id); setDocTax({ mode: "rate", rate_id: r.id, name: r.name, rate: r.rate, source: "manual" }); }} />}
+      <TemplatePickerModal open={tplOpen} onClose={() => setTplOpen(false)} use="quote" list={tpls.list} needsSql={tpls.needsSql} onPick={applyTemplate} manageHref="/dashboard/settings/templates" />
+      {isQuote && <SaveTemplateModal open={saveTpl} onClose={() => setSaveTpl(false)} companyId={companyId} actor={actor}
+        onSaved={(name) => { setTplMsg(t("tplSaved", { name })); setTimeout(() => setTplMsg(""), 2600); }}
+        data={{ lines: linesToTpl(lines), subject: subject.trim() || null, notes: notes.trim() || null, terms: tc.trim() || null, deposit_type: Number(depValue) > 0 ? depType : null, deposit_value: Number(depValue) > 0 ? round2(Number(depValue)) : 0 }} />}
       <NumberModal open={numModal} onClose={() => setNumModal(false)} kind={kind} companyId={companyId} prefs={livePrefs}
         onSaved={(p, isAuto) => { setLivePrefs(p); setAuto(isAuto); if (!isAuto && !editing) setNumber(""); }} />
     </div>

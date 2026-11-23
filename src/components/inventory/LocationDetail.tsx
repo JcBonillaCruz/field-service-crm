@@ -8,12 +8,14 @@ import { useTranslations } from "next-intl";
 import { useInvTx } from "@/i18n/useInvTx";
 import type { MoveRow } from "@/lib/inventory-server";
 import { LocIcon, PageHead, card, pageWrap, useFmt } from "@/components/inventory/PageBits";
+import type { LocExtra } from "@/components/inventory/LocationForm";
 
 type Row = { item_id: string; qty: number; min_qty: number; items: { name: string; sku: string | null; unit: string | null; cost_price: number; image_url: string | null } | null };
 
 // Lo que hay en una bodega o en la van de un técnico, con accesos para resurtir y contar
-export default function LocationDetail({ location, locations, rows, moves, techName, canEdit }: {
+export default function LocationDetail({ location, locations, rows, moves, techName, canEdit, extra = {} }: {
   location: InvLocation & { is_active: boolean }; locations: InvLocation[]; rows: Row[]; moves: MoveRow[]; techName: string | null; canEdit: boolean;
+  extra?: LocExtra; // Paso 6.12: vehículo, foto, dirección, notas
 }) {
   const t = useTranslations("invLocDetail");
   const ix = useInvTx();
@@ -32,7 +34,7 @@ export default function LocationDetail({ location, locations, rows, moves, techN
     <div className={pageWrap}>
       <PageHead back="/dashboard/inventory/locations" title={location.name}
         subtitle={location.kind === "van" ? (techName ? t("vanOf", { name: techName }) : t("vanNoTech")) : location.is_default ? t("mainWh") : t("warehouse")}>
-        <Link prefetch={false} href={`/dashboard/inventory/transfers/new?to=${location.id}`} className={btn}>
+        <Link prefetch={false} href={`/dashboard/inventory/transfers/new?to=${location.id}${location.kind === "van" ? "&restock=1" : ""}`} className={btn}>
           <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3" /></svg>
           {location.kind === "van" ? t("restock") : t("transferIn")}
         </Link>
@@ -42,6 +44,26 @@ export default function LocationDetail({ location, locations, rows, moves, techN
         </Link>
         {canEdit && <PencilButton href={`/dashboard/inventory/locations/${location.id}/edit`} label={t("edit")} />}
       </PageHead>
+
+      {/* Paso 6.12: datos de la van (vehículo y foto) o de la bodega (dirección) */}
+      {(extra.photo_url || extra.vehicle || extra.address || extra.notes) && (() => {
+        const v = extra.vehicle ?? {}; const a = extra.address ?? {};
+        const car = [v.year, v.make, v.model].filter(Boolean).join(" ");
+        const place = [a.street, [a.city, [a.state, a.zip].filter(Boolean).join(" ")].filter(Boolean).join(", ")].filter(Boolean).join(", ");
+        return (
+          <div className={`${card} mt-5 flex flex-wrap items-center gap-4 p-4`}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {extra.photo_url && <img src={extra.photo_url} alt={location.name} className="h-20 w-32 rounded-xl object-cover" />}
+            <dl className="grid min-w-0 flex-1 gap-x-8 gap-y-1.5 text-[14px] sm:grid-cols-2">
+              {car && <div><dt className="text-[12px] text-slate-500">{t("vehicle")}</dt><dd className="text-[#0b1f3a]">{car}</dd></div>}
+              {v.plate && <div><dt className="text-[12px] text-slate-500">{t("plate")}</dt><dd className="font-mono text-[#0b1f3a]">{v.plate}</dd></div>}
+              {v.vin && <div><dt className="text-[12px] text-slate-500">VIN</dt><dd className="font-mono text-[#0b1f3a]">{v.vin}</dd></div>}
+              {place && <div className="sm:col-span-2"><dt className="text-[12px] text-slate-500">{t("address")}</dt><dd className="text-[#0b1f3a]">{place}</dd></div>}
+              {extra.notes && <div className="sm:col-span-2"><dt className="text-[12px] text-slate-500">{t("notes")}</dt><dd className="whitespace-pre-line text-slate-700">{extra.notes}</dd></div>}
+            </dl>
+          </div>
+        );
+      })()}
 
       <div className="mt-5 grid grid-cols-3 gap-3">
         {[[t("units"), qtyFmt(units)], [t("value"), usd(value)], [t("low"), String(low)]].map(([k, v]) => (

@@ -76,6 +76,8 @@ export async function convertQuote(quote: SalesDoc, lines: SalesLine[], settings
   await supabase.from("sales_docs").update({ status: "invoiced", updated_at: new Date().toISOString() }).eq("id", quote.id);
   await logActivity(quote.company_id, "quote", quote.id, `Quote converted to invoice ${number}`, actor);
   await logActivity(quote.company_id, "invoice", data.id, `Invoice created from quote ${quote.number}`, actor);
+  // Paso 6.10: lo cobrado del depósito ya queda descontado en la factura final
+  if (quote.deposit_type) await applyQuoteDeposits(data.id, quote, actor);
   return data.id;
 }
 
@@ -128,7 +130,9 @@ export async function invoiceFromSubscription(sub: Subscription, lines: SalesLin
 export async function refreshInvoicePaid(invoice: SalesDoc) {
   const supabase = db();
   const { data } = await supabase.from("sales_payments").select("kind, amount").eq("invoice_id", invoice.id);
-  const paid = round2((data ?? []).filter((p) => p.kind === "payment").reduce((s, p) => s + Number(p.amount), 0));
+  // Paso 6.10: el depósito aplicado cuenta como pagado (crédito), pero se guarda aparte para mostrarlo en el PDF
+  const dep = round2((data ?? []).filter((p) => p.kind === "deposit").reduce((s, p) => s + Number(p.amount), 0));
+  const paid = round2((data ?? []).filter((p) => p.kind === "payment" || p.kind === "deposit").reduce((s, p) => s + Number(p.amount), 0));
   const off = round2((data ?? []).filter((p) => p.kind === "write_off").reduce((s, p) => s + Number(p.amount), 0));
   const bal = round2(Number(invoice.total) - paid - off);
   let status = invoice.status;
@@ -137,5 +141,88 @@ export async function refreshInvoicePaid(invoice: SalesDoc) {
     else if (bal <= 0 && Number(invoice.total) > 0) status = "paid";
     else if (status === "draft" || status === "paid" || status === "written_off" || status === "partially_paid") status = paid > 0 ? "partially_paid" : "sent";
   }
-  await supabase.from("sales_docs").update({ amount_paid: paid, written_off: off, status, updated_at: new Date().toISOString() }).eq("id", invoice.id);
+  const patch = { amount_paid: paid, written_off: off, status, updated_at: new Date().toISOString() };
+  const { error } = await supabase.from("sales_docs").update({ ...patch, deposit_applied: dep }).eq("id", invoice.id);
+  // Sin el SQL 6.10 (columna deposit_applied) se guarda igual, sin esa columna
+  if (error && /deposit_applied/i.test(error.message)) await supabase.from("sales_docs").update(patch).eq("id", invoice.id);
 }
+
+// =====================================================================
+// Paso 6.10 · Depósitos
+//   1) La cotización pide depósito (ej. 50%).
+//   2) "Create deposit invoice" → factura de depósito (sin impuesto, una línea) ligada a la cotización.
+//   3) Al hacer la factura final (de la cotización o del trabajo), lo cobrado del depósito se aplica como crédito
+//      (pago tipo "deposit"): la factura final queda con el total completo y el saldo ya descontado.
+//      Ese crédito NO cuenta como dinero nuevo en los reportes (el dinero entró con la factura de depósito).
+// =====================================================================
+export async function createDepositInvoice(quote: SalesDoc, actor: string, label: { line: (n: string) => string; desc: (p: string) => string }): Promise<string | null> {
+  const supabase = db();
+  const { depositAmount } = await import("@/lib/templates");
+  const amount = depositAmount(Number(quote.total), quote.deposit_type, quote.deposit_value);
+  if (amount <= 0) return null;
+  const number = await nextNumber(quote.company_id, "invoice");
+  if (!number) return null;
+  const date = today();
+  const pct = quote.deposit_type === "percent" ? `${+Number(quote.deposit_value)}%` : "";
+  const { data, error } = await supabase.from("sales_docs").insert({
+    company_id: quote.company_id, kind: "invoice", number, customer_id: quote.customer_id, customer_name: quote.customer_name, emails: quote.emails,
+    billing_address: quote.billing_address, site_address: quote.site_address, address_id: quote.address_id,
+    reference: quote.number, doc_date: date, payment_terms: "Due on Receipt", due_date: date, salesperson: quote.salesperson, subject: quote.subject,
+    status: "draft", discount_value: 0, discount_type: "flat", tax_name: null, tax_rate: 0, tax_amount: 0, shipping: 0, adjustment: 0, adjustment_label: "Adjustment",
+    subtotal: amount, total: amount, notes: quote.notes, quote_id: quote.id, created_by_name: actor, is_deposit: true, tax_mode: "none", tax_breakdown: [],
+  }).select("id").single();
+  if (error || !data) return null;
+  await saveLines(quote.company_id, { doc_id: data.id }, [{
+    position: 0, item_id: null, name: label.line(quote.number), description: pct ? label.desc(pct) : null, quantity: 1, unit: null,
+    rate: amount, discount: 0, discount_type: "flat", amount, image_url: null, tax_rate: 0, tax_rate_id: null, tax_name: null, tax_amount: 0,
+  }]);
+  await logActivity(quote.company_id, "quote", quote.id, `Deposit invoice ${number} created for ${money2(amount)}`, actor);
+  await logActivity(quote.company_id, "invoice", data.id, `Deposit invoice created from quote ${quote.number}`, actor);
+  return data.id as string;
+}
+
+export type OpenDeposit = { id: string; number: string; quote_id: string | null; reference: string | null; paid: number; applied: number; available: number };
+// Depósitos ya cobrados de un cliente que todavía no se aplican a ninguna factura (o solo en parte)
+export async function openDeposits(companyId: string, customerId: string | null, exceptInvoice?: string): Promise<OpenDeposit[]> {
+  if (!customerId) return [];
+  const supabase = db();
+  const { data: deps, error } = await supabase.from("sales_docs").select("id, number, quote_id, reference, amount_paid, status")
+    .eq("company_id", companyId).eq("customer_id", customerId).eq("kind", "invoice").eq("is_deposit", true).neq("status", "void");
+  if (error || !deps?.length) return [];
+  const ids = deps.map((d) => d.id as string);
+  const { data: used } = await supabase.from("sales_payments").select("source_invoice_id, amount, invoice_id").eq("kind", "deposit").in("source_invoice_id", ids);
+  return deps.filter((d) => d.id !== exceptInvoice).map((d) => {
+    const applied = round2((used ?? []).filter((u) => u.source_invoice_id === d.id).reduce((t, u) => t + Number(u.amount), 0));
+    const paid = round2(Number(d.amount_paid));
+    return { id: d.id as string, number: d.number as string, quote_id: (d.quote_id as string | null) ?? null, reference: (d.reference as string | null) ?? null, paid, applied, available: round2(paid - applied) };
+  }).filter((d) => d.available > 0.004);
+}
+
+// Aplica un depósito cobrado a una factura (sin pasarse del saldo)
+export async function applyDeposit(invoice: SalesDoc, dep: OpenDeposit, actor: string): Promise<number> {
+  const supabase = db();
+  const { data: fresh } = await supabase.from("sales_docs").select("*").eq("id", invoice.id).maybeSingle();
+  const inv = (fresh ?? invoice) as SalesDoc;
+  const bal = round2(Number(inv.total) - Number(inv.amount_paid) - Number(inv.written_off));
+  const amount = round2(Math.min(dep.available, bal));
+  if (amount <= 0) return 0;
+  const { error } = await supabase.from("sales_payments").insert({
+    company_id: inv.company_id, invoice_id: inv.id, kind: "deposit", amount, paid_on: today(), mode: "Deposit",
+    reference: dep.number, notes: null, created_by_name: actor, source_invoice_id: dep.id,
+  });
+  if (error) return 0;
+  await refreshInvoicePaid(inv);
+  await logActivity(inv.company_id, "invoice", inv.id, `Deposit ${dep.number} of ${money2(amount)} applied`, actor);
+  await logActivity(inv.company_id, "invoice", dep.id, `Deposit applied to invoice ${inv.number} (${money2(amount)})`, actor);
+  return amount;
+}
+
+// Al crear la factura final de una cotización: aplica solo los depósitos de ESA cotización
+async function applyQuoteDeposits(invoiceId: string, quote: SalesDoc, actor: string) {
+  const deps = (await openDeposits(quote.company_id, quote.customer_id, invoiceId)).filter((d) => d.quote_id === quote.id);
+  if (!deps.length) return;
+  const { data } = await db().from("sales_docs").select("*").eq("id", invoiceId).maybeSingle();
+  if (!data) return;
+  for (const d of deps) await applyDeposit(data as SalesDoc, d, actor);
+}
+const money2 = (v: number) => `$${(Number(v) || 0).toFixed(2)}`;

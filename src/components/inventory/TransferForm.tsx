@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import SelectMenu from "@/components/ui/SelectMenu";
@@ -14,8 +14,9 @@ import { useInvTx } from "@/i18n/useInvTx";
 type Line = { item: InvItem; qty: string };
 
 // Nueva transferencia (resurtir una van): pantalla completa. Varios productos de una vez, todo o nada.
-export default function TransferForm({ companyId, items, stock, locations, initialTo, initialFrom, barcodes = {} }: {
+export default function TransferForm({ companyId, items, stock, locations, initialTo, initialFrom, barcodes = {}, restock = false, kit = [] }: {
   barcodes?: Record<string, string>; companyId: string; items: InvItem[]; stock: InvStock[]; locations: InvLocation[]; initialTo?: string; initialFrom?: string;
+  restock?: boolean; kit?: { item_id: string; par: number; min: number }[]; // Paso 6.12: "Restock" ya llega con la lista puesta
 }) {
   const t = useTranslations("invTransfer");
   const ix = useInvTx();
@@ -33,13 +34,19 @@ export default function TransferForm({ companyId, items, stock, locations, initi
   const withStock = useMemo(() => items.filter((i) => at(i.id, from) > 0), [items, from, stock]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sugerencia: lo que le falta al destino para llegar a su mínimo (+ lo mismo otra vez como colchón)
-  const suggested = useMemo(() => to ? items.filter((i) => minAt(i.id, to) > 0 && at(i.id, to) <= minAt(i.id, to) && at(i.id, from) > 0) : [], [items, to, from, stock]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Paso 6.12: en una van también entra lo del kit estándar que esté por debajo de lo que debe traer
+  const isVan = locations.find((l) => l.id === to)?.kind === "van";
+  const parOf = (item: string) => (isVan ? kit.find((k) => k.item_id === item)?.par ?? 0 : 0);
+  const suggested = useMemo(() => to ? items.filter((i) => at(i.id, from) > 0 && ((minAt(i.id, to) > 0 && at(i.id, to) <= minAt(i.id, to)) || (parOf(i.id) > 0 && at(i.id, to) < parOf(i.id)))) : [], [items, to, from, stock, kit, isVan]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function add(it: InvItem, qty = 1) {
     setError("");
     setLines((l) => l.some((x) => x.item.id === it.id) ? l : [...l, { item: it, qty: String(Math.min(qty, Math.max(at(it.id, from), 1))) }]);
   }
-  const addSuggested = () => suggested.forEach((i) => add(i, Math.max(1, minAt(i.id, to) * 2 - at(i.id, to))));
+  const needOf = (id: string) => Math.max(1, (parOf(id) > 0 ? parOf(id) : minAt(id, to) * 2) - at(id, to));
+  const addSuggested = () => suggested.forEach((i) => add(i, needOf(i.id)));
+  const auto = useRef(false);
+  useEffect(() => { if (restock && !auto.current && suggested.length) { auto.current = true; addSuggested(); } }, [restock, suggested.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

@@ -18,7 +18,7 @@ export const APPS: App[] = [
     tone: ["#e6f6f2", "#c9ede3", "#0f766e"], hint: "Sales, customers and your money", parts: ["Customers", "Quotes", "Invoices", "Catalog", "Money In", "Expenses"] },
   { id: "qr", label: "QR Studio", href: "/dashboard/tools/qr", icon: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM14 18h2v2h-2zM18 14h2v2h-2z",
     tone: ["#eef2ff", "#dfe4ff", "#4f46e5"], hint: "Branded QR codes for vans, flyers and reviews", parts: ["Website", "Reviews", "WhatsApp", "Wi-Fi"] },
-  { id: "inventory", label: "Inventory", href: "/dashboard/inventory", icon: "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9",
+  { id: "inventory", label: "Inventory", href: "/dashboard/inventory/dashboard", icon: "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9",
     tone: ["#fff7e6", "#fde7c2", "#d97706"], hint: "Parts by barcode, per warehouse and per van", parts: ["Items", "Scan", "Vans", "Alerts"] },
   { id: "jobs", label: "Jobs", href: "/dashboard/jobs", icon: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4",
     tone: ["#eef4ff", "#dbe7ff", "#2563eb"], hint: "Schedule, dispatch and your technicians in the field", parts: ["Schedule", "Dispatch", "Technicians", "Timesheets"] },

@@ -1,4 +1,5 @@
 import { PdfSettings, SalesDoc, SalesLine, Status, addressLines, balanceOf, discountSummary, num2, pdfOf, taxRows } from "@/lib/sales";
+import { depositAmount } from "@/lib/templates";
 import { DocLang, docDateTime, docMeta, docRibbon, docTitle, docTx, metaIcon } from "@/lib/doc-lang";
 import { TPL_ICONS, tplOf } from "@/lib/pdf-templates";
 import { Ribbon } from "@/components/sales/SalesBits";
@@ -36,6 +37,9 @@ export default function DocPaper({ doc, lines, prefs, companyName, status, varia
   const org = prefs.org_info ?? {};
   const bill = addressLines(doc.billing_address);
   const site = addressLines(doc.site_address);
+  // Paso 6.10: depósito pedido (cotización) y depósito aplicado (factura final)
+  const depAmt = isQuote ? depositAmount(Number(doc.total), doc.deposit_type, doc.deposit_value) : 0;
+  const depApplied = isQuote ? 0 : Math.min(Number(doc.amount_paid) || 0, Number(doc.deposit_applied) || 0);
   const disc = discountSummary(doc, lines);
   const showRibbon = Boolean(ribbon && status && priced);
   const signed = Boolean(doc.signed_name && doc.signed_at);
@@ -204,7 +208,10 @@ export default function DocPaper({ doc, lines, prefs, companyName, status, varia
                   {Number(doc.adjustment) !== 0 && <tr><td className="py-1.5 pr-6 text-right">{doc.adjustment_label || L.adjustment}</td><td className="py-1.5 pr-3 text-right tabular-nums">{num2(doc.adjustment)}</td></tr>}
                   <tr className={`font-semibold text-[#0b1f3a] ${tp.totals === "plain" ? "border-t-2 border-slate-800" : ""}`} style={isQuote ? finalStyle : undefined}>
                     <td className="px-3 py-3 text-right">{L.total}</td><td className="px-3 py-3 text-right tabular-nums">${num2(doc.total)}</td></tr>
-                  {!isQuote && Number(doc.amount_paid) > 0 && <tr><td className="py-2 pr-6 text-right">{L.paymentMade}</td><td className="py-2 pr-3 text-right tabular-nums text-[#e11d48]">(-) {num2(doc.amount_paid)}</td></tr>}
+                  {isQuote && depAmt > 0 && <tr><td className="py-2 pr-6 text-right">{L.depositDue(doc.deposit_type === "percent" ? `${+Number(doc.deposit_value)}%` : "")}</td><td className="py-2 pr-3 text-right font-semibold tabular-nums text-[#0b1f3a]">${num2(depAmt)}</td></tr>}
+                  {isQuote && depAmt > 0 && depAmt < Number(doc.total) && <tr><td className="py-1.5 pr-6 text-right text-slate-500">{L.depositRest}</td><td className="py-1.5 pr-3 text-right tabular-nums text-slate-500">{num2(Number(doc.total) - depAmt)}</td></tr>}
+                  {!isQuote && depApplied > 0 && <tr><td className="py-2 pr-6 text-right">{L.depositApplied("")}</td><td className="py-2 pr-3 text-right tabular-nums text-[#e11d48]">(-) {num2(depApplied)}</td></tr>}
+                  {!isQuote && Number(doc.amount_paid) - depApplied > 0.004 && <tr><td className="py-2 pr-6 text-right">{L.paymentMade}</td><td className="py-2 pr-3 text-right tabular-nums text-[#e11d48]">(-) {num2(Number(doc.amount_paid) - depApplied)}</td></tr>}
                   {!isQuote && Number(doc.written_off) > 0 && <tr><td className="py-2 pr-6 text-right">{L.writtenOff}</td><td className="py-2 pr-3 text-right tabular-nums">(-) {num2(doc.written_off)}</td></tr>}
                   {!isQuote && <tr className="font-semibold text-[#0b1f3a]" style={finalStyle}><td className="px-3 py-3 text-right">{L.balanceDue}</td><td className="px-3 py-3 text-right tabular-nums">${num2(balanceOf(doc))}</td></tr>}
                 </tbody>

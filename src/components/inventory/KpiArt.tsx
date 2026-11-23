@@ -82,3 +82,49 @@ export function OutArt({ size = 44 }: P) {
     </svg>
   );
 }
+
+// Paso 6.12 · Usado este mes: llave sobre una caja
+export function UsedArt({ size = 44 }: P) {
+  return (
+    <svg viewBox="0 0 48 48" width={size} height={size} aria-hidden="true">
+      <circle cx="24" cy="25" r="20" fill="#e9f1ff" />
+      <path d="M12 26l12 5 12-5v10l-12 5-12-5z" fill="#93b4f5" />
+      <path d="M12 26l12-5 12 5-12 5z" fill="#c9dafc" />
+      <path d="M24 31v10l12-5V26z" fill="#2563eb" />
+      <g className="origin-[30px_16px] transition-transform duration-300 ease-out group-hover:-rotate-[18deg]">
+        <path d="M33.5 8.5a5 5 0 0 0-6.3 6.3L19 23l2.8 2.8 8.2-8.2a5 5 0 0 0 6.3-6.3l-3 3-2.8-.6-.6-2.8z" fill="#fff" stroke="#1e40af" strokeWidth="1.4" strokeLinejoin="round" />
+      </g>
+    </svg>
+  );
+}
+// Paso 6.12 · Compras del mes: carrito con monedas
+export function CartArt({ size = 44 }: P) {
+  return (
+    <svg viewBox="0 0 48 48" width={size} height={size} aria-hidden="true">
+      <circle cx="24" cy="25" r="20" fill="#fff4ec" />
+      <g className="transition-transform duration-300 ease-out group-hover:translate-x-1">
+        <path d="M9 13h4l3.4 15.5a2 2 0 0 0 2 1.5h13.4a2 2 0 0 0 2-1.5L36.5 18H14.5" fill="none" stroke="#c2410c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M16 18h20l-2.3 9.4H18z" fill="#ffd2b3" />
+        <circle cx="19.5" cy="35" r="2.4" fill="#c2410c" /><circle cx="31" cy="35" r="2.4" fill="#c2410c" />
+      </g>
+      <g className="transition-transform duration-300 ease-out group-hover:-translate-y-1">
+        <circle cx="35" cy="12" r="5.4" fill="#e8713a" />
+        <path d="M35 9.2v5.6M36.6 10.4c-.3-.5-.9-.7-1.6-.7-.9 0-1.5.4-1.5 1 0 1.6 3.3.8 3.3 2.4 0 .6-.7 1.1-1.7 1.1-.8 0-1.4-.3-1.8-.9" stroke="#fff" strokeWidth="1.1" strokeLinecap="round" fill="none" />
+      </g>
+    </svg>
+  );
+}
+// Paso 6.12 · Partes sin escanear: código de barras con signo de alerta
+export function UnscannedArt({ size = 44 }: P) {
+  return (
+    <svg viewBox="0 0 48 48" width={size} height={size} aria-hidden="true">
+      <circle cx="24" cy="25" r="20" fill="#fff1f2" />
+      <rect x="9" y="13" width="26" height="20" rx="3" fill="#fff" stroke="#fda4af" strokeWidth="1.4" />
+      <path d="M13 17v12M16 17v12M19.5 17v12M23 17v12M26 17v12M29.5 17v12M32 17v12" stroke="#334155" strokeWidth="1.4" strokeLinecap="round" />
+      <g className="origin-[35px_33px] transition-transform duration-300 ease-out group-hover:scale-110">
+        <circle cx="35" cy="33" r="7" fill="#e11d48" />
+        <path d="M35 29.5v4.2M35 36.5v.01" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" />
+      </g>
+    </svg>
+  );
+}

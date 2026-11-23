@@ -4,7 +4,9 @@ import { confirmDelete, askConfirm } from "@/lib/confirm";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { convertQuote, db, logActivity, refreshInvoicePaid } from "@/lib/sales-client";
+import { OpenDeposit, applyDeposit, convertQuote, createDepositInvoice, db, logActivity, openDeposits, refreshInvoicePaid } from "@/lib/sales-client";
+import { depositAmount } from "@/lib/templates";
+import { docTx } from "@/lib/doc-lang";
 import {
   Activity, Comment, Payment, SalesDoc, SalesFile, SalesLine, SalesPrefs, addressLines, balanceOf, docStatus, invoiceStatus, money as moneyEn, quoteStatus,
 } from "@/lib/sales";
@@ -125,6 +127,37 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
   }
   const jobLabel = job ? t("openJob", { n: job.number }) : t("toJob");
 
+  // ---------- Paso 6.10: depósitos ----------
+  const depAmt = isQuote ? depositAmount(Number(doc.total), doc.deposit_type, doc.deposit_value) : 0;
+  const depInvoice = isQuote ? data.related.find((r) => r.is_deposit) ?? null : null;
+  const canDeposit = isQuote && depAmt > 0 && !depInvoice && !["declined", "invoiced"].includes(doc.status);
+  async function makeDeposit() {
+    if (depInvoice) { router.push(`/dashboard/invoices/${depInvoice.id}`); return; }
+    setBusy(true);
+    const L = docTx(data.lang ?? "en");
+    const id = await createDepositInvoice(doc, actor, { line: L.depositLine, desc: L.depositDesc });
+    setBusy(false);
+    if (!id) return flash(t("eDeposit"));
+    router.push(`/dashboard/invoices/${id}`);
+    router.refresh();
+  }
+  // Factura normal con saldo: ¿el cliente tiene un depósito cobrado sin aplicar?
+  const [openDeps, setOpenDeps] = useState<OpenDeposit[]>([]);
+  useEffect(() => {
+    if (isQuote || doc.is_deposit || doc.status === "void" || bal <= 0) { setOpenDeps([]); return; }
+    let alive = true;
+    openDeposits(doc.company_id, doc.customer_id, doc.id).then((l) => { if (alive) setOpenDeps(l); }, () => undefined);
+    return () => { alive = false; };
+  }, [isQuote, doc.id, doc.company_id, doc.customer_id, doc.is_deposit, doc.status, bal]);
+  async function takeDeposit(d: OpenDeposit) {
+    setBusy(true);
+    const got = await applyDeposit(doc, d, actor);
+    setBusy(false);
+    if (!got) return flash(t("eDeposit"));
+    flash(t("depApplied", { amount: money(got) }));
+    router.refresh();
+  }
+
   async function remove() {
     if (!(await confirmDelete({ title: t("delQ", { kind: doc.kind, n: doc.number }),
       download: { filename: doc.number, data: async () => ({ ...doc, lines: (await db().from("sales_lines").select("*").eq("doc_id", doc.id)).data, payments: (await db().from("sales_payments").select("*").eq("invoice_id", doc.id)).data }) } }))) return;
@@ -143,10 +176,10 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
     router.refresh();
   }
   async function deletePayment(p: Payment) {
-    if (!(await confirmDelete({ title: t("delPay", { what: p.kind === "payment" ? "payment" : "writeoff", amount: money(p.amount) }), download: { filename: `${doc.number}-${p.kind}`, data: p } }))) return;
+    if (!(await confirmDelete({ title: t("delPay", { what: p.kind === "write_off" ? "writeoff" : "payment", amount: money(p.amount) }), download: { filename: `${doc.number}-${p.kind}`, data: p } }))) return;
     await db().from("sales_payments").delete().eq("id", p.id);
     await refreshInvoicePaid(doc);
-    await logActivity(doc.company_id, "invoice", doc.id, `${p.kind === "payment" ? "Payment" : "Write-off"} of ${moneyEn(p.amount)} deleted`, actor);
+    await logActivity(doc.company_id, "invoice", doc.id, `${p.kind === "payment" ? "Payment" : p.kind === "deposit" ? "Applied deposit" : "Write-off"} of ${moneyEn(p.amount)} deleted`, actor);
     router.refresh();
   }
   const openPrint = (v?: string) => window.open(`/print/${doc.id}?auto=1${v ? `&v=${v}` : ""}`, "_blank");
@@ -176,7 +209,7 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
     { label: t("markSent"), icon: I.send, onClick: () => setStatus("sent", "Quote marked as sent"), hidden: doc.status !== "draft" },
     { label: t("markAccepted"), icon: I.check, onClick: () => setStatus("accepted", "Quote marked as accepted"), hidden: !["draft", "sent", "viewed", "declined"].includes(doc.status) },
     { label: t("markDeclined"), icon: I.x, onClick: () => setStatus("declined", "Quote marked as declined"), hidden: !["draft", "sent", "viewed", "accepted"].includes(doc.status) },
-    { label: t("createProject"), icon: I.project, soon: true, divider: true },
+    { label: t("makeDeposit"), icon: I.money, onClick: makeDeposit, hidden: !canDeposit, divider: true },
     { label: t("clone"), icon: I.clone, href: `${base}/new?clone=${doc.id}` },
     { label: tc("delete"), icon: I.trash, onClick: remove, danger: true },
     { label: t("quotePrefs"), icon: I.prefs, onClick: () => setModal("prefs"), divider: true },
@@ -244,7 +277,7 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
           <thead><tr className="border-b border-slate-200 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500"><th className="py-2.5">{t("date")}</th><th>{t("invoiceNo")}</th><th>{t("status")}</th><th className="text-right">{t("amount")}</th><th className="text-right">{t("balance")}</th></tr></thead>
           <tbody>{data.related.map((r) => { const s = invoiceStatus(r); return (
             <tr key={r.id} className="cursor-pointer border-b border-slate-100 hover:bg-[#f0faf7]" onClick={() => router.push(`/dashboard/invoices/${r.id}`)}>
-              <td className="py-3">{fmtD(r.doc_date)}</td><td className="font-medium text-[#0f766e]">{r.number}</td><td><StatusPill s={s} small /></td>
+              <td className="py-3">{fmtD(r.doc_date)}</td><td className="font-medium text-[#0f766e]">{r.number}{r.is_deposit && <span className="ml-2 rounded-full bg-[#fff4ec] px-2 py-0.5 text-[11px] font-semibold text-[#c2410c]">{t("depositKind")}</span>}</td><td><StatusPill s={s} small /></td>
               <td className="text-right tabular-nums">{money(r.total)}</td><td className="text-right tabular-nums">{money(balanceOf(r))}</td></tr>); })}</tbody>
         </table>
       )}
@@ -298,13 +331,48 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
     </div>
   ) : null;
 
+  // Paso 6.10: tarjeta del depósito (cotización con depósito · factura de depósito · depósito por aplicar)
+  const pill = "rounded-lg px-3 py-1.5 text-sm font-semibold transition-all hover:-translate-y-0.5 disabled:opacity-60";
+  const depositBox = isQuote && depAmt > 0 ? (
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-[#f6d9c4] bg-[#fffaf6] px-4 py-3 text-[14px]">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#fff0e4] text-[#e8713a]"><Ico d={I.money} className="h-[18px] w-[18px]" /></span>
+      <span className="min-w-0 flex-1 text-slate-700">
+        <b className="text-[#0b1f3a]">{t("depReq", { amount: money(depAmt), pct: doc.deposit_type === "percent" ? ` (${+Number(doc.deposit_value)}%)` : "" })}</b>
+        {depInvoice ? <span className="block text-[13px] text-slate-500">{t("depInvoiceIs", { n: depInvoice.number, st: sx.status(invoiceStatus(depInvoice)) })}</span>
+          : <span className="block text-[13px] text-slate-500">{t("depHow")}</span>}
+      </span>
+      {depInvoice ? (
+        <Link prefetch={false} href={`/dashboard/invoices/${depInvoice.id}`} className={`${pill} border border-[#e8713a]/40 bg-white text-[#c2410c] hover:border-[#e8713a]`}>{t("openDeposit", { n: depInvoice.number })}</Link>
+      ) : canDeposit ? (
+        <button type="button" onClick={makeDeposit} disabled={busy} className={`${pill} bg-[#0f766e] text-white hover:bg-[#0c5f59]`}>{t("makeDeposit")}</button>
+      ) : null}
+    </div>
+  ) : !isQuote && doc.is_deposit ? (
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-[#f6d9c4] bg-[#fffaf6] px-4 py-3 text-[14px]">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#fff0e4] text-[#e8713a]"><Ico d={I.money} className="h-[18px] w-[18px]" /></span>
+      <span className="min-w-0 flex-1 text-slate-700"><b className="text-[#0b1f3a]">{t("isDeposit")}</b><span className="block text-[13px] text-slate-500">{t("isDepositHow")}</span></span>
+      {data.related[0] && <Link prefetch={false} href={`/dashboard/quotes/${data.related[0].id}`} className={`${pill} border border-[#e8713a]/40 bg-white text-[#c2410c] hover:border-[#e8713a]`}>{t("openQuote", { n: data.related[0].number })}</Link>}
+    </div>
+  ) : openDeps.length > 0 ? (
+    <div className="mb-4 space-y-2 rounded-xl border border-[#cde8e0] bg-[#f3fbf8] px-4 py-3 text-[14px]">
+      {openDeps.map((d) => (
+        <div key={d.id} className="flex flex-wrap items-center gap-3">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[#0f766e]"><Ico d={I.money} className="h-[18px] w-[18px]" /></span>
+          <span className="min-w-0 flex-1 text-slate-700"><b className="text-[#0b1f3a]">{t("depOpen", { amount: money(d.available), n: d.number })}</b>
+            <span className="block text-[13px] text-slate-500">{d.reference ? t("depOpenFrom", { q: d.reference }) : t("depOpenHow")}</span></span>
+          <button type="button" onClick={() => takeDeposit(d)} disabled={busy} className={`${pill} bg-[#0f766e] text-white hover:bg-[#0c5f59]`}>{t("applyDeposit")}</button>
+        </div>
+      ))}
+    </div>
+  ) : null;
+
   const mobileActions: ToolItem[] = [
     { label: tc("edit"), icon: I.edit, href: locked ? undefined : editHref, hidden: locked },
     { label: t("sendEmail"), icon: I.mail, onClick: () => setModal("email") },
     { label: t("shareM"), icon: I.share, onClick: () => setModal("share") },
     { label: t("downloadPdf"), icon: I.download, onClick: () => downloadPdf() },
     { label: t("openPdf"), icon: I.pdf, onClick: () => viewPdf() },
-    ...(isQuote ? [{ label: t("toInvoice"), icon: I.convert, onClick: convert, hidden: !canConvert }, { label: jobLabel, icon: JOB_ICON, onClick: toJob, hidden: !job && !jobReady }] : [
+    ...(isQuote ? [{ label: t("makeDeposit"), icon: I.money, onClick: makeDeposit, hidden: !canDeposit }, { label: t("toInvoice"), icon: I.convert, onClick: convert, hidden: !canConvert }, { label: jobLabel, icon: JOB_ICON, onClick: toJob, hidden: !job && !jobReady }] : [
       { label: t("recordPayment"), icon: I.money, onClick: () => setModal("payment"), hidden: !canPay },
       { label: t("sendReminder"), icon: I.bell, onClick: () => setModal("reminder"), hidden: !canPay },
     ]),
@@ -379,6 +447,7 @@ export default function DocDetail({ data, actor }: { data: DocData; actor: strin
 
       <div className="flex-1 p-3 sm:p-5">
         <div className="hidden lg:block">{nextStep}</div>
+        {depositBox}
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
           <div className="flex items-center justify-between gap-3 border-b border-slate-200 pr-4">
             <div role="tablist" className="flex gap-6 overflow-x-auto px-5 [scrollbar-width:none] sm:px-7 [&::-webkit-scrollbar]:hidden">
@@ -477,7 +546,7 @@ function PaymentsTable({ payments, onDelete }: { payments: Payment[]; onDelete: 
         <tbody>{payments.map((p) => (
           <tr key={p.id} className="group/p border-b border-slate-100 last:border-0">
             <td className="px-2 py-3">{fmtD(p.paid_on)}</td><td className="text-[#2563eb]">{num.get(p.id)}</td><td>{p.reference ?? "—"}</td>
-            <td className={p.kind === "payment" ? "text-[#16a34a]" : "text-slate-500"}>{p.kind === "payment" ? t("paid") : t("writtenOff")}</td><td>{p.mode ? pay(p.mode) : "—"}</td>
+            <td className={p.kind === "write_off" ? "text-slate-500" : "text-[#16a34a]"}>{p.kind === "payment" ? t("paid") : p.kind === "deposit" ? t("depositKind") : t("writtenOff")}</td><td>{p.kind === "deposit" ? t("depositKind") : p.mode ? pay(p.mode) : "—"}</td>
             <td className="text-right font-medium tabular-nums">{money(p.amount)}</td>
             <td className="w-10 text-right"><button type="button" onClick={() => onDelete(p)} aria-label={tc("delete")} className="text-slate-400 opacity-0 hover:text-red-600 group-hover/p:opacity-100"><Ico d={I.trash} /></button></td>
           </tr>))}</tbody>
@@ -487,7 +556,7 @@ function PaymentsTable({ payments, onDelete }: { payments: Payment[]; onDelete: 
           <li key={p.id} className="flex items-start justify-between gap-3 py-3">
             <div className="min-w-0 space-y-0.5 text-[14px]">
               <p className="font-medium text-[#0b1f3a]">{fmtD(p.paid_on)} <span className="font-normal text-slate-400">· #{num.get(p.id)}</span></p>
-              <p className="text-slate-600">{p.kind === "payment" ? t("paymentBtn") : t("writeOff")}{p.mode ? ` · ${pay(p.mode)}` : ""}</p>
+              <p className="text-slate-600">{p.kind === "payment" ? t("paymentBtn") : p.kind === "deposit" ? t("depositKind") : t("writeOff")}{p.mode && p.kind !== "deposit" ? ` · ${pay(p.mode)}` : ""}</p>
               {p.reference && <p className="text-[13px] text-slate-500">{t("ref", { r: p.reference })}</p>}
             </div>
             <div className="shrink-0 text-right">

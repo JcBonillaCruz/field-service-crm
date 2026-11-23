@@ -42,6 +42,8 @@ export type SalesDoc = {
   tax_exempt_reason?: string | null; tax_cert_number?: string | null; tax_breakdown?: TaxBreak[] | null;
   surcharges?: Surcharge[] | null; surcharge_total?: number | null;
   shipping_type?: "flat" | "percent" | null; shipping_value?: number | null; // Paso 6.9c
+  // Paso 6.10: depósito pedido en la cotización · factura de depósito · crédito de depósitos en la factura final
+  deposit_type?: "percent" | "flat" | null; deposit_value?: number | null; is_deposit?: boolean | null; deposit_applied?: number | null;
   signature_data?: string | null; signed_name?: string | null; signed_at?: string | null; last_email_at?: string | null; email_opened_at?: string | null;
 };
 
@@ -56,8 +58,9 @@ export type Subscription = {
 };
 
 export type Payment = {
-  id: string; invoice_id: string; kind: "payment" | "write_off"; amount: number; paid_on: string; mode: string | null;
+  id: string; invoice_id: string; kind: "payment" | "write_off" | "deposit"; amount: number; paid_on: string; mode: string | null;
   reference: string | null; notes: string | null; created_by_name: string | null; created_at: string;
+  source_invoice_id?: string | null; // Paso 6.10: depósito aplicado → la factura de depósito de donde viene
 };
 export type Activity = { id: string; message: string; detail: string | null; actor_name: string | null; created_at: string };
 export type Comment = { id: string; body: string; author_name: string | null; created_at: string };
