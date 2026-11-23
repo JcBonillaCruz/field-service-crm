@@ -96,3 +96,24 @@ export async function loadLocationExtra(supabase: SupabaseClient, id: string) {
   const { data, error } = await supabase.from("inventory_locations").select("vehicle, photo_url, photo_path, address, notes").eq("id", id).maybeSingle();
   return { extra: (data ?? {}) as Record<string, unknown>, extraSql: !error };
 }
+
+// Paso 6.12c: todo lo que necesitan Stock & Vans / Dashboard / Reports (ubicaciones con vehículo y foto, kit y movimientos recientes)
+export async function loadBoard(supabase: SupabaseClient, companyId: string, opts: { allLocations?: boolean } = {}) {
+  const [inv, members, kit, extras, all, moves] = await Promise.all([
+    loadInventory(supabase, companyId),
+    loadMembers(supabase, companyId),
+    loadVanKit(supabase, companyId),
+    supabase.from("inventory_locations").select("id, vehicle, photo_url, address").eq("company_id", companyId),
+    opts.allLocations ? loadLocationsAll(supabase, companyId) : Promise.resolve(null),
+    supabase.from("inventory_movements").select("item_id, kind, qty, to_location, created_at").eq("company_id", companyId)
+      .in("kind", ["use", "transfer"]).gte("created_at", new Date(Date.now() - 90 * 86400000).toISOString()).limit(20000),
+  ]);
+  const ex = new Map(((extras.error ? [] : extras.data) ?? []).map((e) => [e.id as string, e as Record<string, unknown>]));
+  const base = (all ?? inv.locations.map((l) => ({ ...l, is_active: true }))) as (InvLocation & { is_active: boolean })[];
+  return {
+    ...inv, members,
+    kit: kit.kit as { item_id: string; par: number; min: number }[],
+    boardLocations: base.map((l) => ({ ...l, ...(ex.get(l.id) ?? {}) })),
+    moves: ((moves.data ?? []) as { item_id: string; kind: string; qty: number; to_location: string | null; created_at: string }[]).map((m) => ({ ...m, qty: Number(m.qty) })),
+  };
+}

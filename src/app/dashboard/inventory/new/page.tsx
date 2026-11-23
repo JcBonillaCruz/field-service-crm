@@ -6,7 +6,7 @@ import InventoryItemForm from "@/components/inventory/InventoryItemForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewInventoryItemPage({ searchParams }: { searchParams: { sku?: string } }) {
+export default async function NewInventoryItemPage({ searchParams }: { searchParams: { sku?: string; location?: string } }) {
   const { supabase, current } = await getSession();
   if (!current) redirect("/dashboard");
   if (!canManageInventory(current.role)) return <NoAccess />;
@@ -15,5 +15,5 @@ export default async function NewInventoryItemPage({ searchParams }: { searchPar
     supabase.from("item_categories").select("id, name").eq("company_id", current.id).order("name"),
   ]);
   return <InventoryItemForm companyId={current.id} locations={(locs.data ?? []) as InvLocation[]} categories={(cats.data ?? []) as InvCategory[]}
-    scannedSku={searchParams.sku?.slice(0, 120)} />;
+    scannedSku={searchParams.sku?.slice(0, 120)} initialLocation={searchParams.location} />;
 }

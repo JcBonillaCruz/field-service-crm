@@ -5,11 +5,8 @@ import { InvItem } from "@/lib/inventory";
 import ItemPicker from "@/components/inventory/ItemPicker";
 
 // Paso 6.12 · Kit estándar de la van: lo que toda van debe traer (cantidad que debe llevar) y su mínimo para la alerta
-export type KitRow = { item_id: string; par: number; min: number };
-
-export const kitOf = (raw: unknown): KitRow[] => (Array.isArray(raw) ? raw : [])
-  .map((r) => r as Partial<KitRow>).filter((r) => typeof r.item_id === "string")
-  .map((r) => ({ item_id: r.item_id as string, par: Math.max(0, Number(r.par) || 0), min: Math.max(0, Number(r.min) || 0) }));
+export type { KitRow } from "@/lib/inventory";
+import type { KitRow } from "@/lib/inventory";
 
 export default function KitEditor({ items, rows, onChange, barcodes }: { items: InvItem[]; rows: KitRow[]; onChange: (r: KitRow[]) => void; barcodes?: Record<string, string> }) {
   const t = useTranslations("invKit");

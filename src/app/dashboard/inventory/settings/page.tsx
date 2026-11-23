@@ -4,7 +4,7 @@ import { canManageInventory, InvCategory } from "@/lib/inventory";
 import NoAccess from "@/components/customers/NoAccess";
 import InventorySettings from "@/components/inventory/InventorySettings";
 import { loadInventory, loadVanKit } from "@/lib/inventory-server";
-import { kitOf } from "@/components/inventory/KitEditor";
+import { kitOf } from "@/lib/inventory";
 
 export const dynamic = "force-dynamic";
 

@@ -19,12 +19,13 @@ import { useInvTx } from "@/i18n/useInvTx";
 type Props = {
   companyId: string; item?: InvItem; scannedSku?: string;
   locations: InvLocation[]; categories: InvCategory[]; photos?: InvPhoto[]; stock?: InvStock[];
+  initialLocation?: string; // Paso 6.12c: "+ Producto" desde una van o almacén
   buying?: { purchase_unit: string | null; units_per_purchase: number };
 };
 type Pending = { key: string; file: Blob; preview: string };
 
 // Nuevo / Editar producto de inventario: pantalla completa (solo el menú y este formulario), igual que New Item en Finances
-export default function InventoryItemForm({ companyId, item, scannedSku, locations, categories: initialCats, photos = [], stock = [], buying }: Props) {
+export default function InventoryItemForm({ companyId, item, scannedSku, locations, categories: initialCats, photos = [], stock = [], buying, initialLocation }: Props) {
   const t = useTranslations("invForm");
   const ix = useInvTx();
   const invError = (e: Parameters<typeof invErrorEn>[0]) => ix.err(invErrorEn(e));
@@ -36,7 +37,7 @@ export default function InventoryItemForm({ companyId, item, scannedSku, locatio
   const [sku, setSku] = useState(item?.sku ?? scannedSku ?? "");
   const [category, setCategory] = useState<string | null>(item?.category_id ?? null);
   const [unit, setUnit] = useState(item?.unit ?? "each");
-  const [location, setLocation] = useState(def?.id ?? "");
+  const [location, setLocation] = useState(initialLocation && locations.some((l) => l.id === initialLocation) ? initialLocation : def?.id ?? "");
   const minAt = (loc: string) => Number(stock.find((s) => s.location_id === loc)?.min_qty ?? 0);
   const [qty, setQty] = useState("");
   const [min, setMin] = useState(item ? String(minAt(def?.id ?? "") || "") : "");

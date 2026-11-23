@@ -4,10 +4,13 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useInvTx } from "@/i18n/useInvTx";
-import { InvItem, InvLocation, InvMember, InvStock, qtyFmt } from "@/lib/inventory";
+import { InvItem, InvLocation, InvMember, InvPhoto, InvStock, KitRow, qtyFmt } from "@/lib/inventory";
+import { UseMove, runningOut, shoppingList } from "@/lib/inventory-insights";
+import StockVansBoard, { LocLite } from "@/components/inventory/StockVansBoard";
+import InvProductsList from "@/components/inventory/InvProductsList";
 import type { MoveRow } from "@/lib/inventory-server";
 import { CartArt, ItemsArt, LowArt, OutArt, UnscannedArt, UsedArt, ValueArt } from "@/components/inventory/KpiArt";
-import { LocIcon, pageWrap } from "@/components/inventory/PageBits";
+import { pageWrap } from "@/components/inventory/PageBits";
 import NewLocationModal from "@/components/inventory/NewLocationModal";
 
 // =====================================================================
@@ -19,9 +22,10 @@ const INV = "/dashboard/inventory";
 type Props = {
   companyId: string; items: InvItem[]; stock: InvStock[]; locations: InvLocation[]; members: InvMember[]; moves: MoveRow[]; needsSql: boolean;
   unscanned: { units: number; value: number } | null; kitSize: number; canEdit: boolean;
+  photos: InvPhoto[]; kit: KitRow[]; boardLocations: LocLite[]; recent: UseMove[]; // Paso 6.12c
 };
 
-export default function InvDashboard({ items, stock, locations, members, moves, needsSql, unscanned, kitSize, canEdit }: Props) {
+export default function InvDashboard({ items, stock, locations, members, moves, needsSql, unscanned, kitSize, canEdit, photos, kit, boardLocations, recent }: Props) {
   const t = useTranslations("invDash");
   const ix = useInvTx();
   const usd = ix.money;
@@ -67,7 +71,9 @@ export default function InvDashboard({ items, stock, locations, members, moves, 
     };
   }, [items, stock, locations, members, moves]);
 
-  const maxVal = Math.max(1, ...d.spots.map((s) => s.value));
+  const buy = useMemo(() => shoppingList(items, stock, locations, kit), [items, stock, locations, kit]);
+  const buyTotal = buy.reduce((a, r) => a + r.cost, 0);
+  const soon = useMemo(() => runningOut(items, stock, recent, 21), [items, stock, recent]);
   const alerts = d.out.length + d.lowWh.length + d.lowVan.reduce((a, v) => a + v.list.length, 0) + d.discontinued.length;
   const vans = locations.filter((l) => l.kind === "van");
 
@@ -159,40 +165,39 @@ export default function InvDashboard({ items, stock, locations, members, moves, 
             )}
           </section>
 
-          {/* Valor por ubicación */}
-          <section className="rounded-2xl border border-slate-200 bg-white">
+          {/* Paso 6.12c: qué comprar y qué se va a acabar (lista completa en Reports) */}
+          <section className="flex flex-col rounded-2xl border border-slate-200 bg-white">
             <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
-              <h2 className="text-[16px] font-semibold text-[#0b1f3a]">{t("byLocation")}</h2>
-              <Link prefetch={false} href={`${INV}/locations`} className="text-[13.5px] font-semibold text-[#0f766e] hover:underline">{t("stockVans")}</Link>
+              <div className="flex min-w-0 items-center gap-2.5"><CartArt size={34} /><h2 className="truncate text-[16px] font-semibold text-[#0b1f3a]">{t("toBuy")}</h2></div>
+              {buy.length > 0 && <span className="shrink-0 text-[14px] font-semibold tabular-nums text-[#0b1f3a]">{usd(buyTotal)}</span>}
             </div>
-            <ul className="divide-y divide-slate-100">
-              {d.spots.map((s) => (
-                <li key={s.l.id}>
-                  <Link prefetch={false} href={`${INV}/locations/${s.l.id}`} className="group flex items-center gap-3 px-5 py-3 transition-colors hover:bg-[#f6fbfa]">
-                    <span className="transition-transform duration-200 group-hover:scale-110"><LocIcon kind={s.l.kind} /></span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-2">
-                        <span className="truncate text-[14.5px] font-semibold text-[#0b1f3a] group-hover:text-[#0f766e]">{s.l.name}</span>
-                        {s.l.is_default && <span className="shrink-0 rounded-full bg-[#e9f7f4] px-2 py-0.5 text-[10.5px] font-semibold text-[#0f766e]">{t("main")}</span>}
-                        {s.low > 0 && <span className="shrink-0 rounded-full bg-[#fff7e6] px-2 py-0.5 text-[10.5px] font-semibold text-[#b45309]">{t("nLow", { n: s.low })}</span>}
-                      </span>
-                      <span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-slate-100">
-                        <span className={`block h-full rounded-full transition-all duration-500 ${s.l.kind === "van" ? "bg-[#f4a261]" : "bg-[#14a39a]"}`} style={{ width: `${Math.max(2, (s.value / maxVal) * 100)}%` }} />
-                      </span>
-                      <span className="mt-1 block truncate text-[12.5px] text-slate-500">{s.l.kind === "van" ? (s.tech ? t("techX", { name: s.tech }) : t("noTech")) : t("warehouse")} · {t("units", { n: s.units })}</span>
-                    </span>
-                    <span className="shrink-0 text-right text-[15px] font-semibold tabular-nums text-[#0b1f3a]">{usd(s.value)}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-            {vans.length === 0 && canEdit && (
-              <div className="border-t border-slate-100 px-5 py-4 text-[13.5px] text-slate-500">
-                {t("noVans")} <button type="button" onClick={() => setNewOpen(true)} className="font-semibold text-[#0f766e] hover:underline">{t("addVan")}</button>
+            {buy.length === 0 ? (
+              <p className="px-5 py-8 text-center text-[13.5px] text-slate-500">{t("toBuyNone")}</p>
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {buy.slice(0, 6).map((r) => (
+                  <li key={r.item.id}>
+                    <Link prefetch={false} href={`${INV}/${r.item.id}`} className="flex items-center justify-between gap-3 px-5 py-2.5 text-[14px] transition-colors hover:bg-[#f6fbfa]">
+                      <span className="min-w-0"><span className="block truncate text-[#0b1f3a]">{r.item.name}</span><span className="block truncate text-[12px] text-slate-400">{t("haveNeed", { have: qtyFmt(r.onHand), need: qtyFmt(r.target) })}</span></span>
+                      <span className="shrink-0 text-right"><b className="block tabular-nums text-[#0f766e]">+{qtyFmt(r.need)}</b><span className="block text-[12px] tabular-nums text-slate-500">{usd(r.cost)}</span></span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {soon.length > 0 && (
+              <div className="border-t border-slate-100 px-5 py-3">
+                <p className="text-[12px] font-semibold uppercase tracking-wide text-slate-400">{t("runOut")}</p>
+                <ul className="mt-1.5 space-y-1">
+                  {soon.slice(0, 3).map((r) => (
+                    <li key={r.item.id} className="flex justify-between gap-3 text-[13.5px]"><span className="truncate text-slate-700">{r.item.name}</span><span className={`shrink-0 font-semibold ${r.daysLeft <= 7 ? "text-[#be123c]" : "text-[#b45309]"}`}>{r.daysLeft <= 0 ? t("today") : t("days", { n: r.daysLeft })}</span></li>
+                  ))}
+                </ul>
               </div>
             )}
+            <Link prefetch={false} href={`${INV}/reports`} className="mt-auto block border-t border-slate-100 px-5 py-3 text-center text-[13.5px] font-semibold text-[#0f766e] hover:bg-[#f0faf7]">{t("seeReports")}</Link>
             {vans.length > 0 && kitSize === 0 && canEdit && (
-              <div className="border-t border-slate-100 px-5 py-4 text-[13.5px] text-slate-500">
+              <div className="border-t border-slate-100 px-5 py-3 text-[13px] text-slate-500">
                 {t("noKit")} <Link prefetch={false} href={`${INV}/settings#kit`} className="font-semibold text-[#0f766e] hover:underline">{t("setKit")}</Link>
               </div>
             )}
@@ -200,6 +205,9 @@ export default function InvDashboard({ items, stock, locations, members, moves, 
         </div>
       )}
 
+      {/* Paso 6.12c: Stock & Vans y todos los productos aquí mismo, para trabajar sin cambiar de pantalla */}
+      <div className="mt-8"><StockVansBoard compact items={items} stock={stock} locations={boardLocations} members={members} kit={kit} moves={recent} canEdit={canEdit} /></div>
+      {items.length > 0 && <div className="mt-8"><InvProductsList items={items} stock={stock} locations={locations} photos={photos} /></div>}
       <NewLocationModal open={newOpen} onClose={() => setNewOpen(false)} />
     </div>
   );
@@ -214,7 +222,7 @@ function Kpi({ label, value, Art, hint, href, action, warn }: {
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-[12.5px] font-medium text-slate-500 lg:text-[13px]">{label}</p>
-          <p className={`mt-1 truncate text-[18px] font-semibold tabular-nums tracking-tight sm:text-[22px] lg:text-[26px] ${warn === "red" ? "text-[#be123c]" : "text-[#0b1f3a]"}`}>{value}</p>
+          <p className={`mt-1 truncate text-[16px] font-semibold tabular-nums tracking-tight sm:text-[22px] lg:text-[26px] ${warn === "red" ? "text-[#be123c]" : "text-[#0b1f3a]"}`}>{value}</p>
         </div>
         <span className="shrink-0"><Art size={44} /></span>
       </div>

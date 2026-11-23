@@ -14,7 +14,7 @@ const DAYS_V = ["7", "30", "90", "365"];
 type Agg = { name: string; units: number; value: number };
 
 // Reportes: cuánto usó cada técnico, cuánto le resurtieron y cuánto le faltó en los conteos
-export default function ReportsView({ locations, moves, days }: { locations: InvLocation[]; moves: MoveRow[]; days: number }) {
+export default function ReportsView({ locations, moves, days, children }: { locations: InvLocation[]; moves: MoveRow[]; days: number; children?: React.ReactNode }) {
   const t = useTranslations("invReports");
   const tm0 = useTranslations("invMoves");
   const usd = useInvTx().money;
@@ -45,6 +45,9 @@ export default function ReportsView({ locations, moves, days }: { locations: Inv
       <PageHead title={t("title")} subtitle={t("subtitle")}>
         <div className="w-44"><SelectMenu ariaLabel={tm0("period")} value={String(days)} onChange={(v) => router.replace(`${pathname}?days=${v}`, { scroll: false })} options={DAYS} /></div>
       </PageHead>
+      {/* Paso 6.12c: alertas (qué comprar, por agotarse, agotados, cada técnico) */}
+      {children}
+      {children && <h2 className="mt-8 text-[16px] font-semibold text-[#0b1f3a]">{t("activity")}</h2>}
       <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
         {[[t("used"), tu, "text-[#0b1f3a]"], [t("restocked"), tr, "text-[#0b1f3a]"], [t("missing"), tm, tm.units > 0 ? "text-[#be123c]" : "text-[#0b1f3a]"]].map(([k, x, c]) => (
           <div key={k as string} className={`${card} p-4`}>

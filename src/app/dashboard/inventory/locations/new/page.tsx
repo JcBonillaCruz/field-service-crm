@@ -4,7 +4,7 @@ import { canManageInventory } from "@/lib/inventory";
 import NoAccess from "@/components/customers/NoAccess";
 import { loadInventory, loadLocationsAll, loadMembers, loadVanKit } from "@/lib/inventory-server";
 import LocationForm from "@/components/inventory/LocationForm";
-import { kitOf } from "@/components/inventory/KitEditor";
+import { kitOf } from "@/lib/inventory";
 
 export const dynamic = "force-dynamic";
 

@@ -102,3 +102,9 @@ export const LOCATION_ICON = {
   warehouse: "M3 10.5 12 4l9 6.5V20H3zM8 20v-6h8v6M8 17h8",
   van: "M3 7h11v9H3zM14 10h4l3 3v3h-7zM7 19a1.8 1.8 0 1 0 0-3.6A1.8 1.8 0 0 0 7 19zM17 19a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6z",
 };
+
+// Paso 6.12: kit estándar de la van (aquí y no en KitEditor: lo usan también las páginas del servidor)
+export type KitRow = { item_id: string; par: number; min: number };
+export const kitOf = (raw: unknown): KitRow[] => (Array.isArray(raw) ? raw : [])
+  .map((r) => r as Partial<KitRow>).filter((r) => typeof r.item_id === "string")
+  .map((r) => ({ item_id: r.item_id as string, par: Math.max(0, Number(r.par) || 0), min: Math.max(0, Number(r.min) || 0) }));

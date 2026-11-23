@@ -3,7 +3,7 @@ import { getSession } from "@/lib/session";
 import { canManageInventory } from "@/lib/inventory";
 import NoAccess from "@/components/customers/NoAccess";
 import { loadInventory, loadVanKit } from "@/lib/inventory-server";
-import { kitOf } from "@/components/inventory/KitEditor";
+import { kitOf } from "@/lib/inventory";
 import TransferForm from "@/components/inventory/TransferForm";
 
 export const dynamic = "force-dynamic";
