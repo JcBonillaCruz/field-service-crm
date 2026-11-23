@@ -68,6 +68,7 @@ export async function convertQuote(quote: SalesDoc, lines: SalesLine[], settings
       tax_mode: quote.tax_mode, tax_rate_id: quote.tax_rate_id ?? null, tax_source: quote.tax_source ?? null, tax_exempt_reason: quote.tax_exempt_reason ?? null,
       tax_cert_number: quote.tax_cert_number ?? null, tax_breakdown: quote.tax_breakdown ?? [],
       surcharges: quote.surcharges ?? [], surcharge_total: quote.surcharge_total ?? 0,
+      ...(quote.shipping_type === "percent" ? { shipping_type: "percent", shipping_value: quote.shipping_value ?? 0 } : {}),
     } : {}),
   }).select("id").single();
   if (error || !data) return null;

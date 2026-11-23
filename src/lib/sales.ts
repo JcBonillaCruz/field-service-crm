@@ -41,6 +41,7 @@ export type SalesDoc = {
   tax_mode?: "rate" | "exempt" | "none" | null; tax_rate_id?: string | null; tax_source?: string | null;
   tax_exempt_reason?: string | null; tax_cert_number?: string | null; tax_breakdown?: TaxBreak[] | null;
   surcharges?: Surcharge[] | null; surcharge_total?: number | null;
+  shipping_type?: "flat" | "percent" | null; shipping_value?: number | null; // Paso 6.9c
   signature_data?: string | null; signed_name?: string | null; signed_at?: string | null; last_email_at?: string | null; email_opened_at?: string | null;
 };
 
@@ -148,7 +149,7 @@ export type Totals = { subtotal: number; discount: number; tax: number; shipping
 type TotLine = Pick<SalesLine, "quantity" | "rate" | "discount" | "discount_type"> & Partial<Pick<SalesLine, "tax_rate" | "tax_name">>;
 export function computeTotals(lines: TotLine[], o: {
   discount_value?: number; discount_type?: DiscType; tax_rate?: number; tax_name?: string | null; exempt?: boolean; shipping?: number; adjustment?: number;
-  surcharges?: Surcharge[];
+  surcharges?: Surcharge[]; shipping_type?: "flat" | "percent";
 }): Totals {
   const amounts = lines.map((l) => lineAmount(l));
   const subtotal = round2(amounts.reduce((s, a) => s + a, 0));
@@ -169,7 +170,7 @@ export function computeTotals(lines: TotLine[], o: {
     .sort((a, b) => b.rate - a.rate || a.name.localeCompare(b.name));
   const tax = round2(taxes.reduce((s, x) => s + x.amount, 0));
   const lineTax = lines.map((l, i) => round2(amounts[i] * factor * rateOf(l) / 100));
-  const shipping = round2(Number(o.shipping) || 0);
+  const shipping = round2(o.shipping_type === "percent" ? (subtotal - discount) * (Number(o.shipping) || 0) / 100 : Number(o.shipping) || 0);
   const adjustment = round2(Number(o.adjustment) || 0);
   const surcharges = (o.surcharges ?? []).map((x) => ({ ...x, amount: round2(x.kind === "percent" ? (subtotal - discount) * (Number(x.value) || 0) / 100 : Number(x.value) || 0) }));
   const surchargeTotal = round2(surcharges.reduce((t, x) => t + x.amount, 0));

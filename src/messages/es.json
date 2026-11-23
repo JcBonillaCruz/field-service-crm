@@ -5891,7 +5891,9 @@
     "numAuto": "Seguir generando los números automáticamente",
     "prefix": "Prefijo",
     "nextNo": "Próximo número",
-    "numManual": "Escribir los números a mano"
+    "numManual": "Escribir los números a mano",
+    "shipType": "Envío en $ o % del subtotal",
+    "adjustment": "Ajuste"
   },
   "docDetail": {
     "tabQuote": "Detalles de la cotización",

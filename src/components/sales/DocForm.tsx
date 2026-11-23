@@ -84,7 +84,9 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
   const [newRate, setNewRate] = useState(false);
   // Paso 6.9b: recargos (Trip charge, Distance fee…), aparte del impuesto
   const [surch, setSurch] = useState<Surcharge[]>(() => (src?.surcharges ?? []).map((x) => ({ name: x.name, kind: x.kind, value: Number(x.value) })));
-  const [shipping, setShipping] = useState(String(src?.shipping ?? ""));
+  // Paso 6.9c: envío en $ o en % (del subtotal después del descuento)
+  const [shipType, setShipType] = useState<"flat" | "percent">(src?.shipping_type === "percent" ? "percent" : "flat");
+  const [shipping, setShipping] = useState(String(src?.shipping_type === "percent" ? src?.shipping_value ?? "" : src?.shipping ?? ""));
   const [adjLabel, setAdjLabel] = useState(src?.adjustment_label ?? "Adjustment");
   const [adjustment, setAdjustment] = useState(String(src?.adjustment ?? ""));
   const [notes, setNotes] = useState(src ? src.notes ?? "" : settings.default_notes ?? "");
@@ -147,11 +149,11 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
     return docTax.mode === "rate" && taxable ? { ...l, tax_rate_id: docTax.rate_id, tax_name: docTax.name, tax_rate: docTax.rate } : { ...l, tax_rate_id: null, tax_name: null, tax_rate: 0 };
   }) : lines), [lines, taxReady, docTax, itemTaxable]);
   const totals = useMemo(() => computeTotals(taxLines, {
-    ...effDisc, shipping: Number(shipping) || 0, adjustment: Number(adjustment) || 0, surcharges: taxReady ? surch : [],
+    ...effDisc, shipping: Number(shipping) || 0, shipping_type: shipType, adjustment: Number(adjustment) || 0, surcharges: taxReady ? surch : [],
     ...(taxReady ? {} : { tax_rate: Number(taxRate) || 0, tax_name: taxName }),
   }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [taxLines, discValue, discType, coupon, taxRate, taxName, shipping, adjustment, surch]);
+    [taxLines, discValue, discType, coupon, taxRate, taxName, shipping, shipType, adjustment, surch]);
 
   // ---------- Paso 6.9: impuesto ----------
   // Exento del cliente o del Job Site (si aplica): se usa al quitar la casilla
@@ -233,6 +235,8 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
         surcharges: totals.surcharges.filter((x) => x.name.trim() && x.amount !== 0).map((x) => ({ ...x, name: x.name.trim() })), surcharge_total: totals.surchargeTotal,
       } : { tax_name: taxName.trim() || null, tax_rate: Number(taxRate) || 0 }),
       tax_amount: totals.tax, shipping: totals.shipping,
+      // Paso 6.9c (SQL 6.9c): solo se manda si el envío es en % o si la columna ya existe
+      ...(shipType === "percent" || (src && "shipping_type" in src) ? { shipping_type: shipType, shipping_value: Number(shipping) || 0 } : {}),
       adjustment: totals.adjustment, adjustment_label: adjLabel.trim() || "Adjustment", subtotal: totals.subtotal, total: totals.total,
       notes: notes.trim() || null, terms: tc.trim() || null, updated_at: now,
     };
@@ -410,25 +414,15 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
               </div>
               <div className="min-w-0 rounded-xl bg-[#f7f9fa] p-4">
                 {(!compactTotals || showSummary) && (
-                  <div className="space-y-3 text-[15px]">
+                  <div className="space-y-3.5 text-[15px]">
                     <div className="flex justify-between font-semibold text-[#0b1f3a]"><span>{t("subtotal")}</span><span className="tabular-nums">{num2(grossOf(lines))}</span></div>
                     {grossOf(lines) - totals.subtotal > 0.004 && (
                       <div className="flex justify-between text-[14px]"><span className="text-slate-600">{t("itemDisc")}</span><span className="tabular-nums text-[#e11d48]">(-) {num2(grossOf(lines) - totals.subtotal)}</span></div>
                     )}
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="w-24 text-slate-700">{t("discount")}</span>
-                      {couponObj ? (
-                        <span className="flex flex-1 items-center gap-2 rounded-lg border border-[#14a39a] bg-white px-2.5 py-1.5 text-sm"><b className="text-[#0f766e]">{couponObj.code}</b><span className="text-slate-500">{couponObj.discount_type === "percent" ? `${+couponObj.discount_value}%` : `$${num2(couponObj.discount_value)}`}</span>
-                          <button type="button" onClick={() => setCoupon("")} className="ml-auto text-slate-400 hover:text-red-600" aria-label={t("removeCoupon")}>×</button></span>
-                      ) : (
-                        <div className="flex flex-1 items-center gap-1.5">
-                          <input inputMode="decimal" value={discValue} onFocus={(e) => e.currentTarget.select()} onChange={(e) => setDiscValue(e.target.value.replace(/[^0-9.]/g, ""))} className={`${inputClass} !py-1.5 text-right`} />
-                          <div className="w-20 shrink-0"><SelectMenu value={discType} options={[{ value: "percent", label: "%" }, { value: "flat", label: "$" }]} onChange={(v) => setDiscType(v as DiscType)} ariaLabel={t("discType")} /></div>
-                        </div>
-                      )}
-                      <span className={`w-24 text-right tabular-nums ${totals.discount > 0 ? "text-[#e11d48]" : "text-slate-600"}`}>(-) {num2(totals.discount)}</span>
-                      {coupons.length > 0 && !couponObj && (
-                        <Popover className="relative w-full">
+                    {/* Paso 6.9c: cada renglón = etiqueta · campo · monto (en el celular el campo baja a su propia línea) */}
+                    <TotRow label={t("discount")} amount={<span className={totals.discount > 0 ? "text-[#e11d48]" : ""}>(-) {num2(totals.discount)}</span>}
+                      after={coupons.length > 0 && !couponObj ? (
+                        <Popover className="relative">
                           <PopoverButton className="text-[13px] font-medium text-[#2563eb] hover:underline focus:outline-none">{t("applyCoupon")}</PopoverButton>
                           <PopoverPanel anchor="bottom start" className="z-[70] mt-1 w-64 rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
                             {({ close }) => <>{coupons.map((c) => (
@@ -437,21 +431,22 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
                               </button>))}</>}
                           </PopoverPanel>
                         </Popover>
+                      ) : null}>
+                      {couponObj ? (
+                        <span className="flex items-center gap-2 rounded-lg border border-[#14a39a] bg-white px-2.5 py-1.5 text-sm"><b className="text-[#0f766e]">{couponObj.code}</b><span className="text-slate-500">{couponObj.discount_type === "percent" ? `${+couponObj.discount_value}%` : `$${num2(couponObj.discount_value)}`}</span>
+                          <button type="button" onClick={() => setCoupon("")} className="ml-auto text-slate-400 hover:text-red-600" aria-label={t("removeCoupon")}>×</button></span>
+                      ) : (
+                        <AmountKind value={discValue} onValue={setDiscValue} kind={discType === "flat" ? "flat" : "percent"} onKind={(k) => setDiscType(k === "flat" ? "flat" : "percent")} label={t("discType")} />
                       )}
-                    </div>
+                    </TotRow>
                     {taxReady ? (
                       <>
                         {/* Recargos: Trip charge, Distance fee… (no son impuesto) */}
                         {surch.map((x, i) => (
-                          <div key={i} className="flex flex-wrap items-center gap-2">
-                            <input value={x.name} onChange={(e) => setSurchAt(i, { name: e.target.value })} placeholder={tx("surchName")} aria-label={tx("surchName")} title={x.name} className={`${inputClass} !w-36 !py-1.5 max-sm:!w-auto max-sm:flex-1`} />
-                            <div className="flex min-w-0 flex-1 items-center gap-1.5 max-sm:order-3 max-sm:basis-full">
-                              <input inputMode="decimal" value={String(x.value)} onFocus={(e) => e.currentTarget.select()} onChange={(e) => setSurchAt(i, { value: e.target.value.replace(/[^0-9.]/g, "") as unknown as number })} className={`${inputClass} !py-1.5 text-right`} />
-                              <div className="w-20 shrink-0"><SelectMenu value={x.kind} options={[{ value: "flat", label: "$" }, { value: "percent", label: "%" }]} onChange={(v) => setSurchAt(i, { kind: v as Surcharge["kind"] })} ariaLabel={tx("surchType")} /></div>
-                            </div>
-                            <span className="w-24 text-right tabular-nums text-slate-600">{num2(totals.surcharges[i]?.amount ?? 0)}</span>
-                            <button type="button" onClick={() => setSurch((l) => l.filter((_, j) => j !== i))} aria-label={tx("remove")} className="-ml-1 text-slate-400 hover:text-red-600">×</button>
-                          </div>
+                          <TotRow key={i} amount={num2(totals.surcharges[i]?.amount ?? 0)} onRemove={() => setSurch((l) => l.filter((_, j) => j !== i))} removeLabel={tx("remove")}
+                            label={<LabelInput value={x.name} onChange={(v) => setSurchAt(i, { name: v })} placeholder={tx("surchName")} />}>
+                            <AmountKind value={String(x.value)} onValue={(v) => setSurchAt(i, { value: v as unknown as number })} kind={x.kind} onKind={(k) => setSurchAt(i, { kind: k })} label={tx("surchType")} />
+                          </TotRow>
                         ))}
                         <Popover className="relative">
                           <PopoverButton className="flex items-center gap-1.5 text-[13px] font-medium text-[#2563eb] hover:underline focus:outline-none">
@@ -470,52 +465,39 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
                         </Popover>
 
                         {/* Impuesto: casilla + tasa (la predeterminada ya elegida) */}
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <label className="flex w-24 cursor-pointer items-center gap-2 text-slate-700 max-sm:w-auto max-sm:flex-1">
-                              <input type="checkbox" checked={charging} onChange={(e) => setCharge(e.target.checked)} className="h-4 w-4 rounded accent-[#0f766e]" />{t("tax")}
-                            </label>
-                            <div className="min-w-0 flex-1 max-sm:order-3 max-sm:basis-full">
-                              {charging ? (
-                                <SelectMenu value={docTax.rate_id ?? legacyKey ?? ""} ariaLabel={t("tax")} onChange={pickRate} options={rateOpts} />
-                              ) : (
-                                <button type="button" onClick={() => setCharge(true)} className="text-left text-[13.5px] text-slate-500 hover:text-[#0f766e]">
-                                  {docTax.mode === "exempt" ? <span className="font-medium text-[#b45309]">{tx("exempt")}</span> : tx("chargeTax")}
-                                </button>
-                              )}
-                            </div>
-                            <span className="w-24 text-right tabular-nums text-slate-600">{num2(totals.tax)}</span>
-                          </div>
-                          {docTax.mode === "exempt" && (
-                            <p className="mt-1 pl-[6.5rem] text-[12.5px] text-[#b45309] max-sm:pl-0">
-                              {docTax.source === "site" ? tx("siteExempt") : tx("custExempt")}{exemptInfo(docTax) && ` · ${exemptInfo(docTax)}`}
-                              {certExpired(docTax.cert_expires) && <span className="block font-medium">{tx("certExpiredDoc")}</span>}
-                            </p>
+                        <TotRow amount={num2(totals.tax)}
+                          label={<label className="flex cursor-pointer items-center gap-2 text-slate-700"><input type="checkbox" checked={charging} onChange={(e) => setCharge(e.target.checked)} className="h-4 w-4 rounded accent-[#0f766e]" />{t("tax")}</label>}
+                          after={<>
+                            {docTax.mode === "exempt" && (
+                              <p className="text-[12.5px] text-[#b45309]">
+                                {docTax.source === "site" ? tx("siteExempt") : tx("custExempt")}{exemptInfo(docTax) && ` · ${exemptInfo(docTax)}`}
+                                {certExpired(docTax.cert_expires) && <span className="block font-medium">{tx("certExpiredDoc")}</span>}
+                              </p>
+                            )}
+                            {charging && exemptOf && <p className="text-[12.5px] font-medium text-[#b45309]">{tx("chargingExempt")}</p>}
+                            {charging && lines.some((l) => l.item_id && itemTaxable.get(l.item_id) === false) && <p className="text-[12.5px] text-slate-500">{tx("someNotTaxable")}</p>}
+                            {!activeRates.length && <button type="button" onClick={() => setNewRate(true)} className="text-[12.5px] font-medium text-[#2563eb] hover:underline">{tx("addFirstRate")}</button>}
+                          </>}>
+                          {charging ? (
+                            <SelectMenu value={docTax.rate_id ?? legacyKey ?? ""} ariaLabel={t("tax")} onChange={pickRate} options={rateOpts} />
+                          ) : (
+                            <button type="button" onClick={() => setCharge(true)} className="w-full rounded-lg border border-dashed border-slate-300 px-3 py-2 text-left text-[14px] text-slate-500 transition-colors hover:border-[#14a39a] hover:text-[#0f766e]">
+                              {docTax.mode === "exempt" ? <span className="font-medium text-[#b45309]">{tx("exempt")}</span> : tx("chargeTax")}
+                            </button>
                           )}
-                          {charging && exemptOf && <p className="mt-1 pl-[6.5rem] text-[12.5px] font-medium text-[#b45309] max-sm:pl-0">{tx("chargingExempt")}</p>}
-                          {charging && items.some((it) => it.taxable === false) && lines.some((l) => l.item_id && itemTaxable.get(l.item_id) === false) && (
-                            <p className="mt-1 pl-[6.5rem] text-[12.5px] text-slate-500 max-sm:pl-0">{tx("someNotTaxable")}</p>
-                          )}
-                          {!activeRates.length && <p className="mt-1 pl-[6.5rem] text-[12.5px] max-sm:pl-0"><button type="button" onClick={() => setNewRate(true)} className="font-medium text-[#2563eb] hover:underline">{tx("addFirstRate")}</button></p>}
-                        </div>
+                        </TotRow>
                       </>
                     ) : (
-                      <div className="flex items-center gap-2">
-                        <input value={taxName} onChange={(e) => setTaxName(e.target.value)} placeholder={t("tax")} className={`${inputClass} !w-24 !py-1.5`} />
-                        <div className="flex flex-1 items-center gap-1"><input inputMode="decimal" value={taxRate} onFocus={(e) => e.currentTarget.select()} onChange={(e) => setTaxRate(e.target.value.replace(/[^0-9.]/g, ""))} className={`${inputClass} !py-1.5 text-right`} /><span className="text-slate-500">%</span></div>
-                        <span className="w-24 text-right tabular-nums text-slate-600">{num2(totals.tax)}</span>
-                      </div>
+                      <TotRow amount={num2(totals.tax)} label={<LabelInput value={taxName} onChange={setTaxName} placeholder={t("tax")} />}>
+                        <div className="flex items-center gap-1"><input inputMode="decimal" value={taxRate} onFocus={(e) => e.currentTarget.select()} onChange={(e) => setTaxRate(e.target.value.replace(/[^0-9.]/g, ""))} className={`${inputClass} !py-2 text-right`} /><span className="text-slate-500">%</span></div>
+                      </TotRow>
                     )}
-                    <div className="flex items-center gap-2">
-                      <span className="w-24 text-slate-700">{t("shipping")}</span>
-                      <input inputMode="decimal" value={shipping} onChange={(e) => setShipping(e.target.value.replace(/[^0-9.\-]/g, ""))} className={`${inputClass} flex-1 !py-1.5 text-right`} />
-                      <span className="w-24 text-right tabular-nums text-slate-600">{num2(totals.shipping)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input value={adjLabel} onChange={(e) => setAdjLabel(e.target.value)} className={`${inputClass} !w-24 border-dashed !py-1.5`} />
-                      <input inputMode="decimal" value={adjustment} onChange={(e) => setAdjustment(e.target.value.replace(/[^0-9.\-]/g, ""))} placeholder="+/-" className={`${inputClass} flex-1 !py-1.5 text-right`} />
-                      <span className="w-24 text-right tabular-nums text-slate-600">{num2(totals.adjustment)}</span>
-                    </div>
+                    <TotRow label={t("shipping")} amount={num2(totals.shipping)}>
+                      <AmountKind value={shipping} onValue={setShipping} kind={shipType} onKind={setShipType} label={t("shipType")} />
+                    </TotRow>
+                    <TotRow label={<LabelInput value={adjLabel} onChange={setAdjLabel} placeholder={t("adjustment")} />} amount={num2(totals.adjustment)}>
+                      <input inputMode="decimal" value={adjustment} onChange={(e) => setAdjustment(e.target.value.replace(/[^0-9.\-]/g, ""))} placeholder="+/-" aria-label={adjLabel || t("adjustment")} className={`${inputClass} !py-2 text-right`} />
+                    </TotRow>
                   </div>
                 )}
                 <div className={`flex justify-between text-[18px] font-semibold text-[#0b1f3a] ${(!compactTotals || showSummary) ? "mt-4 border-t border-slate-200 pt-4" : ""}`}><span>{t("total")}</span><span className="tabular-nums">{num2(totals.total)}</span></div>
@@ -670,5 +652,40 @@ function NewRateModal({ open, onClose, companyId, first, onSaved }: {
         <div><label className="mb-1 block text-[13px] text-slate-500">{tx("rate")} (%)</label><input inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value.replace(/[^0-9.]/g, ""))} className={`${inputClass} text-right`} /></div>
       </div>
     </Modal>
+  );
+}
+
+// Paso 6.9c: renglón de totales. Computadora: etiqueta · campo · monto. Celular: etiqueta y monto arriba, campo abajo.
+function TotRow({ label, amount, children, after, onRemove, removeLabel }: {
+  label: React.ReactNode; amount: React.ReactNode; children: React.ReactNode; after?: React.ReactNode; onRemove?: () => void; removeLabel?: string;
+}) {
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 sm:grid-cols-[7.5rem_minmax(0,1fr)_6.5rem]">
+      <div className="min-w-0 text-slate-700">{label}</div>
+      <div className="col-span-2 row-start-2 min-w-0 sm:col-span-1 sm:col-start-2 sm:row-start-1">{children}</div>
+      <div className="flex items-center justify-end gap-1.5 text-right tabular-nums text-slate-600 sm:col-start-3 sm:row-start-1">
+        {amount}
+        {onRemove && <button type="button" onClick={onRemove} aria-label={removeLabel} title={removeLabel} className="group/x flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-600">
+          <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 transition-transform duration-200 group-hover/x:rotate-90" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6.5 6.5 7 7M13.5 6.5l-7 7" strokeLinecap="round" /></svg>
+        </button>}
+      </div>
+      {after && <div className="col-span-2 min-w-0 space-y-1 sm:col-span-1 sm:col-start-2">{after}</div>}
+    </div>
+  );
+}
+// Etiqueta que se puede editar (Adjustment, nombre del recargo): se ve como texto con una raya punteada abajo
+function LabelInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  return (
+    <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} title={value} aria-label={placeholder}
+      className="w-full min-w-0 border-0 border-b border-dashed border-slate-300 bg-transparent px-0 py-1 text-[15px] text-slate-700 placeholder:text-slate-400 hover:border-slate-400 focus:border-[#0f766e] focus:outline-none focus:ring-0" />
+  );
+}
+// Cantidad + $/% (descuento, recargos, envío)
+function AmountKind({ value, onValue, kind, onKind, label }: { value: string; onValue: (v: string) => void; kind: "flat" | "percent"; onKind: (k: "flat" | "percent") => void; label: string }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <input inputMode="decimal" value={value} onFocus={(e) => e.currentTarget.select()} onChange={(e) => onValue(e.target.value.replace(/[^0-9.]/g, ""))} className={`${inputClass} min-w-0 !py-2 text-right`} />
+      <div className="w-[4.5rem] shrink-0"><SelectMenu value={kind} options={[{ value: "flat", label: "$" }, { value: "percent", label: "%" }]} onChange={(v) => onKind(v === "percent" ? "percent" : "flat")} ariaLabel={label} /></div>
+    </div>
   );
 }

@@ -266,7 +266,7 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
     for (const x of doc.surcharges ?? []) rows.push({ k: `${x.name}${x.kind === "percent" ? ` (${+x.value}%)` : ""}`, v: num2(Number(x.amount) || 0) });
     for (const x of taxRows(doc)) rows.push({ k: `${x.name || L.tax} (${+x.rate}%)`, v: num2(x.amount) });
     if (doc.tax_mode === "exempt") rows.push({ k: doc.tax_cert_number ? `${L.taxExempt} · ${L.cert(doc.tax_cert_number)}` : L.taxExempt, v: num2(0) });
-    if (Number(doc.shipping) !== 0) rows.push({ k: L.shipping, v: num2(doc.shipping) });
+    if (Number(doc.shipping) !== 0) rows.push({ k: doc.shipping_type === "percent" ? `${L.shipping} (${+Number(doc.shipping_value)}%)` : L.shipping, v: num2(doc.shipping) });
     if (Number(doc.adjustment) !== 0) rows.push({ k: doc.adjustment_label || L.adjustment, v: num2(doc.adjustment) });
     rows.push({ k: L.total, v: `$${num2(doc.total)}`, strong: true, shade: isQuote });
     if (!isQuote) {

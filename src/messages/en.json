@@ -5868,7 +5868,7 @@
     "discType": "Discount type",
     "applyCoupon": "Apply a coupon",
     "tax": "Tax",
-    "shipping": "Shipping Charges",
+    "shipping": "Shipping",
     "total": "Total ( $ )",
     "hideSummary": "Hide Total Summary",
     "showSummary": "Show Total Summary",
@@ -5896,7 +5896,9 @@
     "numAuto": "Continue auto-generating {kind, select, quote {quote} other {invoice}} numbers",
     "prefix": "Prefix",
     "nextNo": "Next Number",
-    "numManual": "Enter {kind, select, quote {quote} other {invoice}} numbers manually"
+    "numManual": "Enter {kind, select, quote {quote} other {invoice}} numbers manually",
+    "shipType": "Shipping in $ or % of the subtotal",
+    "adjustment": "Adjustment"
   },
   "docDetail": {
     "tabQuote": "Quote Details",
