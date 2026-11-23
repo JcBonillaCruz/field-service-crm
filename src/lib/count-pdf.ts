@@ -9,19 +9,39 @@
 export type CountPdfCol = { label: string; w: number; align?: "left" | "right" | "center"; box?: boolean };
 export type CountPdfRow = { cells: string[]; tone?: ("neg" | "pos" | null)[]; alert?: "red" | "amber"; total?: boolean };
 export type PdfStyle = "grid" | "modern" | "minimal";
+// Paso 6.12h: 10 plantillas. Cada una cambia el encabezado, la letra, el resumen y la tabla.
+export type PdfTemplateId = "classic" | "band" | "centered" | "reversed" | "serif" | "ledger" | "minimal" | "compact" | "brandhead" | "sheet";
+export type PdfTemplate = {
+  font: "sans" | "serif" | "mono"; header: "left" | "right" | "center" | "band"; summary: "cards" | "boxes" | "lines";
+  head: "gray" | "brand" | "line"; grid: boolean; compact: boolean; caps: boolean; rule: number; zebra: boolean;
+};
+const TPL = (p: Partial<PdfTemplate>): PdfTemplate => ({ font: "sans", header: "left", summary: "cards", head: "gray", grid: false, compact: false, caps: false, rule: 1.2, zebra: true, ...p });
+export const PDF_TEMPLATES: Record<PdfTemplateId, PdfTemplate> = {
+  classic: TPL({}),
+  band: TPL({ header: "band", rule: 0 }),
+  centered: TPL({ header: "center", head: "line" }),
+  reversed: TPL({ header: "right" }),
+  serif: TPL({ font: "serif", summary: "lines", head: "line", rule: 0.8 }),
+  ledger: TPL({ font: "mono", summary: "boxes", caps: true, rule: 0.8 }),
+  minimal: TPL({ summary: "lines", head: "line", rule: 0.6, zebra: false }),
+  compact: TPL({ summary: "lines", compact: true, rule: 0.8 }),
+  brandhead: TPL({ head: "brand" }),
+  sheet: TPL({ summary: "boxes", grid: true, rule: 0.8 }),
+};
+export const PDF_TEMPLATE_IDS = Object.keys(PDF_TEMPLATES) as PdfTemplateId[];
 export type PdfDesign = {
-  style?: PdfStyle; primary?: string; accent?: string; signatures?: boolean; logo?: boolean; zebra?: boolean;
+  template?: PdfTemplateId; style?: PdfStyle; primary?: string; accent?: string; signatures?: boolean; logo?: boolean; zebra?: boolean;
   logoData?: string; // logo propio para los PDF (PNG en data URL); si no hay, se usa el logo de la empresa
   orientation?: "portrait" | "landscape"; // (ya no se usa, se guarda por compatibilidad)
 };
 export const DEFAULT_DESIGN: Required<Omit<PdfDesign, "logoData" | "orientation">> & { logoData: string } = {
-  style: "modern", primary: "#0b1f3a", accent: "#0f766e", signatures: true, logo: true, zebra: true, logoData: "",
+  template: "classic", style: "modern", primary: "#0b1f3a", accent: "#0f766e", signatures: true, logo: true, zebra: true, logoData: "",
 };
 export type FullDesign = typeof DEFAULT_DESIGN;
 export const designOf = (d?: PdfDesign | null): FullDesign => {
   const x = { ...DEFAULT_DESIGN, ...Object.fromEntries(Object.entries(d ?? {}).filter(([, v]) => v !== undefined && v !== null)) } as FullDesign;
   const ok = (c: string, f: string) => (/^#[0-9a-f]{6}$/i.test(c) ? c : f);
-  return { ...x, primary: ok(x.primary, DEFAULT_DESIGN.primary), accent: ok(x.accent, DEFAULT_DESIGN.accent), style: (["grid", "modern", "minimal"] as const).includes(x.style) ? x.style : "modern" };
+  return { ...x, primary: ok(x.primary, DEFAULT_DESIGN.primary), accent: ok(x.accent, DEFAULT_DESIGN.accent), style: (["grid", "modern", "minimal"] as const).includes(x.style) ? x.style : "modern", template: x.template in PDF_TEMPLATES ? x.template : "classic" };
 };
 export type CountPdfInput = {
   design?: PdfDesign; logoBytes?: Uint8Array | null; logoPng?: boolean;
@@ -41,18 +61,21 @@ export async function buildCountPdf(d: CountPdfInput): Promise<Uint8Array> {
   type Color = ReturnType<typeof rgb>;
   const pdf = await PDFDocument.create();
   pdf.setTitle(`${d.title} · ${d.company}`); pdf.setAuthor(d.company); pdf.setCreator("BrightPro");
-  const font = await pdf.embedFont(StandardFonts.Helvetica), bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const ds = designOf(d.design);
+  const T = PDF_TEMPLATES[ds.template];
+  const FONTS = { sans: [StandardFonts.Helvetica, StandardFonts.HelveticaBold], serif: [StandardFonts.TimesRoman, StandardFonts.TimesRomanBold], mono: [StandardFonts.Courier, StandardFonts.CourierBold] } as const;
+  const font = await pdf.embedFont(FONTS[T.font][0]), bold = await pdf.embedFont(FONTS[T.font][1]);
   const [W, H] = d.orientation === "landscape" ? [792, 612] : [612, 792];
   const M = 30, CW = W - M * 2, BOTTOM = M + 22;
-  const ds = designOf(d.design);
   const col = (h: string) => rgb(parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255);
   const tint = (h: string, k: number) => { const v = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255); return rgb(...(v.map((c) => c + (1 - c) * k) as [number, number, number])); };
   const C = {
     pri: col(ds.primary), acc: col(ds.accent), accSoft: tint(ds.accent, 0.9), priSoft: tint(ds.primary, 0.93),
     ink: rgb(0.09, 0.12, 0.18), gray: rgb(0.42, 0.47, 0.55), line: rgb(0.86, 0.88, 0.91), lineDark: rgb(0.7, 0.74, 0.79), soft: rgb(0.982, 0.984, 0.988),
-    red: rgb(0.78, 0.09, 0.2), headBg: rgb(0.953, 0.957, 0.965), head: rgb(0.27, 0.31, 0.37), redBg: rgb(1, 0.94, 0.945), amber: rgb(0.8, 0.45, 0.02), amberBg: rgb(1, 0.973, 0.91), pos: rgb(0.02, 0.5, 0.36), white: rgb(1, 1, 1),
+    red: rgb(0.78, 0.09, 0.2), headBg: rgb(0.953, 0.957, 0.965), head: rgb(0.27, 0.31, 0.37), redBg: rgb(1, 0.94, 0.945), amber: rgb(0.8, 0.45, 0.02), amberBg: rgb(1, 0.973, 0.91), pos: rgb(0.02, 0.5, 0.36), white: rgb(1, 1, 1), bandSub: tint(ds.primary, 0.72),
   };
-  const FS = 7.4, HS = 6.3, LH = 8.6, PADY = 3.4, PADX = 4.5; // tamaños: letra, encabezado, alto de línea
+  const mono = T.font === "mono";
+  const FS = T.compact ? 6.6 : mono ? 6.8 : T.font === "serif" ? 7.8 : 7.4, HS = T.compact ? 5.8 : 6.3, LH = T.compact ? 7.6 : 8.6, PADY = T.compact ? 2.6 : 3.4, PADX = 4.5; // tamaños: letra, encabezado, alto de línea
   const tw = (t: string, f: Font, s: number) => f.widthOfTextAtSize(t, s);
   const fit = (t: string, f: Font, size: number, max: number) => {
     let s = safe(t); if (tw(s, f, size) <= max) return s;
@@ -106,44 +129,89 @@ export async function buildCountPdf(d: CountPdfInput): Promise<Uint8Array> {
 
   // Hoja para contar a mano = cuadrícula (se escribe en las celdas). Reportes = diseño limpio: blanco y grises.
   const sheet = d.columns.some((c) => c.box);
-  const grid = sheet;
+  const grid = sheet || T.grid;
   const round = (x: number, top: number, w: number, h: number, r: number, o: { fill?: Color; border?: Color; bw?: number }) =>
     page.drawSvgPath(`M ${r} 0 H ${w - r} A ${r} ${r} 0 0 1 ${w} ${r} V ${h - r} A ${r} ${r} 0 0 1 ${w - r} ${h} H ${r} A ${r} ${r} 0 0 1 0 ${h - r} V ${r} A ${r} ${r} 0 0 1 ${r} 0 Z`,
       { x, y: top, color: o.fill, borderColor: o.border, borderWidth: o.border ? o.bw ?? 0.7 : 0 });
 
-  // ---------- Encabezado: logo de la empresa a la izquierda, título del reporte a la derecha ----------
+  // ---------- Encabezado (según la plantilla) ----------
   y = H - M;
-  let lx = M, logoH = 0;
-  if (ds.logo && d.logoBytes) {
-    try {
-      const img = d.logoPng ? await pdf.embedPng(d.logoBytes) : await pdf.embedJpg(d.logoBytes);
-      const r = img.width / img.height; logoH = Math.min(42, 130 / r); const w = logoH * r;
-      page.drawImage(img, { x: M, y: y - logoH, width: w, height: logoH });
-      lx = M + w + 12;
-    } catch { logoH = 0; }
+  let logoImg: Awaited<ReturnType<typeof pdf.embedPng>> | null = null;
+  if (ds.logo && d.logoBytes) { try { logoImg = d.logoPng ? await pdf.embedPng(d.logoBytes) : await pdf.embedJpg(d.logoBytes); } catch { logoImg = null; } }
+  const logoBox = (maxH: number, maxW: number) => { if (!logoImg) return { w: 0, h: 0 }; const r = logoImg.width / logoImg.height; const h = Math.min(maxH, maxW / r); return { w: h * r, h }; };
+  const metaLine = (max: number, size = 7.2) => fit(d.meta.map(([k, v]) => `${k}: ${v}`).join("   ·   "), font, size, max);
+  const TS = T.font === "mono" ? 14 : 16; // tamaño del título
+  const title = (t: string, max: number) => fit(T.caps ? t.toUpperCase() : t, bold, TS, max);
+  if (T.header === "band") {
+    const bh = 50;
+    page.drawRectangle({ x: 0, y: H - bh, width: W, height: bh, color: C.pri });
+    page.drawText(fit(d.company, bold, 10, CW * 0.45), { x: M, y: H - 22, size: 10, font: bold, color: C.white });
+    page.drawText(fit(d.subtitle, font, 7, CW * 0.45), { x: M, y: H - 34, size: 7, font, color: C.bandSub });
+    const tt = title(d.title, CW * 0.5);
+    page.drawText(tt, { x: W - M - tw(tt, bold, TS), y: H - 26, size: TS, font: bold, color: C.white });
+    const ml = metaLine(CW * 0.5, 6.8);
+    page.drawText(ml, { x: W - M - tw(ml, font, 6.8), y: H - 38, size: 6.8, font, color: C.bandSub });
+    y = H - bh - 12;
+    const lb = logoBox(34, 120);
+    if (logoImg) { page.drawImage(logoImg, { x: M, y: y - lb.h, width: lb.w, height: lb.h }); y -= lb.h + 12; }
+    else y -= 2;
+  } else if (T.header === "center") {
+    const lb = logoBox(40, 140);
+    if (logoImg) { page.drawImage(logoImg, { x: (W - lb.w) / 2, y: y - lb.h, width: lb.w, height: lb.h }); y -= lb.h + 8; }
+    const cn = fit(d.company, bold, 10.5, CW); page.drawText(cn, { x: (W - tw(cn, bold, 10.5)) / 2, y: y - 10, size: 10.5, font: bold, color: C.ink });
+    y -= 26;
+    const tt = title(d.title, CW); page.drawText(tt, { x: (W - tw(tt, bold, TS)) / 2, y: y - 6, size: TS, font: bold, color: C.pri });
+    y -= 18;
+    const sub = fit(`${d.subtitle}${d.meta.length ? "   ·   " : ""}${d.meta.map(([k, v]) => `${k}: ${v}`).join("   ·   ")}`, font, 7.2, CW);
+    page.drawText(sub, { x: (W - tw(sub, font, 7.2)) / 2, y: y - 4, size: 7.2, font, color: C.gray });
+    y -= 14;
+    page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: T.rule, color: C.pri });
+    y -= 14;
+  } else {
+    // "left": logo y empresa a la izquierda, título a la derecha · "right": al revés
+    const right = T.header === "right";
+    const lb = logoBox(42, 130), bh = Math.max(lb.h, 34), hy = y - bh / 2;
+    const ex = right ? W - M - lb.w : M;
+    if (logoImg) page.drawImage(logoImg, { x: ex, y: y - lb.h, width: lb.w, height: lb.h });
+    const half = CW * 0.48 - (lb.w ? lb.w + 12 : 0);
+    const cn = fit(d.company, bold, 11.5, half), sb = fit(d.subtitle, font, 7.4, half);
+    const cx = right ? W - M - (lb.w ? lb.w + 12 : 0) : M + (lb.w ? lb.w + 12 : 0);
+    page.drawText(cn, { x: right ? cx - tw(cn, bold, 11.5) : cx, y: hy + 1.5, size: 11.5, font: bold, color: C.ink });
+    page.drawText(sb, { x: right ? cx - tw(sb, font, 7.4) : cx, y: hy - 9.5, size: 7.4, font, color: C.gray });
+    const tt = title(d.title, CW * 0.48), ml = metaLine(CW * 0.5);
+    page.drawText(tt, { x: right ? M : W - M - tw(tt, bold, TS), y: hy + 0.5, size: TS, font: bold, color: C.pri });
+    page.drawText(ml, { x: right ? M : W - M - tw(ml, font, 7.2), y: hy - 10.5, size: 7.2, font, color: C.gray });
+    y -= bh + 9;
+    if (T.rule) page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: T.rule, color: C.pri });
+    y -= 14;
   }
-  const hy = y - Math.max(logoH, 34) / 2; // centro vertical del encabezado
-  page.drawText(fit(d.company, bold, 11.5, CW * 0.45 - (lx - M)), { x: lx, y: hy + 1.5, size: 11.5, font: bold, color: C.ink });
-  page.drawText(fit(d.subtitle, font, 7.4, CW * 0.5 - (lx - M)), { x: lx, y: hy - 9.5, size: 7.4, font, color: C.gray });
-  const title = fit(d.title, bold, 16, CW * 0.48);
-  page.drawText(title, { x: W - M - tw(title, bold, 16), y: hy + 0.5, size: 16, font: bold, color: C.pri });
-  const metaLine = fit(d.meta.map(([k, v]) => `${k}: ${v}`).join("   ·   "), font, 7.2, CW * 0.5);
-  page.drawText(metaLine, { x: W - M - tw(metaLine, font, 7.2), y: hy - 10.5, size: 7.2, font, color: C.gray });
-  y -= Math.max(logoH, 34) + 9;
-  page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 1.2, color: C.pri });
-  y -= 14;
 
-  // Tarjetas de resumen: redondeadas, blancas con borde gris; el número en rojo solo si es alerta
+  // ---------- Resumen (según la plantilla) ----------
   if (d.summary?.length) {
-    const n = d.summary.length, gap = 8, sw = (CW - gap * (n - 1)) / n, h = 40;
-    d.summary.forEach(([k, v, tone], i) => {
-      const x = M + i * (sw + gap), bad = tone === "neg";
-      round(x, y, sw, h, 9, { fill: C.white, border: C.line, bw: 0.8 });
-      page.drawText(fit(k, font, 7, sw - 22), { x: x + 11, y: y - 14, size: 7, font, color: C.gray });
-      page.drawText(fit(v, bold, 13, sw - 22), { x: x + 11, y: y - 31, size: 13, font: bold, color: bad ? C.red : C.ink });
-      if (bad) page.drawCircle({ x: x + sw - 12, y: y - 12, size: 2.6, color: C.red });
-    });
-    y -= h + 14;
+    const n = d.summary.length;
+    if (T.summary === "cards" || T.summary === "boxes") {
+      const gap = 8, sw = (CW - gap * (n - 1)) / n, h = 40;
+      d.summary.forEach(([k, v, tone], i) => {
+        const x = M + i * (sw + gap), bad = tone === "neg";
+        if (T.summary === "cards") round(x, y, sw, h, 9, { fill: C.white, border: C.line, bw: 0.8 });
+        else page.drawRectangle({ x, y: y - h, width: sw, height: h, color: C.headBg, borderColor: C.lineDark, borderWidth: 0.6 });
+        page.drawText(fit(T.caps ? k.toUpperCase() : k, font, 7, sw - 22), { x: x + 11, y: y - 14, size: 7, font, color: C.gray });
+        page.drawText(fit(v, bold, 13, sw - 22), { x: x + 11, y: y - 31, size: 13, font: bold, color: bad ? C.red : C.ink });
+        if (bad) page.drawCircle({ x: x + sw - 12, y: y - 12, size: 2.6, color: C.red });
+      });
+      y -= h + 14;
+    } else { // "lines": números entre dos líneas finas, sin cajas
+      const sw = CW / n;
+      page.drawLine({ start: { x: M, y }, end: { x: M + CW, y }, thickness: 0.5, color: C.line });
+      d.summary.forEach(([k, v, tone], i) => {
+        const x = M + i * sw, bad = tone === "neg";
+        if (i) page.drawLine({ start: { x, y: y - 6 }, end: { x, y: y - 32 }, thickness: 0.5, color: C.line });
+        page.drawText(fit(T.caps ? k.toUpperCase() : k, font, 6.8, sw - 18), { x: x + (i ? 10 : 0), y: y - 13, size: 6.8, font, color: C.gray });
+        page.drawText(fit(v, bold, 12, sw - 18), { x: x + (i ? 10 : 0), y: y - 28, size: 12, font: bold, color: bad ? C.red : C.ink });
+      });
+      page.drawLine({ start: { x: M, y: y - 38 }, end: { x: M + CW, y: y - 38 }, thickness: 0.5, color: C.line });
+      y -= 52;
+    }
   }
 
   // ---------- Tablas ----------
@@ -151,14 +219,18 @@ export async function buildCountPdf(d: CountPdfInput): Promise<Uint8Array> {
   const headLines = () => cols.map((c) => wrap(c.label.toUpperCase(), bold, HS, c.px - PADX * 2, 2));
   const header = () => {
     const hl = headLines(); const n = Math.max(1, ...hl.map((l) => l.length)); const hh = n * 7.4 + 8;
-    page.drawRectangle({ x: M, y: y - hh, width: CW, height: hh, color: C.headBg, ...(grid ? { borderColor: C.lineDark, borderWidth: 0.7 } : {}) });
-    if (!grid) page.drawLine({ start: { x: M, y: y - hh }, end: { x: M + CW, y: y - hh }, thickness: 0.8, color: C.lineDark });
+    const brandHead = T.head === "brand" && !grid, lineHead = T.head === "line" && !grid;
+    if (brandHead) page.drawRectangle({ x: M, y: y - hh, width: CW, height: hh, color: C.pri });
+    else if (lineHead) { page.drawLine({ start: { x: M, y }, end: { x: M + CW, y }, thickness: 0.5, color: C.line }); page.drawLine({ start: { x: M, y: y - hh }, end: { x: M + CW, y: y - hh }, thickness: 1, color: C.pri }); }
+    else page.drawRectangle({ x: M, y: y - hh, width: CW, height: hh, color: C.headBg, ...(grid ? { borderColor: C.lineDark, borderWidth: 0.7 } : {}) });
+    if (!grid && !brandHead && !lineHead) page.drawLine({ start: { x: M, y: y - hh }, end: { x: M + CW, y: y - hh }, thickness: 0.8, color: C.lineDark });
+    const headInk = brandHead ? C.white : lineHead ? C.pri : C.head;
     let x = M;
     cols.forEach((c, j) => {
       hl[j].forEach((t, li) => {
         const w = tw(t, bold, HS);
         const tx = c.align === "right" ? x + c.px - PADX - w : c.align === "center" || c.box ? x + (c.px - w) / 2 : x + PADX;
-        page.drawText(t, { x: tx, y: y - 4.6 - HS - (li + n - hl[j].length) * 7.4, size: HS, font: bold, color: C.head });
+        page.drawText(t, { x: tx, y: y - 4.6 - HS - (li + n - hl[j].length) * 7.4, size: HS, font: bold, color: headInk });
       });
       if (grid && x > M) page.drawLine({ start: { x, y }, end: { x, y: y - hh }, thickness: 0.6, color: C.lineDark });
       x += c.px;
@@ -173,7 +245,7 @@ export async function buildCountPdf(d: CountPdfInput): Promise<Uint8Array> {
       const lines = Math.max(1, ...cells.map((l) => l.length));
       const rh = Math.max(sheet ? 17 : 0, lines * LH + PADY * 2);
       if (y - rh < BOTTOM) { newPage(); header(); }
-      if (i % 2 && ds.zebra && !r.total) page.drawRectangle({ x: M, y: y - rh, width: CW, height: rh, color: C.soft });
+      if (i % 2 && ds.zebra && T.zebra && !r.total) page.drawRectangle({ x: M, y: y - rh, width: CW, height: rh, color: C.soft });
       if (grid) { let gx = M; cols.forEach((c) => { page.drawRectangle({ x: gx, y: y - rh, width: c.px, height: rh, borderColor: C.line, borderWidth: 0.55 }); gx += c.px; }); }
       let x = M;
       cols.forEach((c, j) => {

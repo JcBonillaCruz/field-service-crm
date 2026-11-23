@@ -8363,7 +8363,7 @@
     "making": "Generando…",
     "parts": "secciones",
     "brand": "Color de tu marca",
-    "brandHint": "Va en el título y la línea de arriba. Lo demás sale en blanco y gris para imprimir limpio.",
+    "brandHint": "Va en el título, la línea de arriba y en las plantillas con color.",
     "cPrimary": "Principal",
     "cAccent": "Acento",
     "logoUpload": "Subir otro logo",
@@ -8372,11 +8372,38 @@
     "noLogo": "Sin logo",
     "logoBad": "Usa una imagen PNG, JPG o SVG de menos de 5 MB.",
     "logoNone": "Tu empresa aún no tiene logo en Ventas: súbelo aquí.",
-    "pagesRule": "Los reportes salen siempre en vertical y limpios (blanco y gris). Las hojas para contar a mano salen en horizontal y con cuadrícula. Caben unos 45 renglones por hoja.",
+    "pagesRule": "Los reportes salen siempre en vertical y las hojas para contar a mano en horizontal (con cuadrícula para escribir). Caben unos 45 renglones por hoja (más en la Compacta).",
     "pvReport": "Reporte",
     "pvSheet": "Hoja de conteo",
     "alwaysPortrait": "Siempre vertical (carta)",
-    "options": "Opciones"
+    "options": "Opciones",
+    "templates": "Plantillas",
+    "templatesHint": "Elige la base de tus reportes y hojas de conteo. Abajo le pones tu color y tu logo.",
+    "customize": "Personalizar",
+    "tpl": {
+      "classic": "Clásica",
+      "band": "Banda de marca",
+      "centered": "Centrada",
+      "reversed": "Logo a la derecha",
+      "serif": "Ejecutiva",
+      "ledger": "Contable",
+      "minimal": "Minimal",
+      "compact": "Compacta",
+      "brandhead": "Tabla en color",
+      "sheet": "Hoja de cálculo"
+    },
+    "tplD": {
+      "classic": "Tarjetas y tabla gris",
+      "band": "Franja de tu color arriba",
+      "centered": "Logo y título al centro",
+      "reversed": "Título a la izquierda",
+      "serif": "Letra elegante tipo Times",
+      "ledger": "Letra de máquina",
+      "minimal": "Solo líneas finas",
+      "compact": "Más renglones por hoja",
+      "brandhead": "Encabezado de tu color",
+      "sheet": "Con cuadrícula"
+    }
   },
   "invReport": {
     "s": {

@@ -8368,7 +8368,7 @@
     "making": "Generating…",
     "parts": "sections",
     "brand": "Your brand color",
-    "brandHint": "Used on the title and the top line. Everything else prints in white and gray.",
+    "brandHint": "Used on the title, the top line and in the color templates.",
     "cPrimary": "Primary",
     "cAccent": "Accent",
     "logoUpload": "Upload another logo",
@@ -8377,11 +8377,38 @@
     "noLogo": "No logo",
     "logoBad": "Use a PNG, JPG or SVG image under 5 MB.",
     "logoNone": "Your company has no logo in Sales yet: upload one here.",
-    "pagesRule": "Reports always print portrait and clean (white and gray). Hand-count sheets print landscape with a grid. About 45 rows per page.",
+    "pagesRule": "Reports always print portrait and hand-count sheets landscape (with a grid to write in). About 45 rows per page (more with Compact).",
     "pvReport": "Report",
     "pvSheet": "Count sheet",
     "alwaysPortrait": "Always portrait (letter)",
-    "options": "Options"
+    "options": "Options",
+    "templates": "Templates",
+    "templatesHint": "Pick the base for your reports and count sheets. Then add your color and logo below.",
+    "customize": "Customize",
+    "tpl": {
+      "classic": "Classic",
+      "band": "Brand band",
+      "centered": "Centered",
+      "reversed": "Logo right",
+      "serif": "Executive",
+      "ledger": "Ledger",
+      "minimal": "Minimal",
+      "compact": "Compact",
+      "brandhead": "Color table",
+      "sheet": "Spreadsheet"
+    },
+    "tplD": {
+      "classic": "Cards and gray table",
+      "band": "Your color across the top",
+      "centered": "Logo and title centered",
+      "reversed": "Title on the left",
+      "serif": "Elegant Times type",
+      "ledger": "Typewriter type",
+      "minimal": "Thin lines only",
+      "compact": "More rows per page",
+      "brandhead": "Header in your color",
+      "sheet": "With a grid"
+    }
   },
   "invReport": {
     "s": {

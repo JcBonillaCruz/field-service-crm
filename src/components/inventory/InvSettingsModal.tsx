@@ -9,7 +9,7 @@ import { confirmDelete } from "@/lib/confirm";
 import { inputClass } from "@/components/customers/ui";
 import { Toast } from "@/components/sales/SalesBits";
 import { AlertFrequency, InvCategory, InvItem, InvLocation, InvMember, InvStock, KitRow } from "@/lib/inventory";
-import { FullDesign, PdfDesign, buildCountPdf, companyLogoPng, designOf, imageToPng, loadPdfBrand, logoBytesOf } from "@/lib/count-pdf";
+import { FullDesign, PDF_TEMPLATES, PDF_TEMPLATE_IDS, PdfDesign, PdfTemplateId, buildCountPdf, companyLogoPng, designOf, imageToPng, loadPdfBrand, logoBytesOf } from "@/lib/count-pdf";
 import { REPORT_SECTIONS, ReportPreset, ReportSection } from "@/lib/inventory-report";
 import KitEditor from "@/components/inventory/KitEditor";
 import { useRunPreset } from "@/components/inventory/ReportPresets";
@@ -343,8 +343,26 @@ function PdfDesigner({ companyId, company, cfg, save, items, es }: { companyId: 
   }, [d, logo, kind, company, items, es, ts, tr]);
 
   return (
+    <div className="space-y-4">
+    {/* Paso 6.12h: Plantillas arriba, personalizar abajo */}
+    <Card title={t("templates")} hint={t("templatesHint")}>
+      <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-1 [scrollbar-width:thin] sm:grid sm:grid-cols-3 sm:overflow-visible lg:grid-cols-5">
+        {PDF_TEMPLATE_IDS.map((id) => (
+          <button key={id} type="button" onClick={() => { set({ template: id }); setKind("report"); }} aria-pressed={d.template === id}
+            className={`group w-[132px] shrink-0 snap-start rounded-2xl border p-2 text-left transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(15,40,60,0.08)] sm:w-auto ${d.template === id ? "border-[#0f766e] bg-[#f3fbf8] ring-2 ring-[#0f766e]/15" : "border-slate-200 bg-white hover:border-[#14a39a]"}`}>
+            <TemplateThumb id={id} color={d.primary} />
+            <span className="mt-2 flex items-center gap-1.5 px-0.5">
+              <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-[#0b1f3a]">{t(`tpl.${id}`)}</span>
+              {d.template === id && <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-[#0f766e]" fill="currentColor"><path d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm3.7-9.7-4.2 4.2a1 1 0 0 1-1.4 0l-1.8-1.8a1 1 0 1 1 1.4-1.4l1.1 1.1 3.5-3.5a1 1 0 1 1 1.4 1.4z" /></svg>}
+            </span>
+            <span className="block truncate px-0.5 text-[11.5px] text-slate-500">{t(`tplD.${id}`)}</span>
+          </button>
+        ))}
+      </div>
+    </Card>
     <div className="grid gap-4 xl:grid-cols-[minmax(0,370px)_minmax(0,1fr)]">
       <div className="space-y-4">
+        <p className="px-1 text-[13px] font-semibold uppercase tracking-wide text-slate-500">{t("customize")}</p>
         <Card title={t("brand")} hint={t("brandHint")}>
           <div className="flex flex-wrap items-center gap-2.5">
             {PALETTES.map((p) => (
@@ -397,8 +415,52 @@ function PdfDesigner({ companyId, company, cfg, save, items, es }: { companyId: 
         {url ? <iframe title={t("preview")} src={`${url}#toolbar=0&view=FitH`} className="min-h-[520px] w-full flex-1 bg-slate-100" /> : <div className="m-5 flex-1 animate-pulse rounded-xl bg-slate-100" />}
       </section>
     </div>
+    </div>
   );
 }
+// Miniatura de cada plantilla (dibujada con su encabezado, resumen y tabla reales, con tu color)
+function TemplateThumb({ id, color }: { id: PdfTemplateId; color: string }) {
+  const T = PDF_TEMPLATES[id];
+  const serif = T.font === "serif" ? "Georgia, serif" : T.font === "mono" ? "Courier New, monospace" : "Helvetica, Arial, sans-serif";
+  const logo = (x: number, y: number) => <g><circle cx={x + 4} cy={y + 4} r="4" fill="#e8713a" /><rect x={x + 10} y={y + 2} width="10" height="4" rx="1" fill={color} /></g>;
+  let top = 0; const head: React.ReactNode[] = [];
+  if (T.header === "band") { head.push(<rect key="b" width="100" height="16" fill={color} />, <rect key="c" x="6" y="5" width="22" height="2.6" rx="1" fill="#fff" />, <text key="t" x="94" y="10" textAnchor="end" fontSize="5.4" fontWeight="700" fill="#fff" fontFamily={serif}>Lista</text>, <rect key="m" x="70" y="12" width="24" height="1.4" rx=".7" fill="#ffffff99" />); head.push(<g key="l">{logo(6, 19)}</g>); top = 32; }
+  else if (T.header === "center") { head.push(<g key="l">{logo(40, 5)}</g>, <rect key="c" x="38" y="16" width="24" height="2.2" rx="1" fill="#334155" />, <text key="t" x="50" y="25" textAnchor="middle" fontSize="5.6" fontWeight="700" fill={color} fontFamily={serif}>Lista</text>, <rect key="m" x="30" y="28" width="40" height="1.4" rx=".7" fill="#cbd5e1" />, <rect key="r" x="6" y="32" width="88" height={T.rule || 0.6} fill={color} />); top = 36; }
+  else {
+    const r = T.header === "right";
+    head.push(<g key="l">{logo(r ? 72 : 6, 6)}</g>, <rect key="c" x={r ? 50 : 30} y="7" width="18" height="2.4" rx="1" fill="#334155" transform={r ? "translate(0,0)" : undefined} />, <rect key="s" x={r ? 52 : 30} y="11" width="16" height="1.4" rx=".7" fill="#cbd5e1" />,
+      <text key="t" x={r ? 6 : 94} y="11" textAnchor={r ? "start" : "end"} fontSize="5.6" fontWeight="700" fill={color} fontFamily={serif}>{T.caps ? "LISTA" : "Lista"}</text>, <rect key="m" x={r ? 6 : 72} y="14" width="22" height="1.4" rx=".7" fill="#cbd5e1" />);
+    if (T.rule) head.push(<rect key="rl" x="6" y="19" width="88" height={T.rule * 0.6} fill={color} />);
+    top = 23;
+  }
+  const sum: React.ReactNode[] = [];
+  for (let i = 0; i < 4; i++) {
+    const x = 6 + i * 22.5, bad = i >= 2;
+    if (T.summary === "cards") sum.push(<rect key={i} x={x} y={top} width="20" height="10" rx="2.4" fill="#fff" stroke="#dbe1e8" strokeWidth=".5" />);
+    if (T.summary === "boxes") sum.push(<rect key={i} x={x} y={top} width="20" height="10" fill="#f1f3f6" stroke="#b8c0ca" strokeWidth=".4" />);
+    if (T.summary === "lines" && i) sum.push(<rect key={`d${i}`} x={x - 1.2} y={top + 1.5} width=".4" height="7" fill="#dbe1e8" />);
+    sum.push(<rect key={`v${i}`} x={x + 2.5} y={top + 5.5} width={bad ? 4 : 10} height="2.4" rx=".6" fill={bad ? "#e11d48" : "#1e293b"} />);
+  }
+  if (T.summary === "lines") sum.push(<rect key="l1" x="6" y={top} width="88" height=".4" fill="#dbe1e8" />, <rect key="l2" x="6" y={top + 10} width="88" height=".4" fill="#dbe1e8" />);
+  const ty = top + 15, rh = T.compact ? 3.6 : 4.6, n = T.compact ? 13 : 10;
+  const rows: React.ReactNode[] = [];
+  if (T.head === "brand" && !T.grid) rows.push(<rect key="h" x="6" y={ty} width="88" height="4.2" fill={color} />);
+  else if (T.head === "line" && !T.grid) rows.push(<rect key="h" x="6" y={ty + 4} width="88" height=".7" fill={color} />);
+  else rows.push(<rect key="h" x="6" y={ty} width="88" height="4.2" fill="#eef1f5" stroke={T.grid ? "#94a3b8" : "none"} strokeWidth=".3" />);
+  for (let i = 0; i < n; i++) {
+    const yy = ty + 4.4 + i * rh;
+    if (T.grid) rows.push(<g key={i}><rect x="6" y={yy} width="88" height={rh} fill="#fff" stroke="#cbd5e1" strokeWidth=".3" />{[40, 62, 76].map((gx) => <rect key={gx} x={gx} y={yy} width=".3" height={rh} fill="#cbd5e1" />)}</g>);
+    else { if (i % 2 && T.zebra) rows.push(<rect key={`z${i}`} x="6" y={yy} width="88" height={rh} fill="#f6f8fa" />); rows.push(<rect key={`l${i}`} x="6" y={yy + rh - .3} width="88" height=".3" fill="#e5e9ee" />); }
+    rows.push(<rect key={`t${i}`} x="8.5" y={yy + rh / 2 - .7} width={12 + ((i * 7) % 14)} height="1.4" rx=".6" fill={i === 1 ? "#e11d48" : "#64748b"} />, <rect key={`n${i}`} x="86" y={yy + rh / 2 - .7} width="5" height="1.4" rx=".6" fill={i === 1 ? "#e11d48" : "#94a3b8"} />);
+  }
+  return (
+    <svg viewBox="0 0 100 129" className="block w-full rounded-lg bg-white shadow-[0_1px_3px_rgba(15,40,60,0.12)] ring-1 ring-slate-200 transition-transform duration-200 group-hover:scale-[1.02]" aria-hidden="true">
+      {head}{sum}{rows}
+      <rect x="6" y="122" width="20" height=".4" fill="#cbd5e1" /><rect x="40" y="122" width="20" height=".4" fill="#cbd5e1" /><rect x="74" y="122" width="20" height=".4" fill="#cbd5e1" />
+    </svg>
+  );
+}
+
 function Reports({ companyId, company, cfg, save, items, stock, locations, members }: { companyId: string; company: string; cfg: InvSettingsRow; save: Save; items: InvItem[]; stock: InvStock[]; locations: InvLocation[]; members: InvMember[] }) {
   const t = useTranslations("invSet");
   const tr = useTranslations("invReport");
