@@ -5,6 +5,8 @@ import NoAccess from "@/components/customers/NoAccess";
 import { loadBoard, loadLocationsAll, loadMovements } from "@/lib/inventory-server";
 import ReportsView from "@/components/inventory/ReportsView";
 import InvReportAlerts from "@/components/inventory/InvReportAlerts";
+import ReportPresets from "@/components/inventory/ReportPresets";
+import { presetsOf } from "@/lib/inventory-report";
 
 export const dynamic = "force-dynamic";
 
@@ -13,17 +15,20 @@ export default async function InventoryReportsPage({ searchParams }: { searchPar
   if (!current) redirect("/dashboard");
   if (!canManageInventory(current.role)) return <NoAccess />;
   const days = [7, 30, 90, 365].includes(Number(searchParams.days)) ? Number(searchParams.days) : 30;
-  const [locations, moves, b, rev] = await Promise.all([
+  const [locations, moves, b, rev, set] = await Promise.all([
     loadLocationsAll(supabase, current.id),
     loadMovements(supabase, current.id, { days, kinds: ["use", "count", "transfer", "return"], limit: 10000 }),
     loadBoard(supabase, current.id),
     supabase.from("inventory_count_reversals").select("batch_id").eq("company_id", current.id),
+    supabase.from("inventory_settings").select("report_presets").eq("company_id", current.id).maybeSingle(),
   ]);
+  const presets = set.error ? [] : presetsOf((set.data as { report_presets?: unknown } | null)?.report_presets);
   // Paso 6.12d: los conteos revertidos ya no cuentan como faltante
   const gone = new Set(((rev.data ?? []) as { batch_id: string }[]).map((r) => r.batch_id));
   return (
     <ReportsView locations={locations} moves={moves.rows.filter((m) => !(m.kind === "count" && m.batch_id && gone.has(m.batch_id)))} days={days}>
-      <InvReportAlerts items={b.items} stock={b.stock} locations={b.locations} members={b.members} kit={kitOf(b.kit)} moves={b.moves} company={current.name} />
+      <ReportPresets presets={presets} companyId={current.id} company={current.name} items={b.items} stock={b.stock} locations={b.locations} members={b.members} kit={kitOf(b.kit)} />
+      <InvReportAlerts items={b.items} stock={b.stock} locations={b.locations} members={b.members} kit={kitOf(b.kit)} moves={b.moves} company={current.name} companyId={current.id} />
     </ReportsView>
   );
 }

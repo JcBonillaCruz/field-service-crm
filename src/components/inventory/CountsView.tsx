@@ -11,9 +11,9 @@ import type { MoveRow } from "@/lib/inventory-server";
 import { EmptyBox, Fab, NewButton, PageHead, card, pageWrap, useFmt } from "@/components/inventory/PageBits";
 
 // Conteos físicos hechos (uno por ubicación y fecha) con lo que faltó y quién es responsable
-export default function CountsView({ locations, moves, reversed = {}, items = [], stock = [], company = "" }: {
+export default function CountsView({ locations, moves, reversed = {}, items = [], stock = [], company = "", companyId = "" }: {
   locations: InvLocation[]; moves: MoveRow[];
-  reversed?: Record<string, { by: string | null; reason: string }>; items?: InvItem[]; stock?: InvStock[]; company?: string; // Paso 6.12d
+  reversed?: Record<string, { by: string | null; reason: string }>; items?: InvItem[]; stock?: InvStock[]; company?: string; companyId?: string; // Paso 6.12d
 }) {
   const [sheet, setSheet] = useState(false);
   const t = useTranslations("invCounts");
@@ -70,7 +70,7 @@ export default function CountsView({ locations, moves, reversed = {}, items = []
       )}
       <p className="mt-6 text-[13px] text-slate-500">{t.rich("reportsNote", { a: (c) => <Link prefetch={false} href="/dashboard/inventory/reports" className="font-medium text-[#0f766e] hover:underline">{c}</Link> })}</p>
       <Fab href="/dashboard/inventory/counts/new" label={t("new")} />
-      <CountSheetModal open={sheet} onClose={() => setSheet(false)} items={items} stock={stock} locations={locations} company={company} />
+      <CountSheetModal companyId={companyId} open={sheet} onClose={() => setSheet(false)} items={items} stock={stock} locations={locations} company={company} />
     </div>
   );
 }

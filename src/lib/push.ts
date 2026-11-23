@@ -43,6 +43,19 @@ export async function pushToCompany(companyId: string, payload: PushPayload) {
   return sent;
 }
 
+// Paso 6.12f: aviso solo a ciertas personas (ej. el técnico dueño de la van)
+export async function pushToUsers(companyId: string, userIds: string[], payload: PushPayload) {
+  if (!setup() || !userIds.length) return 0;
+  const db = admin(); if (!db) return 0;
+  const { data: subs } = await db.from("push_subscriptions").select("id, endpoint, p256dh, auth, user_id").eq("company_id", companyId).in("user_id", userIds);
+  let sent = 0;
+  await Promise.all((subs ?? []).map(async (s) => {
+    try { await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify(payload), { TTL: 60 * 60 * 24 }); sent++; }
+    catch (e) { const code = (e as { statusCode?: number }).statusCode; if (code === 404 || code === 410) await db.from("push_subscriptions").delete().eq("id", s.id); }
+  }));
+  return sent;
+}
+
 // Busca el documento del enlace público (para avisarle al dueño)
 export async function docByToken(token: string) {
   const db = admin(); if (!db) return null;

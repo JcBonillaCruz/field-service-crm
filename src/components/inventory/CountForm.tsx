@@ -188,7 +188,7 @@ export default function CountForm({ companyId, items, stock, locations, initialL
         </div>
       </div>
       <SaveBar saving={saving} cancelHref="/dashboard/inventory/history?tab=counts" error={error} saveLabel={t("saveCount")} />
-      <CountSheetModal open={sheet} onClose={() => setSheet(false)} items={items} stock={stock} locations={locations} company={company} initialLocation={loc} />
+      <CountSheetModal companyId={companyId} open={sheet} onClose={() => setSheet(false)} items={items} stock={stock} locations={locations} company={company} initialLocation={loc} />
     </form>
   );
 }

@@ -28,7 +28,7 @@ export default async function InventoryHistoryPage({ searchParams }: { searchPar
     <>
       <HistoryTabs active={tab} />
       {tab === "transfers" ? <TransfersView locations={locations} moves={moves.rows} done={Number(searchParams.done) || 0} />
-        : tab === "counts" ? <CountsView locations={locations} moves={moves.rows} reversed={reversed} items={inv?.items ?? []} stock={inv?.stock ?? []} company={current.name} />
+        : tab === "counts" ? <CountsView locations={locations} moves={moves.rows} reversed={reversed} items={inv?.items ?? []} stock={inv?.stock ?? []} company={current.name} companyId={current.id} />
           : <MovementsView locations={locations} moves={moves.rows} days={days} initialLocation={searchParams.location ?? "all"} />}
     </>
   );

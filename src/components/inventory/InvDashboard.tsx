@@ -23,9 +23,10 @@ type Props = {
   companyId: string; items: InvItem[]; stock: InvStock[]; locations: InvLocation[]; members: InvMember[]; moves: MoveRow[]; needsSql: boolean;
   unscanned: { units: number; value: number } | null; kitSize: number; canEdit: boolean;
   photos: InvPhoto[]; kit: KitRow[]; boardLocations: LocLite[]; recent: UseMove[]; // Paso 6.12c
+  requests?: React.ReactNode; // Paso 6.12f
 };
 
-export default function InvDashboard({ items, stock, locations, members, moves, needsSql, unscanned, kitSize, canEdit, photos, kit, boardLocations, recent }: Props) {
+export default function InvDashboard({ items, stock, locations, members, moves, needsSql, unscanned, kitSize, canEdit, photos, kit, boardLocations, recent, requests }: Props) {
   const t = useTranslations("invDash");
   const ix = useInvTx();
   const usd = ix.money;
@@ -85,6 +86,9 @@ export default function InvDashboard({ items, stock, locations, members, moves, 
           <p className="mt-0.5 text-[13.5px] text-slate-500 lg:text-sm">{t("subtitle")}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <Link prefetch={false} href={`${INV}/settings`} aria-label={t("settings")} className="group/g flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-all hover:-translate-y-0.5 hover:border-[#14a39a] hover:text-[#0f766e]">
+            <svg viewBox="0 0 24 24" className="h-5 w-5 transition-transform duration-500 group-hover/g:rotate-90" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg>
+          </Link>
           <Link prefetch={false} href={`${INV}/scan`} className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[14px] font-medium text-[#0f766e] transition-all hover:-translate-y-0.5 hover:border-[#14a39a] hover:bg-[#e9f7f4]">
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 8v8M10 8v8M13 8v8M16.5 8v8" /></svg>{t("scan")}
           </Link>
@@ -98,6 +102,7 @@ export default function InvDashboard({ items, stock, locations, members, moves, 
       </div>
 
       {needsSql && <p role="alert" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{t("needsSql")}</p>}
+      {requests}
 
       {/* Del mes */}
       <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -198,7 +203,7 @@ export default function InvDashboard({ items, stock, locations, members, moves, 
             <Link prefetch={false} href={`${INV}/reports`} className="mt-auto block border-t border-slate-100 px-5 py-3 text-center text-[13.5px] font-semibold text-[#0f766e] hover:bg-[#f0faf7]">{t("seeReports")}</Link>
             {vans.length > 0 && kitSize === 0 && canEdit && (
               <div className="border-t border-slate-100 px-5 py-3 text-[13px] text-slate-500">
-                {t("noKit")} <Link prefetch={false} href={`${INV}/settings#kit`} className="font-semibold text-[#0f766e] hover:underline">{t("setKit")}</Link>
+                {t("noKit")} <Link prefetch={false} href={`${INV}/settings?s=vans`} className="font-semibold text-[#0f766e] hover:underline">{t("setKit")}</Link>
               </div>
             )}
           </section>

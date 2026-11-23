@@ -3,18 +3,17 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import { useLocale, useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
 import { useInvTx } from "@/i18n/useInvTx";
 import { InvLocation, invError, pingAlerts, qtyFmt } from "@/lib/inventory";
 import type { MoveRow } from "@/lib/inventory-server";
-import { buildCountPdf, openPdf } from "@/lib/count-pdf";
+import { buildCountPdf, loadPdfBrand, openPdf } from "@/lib/count-pdf";
 import { Modal, btnGhost } from "@/components/sales/SalesBits";
 import { inputClass } from "@/components/customers/ui";
 import { LocArt } from "@/components/inventory/InvArt";
 import { PageHead, pageWrap, useFmt } from "@/components/inventory/PageBits";
-import { SheetIcon, downloadPost } from "@/components/inventory/CountSheetModal";
+import { SheetIcon } from "@/components/inventory/CountSheetModal";
 
 // =====================================================================
 // Paso 6.12d · Ficha de un conteo
@@ -52,8 +51,11 @@ export default function CountDetail({ companyId, batch, rows, location, company,
   const note = rows.find((m) => m.note)?.note;
   const locName = location?.name ?? "—";
 
-  async function pdf(orientation: "portrait" | "landscape") {
+  async function pdf() {
+    const orientation = "portrait" as "portrait" | "landscape"; // Paso 6.12g: reportes siempre vertical
+    const brand = await loadPdfBrand(companyId);
     const bytes = await buildCountPdf({
+      design: brand.design, logoBytes: brand.logoBytes, logoPng: brand.logoPng,
       company, title: t("pdfTitle"), subtitle: reversal ? t("pdfReversed", { reason: reversal.reason }) : t("pdfSub"), orientation,
       meta: [[t("mLoc"), locName], [t("mDate"), fmtWhen(first.created_at)], [t("mBy"), first.actor_name ?? "—"], [t("mStatus"), reversal ? t("reversed") : t("saved")]],
       summary: [[t("kItems"), String(lines.length), null], [t("kMissing"), `${qtyFmt(missing)} · ${usd(missingCost)}`, missing ? "neg" : null], [t("kExtra"), qtyFmt(extra), extra ? "pos" : null], [t("kNet"), usd(net), net < 0 ? "neg" : net > 0 ? "pos" : null]],
@@ -64,6 +66,7 @@ export default function CountDetail({ companyId, batch, rows, location, company,
       rows: lines.map((l, i) => ({
         cells: [String(i + 1), l.m.items?.name ?? "", l.m.items?.sku ?? "", qtyFmt(l.exp), qtyFmt(l.cnt), l.d === 0 ? "0" : `${l.d > 0 ? "+" : "-"}${qtyFmt(Math.abs(l.d))}`, usd(l.value)],
         tone: [null, null, null, null, null, l.d < 0 ? "neg" : l.d > 0 ? "pos" : null, l.d < 0 ? "neg" : l.d > 0 ? "pos" : null],
+        ...(l.d < 0 ? { alert: "red" as const } : {}),
       })),
       note: [note ? `${t("note")}: ${note}` : "", resp ? t("respX", { name: resp }) : ""].filter(Boolean).join("   ·   ") || undefined,
       sign: [t("sCounted"), t("sReviewed"), t("sDate")], footer: `BrightPro · ${company}`, page: (n, total) => t("page", { n, total }),
@@ -87,15 +90,7 @@ export default function CountDetail({ companyId, batch, rows, location, company,
   return (
     <div className={`${pageWrap} min-h-[calc(100vh-4rem)] bg-[#f4f6f8]`}>
       <PageHead back="/dashboard/inventory/history?tab=counts" title={t("title", { loc: locName })} subtitle={[first.actor_name, fmtWhen(first.created_at)].filter(Boolean).join(" · ")}>
-        <Menu>
-          <MenuButton className={btn}><SheetIcon />PDF<svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg></MenuButton>
-          <MenuItems anchor="bottom end" transition className="z-[80] mt-1 w-48 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
-            {(["portrait", "landscape"] as const).map((o) => (
-              <MenuItem key={o}><button type="button" onClick={() => pdf(o)} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 data-[focus]:bg-[#e9f7f4] data-[focus]:text-[#0b1f3a]">{t(o)}</button></MenuItem>
-            ))}
-          </MenuItems>
-        </Menu>
-        <button type="button" onClick={() => downloadPost("/dashboard/inventory/counts/export", { batch, es }, "count.xlsx").catch(() => setMsg(t("eExport")))} className={btn}>Excel</button>
+        <button type="button" onClick={() => pdf()} className={btn}><SheetIcon />PDF</button>
         {canReverse && !reversal && (
           <>
             <button type="button" onClick={() => { setAsk("correct"); setReason(""); setError(""); }} className={btn}>{t("correct")}</button>

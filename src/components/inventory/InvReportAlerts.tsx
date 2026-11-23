@@ -1,14 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useInvTx } from "@/i18n/useInvTx";
 import { InvItem, InvLocation, InvMember, InvStock, KitRow, qtyFmt } from "@/lib/inventory";
 import { UseMove, locationStats, lowRows, runningOut, shoppingList } from "@/lib/inventory-insights";
-import { buildCountPdf, openPdf } from "@/lib/count-pdf";
-import { downloadPost } from "@/components/inventory/CountSheetModal";
+import { buildCountPdf, loadPdfBrand, openPdf } from "@/lib/count-pdf";
+import { SheetIcon } from "@/components/inventory/CountSheetModal";
 import { CartArt, LowArt, OutArt } from "@/components/inventory/KpiArt";
 import { LocArt } from "@/components/inventory/InvArt";
 import { useFmt } from "@/components/inventory/PageBits";
@@ -19,8 +18,8 @@ import { useFmt } from "@/components/inventory/PageBits";
 const INV = "/dashboard/inventory";
 type Tab = "buy" | "soon" | "out";
 
-export default function InvReportAlerts({ items, stock, locations, members, kit, moves, company = "" }: {
-  items: InvItem[]; stock: InvStock[]; locations: InvLocation[]; members: InvMember[]; kit: KitRow[]; moves: UseMove[]; company?: string;
+export default function InvReportAlerts({ items, stock, locations, members, kit, moves, company = "", companyId = "" }: {
+  companyId?: string; items: InvItem[]; stock: InvStock[]; locations: InvLocation[]; members: InvMember[]; kit: KitRow[]; moves: UseMove[]; company?: string;
 }) {
   const t = useTranslations("invAlerts");
   const ix = useInvTx();
@@ -58,26 +57,26 @@ export default function InvReportAlerts({ items, stock, locations, members, kit,
     if (k === "soon") return { title: t("pdfSoon"), cols: [t("cProduct"), "SKU", t("cWhere"), t("cHave"), t("cMin"), t("cDaysLeft")], rows: soon.map((r) => [r.item.name, r.item.sku ?? "", r.where, qtyFmt(r.qty), r.min ? qtyFmt(r.min) : "—", daysLabel(r.days)]), total: "" };
     return { title: t("pdfOut"), cols: [t("cProduct"), "SKU", t("cWhere"), t("cMin"), t("cUnitCost")], rows: out.map((r) => [r.item.name, r.item.sku ?? "", r.loc.name, r.min ? qtyFmt(r.min) : "—", usd(r.item.cost_price)]), total: "" };
   }
-  async function pdf(o: "portrait" | "landscape") {
+  async function pdf() {
+    const o = "portrait" as "portrait" | "landscape"; // Paso 6.12g: reportes siempre vertical
     const d = table(tab);
     setBusy("pdf");
+    const brand = companyId ? await loadPdfBrand(companyId) : null;
     const widths = tab === "buy" ? [22, 11, 7, 7, 7, 7, 9, 9, o === "landscape" ? 18 : 12] : tab === "soon" ? [26, 12, 18, 8, 8, 10] : [28, 12, 20, 8, 10];
     const right = (i: number) => (tab === "buy" ? i >= 2 && i <= 7 : tab === "soon" ? i >= 3 : i >= 3);
     const bytes = await buildCountPdf({
+      design: brand?.design, logoBytes: brand?.logoBytes, logoPng: brand?.logoPng,
       company, title: d.title, subtitle: t("pdfSub", { date: fmtDay(new Date().toISOString()) }), orientation: o,
       meta: [[t("mDate"), fmtDay(new Date().toISOString())], [t("mItems"), String(d.rows.length)], ...(d.total ? [[t("estimated"), d.total] as [string, string]] : [])],
       columns: d.cols.map((c, i) => ({ label: c, w: widths[i], align: right(i) ? "right" as const : "left" as const })),
-      rows: d.rows.map((r) => ({ cells: r })),
+      // Paso 6.12g: alertas resaltadas (rojo = agotado, ámbar = por agotarse) y renglón de total
+      rows: [...d.rows.map((r) => ({ cells: r, alert: tab === "out" ? "red" as const : tab === "soon" ? (r[3] === "0" ? "red" as const : "amber" as const) : undefined,
+        tone: tab === "soon" ? [null, null, null, "neg" as const] : undefined })),
+        ...(tab === "buy" && d.total ? [{ cells: d.cols.map((_, i) => (i === 0 ? t("estimated") : i === d.cols.length - 2 ? d.total : "")), total: true }] : [])],
       sign: tab === "buy" ? [t("sApproved"), t("sOrdered"), t("sDate")] : undefined,
       footer: `BrightPro · ${company}`, page: (n, total) => t("page", { n, total }),
     });
     openPdf(bytes, `${d.title}.pdf`);
-    setBusy("");
-  }
-  async function xlsx() {
-    const d = table(tab);
-    setBusy("xlsx");
-    await downloadPost("/dashboard/inventory/reports/export", { name: es ? { buy: "lista-de-compra", soon: "por-agotarse", out: "agotados" }[tab] : { buy: "shopping-list", soon: "running-out", out: "out-of-stock" }[tab], sheet: d.title, matrix: [d.cols, ...d.rows, ...(d.total ? [["", "", "", "", "", "", "", d.total]] : [])] }, "report.xlsx").catch(() => undefined);
     setBusy("");
   }
 
@@ -109,17 +108,7 @@ export default function InvReportAlerts({ items, stock, locations, members, kit,
           <p className="min-w-0 flex-1 basis-64 text-[13.5px] text-slate-500">{tab === "buy" ? t("buyHint") : tab === "soon" ? t("soonHint") : t("outHint")}</p>
           <div className="flex flex-wrap items-center gap-2">
             {tab === "buy" && buy.length > 0 && <span className="mr-1 text-[15px] text-slate-600">{t("estimated")} <b className="tabular-nums text-[#0b1f3a]">{usd(buyTotal)}</b></span>}
-            <Menu>
-              <MenuButton disabled={empty || !!busy} className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-200 px-3 text-[13px] font-semibold text-slate-700 transition-all hover:-translate-y-0.5 hover:border-[#14a39a] hover:text-[#0f766e] disabled:opacity-50">
-                PDF<svg viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
-              </MenuButton>
-              <MenuItems anchor="bottom end" transition className="z-[80] mt-1 w-44 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl transition duration-150 data-[closed]:scale-95 data-[closed]:opacity-0 focus:outline-none">
-                {(["portrait", "landscape"] as const).map((o) => (
-                  <MenuItem key={o}><button type="button" onClick={() => pdf(o)} className="block w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 data-[focus]:bg-[#e9f7f4] data-[focus]:text-[#0b1f3a]">{t(o)}</button></MenuItem>
-                ))}
-              </MenuItems>
-            </Menu>
-            <button type="button" onClick={xlsx} disabled={empty || !!busy} className="inline-flex h-9 items-center whitespace-nowrap rounded-lg border border-slate-200 px-3 text-[13px] font-semibold text-slate-700 transition-all hover:-translate-y-0.5 hover:border-[#14a39a] hover:text-[#0f766e] disabled:opacity-50">Excel</button>
+            <button type="button" onClick={() => pdf()} disabled={empty || !!busy} className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg bg-[#0f766e] px-3 text-[13px] font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-[#0c5f59] disabled:opacity-50"><SheetIcon className="h-4 w-4" />PDF</button>
           </div>
         </div>
 

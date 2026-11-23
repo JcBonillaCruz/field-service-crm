@@ -6,11 +6,12 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Toast } from "@/components/sales/SalesBits";
 import TechUse from "@/components/inventory/TechUse";
+import RestockRequest from "@/components/inventory/RestockRequest";
 import { STATUS_META, TechStock, invError, qtyFmt } from "@/lib/inventory";
 import { LocIcon, card, pageWrap } from "@/components/inventory/PageBits";
 
 // Técnico: su van. Solo ve lo suyo; al usar una pieza se descuenta de su van y del total de la empresa.
-export default function VanView({ companyId }: { companyId: string }) {
+export default function VanView({ companyId, userName = "", canRequest = true, autoRequest = false }: { companyId: string; userName?: string; canRequest?: boolean; autoRequest?: boolean }) {
   const t = useTranslations("van");
   const [vans, setVans] = useState<{ id: string; name: string }[] | null>(null);
   const [stock, setStock] = useState<TechStock[]>([]);
@@ -54,6 +55,7 @@ export default function VanView({ companyId }: { companyId: string }) {
             <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 8v8M10 8v8M13 8v8M16.5 8v8" /></svg>
             {t("scanUsed")}
           </Link>
+          {canRequest && <RestockRequest companyId={companyId} vanId={vans[0].id} userName={userName} stock={stock} autoOpen={autoRequest} onSent={say} />}
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("search")}
             className="mt-4 h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-[15px] focus:border-[#0f766e] focus:outline-none focus:ring-4 focus:ring-[#14a39a]/15" />
           {list.length === 0 ? <p className={`${card} mt-3 px-4 py-10 text-center text-sm text-slate-500`}>{stock.length ? t("noMatch") : t("empty")}</p> : (
