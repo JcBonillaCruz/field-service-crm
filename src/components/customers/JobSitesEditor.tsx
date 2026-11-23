@@ -10,13 +10,17 @@ import { confirmDelete } from "@/lib/confirm";
 import RowActions from "@/components/ui/RowActions";
 import { useTranslations } from "next-intl";
 import { useCustTx } from "@/i18n/useCustTx";
+import TaxFields, { taxShort } from "@/components/customers/TaxFields";
+import type { TaxRate } from "@/lib/tax";
 
 // Job sites compactos: cada dirección es UNA línea (nombre + dirección) con ✏️ y 🗑️.
 // Al editar se abre una sola fila de campos (nombre · calle · unidad · ciudad · estado · ZIP). Solo una abierta a la vez.
-export default function JobSitesEditor({ sites, onChange, defaultCountry = "US", defaultState = "" }: {
+export default function JobSitesEditor({ sites, onChange, defaultCountry = "US", defaultState = "", tax }: {
   sites: Address[]; onChange: (list: Address[]) => void; defaultCountry?: string; defaultState?: string;
+  tax?: { companyId: string; rates: TaxRate[] }; // Paso 6.9: impuesto propio de cada Job Site
 }) {
   const t = useTranslations("custForm");
+  const tt = useTranslations("tax");
   const cx = useCustTx();
   const [open, setOpen] = useState<number | null>(null);
   const noFill = useNoFill();
@@ -97,6 +101,12 @@ export default function JobSitesEditor({ sites, onChange, defaultCountry = "US",
                   </div>
                 </div>
               </div>
+              {tax && (
+                <div className="mt-3 grid gap-1.5 sm:grid-cols-[6rem_minmax(0,1fr)] sm:items-start">
+                  <span className="pt-2.5 text-[13px] text-slate-500">{tt("label")}:</span>
+                  <TaxFields site companyId={tax.companyId} rates={tax.rates} value={s.tax ?? { tax_mode: "inherit" }} onChange={(v) => set(i, { tax: v })} idPrefix={`js-${i}`} />
+                </div>
+              )}
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-[13px] text-slate-500">
                   <span>{t("country")}:</span>
@@ -115,6 +125,11 @@ export default function JobSitesEditor({ sites, onChange, defaultCountry = "US",
                 <span className="block truncate text-[14.5px] font-semibold text-[#0b1f3a]">{s.label.trim() || t("siteNCap", { n: i + 1 })}</span>
                 <span className="block truncate text-[13px] text-slate-500">{line(s) || t("noAddrYet")}</span>
               </button>
+              {tax && s.tax?.tax_mode === "exempt" && (
+                <span className={`hidden shrink-0 rounded-full px-2.5 py-0.5 text-[12px] font-medium sm:inline ${s.tax.tax_mode === "exempt" ? "bg-[#fff6e8] text-[#b45309]" : "bg-[#eef6ff] text-[#2563eb]"}`}>
+                  {taxShort(tt, s.tax, true)}
+                </span>
+              )}
               <RowActions label={s.label || t("siteN", { n: i + 1 })} onEdit={() => openRow(i)} onDelete={() => remove(i)} />
             </li>
           ))}

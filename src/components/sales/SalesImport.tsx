@@ -106,13 +106,16 @@ export default function SalesImport({ kind, companyId, actor, customers }: { kin
       const status = kind === "quote"
         ? (["draft", "sent", "accepted", "declined", "invoiced"].find((x) => st.startsWith(x)) ?? "draft")
         : st.includes("paid") && !st.includes("partial") && !st.includes("unpaid") ? "paid" : st.includes("void") ? "void" : st.includes("draft") ? "draft" : "sent";
-      const { data: row, error } = await s.from("sales_docs").insert({
+      const base: Record<string, unknown> = {
         company_id: companyId, kind, number, customer_id: cu?.id ?? null, customer_name: cu?.display_name ?? d.customer, emails: [],
         doc_date: d.date, ...(kind === "quote" ? { expiry_date: d.second, reference: d.reference } : { due_date: d.second ?? d.date, order_number: d.reference, payment_terms: "Custom" }),
         salesperson: d.salesperson, subject: d.subject, notes: d.notes, terms: d.terms, status,
         subtotal: tt.subtotal, total: tt.total, discount_value: 0, discount_type: "percent", tax_rate: 0, tax_amount: 0, shipping: 0, adjustment: 0,
         amount_paid: status === "paid" ? tt.total : 0, written_off: 0, created_by_name: actor,
-      }).select("id").single();
+      };
+      // Paso 6.9: lo importado se queda con su total (sin calcular impuesto); sin el SQL 6.9 se guarda igual
+      let { data: row, error } = await s.from("sales_docs").insert({ ...base, tax_mode: "none", tax_source: "import" }).select("id").single();
+      if (error && /tax_/i.test(error.message)) ({ data: row, error } = await s.from("sales_docs").insert(base).select("id").single());
       if (error || !row) { skipped.push(`${number}: ${error?.message ?? t("notSaved")}`); setProgress(i + 1); continue; }
       await saveLines(companyId, { doc_id: row.id }, d.lines);
       await logActivity(companyId, kind, row.id, `${noun} imported from CSV`, actor);

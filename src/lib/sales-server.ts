@@ -1,10 +1,11 @@
+import { loadSurcharges, loadTaxRates } from "@/lib/tax";
 import { docLangOf } from "@/lib/doc-lang";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { TAG, cached, must } from "@/lib/data-cache";
 import { Activity, Comment, DEFAULT_PREFS, DocKind, Payment, SalesDoc, SalesFile, SalesLine, SalesPrefs, Subscription } from "@/lib/sales";
 
 export type CustomerOption = { id: string; display_name: string; email: string | null; company_name: string | null; payment_terms: string | null; currency: string | null };
-export type ItemOption = { id: string; name: string; sku: string | null; selling_price: number; description: string | null; unit: string | null; image_url: string | null; item_type: string };
+export type ItemOption = { id: string; name: string; sku: string | null; selling_price: number; description: string | null; unit: string | null; image_url: string | null; item_type: string; taxable?: boolean };
 export type CouponOption = { id: string; name: string; code: string; discount_type: "flat" | "percent"; discount_value: number };
 
 // Preferencias: la parte fija (logo, plantillas, datos de la empresa) sale de caché;
@@ -40,7 +41,9 @@ async function loadCatalogOptions(supabase: SupabaseClient, companyId: string) {
   const uid = await currentUserId();
   const load = async () => {
     const [items, coupons] = await Promise.all([
-      supabase.from("items").select("id, name, sku, selling_price, description, unit, image_url, item_type").eq("company_id", companyId).eq("is_active", true).order("name").limit(5000).then(must),
+      // Paso 6.9: "taxable" (sin el SQL 6.9 se lee sin esa columna)
+      supabase.from("items").select("id, name, sku, selling_price, description, unit, image_url, item_type, taxable").eq("company_id", companyId).eq("is_active", true).order("name").limit(5000)
+        .then((r) => (r.error ? supabase.from("items").select("id, name, sku, selling_price, description, unit, image_url, item_type").eq("company_id", companyId).eq("is_active", true).order("name").limit(5000) : r)).then(must),
       supabase.from("coupons").select("id, name, code, discount_type, discount_value, expires_on, is_active").eq("company_id", companyId).eq("is_active", true).limit(500).then(must),
     ]);
     return { items: items ?? [], coupons: coupons ?? [] };
@@ -50,11 +53,13 @@ async function loadCatalogOptions(supabase: SupabaseClient, companyId: string) {
 
 // Lo que necesita el formulario de Quote / Invoice / Subscription
 export async function loadFormData(supabase: SupabaseClient, companyId: string) {
-  const [{ data: customers }, { items, coupons }, { data: people }, prefs] = await Promise.all([
+  const [{ data: customers }, { items, coupons }, { data: people }, prefs, tax, surchargePresets] = await Promise.all([
     supabase.from("customers").select("id, display_name, email, company_name, payment_terms, currency").eq("company_id", companyId).order("display_name").limit(5000),
     loadCatalogOptions(supabase, companyId),
     supabase.from("sales_docs").select("salesperson").eq("company_id", companyId).not("salesperson", "is", null).limit(500),
     loadPrefs(supabase, companyId),
+    loadTaxRates(supabase, companyId),
+    loadSurcharges(supabase, companyId),
   ]);
   const salespeople = Array.from(new Set((people ?? []).map((p) => p.salesperson as string).filter(Boolean))).sort();
   const today = new Date().toISOString().slice(0, 10);
@@ -62,7 +67,7 @@ export async function loadFormData(supabase: SupabaseClient, companyId: string) 
     customers: (customers ?? []) as CustomerOption[],
     items: (items ?? []) as ItemOption[],
     coupons: ((coupons ?? []) as (CouponOption & { expires_on: string | null })[]).filter((c) => !c.expires_on || c.expires_on >= today),
-    salespeople, prefs,
+    salespeople, prefs, taxRates: tax.rates, taxSql: !tax.needsSql, surchargePresets,
   };
 }
 

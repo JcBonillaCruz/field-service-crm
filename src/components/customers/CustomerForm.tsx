@@ -22,6 +22,8 @@ import { useTranslations } from "next-intl";
 import { useCustTx } from "@/i18n/useCustTx";
 import { LeadSourceSelect, ReferrerSelect } from "@/components/customers/LeadSourcePicker";
 import { LeadSource, REFERRAL, loadLeadSources } from "@/lib/lead-sources";
+import TaxFields from "@/components/customers/TaxFields";
+import { TaxRate, TaxSetting, loadTaxRates, taxPayload } from "@/lib/tax";
 
 // Formulario de cliente con el mismo diseño de Zoho: etiqueta a la izquierda, campo a la derecha, pestañas abajo
 const sameAddress = (a: Address, b: Address) =>
@@ -68,6 +70,17 @@ export default function CustomerForm({
     loadLeadSources(createClient(), companyId).then((r) => { setSources(r.list); setLeadSql(!r.needsSql); });
   }, [companyId]);
   const isReferral = sources.find((s) => s.id === leadId)?.code === REFERRAL;
+  // Paso 6.9: impuesto del cliente (y de cada Job Site, en su pestaña)
+  const tt = useTranslations("tax");
+  const [rates, setRates] = useState<TaxRate[]>([]);
+  const [taxSql, setTaxSql] = useState(false);
+  const [tax, setTax] = useState<TaxSetting>({
+    tax_mode: customer?.tax_mode ?? "company", tax_rate_id: customer?.tax_rate_id ?? null, tax_exempt_reason: customer?.tax_exempt_reason ?? null,
+    tax_cert_number: customer?.tax_cert_number ?? null, tax_cert_expires: customer?.tax_cert_expires ?? null, tax_cert_path: customer?.tax_cert_path ?? null,
+  });
+  useEffect(() => {
+    loadTaxRates(createClient(), companyId).then((r) => { setRates(r.rates); setTaxSql(!r.needsSql); });
+  }, [companyId]);
   // Direcciones guardadas: "Billing address" y "Shipping address" van en su pestaña; las demás son Job Sites
   const [initial] = useState(() => splitAddresses(initialAddresses ?? []));
   const [billing, setBilling] = useState<Address>(initial.billing);
@@ -179,6 +192,22 @@ export default function CustomerForm({
       if (leadErr) console.error("customer_set_lead:", leadErr.message);
     }
 
+    // Paso 6.9: impuesto del cliente y de sus Job Sites (los sitios nuevos se buscan por su dirección)
+    if (taxSql) {
+      const { data: saved } = await supabase.from("customer_addresses").select("id, label, street, unit, city, zip").eq("customer_id", data);
+      const norm = (a: { label?: string | null; street?: string | null; unit?: string | null; city?: string | null; zip?: string | null }) =>
+        [a.label, a.street, a.unit, a.city, a.zip].map((x) => (x ?? "").trim().toLowerCase()).join("|");
+      const used = new Set<string>();
+      const sitesTax = sites.filter((x) => !addressIsEmpty(x)).map((x) => {
+        const row = cleanAddress(x);
+        const hit = x.id ?? (saved ?? []).find((r) => !used.has(r.id) && norm(r) === norm(row))?.id;
+        if (hit) used.add(hit);
+        return hit ? { id: hit, ...taxPayload(x.tax ?? { tax_mode: "inherit" }) } : null;
+      }).filter(Boolean);
+      const { error: taxErr } = await supabase.rpc("customer_save_tax", { p_customer: data, p_tax: taxPayload(tax), p_sites: sitesTax });
+      if (taxErr) { setSaving(false); return setError(tt("eSaveCustomer")); }
+    }
+
     router.push(`/dashboard/customers/${data}`);
     router.refresh();
   }
@@ -282,6 +311,11 @@ export default function CustomerForm({
             <Row label={t("terms")} htmlFor="c-terms" hint={t("termsHint")}>
               <SearchSelect id="c-terms" ariaLabel={t("terms")} value={terms} options={TERM_OPTIONS} onChange={setTerms} />
             </Row>
+            {taxSql && (
+              <Row label={tt("label")} hint={tt("custHint")} alignTop wide>
+                <TaxFields companyId={companyId} rates={rates} value={tax} onChange={setTax} idPrefix="c" />
+              </Row>
+            )}
             <Row label={t("portal")} hint={t("portalHint")}>
               <label className="flex cursor-pointer items-center gap-2.5 py-1.5 text-[15px] text-slate-700">
                 <input type="checkbox" checked={portal} onChange={(e) => setPortal(e.target.checked)} className="h-4 w-4 rounded accent-[#0f766e]" />
@@ -327,7 +361,8 @@ export default function CustomerForm({
           <div className="max-w-4xl">
             <p className="text-[15px] text-slate-600">{t("sitesIntro")}</p>
             <div className="mt-5">
-              <JobSitesEditor sites={sites} onChange={(l) => { setSites(l); clear(); }} defaultCountry={billing.country || "US"} defaultState={billing.state} />
+              <JobSitesEditor sites={sites} onChange={(l) => { setSites(l); clear(); }} defaultCountry={billing.country || "US"} defaultState={billing.state}
+                tax={taxSql ? { companyId, rates } : undefined} />
             </div>
           </div>
         )}
@@ -351,7 +386,15 @@ export default function CustomerForm({
 }
 
 function splitAddresses(list: Address[]) {
-  const clean = list.map((a) => ({ ...EMPTY_ADDRESS, ...a, label: a.label ?? "", unit: a.unit ?? "", zip: a.zip ?? "", state: a.state ?? "", country: a.country || "US" }));
+  const clean = list.map((a) => {
+    // Paso 6.9: la fila trae el impuesto del Job Site (select "*") → se guarda en "tax"
+    const r = a as Address & TaxSetting;
+    const tax: TaxSetting | undefined = r.tax_mode ? { tax_mode: r.tax_mode, tax_rate_id: r.tax_rate_id, tax_exempt_reason: r.tax_exempt_reason, tax_cert_number: r.tax_cert_number, tax_cert_expires: r.tax_cert_expires, tax_cert_path: r.tax_cert_path } : a.tax;
+    return {
+      ...EMPTY_ADDRESS, id: a.id, street: a.street ?? "", city: a.city ?? "", is_primary: Boolean(a.is_primary), tax,
+      label: a.label ?? "", unit: a.unit ?? "", zip: a.zip ?? "", state: a.state ?? "", country: a.country || "US",
+    } as Address;
+  });
   const isBill = (a: Address) => /^billing/i.test(a.label);
   const billing = clean.find(isBill) ?? clean.find((a) => a.is_primary && !a.label.trim());
   const shipping = clean.find((a) => /^shipping/i.test(a.label));

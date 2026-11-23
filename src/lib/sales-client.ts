@@ -27,11 +27,15 @@ export async function saveLines(companyId: string, parent: { doc_id?: string; su
     item_id: l.item_id, name: l.name.trim(), description: l.description?.trim() || null, quantity: Number(l.quantity) || 0,
     unit: l.unit, rate: round2(Number(l.rate)), discount: round2(Number(l.discount)), discount_type: l.discount_type,
     amount: lineAmount(l), image_url: l.image_url ?? null, account: l.account ?? null,
+    // Paso 6.9: impuesto de la línea (solo si viene; las líneas de suscripción no lo traen y lo calcula la base)
+    ...(l.tax_rate != null ? { tax_rate_id: l.tax_rate_id ?? null, tax_name: Number(l.tax_rate) > 0 ? l.tax_name ?? null : null, tax_rate: Number(l.tax_rate) || 0, tax_amount: round2(Number(l.tax_amount) || 0) } : {}),
   }));
   if (!rows.length) return null;
   let { error } = await supabase.from("sales_lines").insert(rows);
+  // Sin el SQL 6.9 (impuesto por línea) se guarda igual, sin esas columnas
+  if (error && /tax_/i.test(error.message)) ({ error } = await supabase.from("sales_lines").insert(rows.map(({ tax_rate_id: _a, tax_name: _b, tax_rate: _c, tax_amount: _d, ...r }: Record<string, unknown>) => r)));
   // Sin el SQL 3.38 (columna "account") se guarda igual, sin la cuenta
-  if (error && /account/i.test(error.message)) ({ error } = await supabase.from("sales_lines").insert(rows.map(({ account: _a, ...r }) => r)));
+  if (error && /account/i.test(error.message)) ({ error } = await supabase.from("sales_lines").insert(rows.map(({ account: _a, tax_rate_id: _b, tax_name: _c, tax_rate: _d, tax_amount: _e, ...r }: Record<string, unknown>) => r)));
   return error;
 }
 
@@ -59,6 +63,12 @@ export async function convertQuote(quote: SalesDoc, lines: SalesLine[], settings
     tax_rate: quote.tax_rate, tax_amount: quote.tax_amount, shipping: quote.shipping, adjustment: quote.adjustment, adjustment_label: quote.adjustment_label,
     subtotal: quote.subtotal, total: quote.total, notes: settings.retain_notes ? quote.notes : null, terms: settings.retain_terms ? quote.terms : null,
     quote_id: quote.id, created_by_name: actor,
+    // Paso 6.9: el impuesto pasa igual (tasa, exención, desglose)
+    ...(quote.tax_mode ? {
+      tax_mode: quote.tax_mode, tax_rate_id: quote.tax_rate_id ?? null, tax_source: quote.tax_source ?? null, tax_exempt_reason: quote.tax_exempt_reason ?? null,
+      tax_cert_number: quote.tax_cert_number ?? null, tax_breakdown: quote.tax_breakdown ?? [],
+      surcharges: quote.surcharges ?? [], surcharge_total: quote.surcharge_total ?? 0,
+    } : {}),
   }).select("id").single();
   if (error || !data) return null;
   await saveLines(quote.company_id, { doc_id: data.id }, lines);

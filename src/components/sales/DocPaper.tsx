@@ -1,4 +1,4 @@
-import { PdfSettings, SalesDoc, SalesLine, Status, addressLines, balanceOf, discountSummary, num2, pdfOf } from "@/lib/sales";
+import { PdfSettings, SalesDoc, SalesLine, Status, addressLines, balanceOf, discountSummary, num2, pdfOf, taxRows } from "@/lib/sales";
 import { DocLang, docDateTime, docMeta, docRibbon, docTitle, docTx, metaIcon } from "@/lib/doc-lang";
 import { TPL_ICONS, tplOf } from "@/lib/pdf-templates";
 import { Ribbon } from "@/components/sales/SalesBits";
@@ -197,7 +197,9 @@ export default function DocPaper({ doc, lines, prefs, companyName, status, varia
                 <tbody>
                   <tr><td className="py-2 pr-6 text-right">{L.subTotal}</td><td className="py-2 pr-3 text-right tabular-nums">{num2(disc.gross)}</td></tr>
                   {disc.total > 0 && <tr><td className="py-1.5 pr-6 text-right">{discLabel}</td><td className="py-1.5 pr-3 text-right tabular-nums text-[#e11d48]">(-) {num2(disc.total)}</td></tr>}
-                  {Number(doc.tax_amount) > 0 && <tr><td className="py-1.5 pr-6 text-right">{doc.tax_name || L.tax} ({+doc.tax_rate}%)</td><td className="py-1.5 pr-3 text-right tabular-nums">{num2(doc.tax_amount)}</td></tr>}
+                  {(doc.surcharges ?? []).map((x, i) => <tr key={`s${i}`}><td className="py-1.5 pr-6 text-right">{x.name}{x.kind === "percent" ? ` (${+x.value}%)` : ""}</td><td className="py-1.5 pr-3 text-right tabular-nums">{num2(Number(x.amount) || 0)}</td></tr>)}
+                  {taxRows(doc).map((x) => <tr key={`${x.name}${x.rate}`}><td className="py-1.5 pr-6 text-right">{x.name || L.tax} ({+x.rate}%)</td><td className="py-1.5 pr-3 text-right tabular-nums">{num2(x.amount)}</td></tr>)}
+                  {doc.tax_mode === "exempt" && <tr><td className="py-1.5 pr-6 text-right">{L.taxExempt}{doc.tax_cert_number && <span className="block text-[11px] text-slate-500">{L.cert(doc.tax_cert_number)}</span>}</td><td className="py-1.5 pr-3 text-right tabular-nums">{num2(0)}</td></tr>}
                   {Number(doc.shipping) !== 0 && <tr><td className="py-1.5 pr-6 text-right">{L.shipping}</td><td className="py-1.5 pr-3 text-right tabular-nums">{num2(doc.shipping)}</td></tr>}
                   {Number(doc.adjustment) !== 0 && <tr><td className="py-1.5 pr-6 text-right">{doc.adjustment_label || L.adjustment}</td><td className="py-1.5 pr-3 text-right tabular-nums">{num2(doc.adjustment)}</td></tr>}
                   <tr className={`font-semibold text-[#0b1f3a] ${tp.totals === "plain" ? "border-t-2 border-slate-800" : ""}`} style={isQuote ? finalStyle : undefined}>

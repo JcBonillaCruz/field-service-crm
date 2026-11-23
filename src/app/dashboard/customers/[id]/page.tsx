@@ -19,6 +19,7 @@ import CustomerPlansList from "@/components/customers/CustomerPlansList";
 import { getLocale, getTranslations } from "next-intl/server";
 import { intlTag } from "@/i18n/config";
 import { leadLabel } from "@/lib/lead-sources";
+import { TaxRate, TaxSetting, certExpired, loadTaxRates, rateLabel, defaultRate } from "@/lib/tax";
 
 const TABS = ["overview", "comments", "transactions", "mails", "statement"];
 const MOBILE_TABS = ["details", "transactions", "comments"];
@@ -33,6 +34,7 @@ export default async function CustomerPage({
   if (!current) redirect("/dashboard");
   // Paso 6.2b2: textos en el idioma de quien lo ve
   const [t, tl, locale, tLead] = await Promise.all([getTranslations("custDetail"), getTranslations("custLib"), getLocale(), getTranslations("lead")]);
+  const tTax = await getTranslations("tax");
   const tag = intlTag(locale);
   const lk = (g: string, v: string) => { const k = `${g}.${v.replace(/[^A-Za-z0-9]/g, "")}`; return tl.has(k as never) ? tl(k as never) : v; };
   if (!canManageCustomers(current.role)) return <NoAccess />;
@@ -47,7 +49,7 @@ export default async function CustomerPage({
   const editHref = `/dashboard/customers/${c.id}/edit`;
 
   const [{ data: addrRows }, { data: phoneRows }, { data: emailRows }, profit, planList, lead] = await Promise.all([
-    supabase.from("customer_addresses").select("id, label, street, unit, city, state, zip, country, is_primary")
+    supabase.from("customer_addresses").select("*") // Paso 6.9: con el impuesto de cada Job Site
       .eq("customer_id", c.id).order("is_primary", { ascending: false }).order("created_at"),
     supabase.from("customer_phones").select("id, label, country, dial_code, number, is_primary").eq("customer_id", c.id).order("position"),
     supabase.from("customer_emails").select("id, label, email, is_primary").eq("customer_id", c.id).order("position"),
@@ -67,6 +69,16 @@ export default async function CustomerPage({
     })).catch(() => ({ source: null, referrer: null, referrals: [] as { id: string; display_name: string; created_at: string }[] })),
   ]);
   const plans = planList.plans.filter((p) => p.customer_id === c.id);
+  // Paso 6.9: impuesto del cliente y Job Sites con impuesto propio (sin el SQL nuevo, nada)
+  const taxRates: TaxRate[] = "tax_mode" in c ? (await loadTaxRates(supabase, current.id)).rates : [];
+  const taxText = (x: TaxSetting) => {
+    if (x.tax_mode === "exempt") return [tTax("exempt"), x.tax_exempt_reason ? tTax(`r.${x.tax_exempt_reason}`) : "", x.tax_cert_number ? tTax("certShort", { cert: x.tax_cert_number }) : "",
+      x.tax_cert_expires ? tTax("expiresOn", { date: new Date(`${x.tax_cert_expires}T12:00:00`).toLocaleDateString(tag, { month: "short", day: "numeric", year: "numeric" }) }) : ""].filter(Boolean).join(" · ");
+    const d = defaultRate(taxRates);
+    return d ? tTax("taxableRate", { rate: rateLabel(d) }) : tTax("taxable");
+  };
+  const siteTaxes = ((addrRows ?? []) as (TaxSetting & { id: string; label: string | null; street: string })[])
+    .filter((a) => a.tax_mode === "exempt").map((a) => ({ id: a.id, name: a.label || a.street, text: taxText(a), expired: a.tax_mode === "exempt" && certExpired(a.tax_cert_expires) }));
   const phones = phoneRows ?? [];
   const emails = emailRows ?? [];
   const addresses = (addrRows ?? []).map((a) => ({
@@ -223,6 +235,14 @@ export default async function CustomerPage({
                   <dd className={lead.source ? "text-slate-800" : "text-slate-400"}>{lead.source ? leadLabel(tLead, lead.source) : t("notAdded")}</dd></>}
                 {lead.referrer && <><dt className="text-slate-500">{tLead("referredBy")}</dt>
                   <dd><Link prefetch={false} href={`/dashboard/customers/${lead.referrer.id}`} className="font-medium text-[#0f766e] hover:underline">{lead.referrer.display_name}</Link></dd></>}
+                {"tax_mode" in c && <><dt className="text-slate-500">{tTax("label")}</dt>
+                  <dd className="text-slate-800">
+                    <span className={c.tax_mode === "exempt" ? "font-medium text-[#b45309]" : ""}>{taxText(c)}</span>
+                    {c.tax_mode === "exempt" && certExpired(c.tax_cert_expires) && <span className="mt-0.5 block text-[12.5px] font-medium text-[#b45309]">{tTax("certExpiredShort")}</span>}
+                    {siteTaxes.map((x) => (
+                      <span key={x.id} className="mt-1 block text-[12.5px] text-slate-500"><b className="font-medium text-slate-600">{x.name}:</b> {x.text}{x.expired ? ` · ${tTax("certExpiredShort")}` : ""}</span>
+                    ))}
+                  </dd></>}
                 {c.billing_attention && <><dt className="text-slate-500">{t("billAttn")}</dt><dd className="text-slate-800">{c.billing_attention}</dd></>}
                 {c.shipping_attention && <><dt className="text-slate-500">{t("shipAttn")}</dt><dd className="text-slate-800">{c.shipping_attention}</dd></>}
               </dl>

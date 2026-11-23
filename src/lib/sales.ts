@@ -17,7 +17,13 @@ export type SalesLine = {
   id?: string; position: number; item_id: string | null; name: string; description: string | null;
   quantity: number; unit: string | null; rate: number; discount: number; discount_type: DiscType; amount: number; image_url?: string | null;
   account?: string | null; // cuenta de ingreso (Sales, Labor Income…)
+  // Paso 6.9: impuesto de la línea (sin tasa o 0 = no lleva impuesto)
+  tax_rate_id?: string | null; tax_name?: string | null; tax_rate?: number | null; tax_amount?: number;
+  tax_manual?: boolean; // solo en el formulario: la cambiaron a mano (no se guarda)
 };
+export type TaxBreak = { name: string; rate: number; amount: number };
+// Paso 6.9b: recargos del documento (Trip charge, Distance fee…). "percent" = % del subtotal después del descuento
+export type Surcharge = { name: string; kind: "flat" | "percent"; value: number; amount?: number };
 export const INCOME_ACCOUNTS = ["Sales", "Service Income", "Labor Income", "Materials Income", "General Income", "Other Charges", "Shipping Charge", "Late Fee Income", "Discount"];
 
 export type SalesDoc = {
@@ -31,6 +37,10 @@ export type SalesDoc = {
   sent_at: string | null; viewed_at: string | null; accepted_at: string | null; declined_at: string | null; voided_at: string | null;
   reminders_stopped: boolean; expected_payment_date: string | null; share_token: string | null; share_expires_on: string | null;
   created_by_name: string | null; created_at: string; updated_at: string;
+  // Paso 6.9 (requieren el SQL nuevo)
+  tax_mode?: "rate" | "exempt" | "none" | null; tax_rate_id?: string | null; tax_source?: string | null;
+  tax_exempt_reason?: string | null; tax_cert_number?: string | null; tax_breakdown?: TaxBreak[] | null;
+  surcharges?: Surcharge[] | null; surcharge_total?: number | null;
   signature_data?: string | null; signed_name?: string | null; signed_at?: string | null; last_email_at?: string | null; email_opened_at?: string | null;
 };
 
@@ -131,23 +141,51 @@ export function lineAmount(l: Pick<SalesLine, "quantity" | "rate" | "discount" |
   const off = l.discount_type === "percent" ? gross * ((Number(l.discount) || 0) / 100) : Number(l.discount) || 0;
   return round2(Math.max(0, gross - off));
 }
-export type Totals = { subtotal: number; discount: number; tax: number; shipping: number; adjustment: number; total: number };
-export function computeTotals(lines: Pick<SalesLine, "quantity" | "rate" | "discount" | "discount_type">[], o: {
-  discount_value?: number; discount_type?: DiscType; tax_rate?: number; shipping?: number; adjustment?: number;
+export type Totals = { subtotal: number; discount: number; tax: number; shipping: number; adjustment: number; total: number; taxes: TaxBreak[]; lineTax: number[]; surcharges: Surcharge[]; surchargeTotal: number };
+// Paso 6.9: cada línea lleva su tasa. El descuento del documento se reparte entre las líneas antes del impuesto
+// y el impuesto se redondea por tasa (igual que el SQL sales_doc_apply_tax).
+// Líneas sin tax_rate (viejas o de suscripciones) usan la tasa del documento (o.tax_rate).
+type TotLine = Pick<SalesLine, "quantity" | "rate" | "discount" | "discount_type"> & Partial<Pick<SalesLine, "tax_rate" | "tax_name">>;
+export function computeTotals(lines: TotLine[], o: {
+  discount_value?: number; discount_type?: DiscType; tax_rate?: number; tax_name?: string | null; exempt?: boolean; shipping?: number; adjustment?: number;
+  surcharges?: Surcharge[];
 }): Totals {
-  const subtotal = round2(lines.reduce((s, l) => s + lineAmount(l), 0));
+  const amounts = lines.map((l) => lineAmount(l));
+  const subtotal = round2(amounts.reduce((s, a) => s + a, 0));
   const dv = Number(o.discount_value) || 0;
   const discount = round2(Math.min(subtotal, o.discount_type === "flat" ? dv : subtotal * (dv / 100)));
-  const tax = round2((subtotal - discount) * ((Number(o.tax_rate) || 0) / 100));
+  const factor = subtotal > 0 ? (subtotal - discount) / subtotal : 0;
+  const rateOf = (l: TotLine) => (o.exempt ? 0 : l.tax_rate != null ? Number(l.tax_rate) || 0 : Number(o.tax_rate) || 0);
+  const nameOf = (l: TotLine) => (l.tax_rate != null ? l.tax_name : o.tax_name) || "Tax";
+  const groups = new Map<string, { name: string; rate: number; base: number }>();
+  lines.forEach((l, i) => {
+    const r = rateOf(l);
+    if (r <= 0) return;
+    const k = `${nameOf(l)}|${r}`;
+    const g = groups.get(k) ?? { name: nameOf(l), rate: r, base: 0 };
+    g.base += amounts[i]; groups.set(k, g);
+  });
+  const taxes = Array.from(groups.values()).map((g) => ({ name: g.name, rate: g.rate, amount: round2(g.base * factor * g.rate / 100) }))
+    .sort((a, b) => b.rate - a.rate || a.name.localeCompare(b.name));
+  const tax = round2(taxes.reduce((s, x) => s + x.amount, 0));
+  const lineTax = lines.map((l, i) => round2(amounts[i] * factor * rateOf(l) / 100));
   const shipping = round2(Number(o.shipping) || 0);
   const adjustment = round2(Number(o.adjustment) || 0);
-  return { subtotal, discount, tax, shipping, adjustment, total: round2(subtotal - discount + tax + shipping + adjustment) };
+  const surcharges = (o.surcharges ?? []).map((x) => ({ ...x, amount: round2(x.kind === "percent" ? (subtotal - discount) * (Number(x.value) || 0) / 100 : Number(x.value) || 0) }));
+  const surchargeTotal = round2(surcharges.reduce((t, x) => t + x.amount, 0));
+  return { subtotal, discount, tax, shipping, adjustment, total: round2(subtotal - discount + tax + surchargeTotal + shipping + adjustment), taxes, lineTax, surcharges, surchargeTotal };
+}
+// Renglones de impuesto para mostrar (desglose; documentos viejos: el impuesto único)
+export function taxRows(doc: Pick<SalesDoc, "tax_amount" | "tax_name" | "tax_rate"> & Partial<Pick<SalesDoc, "tax_breakdown">>): TaxBreak[] {
+  const b = (doc.tax_breakdown ?? []).filter((x) => Number(x.amount) > 0);
+  if (b.length) return b.map((x) => ({ name: x.name, rate: Number(x.rate), amount: Number(x.amount) }));
+  return Number(doc.tax_amount) > 0 ? [{ name: doc.tax_name || "", rate: Number(doc.tax_rate), amount: Number(doc.tax_amount) }] : [];
 }
 // Lo que vale sin descuentos y el descuento total (líneas + documento), para mostrarlo abajo en rojo como Zoho
 export const grossOf = (lines: Pick<SalesLine, "quantity" | "rate">[]) => round2(lines.reduce((t, l) => t + (Number(l.quantity) || 0) * (Number(l.rate) || 0), 0));
-export function discountSummary(doc: Pick<SalesDoc, "subtotal" | "total" | "tax_amount" | "shipping" | "adjustment">, lines: Pick<SalesLine, "quantity" | "rate">[]) {
+export function discountSummary(doc: Pick<SalesDoc, "subtotal" | "total" | "tax_amount" | "shipping" | "adjustment"> & Partial<Pick<SalesDoc, "surcharge_total">>, lines: Pick<SalesLine, "quantity" | "rate">[]) {
   const gross = grossOf(lines);
-  const docDisc = round2(Number(doc.subtotal) - Number(doc.total) + Number(doc.tax_amount) + Number(doc.shipping) + Number(doc.adjustment));
+  const docDisc = round2(Number(doc.subtotal) - Number(doc.total) + Number(doc.tax_amount) + Number(doc.surcharge_total ?? 0) + Number(doc.shipping) + Number(doc.adjustment));
   const itemDisc = round2(gross - Number(doc.subtotal));
   return { gross, itemDisc: Math.max(0, itemDisc), docDisc: Math.max(0, docDisc), total: round2(Math.max(0, itemDisc) + Math.max(0, docDisc)) };
 }

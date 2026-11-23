@@ -32,6 +32,7 @@ export default function ItemForm({ companyId, item, clone, scannedSku }: { compa
   const [price, setPrice] = useState(src ? String(src.selling_price) : "");
   const [account, setAccount] = useState(src?.account ?? "Sales");
   const [description, setDescription] = useState(src?.description ?? "");
+  const [taxable, setTaxable] = useState(src?.taxable !== false); // Paso 6.9
   const [drag, setDrag] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
@@ -84,6 +85,8 @@ export default function ItemForm({ companyId, item, clone, scannedSku }: { compa
       selling_price: Math.round(amount * 100) / 100, account, description: description.trim() || null, updated_at: new Date().toISOString(),
       // Solo se mandan si se usan (así el formulario sigue funcionando aunque falte el SQL del Paso 4.1)
       ...(tracking || src?.track_inventory || costNum ? { track_inventory: tracking, cost_price: Math.round(costNum * 100) / 100 } : {}),
+      // Paso 6.9: solo se manda si ya existe la columna o si lo apagaron
+      ...((src && "taxable" in src) || !taxable ? { taxable } : {}),
     };
     const { data: saved, error: dbErr } = item
       ? await supabase.from("items").update(row).eq("id", item.id).select("id").single()
@@ -93,6 +96,7 @@ export default function ItemForm({ companyId, item, clone, scannedSku }: { compa
       if (dbErr?.code === "23505") return setError(t("eSkuDup"));
       if (dbErr?.message?.includes("SKU_REQUIRED")) return setError(t("eSkuInv"));
       if (dbErr?.message?.includes("track_inventory") || dbErr?.message?.includes("cost_price")) return setError(t("eSql"));
+      if (dbErr?.message?.includes("taxable")) return setError(t("eTaxSql"));
       return setError(t("eSave"));
     }
     await bustCache("catalog"); router.push(`/dashboard/items/${saved.id}`);
@@ -185,6 +189,15 @@ export default function ItemForm({ companyId, item, clone, scannedSku }: { compa
             </FormRow>
             <FormRow label={t("account")} htmlFor="it-account" required width="max-w-[340px]" hint={t("accountHint")}>
               <SearchSelect id="it-account" ariaLabel={t("account")} value={account} options={ACCOUNT_OPTIONS} onChange={setAccount} />
+            </FormRow>
+            <FormRow label={t("taxable")} hint={t("taxableHint")}>
+              <div className="flex items-center gap-2.5 py-1.5 text-[15px] text-slate-700">
+                <button type="button" role="switch" aria-checked={taxable} onClick={() => setTaxable((v) => !v)}
+                  className={`flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors duration-200 ${taxable ? "bg-[#14a39a]" : "bg-slate-300"}`}>
+                  <span className={`h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${taxable ? "translate-x-5" : ""}`} />
+                </button>
+                <span>{taxable ? t("taxableOn") : t("taxableOff")}</span>
+              </div>
             </FormRow>
             <FormRow label={t("desc")} htmlFor="it-desc" alignTop width="max-w-[460px]" hint={t("descHint")}>
               <textarea id="it-desc" rows={3} value={description} onChange={(e) => setDescription(e.target.value)}

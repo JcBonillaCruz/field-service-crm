@@ -7,6 +7,7 @@ export type Item = {
   selling_price: number; account: string; description: string | null; is_active: boolean; created_at: string;
   updated_at?: string | null; source?: string | null;
   track_inventory?: boolean; cost_price?: number | null; category_id?: string | null; // Paso 4.1 (Inventory)
+  taxable?: boolean; // Paso 6.9: lleva sales tax
 };
 export type CatalogProduct = {
   id: string; name: string; description: string | null; notify_emails: string | null; redirect_url: string | null; auto_numbers: boolean;

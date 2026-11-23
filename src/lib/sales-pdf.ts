@@ -1,6 +1,6 @@
 import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb } from "pdf-lib";
 import { TPL_ICONS, tplOf } from "@/lib/pdf-templates";
-import { AddressSnap, PdfSettings, SalesDoc, SalesLine, addressLines, balanceOf, discountSummary, num2, pdfOf } from "@/lib/sales";
+import { AddressSnap, PdfSettings, SalesDoc, SalesLine, addressLines, balanceOf, discountSummary, num2, pdfOf, taxRows } from "@/lib/sales";
 import { DocLang, docDate, docMeta, docTitle, docTx } from "@/lib/doc-lang";
 
 export type PdfInput = {
@@ -263,7 +263,9 @@ export async function buildSalesPdf(input: PdfInput): Promise<Uint8Array> {
     const d = discountSummary(doc, input.lines);
     const rows: { k: string; v: string; red?: boolean; strong?: boolean; shade?: boolean }[] = [{ k: L.subTotal, v: num2(d.gross) }];
     if (d.total > 0) rows.push({ k: doc.coupon_code ? `${L.discount} (${doc.coupon_code})` : doc.discount_type === "percent" && Number(doc.discount_value) && !d.itemDisc ? `${L.discount} (${+doc.discount_value}%)` : L.discount, v: `(-) ${num2(d.total)}`, red: true });
-    if (Number(doc.tax_amount) > 0) rows.push({ k: `${doc.tax_name || L.tax} (${+doc.tax_rate}%)`, v: num2(doc.tax_amount) });
+    for (const x of doc.surcharges ?? []) rows.push({ k: `${x.name}${x.kind === "percent" ? ` (${+x.value}%)` : ""}`, v: num2(Number(x.amount) || 0) });
+    for (const x of taxRows(doc)) rows.push({ k: `${x.name || L.tax} (${+x.rate}%)`, v: num2(x.amount) });
+    if (doc.tax_mode === "exempt") rows.push({ k: doc.tax_cert_number ? `${L.taxExempt} · ${L.cert(doc.tax_cert_number)}` : L.taxExempt, v: num2(0) });
     if (Number(doc.shipping) !== 0) rows.push({ k: L.shipping, v: num2(doc.shipping) });
     if (Number(doc.adjustment) !== 0) rows.push({ k: doc.adjustment_label || L.adjustment, v: num2(doc.adjustment) });
     rows.push({ k: L.total, v: `$${num2(doc.total)}`, strong: true, shade: isQuote });

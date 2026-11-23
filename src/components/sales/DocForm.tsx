@@ -24,15 +24,19 @@ import CustomerSelect from "@/components/sales/CustomerSelect";
 import { Modal, btnGhost, btnPrimary } from "@/components/sales/SalesBits";
 import { useTranslations } from "next-intl";
 import { useSalesTx } from "@/i18n/useSalesTx";
+import { DocTax, NO_TAX, SurchargePreset, TAX_COLS, TaxRate, TaxSetting, certExpired, rateLabel, resolveTax } from "@/lib/tax";
+import type { Surcharge } from "@/lib/sales";
 
-type Addr = { id: string; label: string | null; street: string; unit: string | null; city: string; state: string | null; zip: string | null; country: string | null; is_primary: boolean };
+type Addr = { id: string; label: string | null; street: string; unit: string | null; city: string; state: string | null; zip: string | null; country: string | null; is_primary: boolean } & TaxSetting;
 const snap = (a?: Addr | null): AddressSnap => (a ? { label: a.label, street: a.street, unit: a.unit, city: a.city, state: a.state, zip: a.zip, country: a.country } : null);
 const addrLabel = (a: Addr, billingL: string, siteL: string) => `${a.label || (a.is_primary ? billingL : siteL)} · ${[a.street, a.city].filter(Boolean).join(", ")}`;
 
-export default function DocForm({ kind, companyId, actor, customers, items, coupons, salespeople, prefs, doc, lines: initLines, clone, presetCustomer }: {
+export default function DocForm({ kind, companyId, actor, customers, items, coupons, salespeople, prefs, doc, lines: initLines, clone, presetCustomer, taxRates: ratesIn = [], taxSql = false, surchargePresets = [] }: {
   kind: DocKind; companyId: string; actor: string; customers: CustomerOption[]; items: ItemOption[]; coupons: CouponOption[]; salespeople: string[];
   prefs: SalesPrefs; doc?: SalesDoc | null; lines?: SalesLine[]; clone?: boolean; presetCustomer?: string;
+  taxRates?: TaxRate[]; taxSql?: boolean; surchargePresets?: SurchargePreset[]; // Paso 6.9
 }) {
+  const tx = useTranslations("tax");
   const t = useTranslations("docForm");
   const tcm = useTranslations("common");
   const sx = useSalesTx();
@@ -68,6 +72,18 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
   const [coupon, setCoupon] = useState(src?.coupon_code ?? "");
   const [taxName, setTaxName] = useState(src?.tax_name ?? "");
   const [taxRate, setTaxRate] = useState(String(src?.tax_rate ?? 0));
+  // Paso 6.9: impuesto del documento (tasa / exento / sin impuesto) y de dónde salió
+  const taxReady = taxSql;
+  const [docTax, setDocTax] = useState<DocTax>(() => src
+    ? src.tax_mode
+      ? { mode: src.tax_mode, rate_id: src.tax_rate_id ?? null, name: src.tax_name, rate: Number(src.tax_rate) || 0, source: (src.tax_source as DocTax["source"]) || "manual", reason: src.tax_exempt_reason, cert_number: src.tax_cert_number }
+      : Number(src.tax_rate) > 0 ? { mode: "rate", rate_id: null, name: src.tax_name || "Tax", rate: Number(src.tax_rate), source: "manual" } : { ...NO_TAX, source: "manual" }
+    : { ...NO_TAX });
+  const [custTax, setCustTax] = useState<{ id: string; tax: TaxSetting } | null>(null);
+  const [taxRates, setTaxRates] = useState<TaxRate[]>(ratesIn);
+  const [newRate, setNewRate] = useState(false);
+  // Paso 6.9b: recargos (Trip charge, Distance fee…), aparte del impuesto
+  const [surch, setSurch] = useState<Surcharge[]>(() => (src?.surcharges ?? []).map((x) => ({ name: x.name, kind: x.kind, value: Number(x.value) })));
   const [shipping, setShipping] = useState(String(src?.shipping ?? ""));
   const [adjLabel, setAdjLabel] = useState(src?.adjustment_label ?? "Adjustment");
   const [adjustment, setAdjustment] = useState(String(src?.adjustment ?? ""));
@@ -98,12 +114,14 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
     let alive = true;
     (async () => {
       const s = db();
-      const [{ data: a }, { data: e }] = await Promise.all([
-        s.from("customer_addresses").select("id, label, street, unit, city, state, zip, country, is_primary").eq("customer_id", customerId).order("is_primary", { ascending: false }).order("created_at"),
+      const [{ data: a }, { data: e }, ct] = await Promise.all([
+        s.from("customer_addresses").select("*").eq("customer_id", customerId).order("is_primary", { ascending: false }).order("created_at"),
         s.from("customer_emails").select("email, is_primary").eq("customer_id", customerId).order("position"),
+        taxReady ? s.from("customers").select(TAX_COLS).eq("id", customerId).maybeSingle() : Promise.resolve({ data: null }),
       ]);
       if (!alive) return;
       setAddresses((a ?? []) as Addr[]);
+      setCustTax({ id: customerId, tax: (ct.data ?? {}) as TaxSetting });
       const c = customers.find((x) => x.id === customerId);
       const opts = Array.from(new Set([...(e ?? []).map((x) => x.email as string), ...(c?.email ? [c.email] : [])].filter(Boolean)));
       setEmailOpts(opts);
@@ -122,10 +140,60 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
   const site = addresses.find((a) => a.id === siteId) ?? null;
   const couponObj = coupons.find((c) => c.code === coupon);
   const effDisc = couponObj ? { discount_value: Number(couponObj.discount_value), discount_type: couponObj.discount_type } : { discount_value: Number(discValue) || 0, discount_type: discType };
-  const totals = useMemo(() => computeTotals(lines, { ...effDisc, tax_rate: Number(taxRate) || 0, shipping: Number(shipping) || 0, adjustment: Number(adjustment) || 0 }),
+  // Paso 6.9: cada línea lleva la tasa del documento si su artículo es "Taxable" (líneas escritas a mano: sí)
+  const itemTaxable = useMemo(() => new Map(items.map((i) => [i.id, i.taxable !== false])), [items]);
+  const taxLines = useMemo(() => (taxReady ? lines.map((l) => {
+    const taxable = !l.item_id || itemTaxable.get(l.item_id) !== false;
+    return docTax.mode === "rate" && taxable ? { ...l, tax_rate_id: docTax.rate_id, tax_name: docTax.name, tax_rate: docTax.rate } : { ...l, tax_rate_id: null, tax_name: null, tax_rate: 0 };
+  }) : lines), [lines, taxReady, docTax, itemTaxable]);
+  const totals = useMemo(() => computeTotals(taxLines, {
+    ...effDisc, shipping: Number(shipping) || 0, adjustment: Number(adjustment) || 0, surcharges: taxReady ? surch : [],
+    ...(taxReady ? {} : { tax_rate: Number(taxRate) || 0, tax_name: taxName }),
+  }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lines, discValue, discType, coupon, taxRate, shipping, adjustment]);
+    [taxLines, discValue, discType, coupon, taxRate, taxName, shipping, adjustment, surch]);
 
+  // ---------- Paso 6.9: impuesto ----------
+  // Exento del cliente o del Job Site (si aplica): se usa al quitar la casilla
+  const siteRow = addresses.find((a) => a.id === siteId) ?? null;
+  const resolved = custTax && custTax.id === customerId ? resolveTax(taxRates, custTax.tax, siteRow) : null;
+  const exemptOf = resolved?.mode === "exempt" ? resolved : null;
+  // Cliente o Job Site nuevo → casilla marcada con la tasa predeterminada (o exento). Al abrir uno guardado se respeta.
+  const lastTaxKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (!taxReady || !custTax || custTax.id !== customerId) return;
+    const key = `${customerId}|${siteId}`;
+    if (lastTaxKey.current === null && src && src.customer_id === customerId && (src.address_id ?? "") === siteId) { lastTaxKey.current = key; return; }
+    if (lastTaxKey.current === key) return;
+    lastTaxKey.current = key;
+    if (resolved) setDocTax(resolved);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [custTax, siteId, addresses, taxReady]);
+  const activeRates = taxRates.filter((r) => r.is_active);
+  const legacyKey = docTax.mode === "rate" && !activeRates.some((r) => r.id === docTax.rate_id) ? `c:${docTax.name ?? "Tax"}:${docTax.rate}` : null;
+  const rateOpts = [
+    ...activeRates.map((r) => ({ value: r.id, label: `${rateLabel(r)}${r.is_default ? ` · ${tx("default")}` : ""}` })),
+    ...(legacyKey ? [{ value: legacyKey, label: rateLabel({ name: docTax.name || "Tax", rate: docTax.rate }) }] : []),
+    { value: "__new", label: tx("newRateOpt"), divider: true },
+  ];
+  const charging = docTax.mode === "rate";
+  const [lastRate, setLastRate] = useState<string | null>(null);
+  function setCharge(on: boolean) {
+    if (!on) return setDocTax(exemptOf ?? { ...NO_TAX, source: "manual" });
+    const r = activeRates.find((x) => x.id === lastRate) ?? activeRates.find((x) => x.is_default) ?? activeRates[0];
+    if (!r) return setNewRate(true);
+    setDocTax({ mode: "rate", rate_id: r.id, name: r.name, rate: Number(r.rate), source: "manual" });
+  }
+  function pickRate(k: string) {
+    if (k === "__new") return setNewRate(true);
+    const r = activeRates.find((x) => x.id === k);
+    if (!r) return;
+    setLastRate(r.id);
+    setDocTax({ mode: "rate", rate_id: r.id, name: r.name, rate: Number(r.rate), source: "manual" });
+  }
+  const exemptInfo = (x: DocTax | null) => (x ? [x.reason ? tx(`r.${x.reason}`) : "", x.cert_number ? tx("certShort", { cert: x.cert_number }) : ""].filter(Boolean).join(" · ") : "");
+  const addSurch = (x: Surcharge) => setSurch((l) => [...l, x]);
+  const setSurchAt = (i: number, patch: Partial<Surcharge>) => setSurch((l) => l.map((x, j) => (j === i ? { ...x, ...patch } : x)));
 
   function onTerms(v: string) { setTerms(v); if (v !== "Custom") setDue(dueFromTerms(date, v)); }
   function onDate(d: string) { setDate(d); if (!isQuote && terms !== "Custom") setDue(dueFromTerms(d, terms)); }
@@ -135,7 +203,9 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
     if (!customerId) return setError(t("eCustomer"));
     if (!auto && !editing && !number.trim()) return setError(t("eNumber", { kind }));
     if (editing && !number.trim()) return setError(t("eNumber", { kind }));
-    const real = lines.filter((l) => l.name.trim() || Number(l.rate) || l.item_id);
+    // Paso 6.9: cada línea guarda su impuesto (en un documento exento, ninguna lleva)
+    const real = taxLines.map((l, i) => (taxReady ? { ...l, tax_amount: totals.lineTax[i] ?? 0 } : l))
+      .filter((l) => l.name.trim() || Number(l.rate) || l.item_id);
     if (!real.length) return setError(t("eItems"));
     if (real.some((l) => !l.name.trim())) return setError(t("eLineName"));
     if (isQuote && expiry && expiry < date) return setError(t("eExpiry"));
@@ -155,7 +225,14 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
       expiry_date: isQuote ? expiry || null : null, due_date: isQuote ? null : due || date, payment_terms: isQuote ? null : terms,
       salesperson: salesperson.trim() || null, subject: subject.trim() || null,
       discount_value: effDisc.discount_value, discount_type: effDisc.discount_type, coupon_code: couponObj?.code ?? null,
-      tax_name: taxName.trim() || null, tax_rate: Number(taxRate) || 0, tax_amount: totals.tax, shipping: totals.shipping,
+      ...(taxReady ? {
+        tax_mode: docTax.mode, tax_rate_id: docTax.mode === "rate" ? docTax.rate_id : null, tax_source: docTax.source,
+        tax_name: docTax.mode === "rate" ? docTax.name : docTax.mode === "exempt" ? "Exempt" : null, tax_rate: docTax.mode === "rate" ? docTax.rate : 0,
+        tax_exempt_reason: docTax.mode === "exempt" ? docTax.reason ?? null : null, tax_cert_number: docTax.mode === "exempt" ? docTax.cert_number?.trim() || null : null,
+        tax_breakdown: totals.taxes,
+        surcharges: totals.surcharges.filter((x) => x.name.trim() && x.amount !== 0).map((x) => ({ ...x, name: x.name.trim() })), surcharge_total: totals.surchargeTotal,
+      } : { tax_name: taxName.trim() || null, tax_rate: Number(taxRate) || 0 }),
+      tax_amount: totals.tax, shipping: totals.shipping,
       adjustment: totals.adjustment, adjustment_label: adjLabel.trim() || "Adjustment", subtotal: totals.subtotal, total: totals.total,
       notes: notes.trim() || null, terms: tc.trim() || null, updated_at: now,
     };
@@ -331,7 +408,7 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
                 <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} />
                 <p className="mt-1 text-[12px] text-slate-500">{t("notesHint", { kind })}</p>
               </div>
-              <div className="rounded-xl bg-[#f7f9fa] p-4">
+              <div className="min-w-0 rounded-xl bg-[#f7f9fa] p-4">
                 {(!compactTotals || showSummary) && (
                   <div className="space-y-3 text-[15px]">
                     <div className="flex justify-between font-semibold text-[#0b1f3a]"><span>{t("subtotal")}</span><span className="tabular-nums">{num2(grossOf(lines))}</span></div>
@@ -362,11 +439,73 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
                         </Popover>
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <input value={taxName} onChange={(e) => setTaxName(e.target.value)} placeholder={t("tax")} className={`${inputClass} !w-24 !py-1.5`} />
-                      <div className="flex flex-1 items-center gap-1"><input inputMode="decimal" value={taxRate} onFocus={(e) => e.currentTarget.select()} onChange={(e) => setTaxRate(e.target.value.replace(/[^0-9.]/g, ""))} className={`${inputClass} !py-1.5 text-right`} /><span className="text-slate-500">%</span></div>
-                      <span className="w-24 text-right tabular-nums text-slate-600">{num2(totals.tax)}</span>
-                    </div>
+                    {taxReady ? (
+                      <>
+                        {/* Recargos: Trip charge, Distance fee… (no son impuesto) */}
+                        {surch.map((x, i) => (
+                          <div key={i} className="flex flex-wrap items-center gap-2">
+                            <input value={x.name} onChange={(e) => setSurchAt(i, { name: e.target.value })} placeholder={tx("surchName")} aria-label={tx("surchName")} title={x.name} className={`${inputClass} !w-36 !py-1.5 max-sm:!w-auto max-sm:flex-1`} />
+                            <div className="flex min-w-0 flex-1 items-center gap-1.5 max-sm:order-3 max-sm:basis-full">
+                              <input inputMode="decimal" value={String(x.value)} onFocus={(e) => e.currentTarget.select()} onChange={(e) => setSurchAt(i, { value: e.target.value.replace(/[^0-9.]/g, "") as unknown as number })} className={`${inputClass} !py-1.5 text-right`} />
+                              <div className="w-20 shrink-0"><SelectMenu value={x.kind} options={[{ value: "flat", label: "$" }, { value: "percent", label: "%" }]} onChange={(v) => setSurchAt(i, { kind: v as Surcharge["kind"] })} ariaLabel={tx("surchType")} /></div>
+                            </div>
+                            <span className="w-24 text-right tabular-nums text-slate-600">{num2(totals.surcharges[i]?.amount ?? 0)}</span>
+                            <button type="button" onClick={() => setSurch((l) => l.filter((_, j) => j !== i))} aria-label={tx("remove")} className="-ml-1 text-slate-400 hover:text-red-600">×</button>
+                          </div>
+                        ))}
+                        <Popover className="relative">
+                          <PopoverButton className="flex items-center gap-1.5 text-[13px] font-medium text-[#2563eb] hover:underline focus:outline-none">
+                            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#2563eb] text-white"><svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M10 5v10M5 10h10" /></svg></span>{tx("addSurch")}
+                          </PopoverButton>
+                          <PopoverPanel anchor="bottom start" className="z-[70] mt-1 w-64 rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
+                            {({ close }) => <>
+                              {surchargePresets.filter((p) => p.is_active).map((p) => (
+                                <button key={p.id} type="button" onClick={() => { addSurch({ name: p.name, kind: p.kind, value: p.value }); close(); }} className="flex w-full items-center justify-between px-4 py-2 text-left text-sm hover:bg-[#f0faf7]">
+                                  <span className="text-[#0b1f3a]">{p.name}</span><span className="text-[#0f766e]">{p.kind === "percent" ? `${+p.value}%` : `$${num2(p.value)}`}</span>
+                                </button>))}
+                              <button type="button" onClick={() => { addSurch({ name: "", kind: "flat", value: 0 }); close(); }} className="block w-full border-t border-slate-100 px-4 py-2 text-left text-sm text-[#0f766e] hover:bg-[#f0faf7]">{tx("customSurch")}</button>
+                              <Link prefetch={false} href="/dashboard/settings/taxes#surcharges" target="_blank" className="block px-4 py-2 text-[12.5px] text-slate-500 hover:text-[#2563eb]">{tx("manageSurch")}</Link>
+                            </>}
+                          </PopoverPanel>
+                        </Popover>
+
+                        {/* Impuesto: casilla + tasa (la predeterminada ya elegida) */}
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <label className="flex w-24 cursor-pointer items-center gap-2 text-slate-700 max-sm:w-auto max-sm:flex-1">
+                              <input type="checkbox" checked={charging} onChange={(e) => setCharge(e.target.checked)} className="h-4 w-4 rounded accent-[#0f766e]" />{t("tax")}
+                            </label>
+                            <div className="min-w-0 flex-1 max-sm:order-3 max-sm:basis-full">
+                              {charging ? (
+                                <SelectMenu value={docTax.rate_id ?? legacyKey ?? ""} ariaLabel={t("tax")} onChange={pickRate} options={rateOpts} />
+                              ) : (
+                                <button type="button" onClick={() => setCharge(true)} className="text-left text-[13.5px] text-slate-500 hover:text-[#0f766e]">
+                                  {docTax.mode === "exempt" ? <span className="font-medium text-[#b45309]">{tx("exempt")}</span> : tx("chargeTax")}
+                                </button>
+                              )}
+                            </div>
+                            <span className="w-24 text-right tabular-nums text-slate-600">{num2(totals.tax)}</span>
+                          </div>
+                          {docTax.mode === "exempt" && (
+                            <p className="mt-1 pl-[6.5rem] text-[12.5px] text-[#b45309] max-sm:pl-0">
+                              {docTax.source === "site" ? tx("siteExempt") : tx("custExempt")}{exemptInfo(docTax) && ` · ${exemptInfo(docTax)}`}
+                              {certExpired(docTax.cert_expires) && <span className="block font-medium">{tx("certExpiredDoc")}</span>}
+                            </p>
+                          )}
+                          {charging && exemptOf && <p className="mt-1 pl-[6.5rem] text-[12.5px] font-medium text-[#b45309] max-sm:pl-0">{tx("chargingExempt")}</p>}
+                          {charging && items.some((it) => it.taxable === false) && lines.some((l) => l.item_id && itemTaxable.get(l.item_id) === false) && (
+                            <p className="mt-1 pl-[6.5rem] text-[12.5px] text-slate-500 max-sm:pl-0">{tx("someNotTaxable")}</p>
+                          )}
+                          {!activeRates.length && <p className="mt-1 pl-[6.5rem] text-[12.5px] max-sm:pl-0"><button type="button" onClick={() => setNewRate(true)} className="font-medium text-[#2563eb] hover:underline">{tx("addFirstRate")}</button></p>}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <input value={taxName} onChange={(e) => setTaxName(e.target.value)} placeholder={t("tax")} className={`${inputClass} !w-24 !py-1.5`} />
+                        <div className="flex flex-1 items-center gap-1"><input inputMode="decimal" value={taxRate} onFocus={(e) => e.currentTarget.select()} onChange={(e) => setTaxRate(e.target.value.replace(/[^0-9.]/g, ""))} className={`${inputClass} !py-1.5 text-right`} /><span className="text-slate-500">%</span></div>
+                        <span className="w-24 text-right tabular-nums text-slate-600">{num2(totals.tax)}</span>
+                      </div>
+                    )}
                     <div className="flex items-center gap-2">
                       <span className="w-24 text-slate-700">{t("shipping")}</span>
                       <input inputMode="decimal" value={shipping} onChange={(e) => setShipping(e.target.value.replace(/[^0-9.\-]/g, ""))} className={`${inputClass} flex-1 !py-1.5 text-right`} />
@@ -442,6 +581,8 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
         {!isQuote && <span className="hidden text-[13px] text-slate-500 xl:block">{t.rich("footTotals", { amount: `$${num2(totals.total)}`, qty: round2(lines.reduce((s, l) => s + (Number(l.quantity) || 0), 0)), b: (c) => <b className="text-[#0b1f3a]">{c}</b> })}</span>}
       </div>
 
+      {taxReady && <NewRateModal open={newRate} onClose={() => setNewRate(false)} companyId={companyId} first={!taxRates.length}
+        onSaved={(r) => { setTaxRates((l) => [...l, r]); setLastRate(r.id); setDocTax({ mode: "rate", rate_id: r.id, name: r.name, rate: r.rate, source: "manual" }); }} />}
       <NumberModal open={numModal} onClose={() => setNumModal(false)} kind={kind} companyId={companyId} prefs={livePrefs}
         onSaved={(p, isAuto) => { setLivePrefs(p); setAuto(isAuto); if (!isAuto && !editing) setNumber(""); }} />
     </div>
@@ -494,6 +635,40 @@ function NumberModal({ open, onClose, kind, companyId, prefs, onSaved }: {
         </div>
       )}
       <label className="mt-4 flex cursor-pointer items-center gap-2.5 text-[15px] text-slate-700"><input type="radio" checked={!auto} onChange={() => setAuto(false)} className="h-4 w-4 accent-[#2563eb]" />{t("numManual", { kind })}</label>
+    </Modal>
+  );
+}
+
+// Paso 6.9b: nueva tasa desde la cotización o factura (queda guardada en Settings → Taxes)
+function NewRateModal({ open, onClose, companyId, first, onSaved }: {
+  open: boolean; onClose: () => void; companyId: string; first: boolean; onSaved: (r: TaxRate) => void;
+}) {
+  const tx = useTranslations("tax");
+  const tcm = useTranslations("common");
+  const [name, setName] = useState("");
+  const [rate, setRate] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => { if (open) { setName(first ? "Sales tax" : ""); setRate(first ? "8.25" : ""); setError(""); } }, [open, first]);
+  async function save() {
+    const n = Number(rate);
+    if (!name.trim() || rate.trim() === "" || n < 0 || n > 100) return setError(tx("eRate"));
+    setBusy(true);
+    const sb = db();
+    const { data, error: e } = await sb.from("tax_rates").insert({ company_id: companyId, name: name.trim(), rate: n, position: 99 }).select("id, name, rate, is_default, is_active, position").single();
+    if (e || !data) { setBusy(false); return setError(/row-level|permission/i.test(e?.message ?? "") ? tx("eOnlyAdmin") : /duplicate|unique/i.test(e?.message ?? "") ? tx("eDup") : tx("eSave")); }
+    let row = { ...(data as TaxRate), rate: Number(data.rate) };
+    if (first && !(await sb.rpc("tax_rate_set_default", { p_company: companyId, p_id: row.id })).error) row = { ...row, is_default: true };
+    setBusy(false); onSaved(row); onClose();
+  }
+  return (
+    <Modal open={open} onClose={onClose} title={tx("newRateTitle")}
+      footer={<><button type="button" onClick={save} disabled={busy} className={btnPrimary}>{tcm("save")}</button><button type="button" onClick={onClose} className={btnGhost}>{tcm("cancel")}</button>{error && <p className="text-sm text-red-600">{error}</p>}</>}>
+      <p className="mb-4 text-[14px] text-slate-600">{first ? tx("newRateFirst") : tx("newRateIntro")}</p>
+      <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-3">
+        <div><label className="mb-1 block text-[13px] text-slate-500">{tx("name")}</label><input autoFocus value={name} maxLength={60} onChange={(e) => setName(e.target.value)} className={inputClass} /></div>
+        <div><label className="mb-1 block text-[13px] text-slate-500">{tx("rate")} (%)</label><input inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value.replace(/[^0-9.]/g, ""))} className={`${inputClass} text-right`} /></div>
+      </div>
     </Modal>
   );
 }

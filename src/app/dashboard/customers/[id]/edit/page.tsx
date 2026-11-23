@@ -23,7 +23,7 @@ export default async function EditCustomerPage({ params }: { params: { id: strin
   const [{ data: phoneRows }, { data: emailRows }, { data: addrRows }] = await Promise.all([
     supabase.from("customer_phones").select("label, country, number, is_primary").eq("customer_id", c.id).order("position"),
     supabase.from("customer_emails").select("label, email, is_primary").eq("customer_id", c.id).order("position"),
-    supabase.from("customer_addresses").select("id, label, street, unit, city, state, zip, country, is_primary").eq("customer_id", c.id).order("created_at"),
+    supabase.from("customer_addresses").select("*").eq("customer_id", c.id).order("created_at"), // "*": con el impuesto del Job Site (Paso 6.9) si ya está el SQL
   ]);
 
   const t = await getTranslations("custPages");

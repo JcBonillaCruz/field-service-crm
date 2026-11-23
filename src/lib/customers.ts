@@ -1,3 +1,4 @@
+import type { TaxSetting } from "@/lib/tax";
 import { Role, formatPhone } from "@/lib/types";
 import { cleanPostal, countryName, dialCode, postalError, subdivisionName, subdivisions, usesNanpFormat } from "@/lib/geo";
 
@@ -13,6 +14,7 @@ export type Address = {
   zip: string;
   country: string;
   is_primary: boolean;
+  tax?: TaxSetting; // Paso 6.9: impuesto propio del Job Site
 };
 
 export type Phone = {
@@ -50,7 +52,7 @@ export type Customer = {
   // Paso 6.8 (requieren el SQL nuevo)
   lead_source_id?: string | null;
   referred_by_id?: string | null;
-};
+} & TaxSetting; // Paso 6.9 (requieren el SQL nuevo)
 
 export const LANGUAGES = ["English", "Spanish", "Portuguese", "French", "Vietnamese", "Chinese", "Korean", "Arabic", "Hindi", "Tagalog", "Russian", "German"];
 

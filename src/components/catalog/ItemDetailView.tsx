@@ -110,6 +110,7 @@ function Overview({ item, companyId }: { item: Item; companyId: string }) {
         <dl>
           <Field label={t("price")}>{vx.money(item.selling_price)}</Field>
           <Field label={t("account")}>{vx.account(item.account)}</Field>
+          {"taxable" in item && <Field label={t("taxable")}>{item.taxable === false ? t("taxNo") : t("taxYes")}</Field>}
           <Field label={t("desc")}>
             {desc ? (
               <>
@@ -350,6 +351,7 @@ function MDetails({ item }: { item: Item }) {
       <Card title={t("salesInfo")} icon="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8zM7.5 7.5h.01M13.6 10.3c-.3-.6-1-.9-1.8-.9-1 0-1.8.5-1.8 1.3s.8 1.1 1.8 1.3 1.8.6 1.8 1.4-.8 1.3-1.8 1.3c-.9 0-1.6-.4-1.9-1M11.8 8.4v7.4">
         <MInfo label={t("price")}>{vx.money(item.selling_price)}</MInfo>
         <MInfo label={t("account")}>{vx.account(item.account)}</MInfo>
+        {"taxable" in item && <MInfo label={t("taxable")}>{item.taxable === false ? t("taxNo") : t("taxYes")}</MInfo>}
         {item.description && (
           <>
             <button type="button" onClick={() => setDesc((v) => !v)} className="mt-1 text-[15px] font-medium text-[#0f9f6e]">{desc ? t("hideDesc") : t("showDesc")}</button>
