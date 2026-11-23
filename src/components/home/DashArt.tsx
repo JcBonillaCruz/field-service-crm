@@ -19,6 +19,23 @@ export function TeamArt({ size = 44 }: P) {
   );
 }
 
+// Cotizaciones (Paso 6.7): hoja con líneas, firma y una palomita que se mueve al pasar el mouse
+export function QuoteArt({ size = 44 }: P) {
+  return (
+    <svg viewBox="0 0 48 48" width={size} height={size} aria-hidden="true" className="shrink-0 drop-shadow-sm">
+      <circle cx="24" cy="24" r="22.5" fill="#f1ebff" stroke="#ddd0fb" strokeWidth="1.5" />
+      <path d="M13 9.5h15.5l6.5 6.5v22.5H13z" fill="#fff" stroke="#7c5ce0" strokeWidth="1.6" strokeLinejoin="round" />
+      <path d="M28.5 9.5V16H35" fill="#ece6fd" stroke="#7c5ce0" strokeWidth="1.6" strokeLinejoin="round" />
+      <path d="M17 19h8M17 23h12M17 27h9" stroke="#c4b5fd" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M17 33c1.6-2.2 2.6-2.2 3.2 0s1.6 1.9 2.8-.2 2-1.4 3 .3" fill="none" stroke="#6d4fd6" strokeWidth="1.4" strokeLinecap="round" />
+      <g className="origin-center transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110" style={{ transformBox: "fill-box" }}>
+        <circle cx="35" cy="33.5" r="6.5" fill="#fff" stroke="#14a39a" strokeWidth="1.6" />
+        <path d="m32.2 33.6 2 2 3.9-4" fill="none" stroke="#0f766e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </g>
+    </svg>
+  );
+}
+
 // Ícono de cada aviso (círculo suave del color del nivel)
 const TONE = {
   red: ["#fff1f2", "#e11d48"], orange: ["#fff6e6", "#d97706"], blue: ["#eef4ff", "#2563eb"], gray: ["#f1f5f9", "#64748b"], teal: ["#e7f6f1", "#0f766e"],
@@ -37,6 +54,11 @@ const PATHS: Record<string, string> = {
   on_my_way: "M2.5 7h11v8.5h-11zM13.5 10h4l3 3v2.5h-7zM6.5 19a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6zM17 19a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6z",
   calendar: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M8 14h3M13 14h3M8 17h3",
   working: "M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.1-.4-.4-2.1z",
+  // Paso 6.7: cotizaciones
+  quote_accepted: "M6 3h9l4 4v14H6zM9.5 13.5l2 2 4-4.5",
+  quote_declined: "M6 3h9l4 4v14H6zM10 11l5 5M15 11l-5 5",
+  quote_no_reply: "M6 3h9l4 4v14H6zM12.5 10v3.5l2.2 1.4M9 7h3",
+  quote_expiring: "M6 3h9l4 4v14H6zM9.5 10h6l-3 3.5 3 3.5h-6l3-3.5z",
 };
 export function AlertIcon({ kind, level, size = 36 }: { kind: string; level: keyof typeof TONE; size?: number }) {
   const [bg, fg] = TONE[level];

@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import {
-  DocKind, QuoteSettings, SalesDoc, SalesLine, Subscription, addInterval, computeTotals, dueFromTerms, lineAmount, round2, today,
+  DEFAULT_PREFS, DocKind, QuoteSettings, SalesDoc, SalesLine, Subscription, addInterval, computeTotals, dueFromTerms, lineAmount, round2, today,
 } from "@/lib/sales";
 
 export const db = () => createClient();
@@ -66,6 +66,20 @@ export async function convertQuote(quote: SalesDoc, lines: SalesLine[], settings
   await logActivity(quote.company_id, "quote", quote.id, `Quote converted to invoice ${number}`, actor);
   await logActivity(quote.company_id, "invoice", data.id, `Invoice created from quote ${quote.number}`, actor);
   return data.id;
+}
+
+// Paso 6.7: convertir a factura desde el Home (sin abrir la cotización). Carga la cotización, sus líneas y
+// las preferencias de cotización de la compañía y usa el mismo convertQuote de siempre.
+export async function convertQuoteById(quoteId: string, actor: string): Promise<string | null> {
+  const supabase = db();
+  const { data: doc } = await supabase.from("sales_docs").select("*").eq("id", quoteId).maybeSingle();
+  if (!doc || doc.kind !== "quote" || doc.status !== "accepted") return null;
+  const [{ data: lines }, { data: prefs }] = await Promise.all([
+    supabase.from("sales_lines").select("*").eq("doc_id", quoteId).order("position"),
+    supabase.from("sales_prefs").select("quote_settings").eq("company_id", doc.company_id).maybeSingle(),
+  ]);
+  const settings = { ...DEFAULT_PREFS.quote_settings, ...((prefs?.quote_settings as QuoteSettings | null) ?? {}) };
+  return convertQuote(doc as SalesDoc, (lines ?? []) as SalesLine[], settings, actor);
 }
 
 // Suscripción → siguiente factura del ciclo

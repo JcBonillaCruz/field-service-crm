@@ -24,6 +24,7 @@ import { useOpsTx } from "@/i18n/useOpsTx";
 import { Member } from "@/lib/team";
 import { useTeamTx } from "@/i18n/useTeamTx";
 import type { HomeAlert, RevenueData, RevenueRange } from "@/lib/home-dashboard";
+import QuotesSection from "@/components/home/QuotesSection";
 
 // =====================================================================
 // Dashboard de trabajos y alertas (Paso 5.3f) — la primera pantalla al entrar.
@@ -136,9 +137,11 @@ function useDash() {
 }
 type JobAlert = { id: string; cat: JobCat; title: string; number: string; sub: string; tag: React.ReactNode; href: string; sort: number; job?: OpsJob };
 
-export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePrice, revenue, monthReport, alerts, header, sample, samplePresence, variant = "home", canDelete = false }: {
+export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePrice, canQuotes = false, actor = "", revenue, monthReport, alerts, header, sample, samplePresence, variant = "home", canDelete = false }: {
   companyId: string; team: TeamMember[]; weekStartsOn: number;
   canSeePrice: boolean;          // dueño y manager
+  canQuotes?: boolean;           // Paso 6.7: dueño, manager y oficina ven la sección de cotizaciones
+  actor?: string;                // nombre para el historial al convertir una cotización
   revenue: RevenueData | null;   // dueño y manager (Paso 5.10f)
   monthReport?: React.ReactNode; // Paso 5.10e: tarjeta "This month's report" (dueño y manager)
   alerts: HomeAlert[];           // avisos guardados: seguimiento de trabajos + inventario
@@ -310,6 +313,7 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
   }, [withGroup, alerts, now]); // eslint-disable-line react-hooks/exhaustive-deps
   const stock = useMemo(() => alerts.filter((a) => a.app === "inventory"), [alerts]);
   const invoices = useMemo(() => alerts.filter((a) => a.app === "finances"), [alerts]);
+  const quotes = useMemo(() => alerts.filter((a) => a.app === "quotes"), [alerts]);
 
   // ---------- Lista de trabajos ----------
   const [q, setQ] = useState("");
@@ -389,11 +393,24 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
           <TeamCard people={people} loading={loading || !members} onPick={setOpenPerson} />
         </div>
 
-        {/* ======= 3. Inventario + Cobros (facturas por vencer o vencidas) ======= */}
-        <div className={`mt-6 grid grid-cols-[minmax(0,1fr)] gap-6 lg:mt-6 lg:gap-4 ${canSeePrice ? "xl:grid-cols-2" : ""}`}>
-          <InventorySection items={stock} wide={!canSeePrice} />
-          {canSeePrice && <InvoicesSection items={invoices} />}
-        </div>
+        {/* ======= 3. Ventas: cotizaciones (Paso 6.7) + cobros · inventario =======
+            Dueño y manager: Cotizaciones | Cobros, y el inventario a lo ancho abajo.
+            Oficina: Inventario | Cotizaciones. Sin ventas: solo el inventario a lo ancho. */}
+        {canQuotes && canSeePrice ? (
+          <>
+            <div className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-6 lg:mt-6 lg:gap-4 xl:grid-cols-2">
+              <QuotesSection items={quotes} actor={actor} />
+              <InvoicesSection items={invoices} />
+            </div>
+            <div className="mt-6"><InventorySection items={stock} wide /></div>
+          </>
+        ) : (
+          <div className={`mt-6 grid grid-cols-[minmax(0,1fr)] gap-6 lg:mt-6 lg:gap-4 ${canSeePrice || canQuotes ? "xl:grid-cols-2" : ""}`}>
+            <InventorySection items={stock} wide={!canSeePrice && !canQuotes} />
+            {canSeePrice && <InvoicesSection items={invoices} />}
+            {canQuotes && <QuotesSection items={quotes} actor={actor} />}
+          </div>
+        )}
 
         {/* ======= 4. Ingresos (dueño y manager) ======= */}
         {revenue && <div className="mt-6"><RevenueCard data={revenue} /></div>}

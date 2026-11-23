@@ -23,7 +23,7 @@ const TRIAL_DAYS = 14;
 //   · Ingresos dentro del Dashboard → dueño y manager (el manager ve el Home igual que el dueño, Paso 5.10f)
 //   · "This month's report" dentro del Dashboard → dueño y manager (Paso 5.10e)
 export default async function DashboardPage({ searchParams }: { searchParams?: { demo?: string } }) {
-  const { supabase, current, firstName, companies } = await getSession();
+  const { supabase, current, firstName, companies, user } = await getSession();
 
   if (!current) {
     // ¿Lo invitaron a alguna compañía? (técnicos, oficina…) → se une en vez de crear una
@@ -36,6 +36,7 @@ export default async function DashboardPage({ searchParams }: { searchParams?: {
 
   const owner = current.role === "owner";
   const canFinance = owner || current.role === "manager";
+  const canQuotes = canManageSales(current.role); // Paso 6.7: dueño, manager y oficina ven las cotizaciones en el Home
 
   // Los trabajos y, a la vez, el día de inicio de semana y la zona horaria de la compañía (para saber qué mes es "este mes")
   const basicsP = loadJobBasics(supabase, current.id);
@@ -46,7 +47,7 @@ export default async function DashboardPage({ searchParams }: { searchParams?: {
     : Promise.resolve(null);
   const [basics, alerts, dash, typeRows, month] = await Promise.all([
     basicsP,
-    loadHomeAlerts(supabase, current.id, { finances: canFinance, inventory: true }).catch(() => []),
+    loadHomeAlerts(supabase, current.id, { finances: canFinance, inventory: true, quotes: canQuotes }).catch(() => []),
     canFinance ? loadDashboard(supabase, current.id).catch(() => null) : Promise.resolve(null),
     canFinance ? supabase.from("customers").select("customer_type").eq("company_id", current.id).eq("is_archived", false) : Promise.resolve({ data: [] }),
     monthP,
@@ -75,6 +76,8 @@ export default async function DashboardPage({ searchParams }: { searchParams?: {
           team={basics.team}
           weekStartsOn={weekStartsOn}
           canSeePrice={canFinance}
+          canQuotes={canQuotes}
+          actor={user.fullName || user.email}
           revenue={canFinance && dash ? buildRevenue(dash.data, weekStartsOn) : null}
           monthReport={month ? <MonthReportCard data={month} /> : null}
           alerts={alerts}
