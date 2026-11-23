@@ -10,9 +10,9 @@ const COUNTRY_CODES = new Set(COUNTRIES.map((c) => c.code));
 export type PlaceSuggestion = { id: string; main: string; secondary: string };
 export type PlaceAddress = { street: string; unit: string; city: string; state: string; zip: string; country: string };
 // Por qué no hay sugerencias: sin llave, apagado en Settings, límite del día, tope del sistema, falta el SQL, Google no respondió
-export type PlacesOff = "nokey" | "off" | "limit" | "cap" | "sql" | "error";
+export type PlacesOff = "nokey" | "off" | "limit" | "cap" | "sql" | "error" | "denied";
 
-export const PLACES_MIN_CHARS = 4;
+export const PLACES_MIN_CHARS = 3;
 
 type Comp = { longText?: string; shortText?: string; types?: string[] };
 

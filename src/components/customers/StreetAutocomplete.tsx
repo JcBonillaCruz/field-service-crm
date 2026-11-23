@@ -6,11 +6,22 @@ import { PLACES_MIN_CHARS, PlaceAddress, PlaceSuggestion, PlacesOff, newSessionT
 
 // =====================================================================
 // Paso 6.8 · Campo "Street" con sugerencias de Google.
-// - Pide sugerencias 300 ms después de dejar de escribir y con 4+ letras (menos llamadas = menos costo).
+// - Pide sugerencias 150 ms después de dejar de escribir y con 3+ letras (6.8c: antes 300 ms y 4 letras).
+// - Al entrar al campo "despierta" el servidor (sin costo de Google) para que la primera búsqueda no tarde.
+// - El navegador recuerda el centro de la compañía y lo manda; así el servidor no lo busca cada vez.
 // - Un token de sesión por dirección: se cierra al elegir; la siguiente dirección empieza otra sesión.
 // - Si no hay llave o se llegó al límite del día, se queda como campo normal. El cliente nunca ve límites ni costos (6.8b).
 // =====================================================================
 let pageOff: PlacesOff | null = null;   // una vez apagado, no se vuelve a preguntar en esta página
+let warmed = false;
+let center: { lat: number; lng: number } | null = null;
+function loadCenter() {
+  if (center) return center;
+  try { const v = sessionStorage.getItem("bp_places_center"); if (v) center = JSON.parse(v); } catch { /* sin storage */ }
+  return center;
+}
+const post = (url: string, body: unknown) => fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+  .then((x) => x.json()).catch(() => ({ off: "error" }));
 
 export default function StreetAutocomplete({ id, value, onChange, onPick, country, placeholder, className, inputProps, autoFocus }: {
   id?: string; value: string; onChange: (v: string) => void; onPick: (a: PlaceAddress) => void;
@@ -19,6 +30,7 @@ export default function StreetAutocomplete({ id, value, onChange, onPick, countr
   const t = useTranslations("places");
   const [list, setList] = useState<PlaceSuggestion[]>([]);
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [active, setActive] = useState(0);
   const [note, setNote] = useState<string | null>(null);
   const session = useRef<string | null>(null);
@@ -35,20 +47,22 @@ export default function StreetAutocomplete({ id, value, onChange, onPick, countr
 
   useEffect(() => {
     const q = value.trim();
-    if (!typed.current || pageOff || q.length < PLACES_MIN_CHARS) { setList([]); return; }
+    if (!typed.current || pageOff || q.length < PLACES_MIN_CHARS) { setList([]); setLoading(false); return; }
     const key = `${country}|${q.toLowerCase()}`;
     const hit = cache.current.get(key);
     if (hit) { setList(hit); setActive(0); return; }
     const n = ++seq.current;
+    setLoading(true);
     const timer = setTimeout(async () => {
       session.current ??= newSessionToken();
-      const r = await fetch("/api/places/autocomplete", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input: q, session: session.current, country }) }).then((x) => x.json()).catch(() => ({ off: "error" }));
+      const r = await post("/api/places/autocomplete", { input: q, session: session.current, country, center: loadCenter() });
       if (n !== seq.current) return;
+      setLoading(false);
       if (r.off) return stop(r.off as PlacesOff);
+      if (r.center && !center) { center = r.center; try { sessionStorage.setItem("bp_places_center", JSON.stringify(r.center)); } catch { /* sin storage */ } }
       const s = (r.suggestions ?? []) as PlaceSuggestion[];
       cache.current.set(key, s); setList(s); setActive(0);
-    }, 300);
+    }, 150);
     return () => clearTimeout(timer);
   }, [value, country]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -57,8 +71,7 @@ export default function StreetAutocomplete({ id, value, onChange, onPick, countr
     const token = session.current ?? newSessionToken();
     session.current = null; cache.current.clear();   // la siguiente dirección es otra sesión
     onChange(s.main);                                   // se ve al momento; luego se llena todo
-    const r = await fetch("/api/places/details", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: s.id, session: token }) }).then((x) => x.json()).catch(() => ({ off: "error" }));
+    const r = await post("/api/places/details", { id: s.id, session: token });
     if (r.off) { stop(r.off as PlacesOff); return; }
     if (r.address) onPick(r.address as PlaceAddress);
   }
@@ -77,9 +90,18 @@ export default function StreetAutocomplete({ id, value, onChange, onPick, countr
       <input id={id} value={value} placeholder={placeholder} autoFocus={autoFocus} className={className} {...inputProps}
         role="combobox" aria-expanded={show} aria-autocomplete="list" aria-controls={id ? `${id}-list` : undefined}
         onChange={(e) => { typed.current = true; setOpen(true); onChange(e.target.value); }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => {
+          setOpen(true);
+          // Despierta el servidor una vez por página (no llama a Google, no cuesta)
+          if (!warmed && !pageOff) { warmed = true; post("/api/places/autocomplete", { input: "", session: "warmup-0000", center: loadCenter() }); }
+        }}
         onBlur={() => { blurTimer.current = setTimeout(() => setOpen(false), 150); }}
         onKeyDown={onKey} />
+      {loading && !pageOff && (
+        <span className="pointer-events-none absolute right-3 top-0 flex h-[46px] items-center" aria-hidden="true">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#14a39a]/25 border-t-[#14a39a]" />
+        </span>
+      )}
       {show && (
         <ul id={id ? `${id}-list` : undefined} role="listbox"
           className="absolute left-0 right-0 top-full z-[100] mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-[0_12px_40px_rgba(15,40,60,0.16)] animate-[bp-pop-in_0.15s_ease-out]">

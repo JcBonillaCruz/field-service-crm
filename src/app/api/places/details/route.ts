@@ -1,8 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getSession } from "@/lib/session";
-import { canManageCustomers } from "@/lib/customers";
 import { parseComponents } from "@/lib/places";
-import { googleFetch, okSession, placesKey, takePlaces } from "@/lib/places-server";
+import { googleFetch, okSession, placesContext, placesKey, takePlaces } from "@/lib/places-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,15 +10,15 @@ export const dynamic = "force-dynamic";
 type G = { addressComponents?: { longText?: string; shortText?: string; types?: string[] }[]; location?: { latitude?: number; longitude?: number } };
 
 export async function POST(request: NextRequest) {
-  const { supabase, current } = await getSession();
-  if (!current || !canManageCustomers(current.role)) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
   const key = placesKey();
   if (!key) return NextResponse.json({ off: "nokey" });
+  const ctx = await placesContext();
+  if (!ctx) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
   const b = await request.json().catch(() => null) as { id?: unknown; session?: unknown } | null;
   const id = typeof b?.id === "string" && /^[A-Za-z0-9_-]{10,300}$/.test(b.id) ? b.id : "";
   if (!id || !okSession(b?.session)) return NextResponse.json({ error: "Bad request" }, { status: 400 });
 
-  const take = await takePlaces(supabase, current.id, "pick");
+  const take = await takePlaces(ctx.sb, ctx.companyId, "pick");
   if (!take.ok) return NextResponse.json({ off: take.off });
 
   const j = await googleFetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(id)}?sessionToken=${encodeURIComponent(b!.session as string)}&languageCode=en`, {

@@ -1,8 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getSession } from "@/lib/session";
-import { canManageCustomers } from "@/lib/customers";
 import { PLACES_MIN_CHARS, type PlaceSuggestion } from "@/lib/places";
-import { companyCenter, googleFetch, okSession, placesKey, takePlaces } from "@/lib/places-server";
+import { companyCenter, googleFetch, okCenter, okSession, placesContext, placesKey, takePlaces } from "@/lib/places-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,19 +9,21 @@ export const dynamic = "force-dynamic";
 type G = { suggestions?: { placePrediction?: { placeId?: string; text?: { text?: string }; structuredFormat?: { mainText?: { text?: string }; secondaryText?: { text?: string } } } }[] };
 
 export async function POST(request: NextRequest) {
-  const { supabase, current } = await getSession();
-  if (!current || !canManageCustomers(current.role)) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
   const key = placesKey();
   if (!key) return NextResponse.json({ off: "nokey" });
-  const b = await request.json().catch(() => null) as { input?: unknown; session?: unknown; country?: unknown } | null;
+  const ctx = await placesContext();
+  if (!ctx) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
+  const b = await request.json().catch(() => null) as { input?: unknown; session?: unknown; country?: unknown; center?: unknown } | null;
   const input = typeof b?.input === "string" ? b.input.trim().slice(0, 120) : "";
   const country = typeof b?.country === "string" && /^[A-Za-z]{2}$/.test(b.country) ? b.country.toLowerCase() : "us";
   if (input.length < PLACES_MIN_CHARS || !okSession(b?.session)) return NextResponse.json({ suggestions: [] });
 
-  const take = await takePlaces(supabase, current.id, "search");
+  // El permiso/contador y el centro van al mismo tiempo (el navegador manda el centro que ya conoce)
+  const [take, center] = await Promise.all([
+    takePlaces(ctx.sb, ctx.companyId, "search"),
+    okCenter(b?.center) ? Promise.resolve(b!.center as { lat: number; lng: number }) : companyCenter(ctx.sb, ctx.companyId).catch(() => null),
+  ]);
   if (!take.ok) return NextResponse.json({ off: take.off });
-
-  const center = await companyCenter(supabase, current.id).catch(() => null);
   const body: Record<string, unknown> = {
     input, sessionToken: b!.session, languageCode: "en",
     includedRegionCodes: [country],
@@ -43,5 +43,5 @@ export async function POST(request: NextRequest) {
     main: p!.structuredFormat?.mainText?.text || p!.text?.text || "",
     secondary: p!.structuredFormat?.secondaryText?.text || "",
   }));
-  return NextResponse.json({ suggestions });
+  return NextResponse.json({ suggestions, center });
 }

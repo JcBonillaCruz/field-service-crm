@@ -1,5 +1,26 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { cookies } from "next/headers";
+import { createClient } from "@/lib/supabase/server";
+import { getSession } from "@/lib/session";
+import { canManageCustomers } from "@/lib/customers";
+import { COMPANY_COOKIE } from "@/lib/types";
 import type { PlacesOff } from "@/lib/places";
+
+// 6.8c · Camino rápido: no carga toda la sesión (usuario, compañías, logos…) en cada letra.
+// La compañía sale de la cookie y places_take revisa en la base de datos (con el token del usuario)
+// que sea dueño, manager u oficina de esa compañía. Si no hay cookie, se usa la sesión completa.
+export async function placesContext(): Promise<{ sb: SupabaseClient; companyId: string } | null> {
+  const id = cookies().get(COMPANY_COOKIE)?.value;
+  if (id && /^[0-9a-f-]{36}$/i.test(id)) return { sb: createClient(), companyId: id };
+  const { supabase, current } = await getSession();
+  return current && canManageCustomers(current.role) ? { sb: supabase, companyId: current.id } : null;
+}
+
+export type Center = { lat: number; lng: number };
+export const okCenter = (c: unknown): c is Center => {
+  const x = c as Center | null;
+  return !!x && Number.isFinite(x.lat) && Number.isFinite(x.lng) && Math.abs(x.lat) <= 90 && Math.abs(x.lng) <= 180;
+};
 
 // Lado servidor de las rutas /api/places/*: llave, contador diario y centro de la compañía para el sesgo
 export const placesKey = () => process.env.GOOGLE_PLACES_API_KEY?.trim() || "";
@@ -10,7 +31,7 @@ export type Take = { ok: true; warn: boolean; picks: number; limit: number } | {
 // Cuenta la llamada en places_usage y dice si todavía se puede (límite de la compañía y tope del sistema)
 export async function takePlaces(sb: SupabaseClient, companyId: string, kind: "search" | "pick"): Promise<Take> {
   const { data, error } = await sb.rpc("places_take", { p_company: companyId, p_kind: kind, p_cap: cap() });
-  if (error) return { ok: false, off: /places_take|does not exist|schema cache/i.test(error.message) ? "sql" : "error" };
+  if (error) return { ok: false, off: /places_take|does not exist|schema cache/i.test(error.message) ? "sql" : /not allowed/i.test(error.message) ? "denied" : "error" };
   const r = (data ?? {}) as { ok?: boolean; reason?: string; warn?: boolean; picks?: number; limit?: number };
   if (!r.ok) return { ok: false, off: r.reason === "off" ? "off" : r.reason === "cap" ? "cap" : "limit" };
   return { ok: true, warn: Boolean(r.warn), picks: r.picks ?? 0, limit: r.limit ?? 0 };
