@@ -47,6 +47,9 @@ export type Customer = {
   portal_enabled?: boolean | null;
   billing_attention?: string | null;
   shipping_attention?: string | null;
+  // Paso 6.8 (requieren el SQL nuevo)
+  lead_source_id?: string | null;
+  referred_by_id?: string | null;
 };
 
 export const LANGUAGES = ["English", "Spanish", "Portuguese", "French", "Vietnamese", "Chinese", "Korean", "Arabic", "Hindi", "Tagalog", "Russian", "German"];

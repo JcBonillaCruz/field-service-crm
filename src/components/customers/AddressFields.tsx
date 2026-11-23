@@ -7,6 +7,8 @@ import { useNoFill } from "@/components/customers/noFill";
 import { inputClass, labelClass } from "@/components/customers/ui";
 import { useTranslations } from "next-intl";
 import { useCustTx } from "@/i18n/useCustTx";
+import StreetAutocomplete from "@/components/customers/StreetAutocomplete";
+import { fillFromPlace } from "@/lib/places";
 
 export default function AddressFields({
   value,
@@ -42,8 +44,11 @@ export default function AddressFields({
       </div>
       <div className="sm:col-span-4">
         <label htmlFor={`${idPrefix}-street`} className={labelClass}>{t("street")}</label>
-        <input id={`${idPrefix}-street`} value={value.street} onChange={set("street")} {...noFill(`${idPrefix}-a2`)}
-          placeholder={value.country === "US" ? "1200 Elm St" : t("streetPh")} className={inputClass} />
+        {/* Paso 6.8: sugerencias de Google al escribir; elegir una llena ciudad, estado y zip */}
+        <StreetAutocomplete id={`${idPrefix}-street`} value={value.street} country={value.country}
+          onChange={(street) => onChange({ ...value, street })}
+          onPick={(p) => onChange(fillFromPlace(value, p))}
+          inputProps={noFill(`${idPrefix}-a2`)} placeholder={value.country === "US" ? "1200 Elm St" : t("streetPh")} className={inputClass} />
       </div>
       <div className="sm:col-span-2">
         <label htmlFor={`${idPrefix}-unit`} className={labelClass}>

@@ -42,7 +42,7 @@ export const SECTIONS: Section[] = [
     { title: "Automation", icon: ic.bolt, tone: "bg-[#fff0f0] text-[#e11d48]", items: [{ label: "Workflow Rules" }, { label: "Workflow Actions" }, { label: "Workflow Logs" }, { label: "Schedules" }] },
   ] },
   { title: "Module Settings", cards: [
-    { title: "General", icon: ic.doc, tone: "bg-[#e9f7f4] text-[#0f766e]", items: [{ label: "Customers", href: "/dashboard/customers" }, { label: "Products", href: "/dashboard/items" }, { label: "Coupons", href: "/dashboard/coupons" }, { label: "Projects" }, { label: "Timesheet" }] },
+    { title: "General", icon: ic.doc, tone: "bg-[#e9f7f4] text-[#0f766e]", items: [{ label: "Customers", href: "/dashboard/customers" }, { label: "Lead Sources", href: "/dashboard/settings/lead-sources" }, { label: "Products", href: "/dashboard/items" }, { label: "Coupons", href: "/dashboard/coupons" }, { label: "Projects" }, { label: "Timesheet" }] },
     { title: "Online Payments", icon: ic.card, tone: "bg-[#fff6e8] text-[#d97706]", items: [{ label: "Payment Gateways" }, { label: "Address Verification Settings" }] },
     { title: "Sales", icon: ic.cart, tone: "bg-[#e9f7f4] text-[#0f766e]", items: [{ label: "Quotes", href: "/dashboard/quotes?prefs=1" }, { label: "Invoices", href: "/dashboard/invoices?prefs=1" }, { label: "Payments Received" }, { label: "Delivery Notes", href: "/dashboard/settings/pdf-templates?for=invoice" }, { label: "Packing Slips", href: "/dashboard/settings/pdf-templates?for=invoice" }] },
     { title: "Subscriptions", icon: ic.repeat, tone: "bg-[#e9f7f4] text-[#0f766e]", items: [{ label: "General", href: "/dashboard/subscriptions?prefs=1" }, { label: "Billing Preferences" }, { label: "Advance Billing" }, { label: "Dunning Management" }, { label: "Cancellation Preferences" }] },
@@ -52,7 +52,7 @@ export const SECTIONS: Section[] = [
   ] },
   { title: "Extension and Developer Data", cards: [
     { title: "Tools", icon: ic.module, tone: "bg-[#eef2ff] text-[#4f46e5]", items: [{ label: "QR Code Studio", href: "/dashboard/tools/qr" }] },
-    { title: "Integrations & Marketplace", icon: ic.plug, tone: "bg-[#e9f7f4] text-[#0f766e]", items: [{ label: "WhatsApp" }, { label: "SMS Integrations" }, { label: "Accounting" }, { label: "Google Calendar" }, { label: "Marketplace" }] },
+    { title: "Integrations & Marketplace", icon: ic.plug, tone: "bg-[#e9f7f4] text-[#0f766e]", items: [{ label: "Address Autocomplete", href: "/dashboard/settings/address-autocomplete" }, { label: "WhatsApp" }, { label: "SMS Integrations" }, { label: "Accounting" }, { label: "Google Calendar" }, { label: "Marketplace" }] },
     { title: "Developer Data", icon: ic.code, tone: "bg-[#fff6e8] text-[#ea580c]", items: [{ label: "Incoming Webhooks" }, { label: "Connections" }, { label: "API Usage" }, { label: "Data Management" }, { label: "Web Forms" }] },
   ] },
 ];

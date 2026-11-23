@@ -18,6 +18,7 @@ import { Plan, loadPlans } from "@/lib/maintenance";
 import CustomerPlansList from "@/components/customers/CustomerPlansList";
 import { getLocale, getTranslations } from "next-intl/server";
 import { intlTag } from "@/i18n/config";
+import { leadLabel } from "@/lib/lead-sources";
 
 const TABS = ["overview", "comments", "transactions", "mails", "statement"];
 const MOBILE_TABS = ["details", "transactions", "comments"];
@@ -31,7 +32,7 @@ export default async function CustomerPage({
   const { supabase, current } = await getSession();
   if (!current) redirect("/dashboard");
   // Paso 6.2b2: textos en el idioma de quien lo ve
-  const [t, tl, locale] = await Promise.all([getTranslations("custDetail"), getTranslations("custLib"), getLocale()]);
+  const [t, tl, locale, tLead] = await Promise.all([getTranslations("custDetail"), getTranslations("custLib"), getLocale(), getTranslations("lead")]);
   const tag = intlTag(locale);
   const lk = (g: string, v: string) => { const k = `${g}.${v.replace(/[^A-Za-z0-9]/g, "")}`; return tl.has(k as never) ? tl(k as never) : v; };
   if (!canManageCustomers(current.role)) return <NoAccess />;
@@ -45,7 +46,7 @@ export default async function CustomerPage({
   const c = customer as Customer;
   const editHref = `/dashboard/customers/${c.id}/edit`;
 
-  const [{ data: addrRows }, { data: phoneRows }, { data: emailRows }, profit, planList] = await Promise.all([
+  const [{ data: addrRows }, { data: phoneRows }, { data: emailRows }, profit, planList, lead] = await Promise.all([
     supabase.from("customer_addresses").select("id, label, street, unit, city, state, zip, country, is_primary")
       .eq("customer_id", c.id).order("is_primary", { ascending: false }).order("created_at"),
     supabase.from("customer_phones").select("id, label, country, dial_code, number, is_primary").eq("customer_id", c.id).order("position"),
@@ -54,6 +55,16 @@ export default async function CustomerPage({
     loadProfit(supabase, current.id, c.id).catch(() => null),
     // Paso 5.11: planes de mantenimiento de este cliente (solo dueño, manager y oficina; sin el SQL nuevo, nada)
     canManageJobs(current.role) ? loadPlans(supabase, current.id).catch(() => ({ plans: [] as Plan[], needsSql: true })) : Promise.resolve({ plans: [] as Plan[], needsSql: true }),
+    // Paso 6.8: lead source, quién lo refirió y a quiénes refirió (sin el SQL nuevo, nada)
+    Promise.all([
+      c.lead_source_id ? supabase.from("lead_sources").select("code, name").eq("id", c.lead_source_id).maybeSingle() : Promise.resolve({ data: null }),
+      c.referred_by_id ? supabase.from("customers").select("id, display_name").eq("id", c.referred_by_id).maybeSingle() : Promise.resolve({ data: null }),
+      "referred_by_id" in c ? supabase.from("customers").select("id, display_name, created_at").eq("referred_by_id", c.id).order("created_at", { ascending: false }).limit(50) : Promise.resolve({ data: [] }),
+    ]).then(([s, r, l]) => ({
+      source: s.data as { code: string | null; name: string | null } | null,
+      referrer: r.data as { id: string; display_name: string } | null,
+      referrals: ((l.data ?? []) as { id: string; display_name: string; created_at: string }[]),
+    })).catch(() => ({ source: null, referrer: null, referrals: [] as { id: string; display_name: string; created_at: string }[] })),
   ]);
   const plans = planList.plans.filter((p) => p.customer_id === c.id);
   const phones = phoneRows ?? [];
@@ -208,10 +219,31 @@ export default async function CustomerPage({
                 <dt className="text-slate-500">{t("portal")}</dt>
                 <dd className={c.portal_enabled ? "text-[#0f766e]" : "text-red-500"}>{c.portal_enabled ? t("enabled") : t("disabled")}</dd>
                 <dt className="text-slate-500">{t("lang")}</dt><dd className="text-slate-800">{lk("lang", c.language || "English")}</dd>
+                {"lead_source_id" in c && <><dt className="text-slate-500">{tLead("label")}</dt>
+                  <dd className={lead.source ? "text-slate-800" : "text-slate-400"}>{lead.source ? leadLabel(tLead, lead.source) : t("notAdded")}</dd></>}
+                {lead.referrer && <><dt className="text-slate-500">{tLead("referredBy")}</dt>
+                  <dd><Link prefetch={false} href={`/dashboard/customers/${lead.referrer.id}`} className="font-medium text-[#0f766e] hover:underline">{lead.referrer.display_name}</Link></dd></>}
                 {c.billing_attention && <><dt className="text-slate-500">{t("billAttn")}</dt><dd className="text-slate-800">{c.billing_attention}</dd></>}
                 {c.shipping_attention && <><dt className="text-slate-500">{t("shipAttn")}</dt><dd className="text-slate-800">{c.shipping_attention}</dd></>}
               </dl>
             </Accordion>
+
+            {/* Paso 6.8: clientes que este cliente nos refirió */}
+            {lead.referrals.length > 0 && (
+              <Accordion flat title={tLead("referrals")} count={lead.referrals.length}>
+                <ul className="space-y-1">
+                  {lead.referrals.map((r) => (
+                    <li key={r.id}>
+                      <Link prefetch={false} href={`/dashboard/customers/${r.id}`} className="group flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-[#f0faf7]">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#fff4ec] text-[12px] font-bold text-[#e8713a]">{r.display_name.slice(0, 1).toUpperCase()}</span>
+                        <span className="min-w-0 flex-1 truncate font-medium text-[#0b1f3a] group-hover:text-[#0f766e]">{r.display_name}</span>
+                        <span className="shrink-0 text-xs text-slate-400">{new Date(r.created_at).toLocaleDateString(tag, { month: "short", day: "numeric", year: "numeric" })}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </Accordion>
+            )}
 
             <Accordion flat title={t("contacts")}>
               <p className="py-2 text-center text-sm text-slate-400">{t("noContacts")}</p>

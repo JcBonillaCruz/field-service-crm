@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Combobox, ComboboxButton, ComboboxInput, ComboboxOption, ComboboxOptions } from "@headlessui/react";
@@ -20,6 +20,8 @@ import { useNoFill } from "@/components/customers/noFill";
 import { inputClass, primaryButton, secondaryButton } from "@/components/customers/ui";
 import { useTranslations } from "next-intl";
 import { useCustTx } from "@/i18n/useCustTx";
+import { LeadSourceSelect, ReferrerSelect } from "@/components/customers/LeadSourcePicker";
+import { LeadSource, REFERRAL, loadLeadSources } from "@/lib/lead-sources";
 
 // Formulario de cliente con el mismo diseño de Zoho: etiqueta a la izquierda, campo a la derecha, pestañas abajo
 const sameAddress = (a: Address, b: Address) =>
@@ -56,6 +58,16 @@ export default function CustomerForm({
   const [terms, setTerms] = useState(customer?.payment_terms || "Due on Receipt");
   const [portal, setPortal] = useState(Boolean(customer?.portal_enabled));
   const [notes, setNotes] = useState(customer?.notes ?? "");
+  // Paso 6.8: cómo llegó el cliente
+  const tl = useTranslations("lead");
+  const [sources, setSources] = useState<LeadSource[]>([]);
+  const [leadSql, setLeadSql] = useState(true); // true = ya está el SQL del 6.8
+  const [leadId, setLeadId] = useState(customer?.lead_source_id ?? "");
+  const [referredId, setReferredId] = useState(customer?.referred_by_id ?? "");
+  useEffect(() => {
+    loadLeadSources(createClient(), companyId).then((r) => { setSources(r.list); setLeadSql(!r.needsSql); });
+  }, [companyId]);
+  const isReferral = sources.find((s) => s.id === leadId)?.code === REFERRAL;
   // Direcciones guardadas: "Billing address" y "Shipping address" van en su pestaña; las demás son Job Sites
   const [initial] = useState(() => splitAddresses(initialAddresses ?? []));
   const [billing, setBilling] = useState<Address>(initial.billing);
@@ -160,6 +172,13 @@ export default function CustomerForm({
     const { error: extraErr } = await supabase.rpc("save_customer_extras", { p_customer_id: data, p_extras: extras });
     if (extraErr) console.error("save_customer_extras:", extraErr.message);
 
+    // Paso 6.8: lead source y referido (si falta el SQL, el cliente se guarda igual)
+    const ref = isReferral ? referredId : "";
+    if (leadSql && (leadId !== (customer?.lead_source_id ?? "") || ref !== (customer?.referred_by_id ?? ""))) {
+      const { error: leadErr } = await supabase.rpc("customer_set_lead", { p_customer: data, p_source: leadId || null, p_referred: ref || null });
+      if (leadErr) console.error("customer_set_lead:", leadErr.message);
+    }
+
     router.push(`/dashboard/customers/${data}`);
     router.refresh();
   }
@@ -223,6 +242,20 @@ export default function CustomerForm({
         <Row label={t("custLang")} htmlFor="c-language" hint={t("custLangHint")}>
           <SearchSelect id="c-language" ariaLabel={t("custLang")} value={language} options={LANGUAGE_OPTIONS} onChange={setLanguage} placeholder={t("searchOrChoose")} />
         </Row>
+
+        {leadSql && (
+          <Row label={tl("label")} htmlFor="c-lead" hint={tl("hint")} alignTop>
+            <LeadSourceSelect id="c-lead" companyId={companyId} sources={sources} value={leadId}
+              onChange={setLeadId} onCreated={(s) => setSources((l) => [...l, s])} />
+          </Row>
+        )}
+        {leadSql && isReferral && (
+          <div className="animate-[bp-fade_0.25s_ease-out]">
+            <Row label={tl("referredBy")} htmlFor="c-referrer" hint={tl("referredHint")}>
+              <ReferrerSelect id="c-referrer" companyId={companyId} selfId={customer?.id} value={referredId} onChange={setReferredId} />
+            </Row>
+          </div>
+        )}
       </div>
 
       {/* ---------- Pestañas ---------- */}

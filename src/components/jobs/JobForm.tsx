@@ -15,6 +15,7 @@ import {
   addressLine, afterHoursFee, afterHoursOf, atMinute, dayStart, durationLabel, fromIsoDay, isoDay, minutesOf, receivesJobs, timeToMin,
 } from "@/lib/jobs";
 
+import StreetAutocomplete from "@/components/customers/StreetAutocomplete";
 import { useTranslations } from "next-intl";
 import { useJobsTx } from "@/i18n/useJobsTx";
 import { useJobError } from "@/i18n/useFmt";
@@ -282,7 +283,12 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
               {newSite ? (
                 <div className="rounded-xl border border-[#bfe7de] bg-[#f6fbfa] p-3.5 animate-[bp-pop-in_0.2s_ease-out]">
                   <div className="grid gap-2.5 sm:grid-cols-6">
-                    <input autoFocus value={newSite.street} onChange={(e) => setNewSite({ ...newSite, street: e.target.value })} placeholder={t("street")} className={`${inputClass} sm:col-span-4`} />
+                    {/* Paso 6.8: sugerencias de Google al escribir la calle */}
+                    <div className="sm:col-span-4">
+                      <StreetAutocomplete autoFocus value={newSite.street} country="US" placeholder={t("street")} className={inputClass} inputProps={{ autoComplete: "bp-off", "data-lpignore": "true", "data-1p-ignore": "true" }}
+                        onChange={(street) => setNewSite((s) => (s ? { ...s, street } : s))}
+                        onPick={(p) => setNewSite((s) => (s ? { street: p.street || s.street, unit: p.unit || s.unit, city: p.city || s.city, state: (p.state || s.state).slice(0, 2).toUpperCase(), zip: (p.zip || s.zip).slice(0, 10) } : s))} />
+                    </div>
                     <input value={newSite.unit} onChange={(e) => setNewSite({ ...newSite, unit: e.target.value })} placeholder={t("unit")} className={`${inputClass} sm:col-span-2`} />
                     <input value={newSite.city} onChange={(e) => setNewSite({ ...newSite, city: e.target.value })} placeholder={t("city")} className={`${inputClass} sm:col-span-3`} />
                     <input value={newSite.state} onChange={(e) => setNewSite({ ...newSite, state: e.target.value })} placeholder={t("state")} maxLength={2} className={`${inputClass} uppercase sm:col-span-1`} />
