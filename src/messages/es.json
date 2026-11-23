@@ -7225,8 +7225,7 @@
       "WorkflowLogs": "Registro de flujos",
       "WorkflowRules": "Reglas de flujo",
       "StatusColors": "Colores por estado",
-      "LeadSources": "Orígenes de clientes",
-      "AddressAutocomplete": "Autocompletar direcciones"
+      "LeadSources": "Orígenes de clientes"
     }
   },
   "branding": {
@@ -7683,47 +7682,6 @@
     "tagged": "{n, plural, =0 {Ningún cliente tiene origen todavía.} one {# cliente tiene origen.} other {# clientes tienen origen.}}"
   },
   "places": {
-    "paused": "Las sugerencias de dirección están en pausa por hoy — escribe la dirección.",
-    "warn": "Ojo: ya se usaron {used} de {limit} búsquedas de dirección hoy.",
-    "allSettings": "Todos los ajustes",
-    "title": "Autocompletar direcciones",
-    "subtitle": "Google sugiere la dirección mientras escribes y llena ciudad, estado y zip.",
-    "stOn": "Encendido",
-    "stOff": "Apagado",
-    "stLimit": "Llegó al límite del día",
-    "stNoKey": "Falta la llave de Google",
-    "stSql": "Falta el SQL",
-    "today": "Hoy",
-    "todayText": "direcciones elegidas · {searches} pedidos de sugerencias",
-    "last30": "Últimos 30 días",
-    "picksN": "{n, plural, one {# dirección} other {# direcciones}}",
-    "monthText": "{picks} direcciones elegidas · {searches} pedidos de sugerencias en 30 días",
-    "enable": "Usar sugerencias de Google",
-    "enableText": "Apagado, el campo de la calle funciona como un campo normal.",
-    "limit": "Direcciones por día",
-    "limitHint": "Al llegar, las sugerencias se pausan hasta mañana. 0 = apagado.",
-    "alert": "Avisar al llegar a",
-    "alertHint": "La oficina ve un aviso pequeño cuando el uso de hoy llega a este porcentaje.",
-    "capNote": "Tope de todo el sistema: {n} direcciones al día entre todas las compañías (se pone en Vercel).",
-    "save": "Guardar",
-    "saving": "Guardando…",
-    "saved": "Guardado",
-    "eSave": "No se pudo guardar. Intenta otra vez.",
-    "needSql": "Primero corre el SQL del Paso 6.8 en Supabase.",
-    "guideTitle": "Configurar Google Cloud",
-    "guideText": "Una sola vez, unos 15 minutos. Solo lo hace el dueño de BrightPro.",
-    "g1t": "Crea el proyecto y activa la facturación",
-    "g1d": "console.cloud.google.com → New project “BrightPro”. Agrega una cuenta de facturación (Google pide tarjeta; incluye un uso gratis cada mes).",
-    "g2t": "Activa Places API (New)",
-    "g2d": "APIs & Services → Library → “Places API (New)” → Enable. Solo esa hace falta.",
-    "g3t": "Crea una llave restringida",
-    "g3d": "APIs & Services → Credentials → Create credentials → API key. Edítala: API restrictions → Restrict key → solo “Places API (New)”.",
-    "g4t": "Pon la llave en Vercel",
-    "g4d": "Vercel → tu proyecto → Settings → Environment Variables: GOOGLE_PLACES_API_KEY = tu llave (Production). Opcional: GOOGLE_PLACES_DAILY_CAP = 300. Luego Redeploy.",
-    "g5t": "Pon un tope de pedidos por día",
-    "g5d": "APIs & Services → Places API (New) → Quotas: baja “Autocomplete requests per day” y “Place details requests per day”. Es el freno duro dentro de Google.",
-    "g6t": "Crea un presupuesto con alertas por correo",
-    "g6d": "Billing → Budgets & alerts → Create budget, ej. $10 al mes, alertas al 50%, 90% y 100%. Google te avisa por correo antes de cobrar más.",
-    "guideNote": "La llave se queda en el servidor — nunca llega al navegador. BrightPro junta cada dirección en una sola sesión de Google y solo pide las partes de la dirección, la opción más barata."
+    "paused": "Las sugerencias de dirección no están disponibles ahora — escribe la dirección."
   }
 }

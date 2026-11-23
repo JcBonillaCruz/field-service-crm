@@ -30,6 +30,5 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     address: parseComponents(j.addressComponents),
     lat: j.location?.latitude ?? null, lng: j.location?.longitude ?? null,
-    warn: take.warn, picks: take.picks, limit: take.limit,
   });
 }

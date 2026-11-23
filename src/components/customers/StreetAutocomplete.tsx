@@ -8,10 +8,9 @@ import { PLACES_MIN_CHARS, PlaceAddress, PlaceSuggestion, PlacesOff, newSessionT
 // Paso 6.8 · Campo "Street" con sugerencias de Google.
 // - Pide sugerencias 300 ms después de dejar de escribir y con 4+ letras (menos llamadas = menos costo).
 // - Un token de sesión por dirección: se cierra al elegir; la siguiente dirección empieza otra sesión.
-// - Si no hay llave, está apagado o se llegó al límite del día, se queda como campo normal (sin avisos molestos).
+// - Si no hay llave o se llegó al límite del día, se queda como campo normal. El cliente nunca ve límites ni costos (6.8b).
 // =====================================================================
 let pageOff: PlacesOff | null = null;   // una vez apagado, no se vuelve a preguntar en esta página
-let warnedToday = false;
 
 export default function StreetAutocomplete({ id, value, onChange, onPick, country, placeholder, className, inputProps, autoFocus }: {
   id?: string; value: string; onChange: (v: string) => void; onPick: (a: PlaceAddress) => void;
@@ -21,7 +20,7 @@ export default function StreetAutocomplete({ id, value, onChange, onPick, countr
   const [list, setList] = useState<PlaceSuggestion[]>([]);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
-  const [note, setNote] = useState<{ text: string; tone: "amber" | "slate" } | null>(null);
+  const [note, setNote] = useState<string | null>(null);
   const session = useRef<string | null>(null);
   const typed = useRef(false);           // solo busca si la persona escribió (no al abrir una dirección guardada)
   const cache = useRef(new Map<string, PlaceSuggestion[]>());
@@ -31,7 +30,7 @@ export default function StreetAutocomplete({ id, value, onChange, onPick, countr
   const stop = (why: PlacesOff) => {
     if (why !== "error") pageOff = why; // si Google no respondió, se intenta otra vez en la siguiente dirección
     setList([]); setOpen(false);
-    if (why === "limit" || why === "cap") setNote({ text: t("paused"), tone: "slate" });
+    if (why === "limit" || why === "cap") setNote(t("paused"));
   };
 
   useEffect(() => {
@@ -62,7 +61,6 @@ export default function StreetAutocomplete({ id, value, onChange, onPick, countr
       body: JSON.stringify({ id: s.id, session: token }) }).then((x) => x.json()).catch(() => ({ off: "error" }));
     if (r.off) { stop(r.off as PlacesOff); return; }
     if (r.address) onPick(r.address as PlaceAddress);
-    if (r.warn && !warnedToday) { warnedToday = true; setNote({ text: t("warn", { used: r.picks, limit: r.limit }), tone: "amber" }); }
   }
 
   function onKey(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -104,7 +102,7 @@ export default function StreetAutocomplete({ id, value, onChange, onPick, countr
           </li>
         </ul>
       )}
-      {note && <p className={`mt-1 text-[12px] ${note.tone === "amber" ? "text-amber-700" : "text-slate-400"}`}>{note.text}</p>}
+      {note && <p className="mt-1 text-[12px] text-slate-400">{note}</p>}
     </div>
   );
 }

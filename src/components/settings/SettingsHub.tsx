@@ -52,7 +52,7 @@ export const SECTIONS: Section[] = [
   ] },
   { title: "Extension and Developer Data", cards: [
     { title: "Tools", icon: ic.module, tone: "bg-[#eef2ff] text-[#4f46e5]", items: [{ label: "QR Code Studio", href: "/dashboard/tools/qr" }] },
-    { title: "Integrations & Marketplace", icon: ic.plug, tone: "bg-[#e9f7f4] text-[#0f766e]", items: [{ label: "Address Autocomplete", href: "/dashboard/settings/address-autocomplete" }, { label: "WhatsApp" }, { label: "SMS Integrations" }, { label: "Accounting" }, { label: "Google Calendar" }, { label: "Marketplace" }] },
+    { title: "Integrations & Marketplace", icon: ic.plug, tone: "bg-[#e9f7f4] text-[#0f766e]", items: [{ label: "WhatsApp" }, { label: "SMS Integrations" }, { label: "Accounting" }, { label: "Google Calendar" }, { label: "Marketplace" }] },
     { title: "Developer Data", icon: ic.code, tone: "bg-[#fff6e8] text-[#ea580c]", items: [{ label: "Incoming Webhooks" }, { label: "Connections" }, { label: "API Usage" }, { label: "Data Management" }, { label: "Web Forms" }] },
   ] },
 ];
