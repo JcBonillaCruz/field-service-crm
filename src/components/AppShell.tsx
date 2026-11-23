@@ -126,148 +126,96 @@ const APP_TITLE: Record<AppId, { label: string; icon: string; color: string }> =
   jobs: { label: "Jobs", icon: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4", color: "#2563eb" },
 };
 
-// Paso 6.3 — Computadora: las apps viven en el menú izquierdo (como Ascora).
-// Cada app es una fila con su ícono a color; al pasar el mouse (o con el teclado) se abre a la derecha
-// un submenú flotante con todo el menú de esa app. Clic en la fila = ir al inicio de esa app.
-// Reemplaza la cuadrícula de apps y el ícono de 9 puntos de la barra de arriba.
+// Paso 6.3 — Computadora: las apps viven en el menú izquierdo (acordeón).
+// Clic en una app = va a su inicio (Finances → Home) y abre su menú de siempre debajo, con sus grupos desplegables.
+// Al tocar otra app, la anterior se cierra y se abre la nueva. La flechita abre/cierra sin cambiar de pantalla.
+// Abajo queda fijo "Settings": los ajustes de toda la app (dueño y manager).
 const APP_ORDER: AppId[] = ["finance", "jobs", "inventory", "qr"];
 const appArt = (id: AppId, size: number) =>
   id === "finance" ? <FinanceArt size={size} /> : id === "inventory" ? <InventoryArt size={size} /> : id === "jobs" ? <JobsArt size={size} /> : <QrArt size={size} />;
-
-// Menú de una app según el rol (los hijos de un grupo también respetan "roles")
-function navFor(app: AppId, role: Role | null): NavItem[] {
-  const allowed = (i: NavItem) => !i.roles || Boolean(role && i.roles.includes(role));
-  return NAV_BY_APP[app].filter(allowed).map((i) => (i.children ? { ...i, children: i.children.filter(allowed) } : i));
-}
-function activeTest(app: AppId, pathname: string) {
-  const NAV = NAV_BY_APP[app];
-  const excludes = new Map(NAV.filter((n) => n.exclude && n.href).map((n) => [n.href as string, n.exclude as string[]]));
-  return (href?: string) => Boolean(href && (href === "/dashboard" ? pathname === "/dashboard"
-    : pathname.startsWith(href) && !(excludes.get(href) ?? []).some((x) => pathname.startsWith(x))));
-}
 // Inicio de cada app (el técnico va directo a lo suyo)
 const appHome = (id: AppId, role: Role | null) =>
   role === "technician" ? (id === "inventory" ? "/dashboard/inventory/van" : "/dashboard/jobs/mine")
     : id === "finance" ? "/dashboard" : id === "jobs" ? "/dashboard/jobs" : id === "inventory" ? "/dashboard/inventory" : "/dashboard/tools/qr";
+const GLOBAL_SETTINGS = "/dashboard/settings";
 
-function SidebarApps({ app, role }: { app: AppId; role: Role | null }) {
+function DesktopNav({ role }: { role: Role | null }) {
   const t = useTranslations("shell");
   const ta = useTranslations("apps");
   const tn = useTranslations("nav");
   const pathname = usePathname() || "";
-  const [fly, setFly] = useState<AppId | null>(null);
-  const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
-  const timer = useRef<ReturnType<typeof setTimeout>>();
-  useEffect(() => setFly(null), [pathname]);
-  useEffect(() => {
-    if (!fly) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFly(null); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [fly]);
-  useEffect(() => () => clearTimeout(timer.current), []);
-
+  const current = appOf(pathname);
+  const [expanded, setExpanded] = useState<AppId | null>(current);
+  useEffect(() => setExpanded(appOf(pathname)), [pathname]);
   // El técnico solo ve Jobs e Inventory
   const apps = APP_ORDER.filter((id) => role !== "technician" || id === "inventory" || id === "jobs");
-  const openFor = (id: AppId, el: HTMLElement) => {
-    clearTimeout(timer.current);
-    const r = el.getBoundingClientRect();
-    const aside = el.closest("aside")?.getBoundingClientRect();
-    // Si la fila está muy abajo, el submenú sube para que quepa en la pantalla
-    const top = Math.max(8, Math.min(r.top - 8, window.innerHeight - 440));
-    setPos({ top, left: (aside?.right ?? r.right) + 8 });
-    setFly(id);
-  };
-  const closeSoon = () => { clearTimeout(timer.current); timer.current = setTimeout(() => setFly(null), 160); };
-  const keep = () => clearTimeout(timer.current);
-
-  const flyItems = fly ? navFor(fly, role) : [];
-  const isActive = fly ? activeTest(fly, pathname) : () => false;
-  const linkCls = (on: boolean) => `group/fl flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] transition-colors duration-100 ${
-    on ? "bg-[#dcf2ec] font-semibold text-[#0b5e57]" : "text-slate-700 hover:bg-[#eef7f4] hover:text-[#0b1f3a]"}`;
-  const ico = (d: string) => (
-    <svg viewBox="0 0 24 24" className="h-[17px] w-[17px] shrink-0 transition-transform duration-150 group-hover/fl:scale-110" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
-  );
+  const showSettings = Boolean(role && SETTINGS.roles?.includes(role));
+  const settingsOn = pathname.startsWith(GLOBAL_SETTINGS);
 
   return (
-    <div className="mb-1">
-      <p className="px-2.5 pb-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-slate-400">{t("apps")}</p>
-      <ul className="space-y-0.5">
-        {apps.map((id) => {
-          const on = id === app;
-          const flying = fly === id;
-          return (
-            <li key={id}>
-              <Link prefetch={false} href={appHome(id, role)} aria-haspopup="menu" aria-expanded={flying}
-                onMouseEnter={(e) => openFor(id, e.currentTarget)} onMouseLeave={closeSoon}
-                onFocus={(e) => openFor(id, e.currentTarget)}
-                className={`group/app flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] transition-colors duration-150 ${
-                  on ? "bg-[#dcf2ec] font-semibold text-[#0b5e57]" : flying ? "bg-[#eef7f4] text-[#0b1f3a]" : "text-slate-700 hover:bg-[#eef7f4] hover:text-[#0b1f3a]"}`}>
-                <span className="-my-0.5 flex shrink-0 transition-transform duration-200 group-hover/app:-rotate-3 group-hover/app:scale-110">{appArt(id, 26)}</span>
-                <span className="min-w-0 flex-1 truncate">{ta(`${id}.label`)}</span>
-                <svg viewBox="0 0 20 20" className={`h-3.5 w-3.5 shrink-0 transition-all duration-150 ${flying ? "translate-x-0.5 text-[#0f766e]" : "text-slate-300 group-hover/app:text-slate-500"}`} fill="currentColor" aria-hidden="true">
-                  <path d="M7.3 5.3a1 1 0 0 1 1.4 0l4 4a1 1 0 0 1 0 1.4l-4 4a1 1 0 1 1-1.4-1.4L10.6 10 7.3 6.7a1 1 0 0 1 0-1.4z" />
-                </svg>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-      {fly && typeof document !== "undefined" && createPortal(
-        <div role="menu" onMouseEnter={keep} onMouseLeave={closeSoon} style={{ top: pos.top, left: pos.left, maxHeight: `calc(100vh - ${pos.top + 12}px)` }}
-          className="fixed z-[95] flex w-64 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_20px_50px_rgba(15,40,60,0.16)] animate-[bp-fly-in_0.14s_ease-out]">
-          <Link prefetch={false} href={appHome(fly, role)} onClick={() => setFly(null)}
-            className="group/hd flex items-center gap-3 border-b border-slate-100 px-4 py-3 transition-colors hover:bg-[#f6fbf9]">
-            <span className="flex shrink-0 transition-transform duration-200 group-hover/hd:scale-105">{appArt(fly, 34)}</span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[14px] font-semibold text-[#0b1f3a]">{ta(`${fly}.label`)}</span>
-              <span className="block text-[11.5px] leading-snug text-slate-500">{ta(`${fly}.hint`)}</span>
-            </span>
-          </Link>
-          <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">
-            {flyItems.map((item) => item.children ? (
-              item.children.length > 0 && (
-                <li key={item.label} className="pt-1.5">
-                  <p className="flex items-center gap-2 px-2.5 pb-0.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-slate-400">{tn(navKey(item.label))}</p>
-                  <ul className="space-y-0.5">
-                    {item.children.filter((c) => c.href).map((c) => (
-                      <li key={c.label}>
-                        <Link prefetch={false} href={c.href as string} onClick={() => setFly(null)} className={`${linkCls(isActive(c.href))} pl-[2.2rem]`}>
-                          <span className="min-w-0 flex-1 truncate">{tn(navKey(c.label))}</span>
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              )
-            ) : item.href ? (
-              <li key={`${item.label}-${item.href}`}>
-                <Link prefetch={false} href={item.href} onClick={() => setFly(null)} className={linkCls(isActive(item.href))}>
-                  {item.art ? <span className="-my-1 flex shrink-0"><DashboardArt size={20} /></span> : ico(item.icon)}
-                  <span className="min-w-0 flex-1 truncate">{tn(navKey(item.label))}</span>
-                </Link>
+    <>
+      <nav className="flex-1 overflow-y-auto px-2.5 py-3">
+        <p className="px-2.5 pb-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-slate-400">{t("apps")}</p>
+        <ul className="space-y-0.5">
+          {apps.map((id) => {
+            const open = expanded === id;
+            const here = current === id;
+            return (
+              <li key={id}>
+                <div className={`group/app relative flex items-center rounded-lg transition-colors duration-150 ${
+                  here ? "bg-[#e6f5f0]" : "hover:bg-[#eef7f4]"}`}>
+                  <Link prefetch={false} href={appHome(id, role)} onClick={() => setExpanded(id)}
+                    className={`flex min-w-0 flex-1 items-center gap-2.5 py-1.5 pl-2 pr-1 text-[13.5px] ${here ? "font-semibold text-[#0b5e57]" : "text-slate-700 group-hover/app:text-[#0b1f3a]"}`}>
+                    <span className="-my-0.5 flex shrink-0 transition-transform duration-200 group-hover/app:-rotate-3 group-hover/app:scale-110">{appArt(id, 26)}</span>
+                    <span className="min-w-0 flex-1 truncate">{ta(`${id}.label`)}</span>
+                  </Link>
+                  <button type="button" onClick={() => setExpanded(open ? null : id)} aria-expanded={open} aria-label={ta(`${id}.label`)}
+                    className="mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-white hover:text-[#0f766e]">
+                    <svg viewBox="0 0 20 20" className={`h-3.5 w-3.5 transition-transform duration-200 ${open ? "text-[#0f766e]" : "-rotate-90"}`} fill="currentColor" aria-hidden="true">
+                      <path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" />
+                    </svg>
+                  </button>
+                </div>
+                {open && (
+                  <div className="mb-2 mt-1 animate-[bp-fade_0.2s_ease-out]">
+                    <NavList role={role} forApp={id} embedded />
+                  </div>
+                )}
               </li>
-            ) : null)}
-          </ul>
-        </div>,
-        document.body,
+            );
+          })}
+        </ul>
+      </nav>
+      {/* Ajustes de toda la app: siempre a la vista, abajo del menú */}
+      {showSettings && (
+        <div className="border-t border-[#dfe7ee] px-2.5 py-2.5">
+          <Link prefetch={false} href={GLOBAL_SETTINGS}
+            className={`group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] transition-colors ${settingsOn ? "bg-[#dcf2ec] font-semibold text-[#0b5e57]" : "text-slate-700 hover:bg-[#eef7f4] hover:text-[#0b1f3a]"}`}>
+            <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] shrink-0 transition-transform duration-500 group-hover:rotate-90" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.8 1.2V21a2 2 0 1 1-4 0a1.7 1.7 0 0 0-2.8-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.8H3a2 2 0 1 1 0-4a1.7 1.7 0 0 0 1.2-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.8-1.2V3a2 2 0 1 1 4 0a1.7 1.7 0 0 0 2.8 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-1.2 2.8H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+            </svg>
+            <span className="min-w-0 flex-1 truncate">{tn("settings")}</span>
+          </Link>
+        </div>
       )}
-      <div className="mx-2 mb-2 mt-2.5 border-t border-[#dfe7ee]" />
-    </div>
+    </>
   );
 }
 
-function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => void }) {
+// embedded (paso 6.3): el menú de una app dentro del acordeón de la computadora (sin encabezado)
+function NavList({ role, onNavigate, forApp, embedded = false }: { role: Role | null; onNavigate?: () => void; forApp?: AppId; embedded?: boolean }) {
   const t = useTranslations("shell");
   const tn = useTranslations("nav");
   const ta = useTranslations("navAdd");
   const tc = useTranslations("common");
   const pathname = usePathname();
-  const app = appOf(pathname);
+  const app = forApp ?? appOf(pathname);
   const NAV = NAV_BY_APP[app];
   const allowed = (i: NavItem) => !i.roles || Boolean(role && i.roles.includes(role));
   // Los hijos de un grupo también respetan "roles" (Payroll y Reports de Finances: dueño y manager)
-  const items = NAV.filter(allowed).map((i) => (i.children ? { ...i, children: i.children.filter(allowed) } : i));
+  // En la computadora, "Settings" de toda la app va fijo abajo del menú (no repetido dentro de Finances / QR)
+  const items = NAV.filter(allowed).filter((i) => !(embedded && i.href === GLOBAL_SETTINGS))
+    .map((i) => (i.children ? { ...i, children: i.children.filter(allowed) } : i));
   const excludes = new Map(NAV.filter((n) => n.exclude && n.href).map((n) => [n.href as string, n.exclude as string[]]));
   const isActive = (href?: string) => Boolean(href && (href === "/dashboard" ? pathname === "/dashboard"
     : pathname.startsWith(href) && !(excludes.get(href) ?? []).some((x) => pathname.startsWith(x))));
@@ -316,7 +264,7 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
       </>
     );
     const base = `flex items-center gap-2.5 rounded-lg transition-all duration-150 ${size} ${child ? (mobile ? "pl-[3.6rem] pr-2.5" : "pl-[3.35rem] pr-2.5") : "px-2.5"} ${showAdd ? "pr-10" : ""}`;
-    const addText = ta(navKey(item.addLabel ?? item.label));
+    const addText = item.addHref ? ta(navKey(item.addLabel ?? item.label)) : "";
     return (
       <li key={`${item.label}-${item.href ?? item.roles?.join("")}`} className="group relative">
         {item.href ? (
@@ -341,21 +289,47 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
     );
   }
 
+  const list = (
+      <ul className="space-y-0.5"
+        onMouseEnter={() => clearTimeout(leaveTimer.current)}
+        // Si abriste un grupo y sacas el mouse sin elegir nada, se vuelve a cerrar
+        onMouseLeave={() => { leaveTimer.current = setTimeout(() => setOpen(insideGroups()), 700); }}>
+        {items.map((item) => {
+          if (!item.children) return entry(item);
+          const isOpen = Boolean(open[item.label]);
+          const inside = item.children.some((c) => isActive(c.href));
+          return (
+            <li key={item.label}>
+              <button type="button" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [item.label]: !isOpen }))}
+                className={`group flex w-full items-center gap-2.5 rounded-lg px-2.5 text-left ${size} transition-colors hover:bg-[#eef7f4] ${inside ? "font-semibold text-[#0b5e57]" : "text-slate-700 hover:text-[#0b1f3a]"}`}>
+                {caret(isOpen)}
+                {icon(item.icon)}
+                <span className="min-w-0 flex-1 truncate">{tn(navKey(item.label))}</span>
+              </button>
+              {isOpen && (
+                <ul className="mt-0.5 space-y-0.5 animate-[bp-fade_0.2s_ease-out]">
+                  {item.children.map((c) => entry(c, true))}
+                </ul>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+  );
+  if (embedded) return list;
+
   return (
-    <nav className="flex-1 overflow-y-auto px-2.5 py-3"
-      onMouseEnter={() => clearTimeout(leaveTimer.current)}
-      // Si abriste un grupo y sacas el mouse del menú sin elegir nada, se vuelve a cerrar
-      onMouseLeave={() => { leaveTimer.current = setTimeout(() => setOpen(insideGroups()), 700); }}>
+    <nav className="flex-1 overflow-y-auto px-2.5 py-3">
       {/* Ícono de la app actual (sencillo, sin borde ni sombreado).
           Celular: al lado, "Apps" abre la pantalla completa para cambiar de app.
-          Computadora (paso 6.3): la lista de apps con su submenú flotante. */}
-      <div className={mobile ? "mb-2 flex items-center gap-2 px-2" : ""}>
+          Computadora (paso 6.3): DesktopNav (acordeón de apps). */}
+      <div className="mb-2 flex items-center gap-2 px-2">
         {mobile ? (
           <span title={tn(navKey(APP_TITLE[app].label))} aria-label={tn(navKey(APP_TITLE[app].label))} className="flex">
             {app === "finance" ? <FinanceArt size={40} /> : app === "inventory" ? <InventoryArt size={40} /> : app === "jobs" ? <JobsArt size={40} /> : <QrArt size={40} />}
           </span>
         ) : (
-          <SidebarApps app={app} role={role} />
+          <span className="flex">{appArt(app, 34)}</span>
         )}
         {mobile && (
           <button type="button" onClick={() => setAppsOpen(true)}
@@ -385,28 +359,7 @@ function NavList({ role, onNavigate }: { role: Role | null; onNavigate?: () => v
         </div>,
         document.body,
       )}
-      <ul className="space-y-0.5">
-        {items.map((item) => {
-          if (!item.children) return entry(item);
-          const isOpen = Boolean(open[item.label]);
-          const inside = item.children.some((c) => isActive(c.href));
-          return (
-            <li key={item.label}>
-              <button type="button" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [item.label]: !isOpen }))}
-                className={`group flex w-full items-center gap-2.5 rounded-lg px-2.5 text-left ${size} transition-colors hover:bg-[#eef7f4] ${inside ? "font-semibold text-[#0b5e57]" : "text-slate-700 hover:text-[#0b1f3a]"}`}>
-                {caret(isOpen)}
-                {icon(item.icon)}
-                <span className="min-w-0 flex-1 truncate">{tn(navKey(item.label))}</span>
-              </button>
-              {isOpen && (
-                <ul className="mt-0.5 space-y-0.5 animate-[bp-fade_0.2s_ease-out]">
-                  {item.children.map((c) => entry(c, true))}
-                </ul>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+      {list}
       {/* Celular: opción discreta para instalar la app (solo si Chrome lo permite y aún no está instalada) */}
       {mobile && installApp.can && (
         <button type="button" onClick={installApp.install}
@@ -475,7 +428,7 @@ export default function AppShell({
             <Image src="/logo-brightpro.png" alt="BrightPro" width={140} height={38} className="h-8 w-auto" priority />
           </Link>
         </div>
-        <NavList role={role} />
+        <DesktopNav role={role} />
       </aside>
 
       {/* Menú deslizable en celular */}

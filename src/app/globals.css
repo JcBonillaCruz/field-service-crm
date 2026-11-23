@@ -55,7 +55,6 @@
 @keyframes bp-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes bp-bar-in { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes bp-shimmer { 0% { transform: translateX(-120%); } 55%, 100% { transform: translateX(260%); } }
-@keyframes bp-fly-in { 0% { opacity: 0; transform: translateX(-6px) scale(.98); } 100% { opacity: 1; transform: none; } }
 @keyframes bp-pop-in { 0% { opacity: 0; transform: translateY(8px) scale(.96); } 100% { opacity: 1; transform: none; } }
 @keyframes bp-stick { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 .bp-shimmer { position: relative; overflow: hidden; }
