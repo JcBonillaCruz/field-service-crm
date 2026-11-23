@@ -21,7 +21,7 @@ import ExportModal from "@/components/customers/ExportModal";
 import BottomSheet from "@/components/customers/BottomSheet";
 import MobileSortSheet from "@/components/customers/MobileSortSheet";
 import PrefsPanel from "@/components/sales/PrefsPanel";
-import { Toast } from "@/components/sales/SalesBits";
+import { Toast, quoteInk, useQuoteColor } from "@/components/sales/SalesBits";
 import { sheetItem } from "@/components/ui/sheet";
 
 const EXPORT_NAME: Record<SalesModule, "Quotes" | "Invoices" | "Subscriptions"> = { quotes: "Quotes", invoices: "Invoices", subscriptions: "Subscriptions" };
@@ -424,6 +424,7 @@ export default function SalesWorkspace({ module, rows, customViews, companyId, p
 
 function Cell({ vx, sx, module, r, k, align, base }: { vx: ViewTx; sx: SalesTx; module: SalesModule; r: Row; k: string; align?: "right"; base: string }) {
   const td = `truncate border-b border-slate-100 px-3 py-3 ${align === "right" ? "text-right tabular-nums" : ""}`;
+  const quoteColor = useQuoteColor();
   if (k === "name") {
     return (
       <td className={td}>
@@ -433,7 +434,8 @@ function Cell({ vx, sx, module, r, k, align, base }: { vx: ViewTx; sx: SalesTx; 
   }
   if (k === "status") {
     const s = statusOf(module, r);
-    return <td className={`${td} text-[12px] font-semibold uppercase tracking-wide ${TONE_TEXT[s.tone]}`}>{sx.status(s)}</td>;
+    const c = quoteColor(s);
+    return <td className={`${td} text-[12px] font-semibold uppercase tracking-wide ${c ? "" : TONE_TEXT[s.tone]}`} style={c ? { color: quoteInk(c, 0.85) } : undefined}>{sx.status(s)}</td>;
   }
   const text = vx.display(r, k);
   return <td className={`${td} ${k === "amount" || k === "balance" ? "font-medium text-[#0b1f3a]" : k === "customer" ? "text-[#0b1f3a]" : "text-slate-600"}`} title={text}>{text || <span className="text-slate-300">—</span>}</td>;
@@ -445,6 +447,7 @@ function CompactRow({ vx, sx, module, r, active, base, checked, onCheck }: {
   const ref = useRef<HTMLLIElement>(null);
   useEffect(() => { if (active) ref.current?.scrollIntoView({ block: "nearest" }); }, [active]);
   const s = statusOf(module, r);
+  const quoteColor = useQuoteColor();
   const isSub = module === "subscriptions";
   const d = r as SalesDoc; const sub = r as Subscription;
   return (
@@ -456,7 +459,7 @@ function CompactRow({ vx, sx, module, r, active, base, checked, onCheck }: {
           <span className="mt-0.5 flex items-center gap-1.5 truncate text-[13px] text-slate-500">
             {d.number}<span className="h-1 w-1 rounded-full bg-slate-300" />{isSub ? sx.freq(sub.bill_every, sub.bill_unit) : sx.fmtD(d.doc_date)}
           </span>
-          <span className={`mt-1 block text-[11px] font-semibold uppercase tracking-wide ${TONE_TEXT[s.tone]}`}>{sx.status(s)}</span>
+          <span className={`mt-1 block text-[11px] font-semibold uppercase tracking-wide ${quoteColor(s) ? "" : TONE_TEXT[s.tone]}`} style={quoteColor(s) ? { color: quoteInk(quoteColor(s)!, 0.85) } : undefined}>{sx.status(s)}</span>
         </span>
         <span className="shrink-0 text-right">
           <span className="block font-medium tabular-nums text-[#0b1f3a]">{sx.money(d.total)}</span>

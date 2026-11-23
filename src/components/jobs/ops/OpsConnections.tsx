@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { TeamMember, receivesJobs } from "@/lib/jobs";
+import { useGroupTones } from "@/components/StatusColors";
 import { OpsGroup, OpsJob } from "@/lib/operations";
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { StatusArt, TechDot } from "@/components/jobs/EventBar";
@@ -403,6 +404,7 @@ export default function OpsConnections({ companyId, jobs: rawJobs, groupOf, team
 function ShowPicker({ show, counts, onToggle, onAll }: { show: Show[]; counts: Map<string, number>; onToggle: (v: Show) => void; onAll: () => void }) {
   const T = useTranslations("opsConn");
   const ox = useOpsTx();
+  const groupTone = useGroupTones();
   const all = show.length === SHOW.length;
   const picked = SHOW.filter((x) => show.includes(x.v)).map((x) => ({ ...x, label: ox.groupLabel(x.v as OpsGroup) }));
   const label = all ? T("allJobs") : picked.length <= 2 ? picked.map((x) => x.label).join(" · ") : `${picked[0].label} +${picked.length - 1}`;
@@ -416,7 +418,7 @@ function ShowPicker({ show, counts, onToggle, onAll }: { show: Show[]; counts: M
     <Popover className="relative">
       <PopoverButton className="flex h-9 min-w-[13rem] items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-left text-[13.5px] transition-colors hover:border-[#14a39a] focus:outline-none data-[open]:border-[#0f766e] data-[open]:ring-4 data-[open]:ring-[#14a39a]/15">
         <span className="text-slate-400">{T("show")}</span>
-        <span className="flex shrink-0 -space-x-0.5">{picked.slice(0, 4).map((x) => <span key={x.v} className={`h-2.5 w-2.5 rounded-full ring-2 ring-white ${x.dot}`} />)}</span>
+        <span className="flex shrink-0 -space-x-0.5">{picked.slice(0, 4).map((x) => <span key={x.v} className="h-2.5 w-2.5 rounded-full ring-2 ring-white" style={{ background: groupTone[x.v as OpsGroup] }} />)}</span>
         <span className="min-w-0 flex-1 truncate font-semibold text-[#0b1f3a]">{label}</span>
         <span className="rounded-full bg-slate-100 px-1.5 text-[11.5px] font-semibold text-slate-500">{total}</span>
         <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate-400" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>
@@ -431,7 +433,7 @@ function ShowPicker({ show, counts, onToggle, onAll }: { show: Show[]; counts: M
           const on = show.includes(x.v);
           return (
             <button key={x.v} type="button" onClick={() => onToggle(x.v)} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] text-slate-700 hover:bg-[#eef4ff]">
-              {box(on)}<span className={`h-2 w-2 shrink-0 rounded-full ${x.dot}`} /><span className="flex-1">{ox.groupLabel(x.v as OpsGroup)}</span>
+              {box(on)}<span className="h-2 w-2 shrink-0 rounded-full" style={{ background: groupTone[x.v as OpsGroup] }} /><span className="flex-1">{ox.groupLabel(x.v as OpsGroup)}</span>
               <span className="text-[12px] tabular-nums text-slate-400">{counts.get(x.v) ?? 0}</span>
             </button>
           );

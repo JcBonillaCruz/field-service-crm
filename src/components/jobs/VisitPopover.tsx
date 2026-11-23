@@ -6,7 +6,9 @@ import Link from "next/link";
 import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 import { StatusArt } from "@/components/jobs/EventBar";
-import { CalVisit, PRIORITIES, STATUS_META, addMinutes } from "@/lib/jobs";
+import { CalVisit, addMinutes } from "@/lib/jobs";
+import { JobStatusBadge } from "@/components/StatusColors";
+import { visitColorKey } from "@/lib/status-colors";
 
 import { useTranslations } from "next-intl";
 import { useJobsTx } from "@/i18n/useJobsTx";
@@ -38,7 +40,6 @@ export default function VisitPopover({ v, rect, pinned, onClose, onEnter, onLeav
   const top = mobile ? undefined : Math.min(Math.max(12, rect.top - 6), vh - 300);
   const start = new Date(v.starts_at), end = new Date(v.ends_at);
   const pr = jt.priorities.find((p) => p.value === v.priority) ?? jt.priorities[1];
-  const st = STATUS_META[v.job_status];
 
   const fmtAt = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString(jt.tag, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "—");
   const completedCard = (
@@ -93,7 +94,7 @@ export default function VisitPopover({ v, rect, pinned, onClose, onEnter, onLeav
           <p className="text-[12.5px] text-slate-500">{fmtDayShort(start)} · {fmtRange(start, end)}</p>
           {v.arrival_window_min > 0 && <p className="text-[12px] text-slate-400">{t("arrival", { from: fmtTime(start), to: fmtTime(addMinutes(start, v.arrival_window_min)) })}</p>}
         </div>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-semibold ring-1 ${st.badge}`}>{jt.jobStatus(v.job_status)}</span>
+        <JobStatusBadge s={v.job_status === "cancelled" ? "cancelled" : visitColorKey(v)} size="sm" />
         <Link prefetch={false} href={`/dashboard/jobs/${v.job_id}/edit`} aria-label={t("editJob")} title={t("editJob")}
           className="group/ed flex h-7 shrink-0 items-center gap-1 rounded-lg px-2 text-[12.5px] font-semibold text-[#0f766e] transition-colors hover:bg-[#e9f7f4]">
           <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 transition-transform duration-200 group-hover/ed:-rotate-12 group-hover/ed:scale-110" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" /></svg>

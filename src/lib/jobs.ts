@@ -203,7 +203,7 @@ export function tint(hex: string, alpha: number) {
 }
 export const leadOf = (techs: TechChip[]) => techs.find((t) => t.is_lead) ?? techs[0] ?? null;
 export const barColor = (v: { techs: TechChip[]; color?: string }) => v.color ?? leadOf(v.techs)?.color ?? UNASSIGNED_COLOR;
-export type ColorBy = "tech" | "type" | "priority";
+export type ColorBy = "status" | "tech" | "type" | "priority"; // Paso 6.4: "status" = colores por estado (lo de fábrica)
 
 // Mensajes claros para los errores de la base de datos
 export function jobError(e: { message?: string; code?: string; hint?: string } | null | undefined): string {

@@ -113,7 +113,7 @@ export default function DocPaper({ doc, lines, prefs, companyName, status, varia
 
   return (
     <div className={`bp-paper relative mx-auto w-full ${tp.receipt ? "max-w-[460px]" : compact ? "max-w-[740px]" : "max-w-[820px]"} bg-white ${size} ${fontCls} leading-relaxed text-slate-700 shadow-[0_2px_16px_rgba(15,40,60,0.08)] print:max-w-none print:shadow-none ${tp.border ? "border-2 border-slate-300" : "border border-slate-200"}`}>
-      {showRibbon && <Ribbon label={docRibbon(lang, status!)} tone={status!.tone} />}
+      {showRibbon && <Ribbon label={docRibbon(lang, status!)} tone={status!.tone} status={status} />}
       <div className={`${top} ${padY} ${signed ? "flex min-h-[1040px] flex-col" : ""}`}>
         {header}
         {tp.header === "split" && <div className={`${pad} mt-6`}><div className="h-1 rounded-full" style={{ background: A }} /></div>}

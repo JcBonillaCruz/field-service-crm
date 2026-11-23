@@ -1279,13 +1279,18 @@
     "cb": {
       "tech": "Technician",
       "type": "Job type",
-      "priority": "Priority"
+      "priority": "Priority",
+      "status": "Status"
     },
     "forX": "For {name}",
     "createJob": "Create job",
     "prevMonth": "Previous month",
     "nextMonth": "Next month",
-    "goToday": "Go to today"
+    "goToday": "Go to today",
+    "legend": "Legend",
+    "legendOnly": "Show only {name}",
+    "legendShowAll": "Show all",
+    "editColors": "Edit colors"
   },
   "jobProfit": {
     "title": "Job profit",
@@ -7168,7 +7173,8 @@
       "WhatsApp": "WhatsApp",
       "WorkflowActions": "Workflow Actions",
       "WorkflowLogs": "Workflow Logs",
-      "WorkflowRules": "Workflow Rules"
+      "WorkflowRules": "Workflow Rules",
+      "StatusColors": "Status Colors"
     }
   },
   "branding": {
@@ -7466,5 +7472,52 @@
   "printBar": {
     "print": "Print / Save as PDF",
     "close": "Close"
+  },
+  "statusColors": {
+    "all": "All settings",
+    "title": "Status colors",
+    "subtitle": "One soft color per status, used in the Schedule, Operations, job details and quotes.",
+    "jobs": "Jobs",
+    "jobsText": "Calendar bars, the Schedule legend, Operations and the job badges.",
+    "quotes": "Quotes",
+    "quotesText": "Quote lists, badges and the ribbon on the quote.",
+    "pickFor": "Color for {name}",
+    "custom": "Custom color",
+    "resetOne": "Back to the original color",
+    "resetAll": "Restore original colors",
+    "saved": "Colors saved",
+    "eSave": "Couldn't save the colors. Try again.",
+    "needSql": "Run paso-6.4-status-colors.sql in Supabase first.",
+    "preview": "Preview",
+    "legend": "Legend",
+    "previewNote": "Completed jobs stay gray on the calendar with the check in this color, so the active work stands out.",
+    "jh": {
+      "unscheduled": "No date yet (waiting in the tray)",
+      "scheduled": "Has a date and time",
+      "on_my_way": "The collaborator is driving there",
+      "in_progress": "Working on site now",
+      "paused": "Work paused for a moment",
+      "on_hold": "Left for follow-up (part, approval…)",
+      "completed": "Work finished",
+      "cancelled": "Job cancelled"
+    },
+    "q": {
+      "draft": "Draft",
+      "sent": "Sent",
+      "viewed": "Customer viewed",
+      "accepted": "Accepted",
+      "declined": "Declined",
+      "expired": "Expired",
+      "invoiced": "Invoiced"
+    },
+    "qh": {
+      "draft": "Not sent yet",
+      "sent": "Sent to the customer",
+      "viewed": "The customer opened it",
+      "accepted": "The customer said yes",
+      "declined": "The customer said no",
+      "expired": "Past its expiry date",
+      "invoiced": "Turned into an invoice"
+    }
   }
 }

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { askConfirm, confirmDelete } from "@/lib/confirm";
 import { STATUS_META, JobStatus, addressLine, durationLabel } from "@/lib/jobs";
+import { JobStatusBadge } from "@/components/StatusColors";
 import { HORIZON_DAYS, Plan, PlanJob } from "@/lib/maintenance";
 import { card, ghostBtn, tealBtn } from "@/components/finances/FinBits";
 import PlanArt from "@/components/jobs/plans/PlanArt";
@@ -55,7 +56,7 @@ export default function PlanDetail({ plan: p, jobs, techNames, justSaved }: { pl
 
   const row = (label: string, value: React.ReactNode) => (<><dt className="text-slate-500">{label}</dt><dd className="min-w-0 text-slate-800">{value}</dd></>);
   const visit = (j: PlanJob) => {
-    const s = j.cancelled ? STATUS_META.cancelled : STATUS_META[j.status as JobStatus] ?? STATUS_META.scheduled;
+    const sk: JobStatus = j.cancelled ? "cancelled" : STATUS_META[j.status as JobStatus] ? (j.status as JobStatus) : "scheduled";
     return (
       <li key={j.job_id}>
         <Link prefetch={false} href={`/dashboard/jobs/${j.job_id}`} className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-[#f6fbfa]">
@@ -63,7 +64,7 @@ export default function PlanDetail({ plan: p, jobs, techNames, justSaved }: { pl
             <span className="block truncate text-[14px] font-medium text-[#0b1f3a]">{j.starts_at ? whenText(j.starts_at) : t("notScheduled")}</span>
             <span className="block truncate text-[12px] text-slate-400">#{j.number} · {j.techs.length ? j.techs.join(", ") : t("unassigned")}</span>
           </span>
-          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${s.badge}`}>{j.cancelled ? jt.jobStatus("cancelled") : jt.jobStatus(STATUS_META[j.status as JobStatus] ? j.status : "scheduled")}</span>
+          <JobStatusBadge s={sk} size="sm" />
           <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7.5 4.5 13 10l-5.5 5.5" /></svg>
         </Link>
       </li>

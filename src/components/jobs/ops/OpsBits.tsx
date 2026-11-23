@@ -6,6 +6,7 @@ import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import { VisitStatus, addressLine } from "@/lib/jobs";
 import { OPS_GROUPS, OpsGroup, OpsJob, progressOf } from "@/lib/operations";
 import { AfterHoursMoon, StatusArt, TechDots } from "@/components/jobs/EventBar";
+import { useGroupTones } from "@/components/StatusColors";
 
 import { useTranslations } from "next-intl";
 import { useOpsTx } from "@/i18n/useOpsTx";
@@ -76,6 +77,7 @@ export function OpsCard({ job, group, now, innerRef, onHover, dim = false, menu,
   innerRef?: (el: HTMLDivElement | null) => void; onHover?: (on: boolean) => void; dim?: boolean;
   menu?: CardMenu; drag?: React.HTMLAttributes<HTMLDivElement> & { draggable?: boolean }; dragging?: boolean;
 }) {
+  const groupTone = useGroupTones(); // Paso 6.4: color del grupo = color del estado
   const ox = useOpsTx();
   const jt = useJobsTx();
   const router = useRouter();
@@ -126,7 +128,7 @@ export function OpsCard({ job, group, now, innerRef, onHover, dim = false, menu,
           : tint
             // Conexiones (tarjeta de color): anillo naranja fuerte sobre fondo blanco para que se lea bien
             ? <ProgressRing pct={pct} size={tiny ? 34 : 38} stroke={3.5} color={delay ? "#e11d48" : "#f97316"} track="#ffffff" fill="#0b1f3a" text="#ffffff" />
-            : <ProgressRing pct={pct} size={tiny ? 22 : 28} stroke={3} color={GROUP_TONE[group]} />}
+            : <ProgressRing pct={pct} size={tiny ? 22 : 28} stroke={3} color={groupTone[group]} />}
       </div>
       <div className={`${tiny ? "mt-0.5" : "mt-1"} flex items-center gap-1.5`}>
         <span className={`flex ${gray ? "opacity-60 grayscale" : ""}`}><TechDots techs={job.techs} size={tiny ? 15 : 18} max={3} /></span>

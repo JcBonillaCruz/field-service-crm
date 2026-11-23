@@ -20,6 +20,8 @@ import MonthGrid from "@/components/jobs/MonthGrid";
 import VisitPopover, { OfficeAction } from "@/components/jobs/VisitPopover";
 import JobTray from "@/components/jobs/JobTray";
 import { TechDot } from "@/components/jobs/EventBar";
+import { useStatusColors } from "@/components/StatusColors";
+import { JobColorKey, StatusPalette, visitColorKey } from "@/lib/status-colors";
 import { Check, Chevron, optionClass, panelClass } from "@/components/ui/SearchSelect";
 
 import { useTranslations } from "next-intl";
@@ -37,9 +39,10 @@ function useViews() {
   const t = useTranslations("sched");
   return VIEWS.map((v) => ({ ...v, label: t(`v.${v.id}` as never) }));
 }
-const COLOR_KEY = "bp-schedule-color";
+const COLOR_KEY = "bp-schedule-color-v2"; // Paso 6.4: llave nueva para que todos arranquen con "Status"
 const TRAY_KEY = "bp-schedule-tray";
 const UNASSIGNED = "__none__";
+type StatusF = "all" | JobStatus | "paused"; // Paso 6.4: "paused" se puede filtrar desde la leyenda
 
 // Estado de la visita llevado a las pestañas del trabajo
 const asJobStatus = (v: CalVisit): JobStatus =>
@@ -63,7 +66,8 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
   const sp = useSearchParams();
   // Siempre abre en Semana (a menos que el enlace diga otra vista)
   const [view, setView] = useState<CalView>(() => (VIEWS.some((v) => v.id === sp.get("view")) ? (sp.get("view") as CalView) : "week"));
-  const [colorBy, setColorBy] = useState<ColorBy>("tech");
+  const [colorBy, setColorBy] = useState<ColorBy>("status");
+  const palette = useStatusColors();
   const [draft, setDraft] = useState<{ day: Date; startMin: number; endMin: number; techId: string | null; x: number; y: number } | null>(null);
   const [ask, setAsk] = useState<{ v: CalVisit; start: Date } | null>(null);
   const [anchor, setAnchor] = useState<Date>(() => (sp.get("date") ? fromIsoDay(sp.get("date") as string) : dayStart(new Date())));
@@ -71,7 +75,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
   const [tray, setTray] = useState<JobRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [trayOpen, setTrayOpen] = useState(false);
-  const [statusF, setStatusF] = useState<"all" | JobStatus>("all");
+  const [statusF, setStatusF] = useState<StatusF>("all");
   const [techF, setTechF] = useState<string[]>(() => (sp.get("tech") ? [sp.get("tech") as string] : []));
   const [typeF, setTypeF] = useState("");
   const [now, setNow] = useState(() => new Date());
@@ -102,7 +106,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
   useEffect(() => {
     const small = window.innerWidth < 1024;
     const c = localStorage.getItem(COLOR_KEY) as ColorBy | null;
-    if (c === "tech" || c === "type" || c === "priority") setColorBy(c);
+    if (c === "status" || c === "tech" || c === "type" || c === "priority") setColorBy(c);
     setTrayOpen(!small && localStorage.getItem(TRAY_KEY) !== "0");
     const t = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(t);
@@ -160,13 +164,14 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
     return c;
   }, [visits]);
   const colored = useMemo(() => visits.map((v) => ({
-    ...v, color: colorBy === "type" ? v.type_color ?? UNASSIGNED_COLOR
+    ...v, color: colorBy === "status" ? palette.job[visitColorKey(v)]
+      : colorBy === "type" ? v.type_color ?? UNASSIGNED_COLOR
       : colorBy === "priority" ? PRIORITIES.find((p) => p.value === v.priority)?.color ?? UNASSIGNED_COLOR
       : leadOf(v.techs)?.color ?? UNASSIGNED_COLOR,
     after_hours: afterHoursOf(new Date(v.starts_at), new Date(v.ends_at), settings),
-  })), [visits, colorBy, settings]);
+  })), [visits, colorBy, settings, palette]);
   const shown = useMemo(() => colored.filter((v) =>
-    (statusF === "all" || asJobStatus(v) === statusF)
+    (statusF === "all" || (statusF === "paused" ? v.visit_status === "paused" : asJobStatus(v) === statusF))
     && (!typeF || v.job_type_id === typeF)
     && (!techF.length || byRows || techF.some((t) => (t === UNASSIGNED ? v.tech_ids.length === 0 : v.tech_ids.includes(t))))), [colored, statusF, typeF, techF, byRows]);
 
@@ -587,6 +592,11 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
             </div>
           )}
         </div>
+        {/* Paso 6.4: leyenda de colores abajo del calendario (cambia según "Color by") */}
+        {view !== "map" && (
+          <ScheduleLegend colorBy={colorBy} palette={palette} visits={visits} techs={techs} types={types.filter((t) => t.is_active)}
+            statusF={statusF} setStatusF={setStatusF} techF={techF} setTechF={setTechF} typeF={typeF} setTypeF={setTypeF} />
+        )}
       </div>
 
         {/* Columna derecha (computadora): resumen del día y, si está abierta, la bandeja. En celular la bandeja sale encima. */}
@@ -791,7 +801,7 @@ function DaySummary({ day, isToday, data, loading, compact, techF, onTech, onDet
 }
 
 function FiltersMenu({ statusF, setStatusF, counts, team, techF, setTechF, types, typeF, setTypeF, colorBy, setColorBy }: {
-  statusF: "all" | JobStatus; setStatusF: (v: "all" | JobStatus) => void; counts: Map<string, number>;
+  statusF: StatusF; setStatusF: (v: StatusF) => void; counts: Map<string, number>;
   team: TeamMember[]; techF: string[]; setTechF: (v: string[]) => void; types: JobType[]; typeF: string; setTypeF: (v: string) => void;
   colorBy: ColorBy; setColorBy: (v: ColorBy) => void;
 }) {
@@ -857,9 +867,9 @@ function FiltersMenu({ statusF, setStatusF, counts, team, techF, setTechF, types
 
         <p className="mb-2 mt-4 text-[12.5px] font-semibold text-slate-500">{T("colorBy")}</p>
         <div className="flex rounded-lg bg-slate-100 p-0.5">
-          {([["tech", T("cb.tech")], ["type", T("cb.type")], ["priority", T("cb.priority")]] as const).map(([v, l]) => (
+          {([["status", T("cb.status")], ["tech", T("cb.tech")], ["type", T("cb.type")], ["priority", T("cb.priority")]] as const).map(([v, l]) => (
             <button key={v} type="button" onClick={() => setColorBy(v)}
-              className={`flex-1 rounded-md px-2 py-1.5 text-[12.5px] font-semibold transition-all ${colorBy === v ? "bg-white text-[#0f766e] shadow-sm" : "text-slate-500 hover:text-[#0b1f3a]"}`}>{l}</button>
+              className={`flex-1 rounded-md px-1.5 py-1.5 text-[12px] font-semibold transition-all ${colorBy === v ? "bg-white text-[#0f766e] shadow-sm" : "text-slate-500 hover:text-[#0b1f3a]"}`}>{l}</button>
           ))}
         </div>
       </PopoverPanel>
@@ -945,5 +955,66 @@ function DateJump({ label, anchor, days, weekStartsOn, onPick }: { label: string
         )}
       </PopoverPanel>
     </Popover>
+  );
+}
+
+// ---------- Paso 6.4: leyenda de colores ----------
+// Status = un renglón por estado (tocar = filtrar ese estado) · Técnico / Tipo / Prioridad = sus colores
+const LEGEND_STATUSES: JobColorKey[] = ["scheduled", "on_my_way", "in_progress", "paused", "on_hold", "completed", "cancelled"];
+function ScheduleLegend({ colorBy, palette, visits, techs, types, statusF, setStatusF, techF, setTechF, typeF, setTypeF }: {
+  colorBy: ColorBy; palette: StatusPalette; visits: CalVisit[]; techs: TeamMember[]; types: JobType[];
+  statusF: StatusF; setStatusF: (v: StatusF) => void; techF: string[]; setTechF: (v: string[]) => void; typeF: string; setTypeF: (v: string) => void;
+}) {
+  const T = useTranslations("sched");
+  const jt = useJobsTx();
+  const items: { key: string; label: string; color: string; n?: number; on: boolean; done?: boolean; onClick: () => void }[] = useMemo(() => {
+    if (colorBy === "status") {
+      const c = new Map<JobColorKey, number>();
+      visits.forEach((v) => { const k = visitColorKey(v); c.set(k, (c.get(k) ?? 0) + 1); });
+      return LEGEND_STATUSES.map((k) => {
+        const f: StatusF = k === "paused" ? "paused" : (k as JobStatus);
+        return { key: k, label: k === "paused" ? jt.visitStatus("paused") : jt.jobStatus(k), color: palette.job[k], n: c.get(k) ?? 0, on: statusF === f, done: k === "completed" || k === "cancelled",
+          onClick: () => setStatusF(statusF === f ? "all" : f) };
+      });
+    }
+    if (colorBy === "type") return types.map((t) => ({ key: t.id, label: t.name, color: t.color, on: typeF === t.id, onClick: () => setTypeF(typeF === t.id ? "" : t.id) }));
+    if (colorBy === "priority") return jt.priorities.map((p) => ({ key: p.value, label: p.label, color: p.color, on: false, onClick: () => {} }));
+    return [...techs.map((m) => ({ key: m.user_id, label: m.full_name, color: m.color, on: techF.length === 1 && techF[0] === m.user_id,
+      onClick: () => setTechF(techF.length === 1 && techF[0] === m.user_id ? [] : [m.user_id]) })),
+      { key: UNASSIGNED, label: T("unassignedCol"), color: UNASSIGNED_COLOR, on: techF.length === 1 && techF[0] === UNASSIGNED, onClick: () => setTechF(techF.length === 1 && techF[0] === UNASSIGNED ? [] : [UNASSIGNED]) }];
+  }, [colorBy, visits, palette, types, techs, statusF, techF, typeF, jt, T, setStatusF, setTypeF, setTechF]);
+  const clickable = colorBy !== "priority";
+  return (
+    <div className="flex items-center gap-2 border-t border-slate-100 bg-white px-2.5 py-2 lg:px-4">
+      <span className="hidden shrink-0 text-[11.5px] font-semibold uppercase tracking-wide text-slate-400 sm:inline">{T("legend")}</span>
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {items.map((i) => (
+          <button key={i.key} type="button" disabled={!clickable} onClick={i.onClick} aria-pressed={clickable ? i.on : undefined}
+            title={clickable ? (i.on ? T("legendShowAll") : T("legendOnly", { name: i.label })) : i.label}
+            className={`group/l flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border py-1 pl-1.5 pr-2.5 text-[12px] font-semibold transition-all duration-150 ${clickable ? "hover:-translate-y-px hover:shadow-sm" : "cursor-default"} ${i.on ? "text-[#0b1f3a]" : "border-transparent text-slate-600"}`}
+            style={i.on ? { borderColor: i.color, background: `${i.color}1f` } : { background: `${i.color}12` }}>
+            {/* muestra como la barrita del calendario: pastel con su orilla; terminado = gris con palomita */}
+            <span className="relative flex h-4 w-6 items-center justify-center rounded-[5px] border transition-transform duration-150 group-hover/l:scale-110"
+              style={i.done ? { background: "#f1f4f7", borderColor: "#e2e8f0" } : { background: `${i.color}2b`, borderColor: `${i.color}66` }}>
+              {i.done ? (
+                <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke={i.color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d={i.key === "cancelled" ? "M6 6l8 8M14 6l-8 8" : "m5 10.5 3 3 7-7"} /></svg>
+              ) : <span className="h-2 w-2 rounded-full" style={{ background: i.color }} />}
+            </span>
+            {i.label}
+            {i.n !== undefined && <span className="font-normal tabular-nums text-slate-400">{i.n}</span>}
+          </button>
+        ))}
+      </div>
+      {colorBy === "status" && (
+        <Link prefetch={false} href="/dashboard/settings/status-colors" title={T("editColors")}
+          className="group/e flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-[12.5px] font-semibold text-[#0f766e] transition-colors hover:bg-[#e9f7f4]">
+          <svg viewBox="0 0 24 24" className="h-4 w-4 transition-transform duration-300 group-hover/e:rotate-12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.7-.9 1.4-1.8-.3-1 .3-2.2 1.5-2.2H17a4 4 0 0 0 4-4c0-5-4-10-9-10z" />
+            <circle cx="7.5" cy="11" r="1.3" fill="currentColor" stroke="none" /><circle cx="10.5" cy="7" r="1.3" fill="currentColor" stroke="none" /><circle cx="15.5" cy="7.5" r="1.3" fill="currentColor" stroke="none" />
+          </svg>
+          <span className="hidden md:inline">{T("editColors")}</span>
+        </Link>
+      )}
+    </div>
   );
 }

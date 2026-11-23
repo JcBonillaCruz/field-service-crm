@@ -10,12 +10,13 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { askConfirm } from "@/lib/confirm";
 import {
-  JobSettings, JobStatus, Priority, STATUS_META, SiteAddress, TechChip, VisitStatus, addressLine, afterHoursFee, afterHoursOf,
+  JobSettings, JobStatus, Priority, SiteAddress, TechChip, VisitStatus, addressLine, afterHoursFee, afterHoursOf,
   mapsLink,
 } from "@/lib/jobs";
 import { OpsJob, groupOf, progressOf } from "@/lib/operations";
 import { AfterHoursMoon, StatusArt, TechDot } from "@/components/jobs/EventBar";
-import { DelayTag, GROUP_TONE, ProgressRing } from "@/components/jobs/ops/OpsBits";
+import { DelayTag, ProgressRing } from "@/components/jobs/ops/OpsBits";
+import { JobStatusBadge, useGroupTones } from "@/components/StatusColors";
 import { Timeline } from "@/components/catalog/DetailBits";
 import JobChat from "@/components/jobs/JobChat";
 import JobPhases from "@/components/jobs/JobPhases";
@@ -73,6 +74,7 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
 }) {
   const T = useTranslations("jobDetail");
   const jt = useJobsTx();
+  const groupTone = useGroupTones();
   const jobError = useJobError();
   const { usd, dayShort: fmtDayShort, time: fmtTime, businessHours: businessHoursLabel } = jt;
   const when = (iso: string | null) => (iso ? jt.dateTime(new Date(iso)) : null);
@@ -201,7 +203,7 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
             className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition-all hover:-translate-x-0.5 hover:border-[#14a39a] hover:text-[#0f766e]">
             <Icon d="M15 5 8 12l7 7" />
           </Link>
-          {group === "done" && !cancelled ? <StatusArt s="completed" size={58} /> : <ProgressRing pct={cancelled ? 0 : pct} size={58} stroke={5} color={cancelled ? "#94a3b8" : GROUP_TONE[group]} />}
+          {group === "done" && !cancelled ? <StatusArt s="completed" size={58} /> : <ProgressRing pct={cancelled ? 0 : pct} size={58} stroke={5} color={cancelled ? "#94a3b8" : groupTone[group]} />}
           <div className="min-w-0 flex-1">
             <p className="flex flex-wrap items-center gap-2 text-[13px] font-semibold text-slate-400">
               <span>{T("jobNum", { n: j.number })}</span>
@@ -213,7 +215,7 @@ export default function JobDetail({ companyId, data, docs, photoUrls, isOwner, s
             <h1 className="mt-0.5 truncate text-[22px] font-semibold tracking-tight text-[#0b1f3a]">{j.customer_name || j.title || T("job")}</h1>
             {j.title && j.customer_name && <p className="truncate text-[14px] text-slate-500">{j.title}</p>}
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[12.5px] font-semibold ring-1 ${STATUS_META[j.status].badge}`}>{jt.jobStatus(j.status)}</span>
+              <JobStatusBadge s={j.status} />
               {!cancelled && (
                 <button type="button" disabled={srBusy} onClick={openReport} title={T("reportTitle")}
                   className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[12.5px] font-semibold text-[#0f766e] transition-colors hover:border-[#0f766e] disabled:opacity-50">

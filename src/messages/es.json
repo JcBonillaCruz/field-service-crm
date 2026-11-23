@@ -1274,13 +1274,18 @@
     "cb": {
       "tech": "Técnico",
       "type": "Tipo de trabajo",
-      "priority": "Prioridad"
+      "priority": "Prioridad",
+      "status": "Estado"
     },
     "forX": "Para {name}",
     "createJob": "Crear trabajo",
     "prevMonth": "Mes anterior",
     "nextMonth": "Mes siguiente",
-    "goToday": "Ir a hoy"
+    "goToday": "Ir a hoy",
+    "legend": "Leyenda",
+    "legendOnly": "Ver solo {name}",
+    "legendShowAll": "Ver todos",
+    "editColors": "Editar colores"
   },
   "jobProfit": {
     "title": "Ganancia del trabajo",
@@ -7163,7 +7168,8 @@
       "WhatsApp": "WhatsApp",
       "WorkflowActions": "Acciones de flujo",
       "WorkflowLogs": "Registro de flujos",
-      "WorkflowRules": "Reglas de flujo"
+      "WorkflowRules": "Reglas de flujo",
+      "StatusColors": "Colores por estado"
     }
   },
   "branding": {
@@ -7461,5 +7467,52 @@
   "printBar": {
     "print": "Imprimir / Guardar como PDF",
     "close": "Cerrar"
+  },
+  "statusColors": {
+    "all": "Todos los ajustes",
+    "title": "Colores por estado",
+    "subtitle": "Un color suave por estado, usado en la Agenda, Operaciones, la ficha del trabajo y las cotizaciones.",
+    "jobs": "Trabajos",
+    "jobsText": "Barras del calendario, leyenda de la Agenda, Operaciones y las etiquetas del trabajo.",
+    "quotes": "Cotizaciones",
+    "quotesText": "Listas de cotizaciones, etiquetas y la cinta de la cotización.",
+    "pickFor": "Color de {name}",
+    "custom": "Color propio",
+    "resetOne": "Volver al color original",
+    "resetAll": "Restaurar colores originales",
+    "saved": "Colores guardados",
+    "eSave": "No se pudieron guardar los colores. Intenta otra vez.",
+    "needSql": "Primero corre paso-6.4-status-colors.sql en Supabase.",
+    "preview": "Vista previa",
+    "legend": "Leyenda",
+    "previewNote": "Los trabajos terminados siguen en gris en el calendario con la palomita de este color, para que resalte el trabajo activo.",
+    "jh": {
+      "unscheduled": "Sin fecha todavía (esperando en la bandeja)",
+      "scheduled": "Ya tiene fecha y hora",
+      "on_my_way": "El colaborador va manejando",
+      "in_progress": "Trabajando en el lugar",
+      "paused": "Trabajo en pausa un momento",
+      "on_hold": "Pendiente para regresar (pieza, aprobación…)",
+      "completed": "Trabajo terminado",
+      "cancelled": "Trabajo cancelado"
+    },
+    "q": {
+      "draft": "Borrador",
+      "sent": "Enviada",
+      "viewed": "Vista por el cliente",
+      "accepted": "Aceptada",
+      "declined": "Rechazada",
+      "expired": "Vencida",
+      "invoiced": "Facturada"
+    },
+    "qh": {
+      "draft": "Todavía no se envía",
+      "sent": "Enviada al cliente",
+      "viewed": "El cliente la abrió",
+      "accepted": "El cliente dijo que sí",
+      "declined": "El cliente dijo que no",
+      "expired": "Pasó su fecha de vencimiento",
+      "invoiced": "Se convirtió en factura"
+    }
   }
 }

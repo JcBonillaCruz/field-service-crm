@@ -13,6 +13,7 @@ import { askConfirm } from "@/lib/confirm";
 import { OPS_GROUPS, OpsGroup, OpsJob, delayOf, fold, groupOf as groupAt, progressOf } from "@/lib/operations";
 import { TechDot } from "@/components/jobs/EventBar";
 import { notifyAssigned } from "@/lib/jobs-assign-notify";
+import { useGroupTones } from "@/components/StatusColors";
 import { CardMenu, GroupArt, OpsCard, ProgressRing } from "@/components/jobs/ops/OpsBits";
 import { loadPlanJobIds } from "@/lib/maintenance";
 import OpsConnections from "@/components/jobs/ops/OpsConnections";
@@ -93,6 +94,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
   money: "owner" | "manager" | null; // quién ve dinero arriba (la oficina no)
 }) {
   const router = useRouter();
+  const groupTone = useGroupTones();
   const ow = useOpsWhen();
   const T = ow.t;
   const { spanLabel, WHEN } = ow;
@@ -462,7 +464,7 @@ export default function OperationsCenter({ companyId, team, weekStartsOn, canDel
                     title={focus ? undefined : T("dragCols")}
                     className={`group/h flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-slate-200/70 px-3 py-2 ${focus ? "" : "cursor-grab active:cursor-grabbing"}`}>
                     {!focus && <svg viewBox="0 0 20 20" className="hidden h-3.5 w-3.5 shrink-0 text-slate-300 transition-colors group-hover/h:text-slate-500 2xl:block" fill="currentColor"><circle cx="7" cy="5" r="1.4" /><circle cx="13" cy="5" r="1.4" /><circle cx="7" cy="10" r="1.4" /><circle cx="13" cy="10" r="1.4" /><circle cx="7" cy="15" r="1.4" /><circle cx="13" cy="15" r="1.4" /></svg>}
-                    <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${g.dot}`} />
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: groupTone[g.id] }} />
                     <p className="min-w-0 truncate whitespace-nowrap text-[13.5px] font-semibold text-[#0b1f3a]">{g.label}</p>
                     <span className="rounded-full bg-white px-2 py-0.5 text-[12px] font-semibold text-slate-500 ring-1 ring-slate-200">{byGroup[g.id].length}</span>
                     {/* Con 6 columnas las herramientas van en una segunda línea, para que el nombre del grupo se lea completo */}
@@ -937,10 +939,11 @@ function RangeModal({ label, from, to, onClose, onApply }: { label: string; from
 // Celular: el grupo se escoge en un desplegable (con su número y su color)
 function GroupPicker({ groups, value, onChange, counts }: { groups: { id: OpsGroup; label: string; hint: string; dot: string }[]; value: OpsGroup; onChange: (g: OpsGroup) => void; counts: Record<OpsGroup, OpsJob[]> }) {
   const cur = groups.find((g) => g.id === value)!;
+  const groupTone = useGroupTones();
   return (
     <Menu>
       <MenuButton className="flex h-11 w-full items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 text-left focus:outline-none data-[open]:border-[#0f766e] data-[open]:ring-4 data-[open]:ring-[#14a39a]/15">
-        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${cur.dot}`} />
+        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: groupTone[cur.id] }} />
         <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-[#0b1f3a]">{cur.label}</span>
         <span className={`rounded-full px-2 py-0.5 text-[12px] font-bold ${value === "delayed" && counts[value].length ? "bg-[#ffe4e6] text-[#be123c]" : "bg-slate-100 text-slate-600"}`}>{counts[value].length}</span>
         <svg viewBox="0 0 20 20" className="h-4 w-4 shrink-0 text-slate-400" fill="currentColor"><path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" /></svg>

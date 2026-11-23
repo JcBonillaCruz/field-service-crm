@@ -5,6 +5,15 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import { Status, TONE_FOLD, TONE_PILL, TONE_RIBBON, Tone } from "@/lib/sales";
+import { useStatusColors } from "@/components/StatusColors";
+import { QUOTE_STATUS_KEYS, QuoteColorKey, deep, pillStyle } from "@/lib/status-colors";
+
+// Paso 6.4: color de la compañía para el estado de una cotización (null = colores de siempre)
+export function useQuoteColor() {
+  const p = useStatusColors();
+  return (s: Status | undefined | null) => (s?.quote && (QUOTE_STATUS_KEYS as readonly string[]).includes(s.key) ? p.quote[s.key as QuoteColorKey] : null);
+}
+export { deep as quoteInk };
 import { useTranslations } from "next-intl";
 import { useSalesTx } from "@/i18n/useSalesTx";
 
@@ -46,15 +55,17 @@ export const Chev = () => (
 
 export function StatusPill({ s, small = false }: { s: Status; small?: boolean }) {
   const sx = useSalesTx();
-  return <span className={`inline-flex items-center rounded-full font-semibold uppercase tracking-wide ${TONE_PILL[s.tone]} ${small ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-1 text-[11px]"}`}>{sx.status(s)}</span>;
+  const c = useQuoteColor()(s);
+  return <span className={`inline-flex items-center rounded-full font-semibold uppercase tracking-wide ${c ? "" : TONE_PILL[s.tone]} ${small ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-1 text-[11px]"}`} style={c ? pillStyle(c) : undefined}>{sx.status(s)}</span>;
 }
 
 // Cinta diagonal que ENVUELVE la esquina del documento (con los dobleces por detrás, como Zoho)
-export function Ribbon({ label, tone }: { label: string; tone: Tone }) {
+export function Ribbon({ label, tone, status }: { label: string; tone: Tone; status?: Status }) {
+  const color = useQuoteColor()(status);
   return (
     <div className="pointer-events-none absolute -left-2 top-0 z-10 h-[104px] w-[104px] overflow-hidden print:hidden" aria-hidden="true">
-      <span className={`absolute bottom-0 left-0 h-2 w-2 ${TONE_FOLD[tone]}`} />
-      <span className={`absolute left-[-36px] top-[30px] w-[160px] -rotate-45 py-[5px] text-center text-[12px] font-medium tracking-wide text-white shadow-[0_2px_4px_rgba(0,0,0,0.15)] ${TONE_RIBBON[tone]}`}>{label}</span>
+      <span className={`absolute bottom-0 left-0 h-2 w-2 ${color ? "" : TONE_FOLD[tone]}`} style={color ? { background: deep(color, 0.55) } : undefined} />
+      <span className={`absolute left-[-36px] top-[30px] w-[160px] -rotate-45 py-[5px] text-center text-[12px] font-medium tracking-wide text-white shadow-[0_2px_4px_rgba(0,0,0,0.15)] ${color ? "" : TONE_RIBBON[tone]}`} style={color ? { background: color } : undefined}>{label}</span>
     </div>
   );
 }

@@ -38,7 +38,7 @@ export const SECTIONS: Section[] = [
     { title: "Users & Roles", icon: ic.users, tone: "bg-[#fff0f0] text-[#e11d48]", items: [{ label: "Users" }, { label: "Roles" }, { label: "User Preferences" }] },
     { title: "Taxes & Compliance", icon: ic.tax, tone: "bg-[#eef6ff] text-[#2563eb]", items: [{ label: "Taxes" }] },
     { title: "Setup & Configurations", icon: ic.setup, tone: "bg-[#fff6e8] text-[#d97706]", items: [{ label: "General" }, { label: "Currencies" }, { label: "Payment Terms" }, { label: "Reminders" }, { label: "Transaction Number Series", href: "/dashboard/invoices?prefs=1" }] },
-    { title: "Customization", icon: ic.brush, tone: "bg-[#fff6e8] text-[#ea580c]", items: [{ label: "PDF Templates", href: "/dashboard/settings/pdf-templates" }, { label: "Email Notifications", href: "/dashboard/settings/email" }, { label: "Hosted Payment Pages" }, { label: "Web Tabs" }] },
+    { title: "Customization", icon: ic.brush, tone: "bg-[#fff6e8] text-[#ea580c]", items: [{ label: "PDF Templates", href: "/dashboard/settings/pdf-templates" }, { label: "Status Colors", href: "/dashboard/settings/status-colors" }, { label: "Email Notifications", href: "/dashboard/settings/email" }, { label: "Hosted Payment Pages" }, { label: "Web Tabs" }] },
     { title: "Automation", icon: ic.bolt, tone: "bg-[#fff0f0] text-[#e11d48]", items: [{ label: "Workflow Rules" }, { label: "Workflow Actions" }, { label: "Workflow Logs" }, { label: "Schedules" }] },
   ] },
   { title: "Module Settings", cards: [

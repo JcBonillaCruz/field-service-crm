@@ -155,17 +155,17 @@ export const balanceOf = (d: Pick<SalesDoc, "total" | "amount_paid" | "written_o
 
 // ---------- Estados ----------
 export type Tone = "draft" | "sent" | "viewed" | "accepted" | "declined" | "expired" | "invoiced" | "overdue" | "partial" | "paid" | "void" | "live" | "paused" | "cancelled" | "future";
-export type Status = { key: string; label: string; tone: Tone };
+export type Status = { key: string; label: string; tone: Tone; quote?: boolean }; // quote = usa los colores de cotización de la compañía (Paso 6.4)
 
 export function quoteStatus(d: Pick<SalesDoc, "status" | "expiry_date">): Status {
   const s = d.status;
-  if (["draft", "sent", "viewed"].includes(s) && d.expiry_date && d.expiry_date < today()) return { key: "expired", label: "Expired", tone: "expired" };
+  if (["draft", "sent", "viewed"].includes(s) && d.expiry_date && d.expiry_date < today()) return { key: "expired", label: "Expired", tone: "expired", quote: true };
   const map: Record<string, Status> = {
     draft: { key: "draft", label: "Draft", tone: "draft" }, sent: { key: "sent", label: "Sent", tone: "sent" },
     viewed: { key: "viewed", label: "Customer Viewed", tone: "viewed" }, accepted: { key: "accepted", label: "Accepted", tone: "accepted" },
     declined: { key: "declined", label: "Declined", tone: "declined" }, invoiced: { key: "invoiced", label: "Invoiced", tone: "invoiced" },
   };
-  return map[s] ?? map.draft;
+  return { ...(map[s] ?? map.draft), quote: true };
 }
 
 export function invoiceStatus(d: Pick<SalesDoc, "status" | "due_date" | "total" | "amount_paid" | "written_off">): Status & { days?: number } {
