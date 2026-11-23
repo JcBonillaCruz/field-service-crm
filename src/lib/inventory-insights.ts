@@ -81,3 +81,10 @@ export function runningOut(items: InvItem[], stock: InvStock[], moves: UseMove[]
   }
   return rows.sort((a, b) => a.daysLeft - b.daysLeft);
 }
+
+// Paso 6.12d: lo que se cuenta en una ubicación (mismo orden en pantalla, en la hoja PDF y en Excel)
+export function countList(items: InvItem[], stock: InvStock[], loc: string, extraIds: string[] = []) {
+  const ids = new Set(stock.filter((s) => s.location_id === loc && (Number(s.qty) !== 0 || Number(s.min_qty) > 0)).map((s) => s.item_id));
+  extraIds.forEach((e) => ids.add(e));
+  return items.filter((i) => ids.has(i.id)).sort((a, b) => a.name.localeCompare(b.name));
+}

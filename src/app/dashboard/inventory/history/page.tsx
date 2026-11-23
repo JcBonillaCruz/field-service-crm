@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { canManageInventory } from "@/lib/inventory";
 import NoAccess from "@/components/customers/NoAccess";
-import { loadLocationsAll, loadMovements } from "@/lib/inventory-server";
+import { loadInventory, loadLocationsAll, loadMovements } from "@/lib/inventory-server";
 import MovementsView from "@/components/inventory/MovementsView";
 import TransfersView from "@/components/inventory/TransfersView";
 import CountsView from "@/components/inventory/CountsView";
@@ -18,12 +18,17 @@ export default async function InventoryHistoryPage({ searchParams }: { searchPar
   const tab: HistTab = searchParams.tab === "transfers" || searchParams.tab === "counts" ? searchParams.tab : "movements";
   const days = [7, 30, 90, 365].includes(Number(searchParams.days)) ? Number(searchParams.days) : 30;
   const opts = tab === "transfers" ? { kinds: ["transfer", "return"], days: 90, limit: 2000 } : tab === "counts" ? { kinds: ["count"], days: 365, limit: 5000 } : { days, limit: 5000 };
-  const [locations, moves] = await Promise.all([loadLocationsAll(supabase, current.id), loadMovements(supabase, current.id, opts)]);
+  const [locations, moves, inv, rev] = await Promise.all([
+    loadLocationsAll(supabase, current.id), loadMovements(supabase, current.id, opts),
+    tab === "counts" ? loadInventory(supabase, current.id) : Promise.resolve(null),
+    tab === "counts" ? supabase.from("inventory_count_reversals").select("batch_id, reversed_by_name, reason").eq("company_id", current.id) : Promise.resolve({ data: null }),
+  ]);
+  const reversed = Object.fromEntries(((rev.data ?? []) as { batch_id: string; reversed_by_name: string | null; reason: string }[]).map((r) => [r.batch_id, { by: r.reversed_by_name, reason: r.reason }]));
   return (
     <>
       <HistoryTabs active={tab} />
       {tab === "transfers" ? <TransfersView locations={locations} moves={moves.rows} done={Number(searchParams.done) || 0} />
-        : tab === "counts" ? <CountsView locations={locations} moves={moves.rows} />
+        : tab === "counts" ? <CountsView locations={locations} moves={moves.rows} reversed={reversed} items={inv?.items ?? []} stock={inv?.stock ?? []} company={current.name} />
           : <MovementsView locations={locations} moves={moves.rows} days={days} initialLocation={searchParams.location ?? "all"} />}
     </>
   );
