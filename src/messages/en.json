@@ -1290,7 +1290,17 @@
     "legend": "Legend",
     "legendOnly": "Show only {name}",
     "legendShowAll": "Show all",
-    "editColors": "Edit colors"
+    "editColors": "Edit colors",
+    "offKind": {
+      "vacation": "Vacation",
+      "sick": "Sick",
+      "personal": "Personal",
+      "training": "Training",
+      "holiday": "Holiday",
+      "other": "Other"
+    },
+    "off": "Off",
+    "weekJobs": "{n, plural, one {# this week} other {# this week}}"
   },
   "jobProfit": {
     "title": "Job profit",
@@ -2336,7 +2346,16 @@
     "reasonPh": "Reason (required)",
     "cancelJob": "Cancel job",
     "keep": "Keep it",
-    "createJob": "Create job"
+    "createJob": "Create job",
+    "offKind": {
+      "vacation": "Vacation",
+      "sick": "Sick",
+      "personal": "Personal",
+      "training": "Training",
+      "holiday": "Holiday",
+      "other": "Other"
+    },
+    "offWarn": "{name} is off ({kind}): {when}"
   },
   "jobDetail": {
     "steps": {
@@ -7519,5 +7538,46 @@
       "expired": "Past its expiry date",
       "invoiced": "Turned into an invoice"
     }
+  },
+  "newItem": {
+    "title": "New",
+    "editOff": "Edit time off",
+    "tabJob": "Job",
+    "tabQuote": "Quote",
+    "tabOff": "Time off",
+    "createJob": "Create job",
+    "toQuote": "Continue to quote",
+    "saveOff": "Save time off",
+    "jobCreated": "Job created",
+    "jobUnscheduled": "Job created. It's waiting in To schedule.",
+    "quoteCustomer": "Customer",
+    "quotePickerHint": "Search by name, phone or email. Not there? Tap New to add it.",
+    "quoteHow": "The quote opens in the full quote editor with this customer already chosen. There you add the services and parts, and then save it or send it.",
+    "eQuoteCustomer": "Choose the customer for the quote.",
+    "who": "Who",
+    "searchPeople": "Search among {n} people",
+    "onePerson": "To give time off to someone else, create a new one.",
+    "reason": "Reason",
+    "when": "When",
+    "allDay": "All day",
+    "someHours": "Some hours",
+    "from": "From",
+    "to": "To",
+    "note": "Note",
+    "notePh": "Optional. Only the office sees it.",
+    "hasJobs": "{name} has {n, plural, one {# job} other {# jobs}} at that time. They stay as they are; move or reassign them if needed.",
+    "alreadyOff": "{name} already has time off then.",
+    "offNeedsSql": "To save time off, run the file paso-6.5-time-off.sql in Supabase first.",
+    "eOffSql": "Run paso-6.5-time-off.sql in Supabase to save time off.",
+    "eOffWho": "Choose who is taking the time off.",
+    "eOffDates": "The last day can't be before the first day.",
+    "eOffSave": "The time off couldn't be saved. Try again.",
+    "offSaved": "Time off saved for {names}",
+    "nPeople": "{n} people",
+    "offUpdated": "Time off updated",
+    "offDeleted": "Time off deleted",
+    "deleteOff": "Delete time off",
+    "delOffQ": "Delete {name}'s time off?",
+    "delOffMsg": "It disappears from the calendar. Jobs aren't changed."
   }
 }

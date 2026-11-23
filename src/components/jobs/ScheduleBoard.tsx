@@ -9,7 +9,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions, Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import { createClient } from "@/lib/supabase/client";
 import {
-  CalView, CalVisit, ColorBy, JobRow, JobSettings, JobStatus, JobType, PRIORITIES, STATUS_ORDER, TeamMember, TechChip, UNASSIGNED_COLOR, leadOf, startOfMonth, startOfWeek,
+  CalView, CalVisit, ChecklistTemplate, ColorBy, JobRow, JobSettings, JobStatus, JobTag, JobType, PRIORITIES, STATUS_ORDER, TeamMember, TechChip, UNASSIGNED_COLOR, leadOf, startOfMonth, startOfWeek,
   addDays, addMinutes, atMinute, barColor, dayStart, fromIsoDay, isoDay, minutesOf,
   afterHoursOf, receivesJobs, sameDay, shiftAnchor, timeToMin, viewDays,
 } from "@/lib/jobs";
@@ -23,6 +23,9 @@ import { TechDot } from "@/components/jobs/EventBar";
 import { useStatusColors } from "@/components/StatusColors";
 import { JobColorKey, StatusPalette, visitColorKey } from "@/lib/status-colors";
 import { Check, Chevron, optionClass, panelClass } from "@/components/ui/SearchSelect";
+import NewItemModal, { NewSlot, NewTab } from "@/components/jobs/NewItemModal";
+import type { PayerOption } from "@/components/expenses/ExpensesWorkspace";
+import { OFF_SELECT, TimeOff } from "@/lib/time-off";
 
 import { useTranslations } from "next-intl";
 import { useJobsTx } from "@/i18n/useJobsTx";
@@ -55,8 +58,9 @@ type DragState = {
   color: string; label: string; hit?: Hit | null; preview?: Preview; overTray?: boolean; locked?: boolean;
 };
 
-export default function ScheduleBoard({ companyId, settings, types, team, canSeeMoney }: {
+export default function ScheduleBoard({ companyId, settings, types, team, canSeeMoney, tags = [], templates = [], customers = [], canQuote = false }: {
   companyId: string; settings: JobSettings; types: JobType[]; team: TeamMember[]; canSeeMoney: boolean;
+  tags?: JobTag[]; templates?: ChecklistTemplate[]; customers?: PayerOption[]; canQuote?: boolean;
 }) {
   const T = useTranslations("sched");
   const jt = useJobsTx();
@@ -68,7 +72,10 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
   const [view, setView] = useState<CalView>(() => (VIEWS.some((v) => v.id === sp.get("view")) ? (sp.get("view") as CalView) : "week"));
   const [colorBy, setColorBy] = useState<ColorBy>("status");
   const palette = useStatusColors();
-  const [draft, setDraft] = useState<{ day: Date; startMin: number; endMin: number; techId: string | null; x: number; y: number } | null>(null);
+  // Paso 6.5: modal grande (Job / Quote / Time off) en lugar de la tarjetita
+  const [draft, setDraft] = useState<{ slot: NewSlot; tab?: NewTab; editOff?: TimeOff | null } | null>(null);
+  const [offs, setOffs] = useState<TimeOff[]>([]);
+  const [offReady, setOffReady] = useState(true);
   const [ask, setAsk] = useState<{ v: CalVisit; start: Date } | null>(null);
   const [anchor, setAnchor] = useState<Date>(() => (sp.get("date") ? fromIsoDay(sp.get("date") as string) : dayStart(new Date())));
   const [visits, setVisits] = useState<CalVisit[]>([]);
@@ -125,17 +132,22 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
     if (drag.current?.active) { pendingReload.current = true; return; }
     const id = ++reqId.current;
     const sb = createClient();
-    const [cal, tr, planIds] = await Promise.all([
+    const [cal, tr, planIds, off] = await Promise.all([
       sb.from("v_job_calendar").select("*").eq("company_id", companyId)
         .lt("starts_at", rangeEnd.toISOString()).gt("ends_at", rangeStart.toISOString()).order("starts_at").limit(3000),
       sb.from("v_jobs").select("id, company_id, number, customer_id, customer_name, customer_phone, address_id, site_address, job_type_id, title, description, priority, status, estimated_total, visit_count, hold_reason, hold_note, hold_at, needs_followup, created_at, type_name, type_color, techs, tech_ids, tags")
         .eq("company_id", companyId).in("status", ["unscheduled", "on_hold"]).order("created_at", { ascending: false }).limit(300),
       loadPlanJobIds(sb, companyId), // Paso 5.11: etiqueta "Plan" en la tarjeta del trabajo
+      // Paso 6.5: días libres del equipo (si falta el SQL, el calendario sigue igual)
+      sb.from("team_time_off").select(OFF_SELECT).eq("company_id", companyId)
+        .lt("starts_at", rangeEnd.toISOString()).gt("ends_at", rangeStart.toISOString()).order("starts_at").limit(1000),
     ]);
     if (id !== reqId.current) return;
     if (cal.error) flash(jobError(cal.error), "error");
     else setVisits((cal.data ?? []).map((v) => ({ ...v, estimated_total: Number(v.estimated_total), plan: planIds.has(v.job_id) })) as CalVisit[]);
     if (!tr.error) setTray((tr.data ?? []) as unknown as JobRow[]);
+    setOffs(off.error ? [] : ((off.data ?? []) as TimeOff[]));
+    setOffReady(!off.error);
     setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, rangeKey, flash]);
@@ -151,6 +163,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
       .on("postgres_changes", { event: "*", schema: "public", table: "job_visits", filter: `company_id=eq.${companyId}` }, again)
       .on("postgres_changes", { event: "*", schema: "public", table: "jobs", filter: `company_id=eq.${companyId}` }, again)
       .on("postgres_changes", { event: "*", schema: "public", table: "job_visit_techs", filter: `company_id=eq.${companyId}` }, again)
+      .on("postgres_changes", { event: "*", schema: "public", table: "team_time_off", filter: `company_id=eq.${companyId}` }, again)
       .subscribe();
     const onShow = () => { if (document.visibilityState === "visible") again(); };
     document.addEventListener("visibilitychange", onShow);
@@ -275,12 +288,6 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
     }
     load();
   }
-  function newJobAt(day: Date, startMin: number, endMin: number, techId: string | null) {
-    const s = atMinute(day, startMin), e = atMinute(day, endMin);
-    const q = new URLSearchParams({ start: s.toISOString(), end: e.toISOString() });
-    if (techId) q.set("tech", techId);
-    router.push(`/dashboard/jobs/new?${q.toString()}`);
-  }
 
   // ---------- Arrastrar y soltar (mouse y dedo) ----------
   const snap = (m: number) => Math.round(m / slot) * slot;
@@ -367,7 +374,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
       if (s.kind === "tray" && s.job) { router.push(`/dashboard/jobs/${s.job.id}/edit`); return; }
       if (s.kind === "create" && s.col) {
         const a = view === "month" ? workStart : Math.floor(s.startMin / slot) * slot;
-        openDraft(s.col, a, a + settings.default_duration_min, ev.clientX, ev.clientY);
+        openDraft(s.col, a, a + settings.default_duration_min, false);
       }
       return;
     }
@@ -375,7 +382,7 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
     if (s.overTray && s.visit) { unschedule(s.visit); return; }
     const p = s.preview, hit = s.hit;
     if (!p) return;
-    if (s.kind === "create" && s.col) { openDraft({ ...s.col, day: p.day }, p.startMin, p.endMin, ev.clientX, ev.clientY); return; }
+    if (s.kind === "create" && s.col) { openDraft({ ...s.col, day: p.day }, p.startMin, p.endMin, true); return; }
 
     if (s.kind === "tray" && s.job) {
       const start = view === "month" ? atMinute(p.day, workStart) : atMinute(p.day, p.startMin);
@@ -416,12 +423,22 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
     touch: (e: TouchEvent) => { if (drag.current?.active) e.preventDefault(); },
   });
 
-  // Clic o arrastre en un espacio vacío: primero una tarjetita para confirmar (nunca abre el formulario solo)
-  function openDraft(col: Col, startMin: number, endMin: number, x: number, y: number) {
-    setDraft({ day: col.day, startMin, endMin, techId: col.techId, x, y });
-    setPreview({ colKey: col.key, day: col.day, startMin, endMin, color: "#0f766e", label: T("newJob") });
+  // Paso 6.5: clic o arrastre en un espacio vacío → modal grande con fondo gris, ya lleno con día, hora y técnico
+  function openDraft(col: Col, startMin: number, endMin: number, dragged: boolean) {
+    setPop(null);
+    setDraft({ slot: { day: col.day, startMin, endMin, techId: col.techId, dragged } });
   }
-  function closeDraft() { setDraft(null); setPreview(null); }
+  // "+ New job": el día que estás viendo (hoy si está a la vista) a la primera hora de trabajo
+  function openNew() {
+    const start = Math.max(workStart, 8 * 60);
+    setDraft({ slot: { day: focusDay, startMin: start, endMin: Math.min(24 * 60 - 15, start + settings.default_duration_min), techId: null, dragged: false } });
+  }
+  function openOff(o: TimeOff) {
+    setPop(null);
+    const s = new Date(o.starts_at);
+    setDraft({ slot: { day: dayStart(s), startMin: minutesOf(s), endMin: minutesOf(new Date(o.ends_at)) || 24 * 60 - 15, techId: o.user_id, dragged: !o.all_day }, tab: "off", editOff: o });
+  }
+  const closeDraft = useCallback(() => { setDraft(null); setPreview(null); }, []);
 
   function begin(e: React.PointerEvent, s: Omit<DragState, "pointerId" | "touch" | "x0" | "y0" | "lastX" | "lastY" | "active" | "scrolled">) {
     if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -527,11 +544,11 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
         </div>
         <div className="flex shrink-0 items-center gap-3">
         <ViewSwitch value={view} onChange={setView} />
-        <Link prefetch={false} href="/dashboard/jobs/new"
+        <button type="button" onClick={openNew}
           className="group/n inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl bg-[#0f766e] px-4 text-[15px] font-semibold text-white shadow-sm shadow-[#0f766e]/25 transition-all duration-150 hover:-translate-y-px hover:bg-[#0c5f59] hover:shadow-md">
           <svg viewBox="0 0 20 20" className="h-4 w-4 transition-transform duration-200 group-hover/n:rotate-90" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>
           {T("newJob")}
-        </Link>
+        </button>
         </div>
       </div>
 
@@ -564,11 +581,11 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
             <span className="hidden xl:inline">{T("toSchedule")}</span>
             {trayCount > 0 && <span className={`rounded-full px-1.5 text-[11px] text-white ${holdCount ? "bg-[#e11d48]" : "bg-[#0f766e]"}`}>{trayCount}</span>}
           </button>
-          <Link prefetch={false} href="/dashboard/jobs/new" aria-label={T("newJob")}
+          <button type="button" onClick={openNew} aria-label={T("newJob")}
             className="group/n hidden h-11 min-w-[2.75rem] sm:inline-flex lg:hidden items-center justify-center gap-1.5 rounded-xl bg-[#0f766e] px-2.5 text-[14px] sm:h-9 sm:min-w-0 sm:rounded-lg font-semibold text-white shadow-sm shadow-[#0f766e]/30 transition-colors hover:bg-[#0c5f59] sm:px-3.5">
             <svg viewBox="0 0 20 20" className="h-6 w-6 transition-transform duration-200 group-hover/n:rotate-90 sm:h-4 sm:w-4" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M10 4.5v11M4.5 10h11" /></svg>
             <span className="hidden sm:inline">{T("newJob")}</span>
-          </Link>
+          </button>
         </div>
       </div>
 
@@ -576,15 +593,15 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
           {view === "map" ? (
             <LiveMap companyId={companyId} day={anchor} visits={shown} team={team} />
           ) : view === "dispatch" ? (
-            <DispatchGrid days={days} rows={cols} visits={shown} dStart={visStart} dEnd={visEnd} preview={preview} handlers={handlers} apiRef={apiRef} now={now} />
+            <DispatchGrid days={days} rows={cols} visits={shown} dStart={visStart} dEnd={visEnd} preview={preview} handlers={handlers} apiRef={apiRef} now={now} offs={offs} onOff={openOff} />
           ) : view === "day" ? (
-            <DispatchGrid big days={days} rows={cols} visits={shown} dStart={visStart} dEnd={visEnd} preview={preview} handlers={handlers} apiRef={apiRef} now={now} scrollTo={scrollTo} />
+            <DispatchGrid big days={days} rows={cols} visits={shown} dStart={visStart} dEnd={visEnd} preview={preview} handlers={handlers} apiRef={apiRef} now={now} scrollTo={scrollTo} offs={offs} onOff={openOff} />
           ) : view === "month" ? (
-            <MonthGrid days={days} month={anchor.getMonth()} visits={shown} preview={preview} handlers={handlers} apiRef={apiRef} now={now}
+            <MonthGrid days={days} month={anchor.getMonth()} visits={shown} preview={preview} handlers={handlers} apiRef={apiRef} now={now} offs={offs} team={team} onOff={openOff}
               onOpenDay={(d) => { setAnchor(d); setView("day"); }} />
           ) : (
             <TimeGrid cols={cols} visits={shown} visStart={visStart} visEnd={visEnd} workStart={workStart} workEnd={workEnd} slot={slot}
-              preview={preview} handlers={handlers} apiRef={apiRef} now={now} dispatch={false} scrollTo={scrollTo} />
+              preview={preview} handlers={handlers} apiRef={apiRef} now={now} dispatch={false} scrollTo={scrollTo} offs={offs} team={team} onOff={openOff} />
           )}
           {!loading && visits.length === 0 && view !== "month" && view !== "map" && (
             <div className="pointer-events-none absolute left-1/2 top-24 -translate-x-1/2 rounded-full bg-white/90 px-4 py-2 text-[13px] text-slate-500 shadow-sm ring-1 ring-slate-200">
@@ -623,8 +640,14 @@ export default function ScheduleBoard({ companyId, settings, types, team, canSee
       )}
 
       {draft && (
-        <DraftCard draft={draft} techName={draft.techId ? team.find((m) => m.user_id === draft.techId)?.full_name ?? null : null}
-          onCreate={() => { newJobAt(draft.day, draft.startMin, draft.endMin, draft.techId); }} onClose={closeDraft} />
+        <NewItemModal companyId={companyId} settings={settings} types={types} tags={tags} team={team} templates={templates} customers={customers}
+          offs={offs} visits={visits} canQuote={canQuote} offReady={offReady} slot={draft.slot} tab={draft.tab} editOff={draft.editOff}
+          onClose={closeDraft}
+          onSaved={(msg, date) => {
+            closeDraft(); flash(msg); load();
+            // Si el trabajo quedó en otro día que no estás viendo, brinca a ese día
+            if (date && !days.some((d) => isoDay(d) === date)) setAnchor(fromIsoDay(date));
+          }} />
       )}
 
       {ask && (
@@ -874,38 +897,6 @@ function FiltersMenu({ statusF, setStatusF, counts, team, techF, setTechF, types
         </div>
       </PopoverPanel>
     </Popover>
-  );
-}
-
-// ---------- Tarjetita "New job" al dar clic o arrastrar en un espacio vacío ----------
-function DraftCard({ draft, techName, onCreate, onClose }: {
-  draft: { day: Date; startMin: number; endMin: number; x: number; y: number }; techName: string | null; onCreate: () => void; onClose: () => void;
-}) {
-  const T = useTranslations("sched");
-  const tc = useTranslations("common");
-  const { dayShort: fmtDayShort, time: fmtTime } = useJobsTx();
-  useEffect(() => {
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); if (e.key === "Enter") onCreate(); };
-    const out = () => onClose();
-    window.addEventListener("keydown", esc);
-    const t = setTimeout(() => window.addEventListener("pointerdown", out), 0);
-    return () => { window.removeEventListener("keydown", esc); window.removeEventListener("pointerdown", out); clearTimeout(t); };
-  }, [onClose, onCreate]);
-  const W = 260;
-  const vw = typeof window !== "undefined" ? window.innerWidth : 1200, vh = typeof window !== "undefined" ? window.innerHeight : 800;
-  const left = Math.min(Math.max(12, draft.x + 14), vw - W - 12), top = Math.min(Math.max(12, draft.y - 20), vh - 170);
-  const s = atMinute(draft.day, draft.startMin), e = atMinute(draft.day, draft.endMin);
-  return (
-    <div role="dialog" aria-label={T("newJob")} onPointerDown={(ev) => ev.stopPropagation()}
-      className="fixed z-[92] rounded-xl border border-slate-200 bg-white p-3.5 shadow-[0_18px_48px_rgba(15,40,60,0.22)] animate-[bp-pop-in_0.14s_ease-out]" style={{ left, top, width: W }}>
-      <p className="text-[15px] font-semibold text-[#0b1f3a]">{T("newJob")}</p>
-      <p className="mt-0.5 text-[13px] text-slate-600">{fmtDayShort(s)} · {fmtTime(s)} – {fmtTime(e)}</p>
-      {techName && <p className="text-[12.5px] text-slate-500">{T("forX", { name: techName })}</p>}
-      <div className="mt-3 flex gap-2">
-        <button type="button" autoFocus onClick={onCreate} className="flex-1 rounded-lg bg-[#0f766e] px-3 py-2 text-[13.5px] font-semibold text-white hover:bg-[#0c5f59]">{T("createJob")}</button>
-        <button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-[13.5px] font-medium text-slate-600 hover:bg-slate-100">{tc("cancel")}</button>
-      </div>
-    </div>
   );
 }
 

@@ -1285,7 +1285,17 @@
     "legend": "Leyenda",
     "legendOnly": "Ver solo {name}",
     "legendShowAll": "Ver todos",
-    "editColors": "Editar colores"
+    "editColors": "Editar colores",
+    "offKind": {
+      "vacation": "Vacaciones",
+      "sick": "Enfermedad",
+      "personal": "Personal",
+      "training": "Capacitación",
+      "holiday": "Día feriado",
+      "other": "Otro"
+    },
+    "off": "Libre",
+    "weekJobs": "{n, plural, one {# esta semana} other {# esta semana}}"
   },
   "jobProfit": {
     "title": "Ganancia del trabajo",
@@ -2331,7 +2341,16 @@
     "reasonPh": "Motivo (obligatorio)",
     "cancelJob": "Cancelar trabajo",
     "keep": "Dejarlo",
-    "createJob": "Crear trabajo"
+    "createJob": "Crear trabajo",
+    "offKind": {
+      "vacation": "Vacaciones",
+      "sick": "Enfermedad",
+      "personal": "Personal",
+      "training": "Capacitación",
+      "holiday": "Día feriado",
+      "other": "Otro"
+    },
+    "offWarn": "{name} está de descanso ({kind}): {when}"
   },
   "jobDetail": {
     "steps": {
@@ -7514,5 +7533,46 @@
       "expired": "Pasó su fecha de vencimiento",
       "invoiced": "Se convirtió en factura"
     }
+  },
+  "newItem": {
+    "title": "Nuevo",
+    "editOff": "Editar día libre",
+    "tabJob": "Trabajo",
+    "tabQuote": "Cotización",
+    "tabOff": "Día libre",
+    "createJob": "Crear trabajo",
+    "toQuote": "Seguir a la cotización",
+    "saveOff": "Guardar día libre",
+    "jobCreated": "Trabajo creado",
+    "jobUnscheduled": "Trabajo creado. Quedó en Por programar.",
+    "quoteCustomer": "Cliente",
+    "quotePickerHint": "Busca por nombre, teléfono o correo. ¿No está? Toca Nuevo para agregarlo.",
+    "quoteHow": "La cotización se abre en el editor completo de cotizaciones con este cliente ya elegido. Ahí agregas los servicios y las piezas, y luego la guardas o la mandas.",
+    "eQuoteCustomer": "Elige el cliente de la cotización.",
+    "who": "Quién",
+    "searchPeople": "Buscar entre {n} personas",
+    "onePerson": "Para darle un día libre a otra persona, crea uno nuevo.",
+    "reason": "Motivo",
+    "when": "Cuándo",
+    "allDay": "Todo el día",
+    "someHours": "Algunas horas",
+    "from": "Desde",
+    "to": "Hasta",
+    "note": "Nota",
+    "notePh": "Opcional. Solo la ve la oficina.",
+    "hasJobs": "{name} tiene {n, plural, one {# trabajo} other {# trabajos}} a esa hora. Se quedan como están; muévelos o reasígnalos si hace falta.",
+    "alreadyOff": "{name} ya tiene un día libre en esas fechas.",
+    "offNeedsSql": "Para guardar días libres, primero corre el archivo paso-6.5-time-off.sql en Supabase.",
+    "eOffSql": "Corre paso-6.5-time-off.sql en Supabase para guardar días libres.",
+    "eOffWho": "Elige quién toma el día libre.",
+    "eOffDates": "El último día no puede ser antes del primero.",
+    "eOffSave": "No se pudo guardar el día libre. Intenta de nuevo.",
+    "offSaved": "Día libre guardado para {names}",
+    "nPeople": "{n} personas",
+    "offUpdated": "Día libre actualizado",
+    "offDeleted": "Día libre borrado",
+    "deleteOff": "Borrar día libre",
+    "delOffQ": "¿Borrar el día libre de {name}?",
+    "delOffMsg": "Se quita del calendario. Los trabajos no cambian."
   }
 }

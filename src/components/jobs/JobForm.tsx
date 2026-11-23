@@ -18,6 +18,7 @@ import {
 import { useTranslations } from "next-intl";
 import { useJobsTx } from "@/i18n/useJobsTx";
 import { useJobError } from "@/i18n/useFmt";
+import { OFF_COLOR, TimeOff, lastDay, overlaps } from "@/lib/time-off";
 type Addr = { id: string; label: string | null; street: string | null; unit: string | null; city: string | null; state: string | null; zip: string | null; is_primary: boolean };
 type CheckRow = { id?: string; label: string; required: boolean; done?: boolean };
 export type JobFormInitial = {
@@ -30,9 +31,16 @@ export type JobFormInitial = {
 
 const TIMES = Array.from({ length: 96 }, (_, i) => i * 15);
 
-export default function JobForm({ companyId, settings, types, tags, team, templates, customers: initialCustomers, initial, defaults }: {
+// Paso 6.5: el mismo formulario dentro del modal grande del calendario (sin encabezado ni barra de abajo;
+// Save/Cancel van arriba en el modal y al guardar te quedas en el calendario)
+export type JobFormModal = {
+  formId: string; onSaved: (date: string, scheduled: boolean) => void;
+  onState?: (s: { saving: boolean; error: string }) => void; onCustomer?: (id: string | null) => void; offs?: TimeOff[];
+};
+
+export default function JobForm({ companyId, settings, types, tags, team, templates, customers: initialCustomers, initial, defaults, modal }: {
   companyId: string; settings: JobSettings; types: JobType[]; tags: JobTag[]; team: TeamMember[]; templates: ChecklistTemplate[]; customers: PayerOption[];
-  initial?: JobFormInitial; defaults?: { start?: string; end?: string; tech?: string; unscheduled?: boolean; customer?: string };
+  initial?: JobFormInitial; defaults?: { start?: string; end?: string; tech?: string; unscheduled?: boolean; customer?: string }; modal?: JobFormModal;
 }) {
   const t = useTranslations("jobForm");
   const tc = useTranslations("common");
@@ -81,6 +89,10 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
   const [cancelReason, setCancelReason] = useState("");
 
   const customer = customers.find((c) => c.id === customerId) ?? null;
+  // Modal: el botón Save de arriba necesita saber si se está guardando o si hubo un error
+  const onState = modal?.onState, onCustomer = modal?.onCustomer;
+  useEffect(() => { onState?.({ saving, error }); }, [saving, error, onState]);
+  useEffect(() => { onCustomer?.(customerId); }, [customerId, onCustomer]);
   // Solo técnicos (si ya estaba asignado alguien de la oficina, también se muestra para poder quitarlo)
   const techFirst = useMemo(() => team.filter((m) => receivesJobs(m) || (visit?.tech_ids ?? []).includes(m.user_id)), [team, visit]);
   const [notifyCust, setNotifyCust] = useState(settings.notify_customer === "always");
@@ -159,6 +171,7 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
       });
       if (err || !data) { setSaving(false); return setError(jobError(err)); }
       if (techIds.length) await notify({ jobId: data, assignAll: true });
+      if (modal) { setSaving(false); modal.onSaved(date, scheduleNow); return; }
       router.push(scheduleNow ? `/dashboard/jobs/schedule?view=day&date=${date}` : "/dashboard/jobs/schedule");
       router.refresh();
       return;
@@ -237,11 +250,17 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
   }
 
   const timeOpts = TIMES.map((m) => ({ value: String(m), label: timeLabel(m) }));
+  // Paso 6.5: aviso si alguien elegido está de descanso a esa hora
+  const offHits = useMemo(() => {
+    if (!modal?.offs?.length || !scheduleNow || !techIds.length) return [];
+    const day = fromIsoDay(date), a = atMinute(day, startMin), b = atMinute(day, endMin);
+    return modal.offs.filter((o) => techIds.includes(o.user_id) && overlaps(o, a, b));
+  }, [modal?.offs, scheduleNow, techIds, date, startMin, endMin]);
   const closeHref = "/dashboard/jobs/schedule";
 
   return (
-    <form onSubmit={submit} noValidate autoComplete="off" className="flex min-h-[calc(100vh-4rem)] min-w-0 flex-col overflow-x-hidden bg-white">
-      <FormHeader title={editing ? t("editTitle", { n: initial!.number }) : t("newTitle")} closeHref={closeHref} />
+    <form id={modal?.formId} onSubmit={submit} noValidate autoComplete="off" className={`flex min-w-0 flex-col overflow-x-hidden bg-white ${modal ? "" : "min-h-[calc(100vh-4rem)]"}`}>
+      {!modal && <FormHeader title={editing ? t("editTitle", { n: initial!.number }) : t("newTitle")} closeHref={closeHref} />}
 
       {initial?.cancelled_at && (
         <div className="mx-5 mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 sm:mx-8">
@@ -406,6 +425,16 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
                         </div>
                       );
                     })}
+                    {offHits.map((o) => {
+                      const m = team.find((x) => x.user_id === o.user_id);
+                      const s = new Date(o.starts_at), l = lastDay(o);
+                      return (
+                        <p key={o.id} role="alert" className="flex w-full items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-900 animate-[bp-fade_0.2s_ease-out]">
+                          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: OFF_COLOR[o.kind] }} />
+                          {t("offWarn", { name: m?.full_name ?? "", kind: t(`offKind.${o.kind}` as never), when: o.all_day ? (s.toDateString() === l.toDateString() ? jt.dayShort(s) : `${jt.dayShort(s)} – ${jt.dayShort(l)}`) : `${jt.time(s)} – ${jt.time(new Date(o.ends_at))}` })}
+                        </p>
+                      );
+                    })}
                     <p className="w-full text-[12px] text-slate-400">{t.rich("assignLater", { b: (c) => <b className="font-semibold text-slate-500">{c}</b> })}</p>
                   </div>
                 )}
@@ -466,8 +495,10 @@ export default function JobForm({ companyId, settings, types, tags, team, templa
           </div>
         </div>
       )}
-      <SaveBar saving={saving} cancelHref={closeHref} error={error} saveLabel={editing ? tc("save") : t("createJob")}
-        onDelete={editing && !initial?.cancelled_at && initial?.status !== "completed" ? () => setCancelAsk(true) : undefined} deleteLabel={t("cancelJob")} />
+      {!modal && (
+        <SaveBar saving={saving} cancelHref={closeHref} error={error} saveLabel={editing ? tc("save") : t("createJob")}
+          onDelete={editing && !initial?.cancelled_at && initial?.status !== "completed" ? () => setCancelAsk(true) : undefined} deleteLabel={t("cancelJob")} />
+      )}
     </form>
   );
 }

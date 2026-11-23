@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useImperativeHandle, useMemo, useRef } from "react";
-import { CalVisit, addDays, minutesOf, sameDay, tint } from "@/lib/jobs";
+import { CalVisit, TeamMember, addDays, minutesOf, sameDay, tint } from "@/lib/jobs";
 import { Col, GridApi, Handlers, Preview } from "@/components/jobs/cal-shared";
 import { EventBar, TechDot } from "@/components/jobs/EventBar";
 
 import { useTranslations } from "next-intl";
 import { useJobsTx } from "@/i18n/useJobsTx";
+import { TimeOff, offsOn } from "@/lib/time-off";
+import OffChips from "@/components/jobs/OffChips";
 export const PX = 1; // 1 px por minuto → 60 px por hora
 
 type Placed = { v: CalVisit; s: number; e: number; start: Date; end: Date; lane: number; lanes: number };
@@ -28,9 +30,10 @@ function layout(items: { v: CalVisit; s: number; e: number; start: Date; end: Da
   return out;
 }
 
-export default function TimeGrid({ cols, visits, visStart, visEnd, workStart, workEnd, slot, preview, handlers, apiRef, now, dispatch, scrollTo }: {
+export default function TimeGrid({ cols, visits, visStart, visEnd, workStart, workEnd, slot, preview, handlers, apiRef, now, dispatch, scrollTo, offs = [], team = [], onOff }: {
   cols: Col[]; visits: CalVisit[]; visStart: number; visEnd: number; workStart: number; workEnd: number; slot: number;
   preview: Preview; handlers: Handlers; apiRef: React.MutableRefObject<GridApi | null>; now: Date; dispatch: boolean; scrollTo: number;
+  offs?: TimeOff[]; team?: TeamMember[]; onOff?: (o: TimeOff) => void; // Paso 6.5: quién está de descanso
 }) {
   const t = useTranslations("sched");
   const { hour: fmtHour, time: fmtTime } = useJobsTx();
@@ -91,7 +94,7 @@ export default function TimeGrid({ cols, visits, visStart, visEnd, workStart, wo
           const n = byCol.get(c.key)?.length ?? 0;
           const mins = (byCol.get(c.key) ?? []).reduce((a, p) => a + (p.e - p.s), 0);
           return (
-            <div key={c.key} className={`flex flex-1 ${minCol} items-center gap-2 border-l border-slate-100 px-2 ${dispatch ? "py-2" : "justify-center py-1.5 lg:py-2"}`}>
+            <div key={c.key} className={`flex flex-1 ${minCol} items-center gap-2 border-l border-slate-100 px-2 ${dispatch ? "py-2" : "flex-col justify-center gap-1 py-1.5 lg:py-2"}`}>
               {dispatch ? (
                 <>
                   {c.initials ? <TechDot t={{ initials: c.initials, color: c.color ?? "#94a3b8", avatar_url: c.avatar ?? null }} size={30} ring={false} />
@@ -106,6 +109,9 @@ export default function TimeGrid({ cols, visits, visStart, visEnd, workStart, wo
                   <span className={`text-[11.5px] font-medium leading-tight lg:text-[12.5px] ${c.today ? "text-[#0f766e]" : "text-slate-400"}`}>{c.label}</span>
                   <span className={`text-[18px] font-bold leading-tight tracking-tight lg:text-[22px] ${c.today ? "text-[#0f766e]" : "text-[#0b1f3a]"}`}>{c.sub}</span>
                 </span>
+              )}
+              {!dispatch && offs.length > 0 && (
+                <OffChips list={offsOn(offs, c.day)} team={team} onOff={onOff} max={cols.length > 1 ? 2 : 6} center />
               )}
             </div>
           );

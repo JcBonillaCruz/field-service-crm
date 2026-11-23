@@ -7,6 +7,7 @@ import { StatusArt, TechDot, TechDots } from "@/components/jobs/EventBar";
 
 import { useTranslations } from "next-intl";
 import { useJobsTx } from "@/i18n/useJobsTx";
+import { OFF_COLOR, OFF_HATCH, TimeOff, overlaps } from "@/lib/time-off";
 // =====================================================================
 // Dispatch (como Housecall Pro): una FILA por técnico, las horas de lado a lado y los 7 días de la semana.
 // Se arrastra a la derecha/izquierda para cambiar la hora o el día, y arriba/abajo para cambiar de técnico.
@@ -21,9 +22,10 @@ const SIZE = {
 type Row = Col; // fila = técnico (techId) o "Unassigned" (techId null)
 type Placed = { v: CalVisit; dayIdx: number; s: number; e: number; lane: number };
 
-export default function DispatchGrid({ days, rows, visits, dStart, dEnd, preview, handlers, apiRef, now, big = false, scrollTo }: {
+export default function DispatchGrid({ days, rows, visits, dStart, dEnd, preview, handlers, apiRef, now, big = false, scrollTo, offs = [], onOff }: {
   days: Date[]; rows: Row[]; visits: CalVisit[]; dStart: number; dEnd: number; preview: Preview; handlers: Handlers;
   apiRef: React.MutableRefObject<GridApi | null>; now: Date; big?: boolean; scrollTo?: number;
+  offs?: TimeOff[]; onOff?: (o: TimeOff) => void; // Paso 6.5: días libres
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const area = useRef<HTMLDivElement>(null);
@@ -69,6 +71,21 @@ export default function DispatchGrid({ days, rows, visits, dStart, dEnd, preview
     const lanes = Math.max(1, laneEnd.length);
     return { row: r, items, height: lanes * LANE_H + PAD * 2 };
   }), [rows, visits, days, dStart, dEnd, LANE_H, PAD]);
+
+  // Paso 6.5: bloques "de descanso" de cada persona (gris rayado detrás de los trabajos)
+  const offBlocks = useMemo(() => {
+    const map = new Map<string, { o: TimeOff; dayIdx: number; s: number; e: number }[]>();
+    offs.forEach((o) => days.forEach((d, i) => {
+      const d1 = addDays(d, 1);
+      if (!overlaps(o, d, d1)) return;
+      const s0 = new Date(o.starts_at), e0 = new Date(o.ends_at);
+      const s = Math.max(dStart, s0 > d ? minutesOf(s0) : dStart);
+      const e = Math.min(dEnd, e0 < d1 ? minutesOf(e0) || 24 * 60 : dEnd);
+      if (e <= s) return;
+      map.set(o.user_id, [...(map.get(o.user_id) ?? []), { o, dayIdx: i, s, e }]);
+    }));
+    return map;
+  }, [offs, days, dStart, dEnd]);
 
   const offsets = useMemo(() => { let y = 0; return layout.map((l) => { const top = y; y += l.height; return top; }); }, [layout]);
   const keyFor = (r: Row, d: Date) => `${r.key}@${isoDay(d)}`;
@@ -122,7 +139,12 @@ export default function DispatchGrid({ days, rows, visits, dStart, dEnd, preview
                   : big ? null : <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-dashed border-slate-300 text-slate-400"><svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="10" cy="7" r="3" /><path d="M4.5 17a5.5 5.5 0 0 1 11 0" strokeLinecap="round" /></svg></span>}
                 <span className="min-w-0">
                   <span className={`block truncate font-semibold ${big ? (row.initials ? "text-[12.5px] text-[#0b1f3a] sm:text-[14.5px]" : "text-[12.5px] text-slate-500 sm:text-[14.5px]") : "text-[13px] text-[#0b1f3a]"}`}>{row.label}</span>
-                  <span className={`block text-slate-500 ${big ? "text-[11px] sm:text-[12px]" : "text-[11px]"}`}>{(() => { const n = new Set(items.map((i) => i.v.visit_id)).size; return big ? `${n} job${n === 1 ? "" : "s"}` : `${n} this week`; })()}</span>
+                  <span className={`block text-slate-500 ${big ? "text-[11px] sm:text-[12px]" : "text-[11px]"}`}>{(() => { const n = new Set(items.map((i) => i.v.visit_id)).size; return big ? ts("jobsCount", { n }) : ts("weekJobs", { n }); })()}</span>
+                  {big && row.techId && offBlocks.get(row.techId)?.length ? (
+                    <span className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-slate-100 px-1.5 py-px text-[10.5px] font-semibold text-slate-600">
+                      <span className="h-1.5 w-1.5 rounded-full" style={{ background: OFF_COLOR[offBlocks.get(row.techId)![0].o.kind] }} />{ts("off")}
+                    </span>
+                  ) : null}
                 </span>
               </div>
             ))}
@@ -140,6 +162,19 @@ export default function DispatchGrid({ days, rows, visits, dStart, dEnd, preview
                   handlers.onEmptyDown(e, { ...row, key: keyFor(row, days[i]), day: days[i] }, dStart + (px - i * dayW) / PXM);
                 }}
 >
+                {row.techId && offBlocks.get(row.techId)?.map((b) => {
+                  const w = (b.e - b.s) * PXM;
+                  return (
+                    <div key={`off-${b.o.id}-${b.dayIdx}`} className="pointer-events-none absolute rounded-[10px] border border-dashed border-slate-300"
+                      style={{ left: b.dayIdx * dayW + (b.s - dStart) * PXM + 1, width: Math.max(8, w - 2), top: 3, bottom: 3, background: OFF_HATCH }}>
+                      <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => onOff?.(b.o)} title={b.o.note ?? undefined}
+                        className={`pointer-events-auto ml-1.5 mt-1 inline-flex max-w-[calc(100%-0.75rem)] items-center gap-1 truncate rounded-full bg-white/95 px-2 py-0.5 font-semibold text-slate-600 shadow-sm ring-1 ring-slate-200 transition-all duration-150 hover:-translate-y-px hover:text-[#0b1f3a] hover:ring-slate-300 ${big ? "text-[11.5px]" : "text-[10.5px]"}`}>
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: OFF_COLOR[b.o.kind] }} />
+                        <span className="truncate">{w > 70 ? ts(`offKind.${b.o.kind}` as never) : ts("off")}</span>
+                      </button>
+                    </div>
+                  );
+                })}
                 {items.map((p) => {
                   const color = barColor(p.v);
                   const left = p.dayIdx * dayW + (p.s - dStart) * PXM;

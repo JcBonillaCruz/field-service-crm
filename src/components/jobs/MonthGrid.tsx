@@ -1,7 +1,9 @@
 "use client";
 
 import { useImperativeHandle, useMemo, useRef } from "react";
-import { CalVisit, isoDay, sameDay, tint } from "@/lib/jobs";
+import { CalVisit, TeamMember, isoDay, sameDay, tint } from "@/lib/jobs";
+import { TimeOff, offsOn } from "@/lib/time-off";
+import OffChips from "@/components/jobs/OffChips";
 import { Col, GridApi, Handlers, Preview } from "@/components/jobs/cal-shared";
 import { EventChip } from "@/components/jobs/EventBar";
 
@@ -9,9 +11,9 @@ import { EventChip } from "@/components/jobs/EventBar";
 import { useTranslations } from "next-intl";
 import { useJobsTx } from "@/i18n/useJobsTx";
 // Vista de Mes: 6 semanas; cada día muestra hasta 3 trabajos y "+N more"
-export default function MonthGrid({ days, month, visits, preview, handlers, apiRef, now, onOpenDay }: {
+export default function MonthGrid({ days, month, visits, preview, handlers, apiRef, now, onOpenDay, offs = [], team = [], onOff }: {
   days: Date[]; month: number; visits: CalVisit[]; preview: Preview; handlers: Handlers; apiRef: React.MutableRefObject<GridApi | null>;
-  now: Date; onOpenDay: (d: Date) => void;
+  now: Date; onOpenDay: (d: Date) => void; offs?: TimeOff[]; team?: TeamMember[]; onOff?: (o: TimeOff) => void;
 }) {
   const t = useTranslations("sched");
   const DOW = useJobsTx().dayNames("short");
@@ -56,10 +58,14 @@ export default function MonthGrid({ days, month, visits, preview, handlers, apiR
               onPointerDown={(e) => { if (e.target === e.currentTarget || (e.target as HTMLElement).dataset.cell) handlers.onEmptyDown(e, c, null); }}
               className={`relative flex min-h-0 flex-col gap-[3px] overflow-hidden border-b border-l border-slate-100 p-1 transition-colors lg:p-1.5 ${out ? "bg-[#fafbfc]" : today ? "bg-[#f6fcfa]" : "bg-white"}`}
               style={target ? { background: tint(preview!.color, 0.12), boxShadow: `inset 0 0 0 2px ${preview!.color}` } : undefined}>
-              <button type="button" data-cell="1" onPointerDown={(e) => e.stopPropagation()} onClick={() => onOpenDay(c.day)}
-                className={`mb-0.5 flex h-7 min-w-[1.75rem] items-center justify-center self-start rounded-lg px-1.5 text-[13px] font-bold tracking-tight transition-colors hover:bg-[#e9f7f4] ${today ? "bg-[#0f766e] text-white hover:bg-[#0c5f59]" : out ? "text-slate-300" : "text-[#0b1f3a]"}`}>
+              <span data-cell="1" className="mb-0.5 flex min-w-0 items-center gap-1">
+              <button type="button" onPointerDown={(e) => e.stopPropagation()} onClick={() => onOpenDay(c.day)}
+                className={`flex h-7 min-w-[1.75rem] items-center justify-center self-start rounded-lg px-1.5 text-[13px] font-bold tracking-tight transition-colors hover:bg-[#e9f7f4] ${today ? "bg-[#0f766e] text-white hover:bg-[#0c5f59]" : out ? "text-slate-300" : "text-[#0b1f3a]"}`}>
                 {c.day.getDate()}
               </button>
+              {/* Paso 6.5: quién está de descanso ese día */}
+              {offs.length > 0 && <OffChips list={offsOn(offs, c.day)} team={team} onOff={onOff} max={1} />}
+              </span>
               {list.slice(0, 3).map((v) => (
                 <EventChip key={v.visit_id} v={v} dragging={handlers.draggingId === v.visit_id}
                   onDown={(e) => handlers.onVisitDown(e, v, c, "move")} onHover={(el) => handlers.onVisitHover(el ? v : null, el)} />
