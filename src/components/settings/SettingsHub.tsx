@@ -26,7 +26,8 @@ const ic = {
   code: "M8 8l-4 4 4 4M16 8l4 4-4 4M14 5l-4 14",
 };
 
-const SECTIONS: Section[] = [
+// Paso 6.3d: también lo usa el menú izquierdo (Settings → Mi cuenta, Organización, Módulos…)
+export const SECTIONS: Section[] = [
   { title: "My Account", cards: [
     { title: "Personal", icon: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20.5a7.5 7.5 0 0 1 15 0", tone: "bg-[#fff4ec] text-[#e8713a]", items: [
       { label: "Profile & photo", href: "/dashboard/account" }, { label: "Email & password", href: "/dashboard/account#security" }, { label: "My organizations", href: "/dashboard/account" }, { label: "Delete account", href: "/dashboard/account#delete" },

@@ -14,9 +14,10 @@ import Avatar from "@/components/Avatar";
 import NotificationsProvider from "@/components/NotificationsProvider";
 import { AppsGrid } from "@/components/AppsMenu";
 import { useInstallApp } from "@/components/InstallPrompt";
-import { FinanceArt, InventoryArt, JobsArt, QrArt, SettingsArt } from "@/components/AppIcons";
-import { DashboardArt, TeamArt } from "@/components/home/DashArt";
+import { FinanceArt, InventoryArt, JobsArt, QrArt, SettingsArt, TeamAppArt } from "@/components/AppIcons";
+import { DashboardArt } from "@/components/home/DashArt";
 import { canManageSales } from "@/lib/sales";
+import { SECTIONS as SETTINGS_SECTIONS } from "@/components/settings/SettingsHub";
 import { CompanySummary, CurrentUser, Role } from "@/lib/types";
 
 type NavItem = {
@@ -139,6 +140,74 @@ const appHome = (id: AppId, role: Role | null) =>
     : id === "finance" ? "/dashboard" : id === "jobs" ? "/dashboard/jobs" : id === "inventory" ? "/dashboard/inventory" : "/dashboard/tools/qr";
 const GLOBAL_SETTINGS = "/dashboard/settings";
 const GLOBAL_TEAM = "/dashboard/team";
+const ACCOUNT = "/dashboard/account";
+const SECTION_ICON = [
+  "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20.5a7.5 7.5 0 0 1 15 0",
+  "M4 20V7l8-4 8 4v13M9 20v-5h6v5M8 10h.01M12 10h.01M16 10h.01",
+  "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
+  "M9 7V3M15 7V3M7 7h10v4a5 5 0 0 1-10 0zM12 16v5",
+];
+
+// Paso 6.3d: Settings general también en el menú izquierdo, con las mismas secciones de "Todos los ajustes"
+// (Mi cuenta, Ajustes de la organización, Ajustes de módulos, Extensiones). Solo las opciones que ya funcionan.
+function SettingsMenu() {
+  const t = useTranslations("settingsHub");
+  const L = (x: string) => t(`l.${x.replace(/[^A-Za-z0-9]/g, "")}`);
+  const pathname = usePathname() || "";
+  const sections = SETTINGS_SECTIONS.map((sec, i) => ({
+    key: sec.title, name: L(sec.title), icon: SECTION_ICON[i] ?? SECTION_ICON[2],
+    items: sec.cards.flatMap((c) => c.items.filter((it) => it.href).map((it) => ({ label: L(it.label), href: it.href as string }))),
+  })).filter((sec) => sec.items.length);
+  // Solo se marca la primera opción que lleva a la pantalla donde estás
+  const seen = new Set<string>();
+  const marked = new Set<string>();
+  sections.forEach((sec) => sec.items.forEach((it) => {
+    const path = it.href.split(/[?#]/)[0];
+    if (!seen.has(path) && pathname === path) marked.add(`${sec.key}|${it.href}|${it.label}`);
+    seen.add(path);
+  }));
+  const isOn = (sec: string, it: { href: string; label: string }) => marked.has(`${sec}|${it.href}|${it.label}`);
+  const [open, setOpen] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(sections.filter((sec) => sec.items.some((it) => isOn(sec.key, it))).map((sec) => [sec.key, true])));
+
+  return (
+    <ul className="space-y-0.5">
+      {sections.map((sec) => {
+        const isOpen = Boolean(open[sec.key]);
+        const inside = sec.items.some((it) => isOn(sec.key, it));
+        return (
+          <li key={sec.key}>
+            <button type="button" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [sec.key]: !isOpen }))}
+              className={`group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] transition-colors hover:bg-[#eef7f4] ${inside ? "font-semibold text-[#0b5e57]" : "text-slate-700 hover:text-[#0b1f3a]"}`}>
+              <span className="flex w-3.5 shrink-0 justify-center">
+                <svg viewBox="0 0 20 20" className={`h-3.5 w-3.5 transition-transform duration-200 ${isOpen ? "text-[#0f766e]" : "-rotate-90 text-slate-400"}`} fill="currentColor" aria-hidden="true">
+                  <path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" />
+                </svg>
+              </span>
+              <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] shrink-0 group-hover:animate-[bp-nav-pop_0.5s_ease-out_forwards]" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={sec.icon} /></svg>
+              <span className="min-w-0 flex-1 truncate">{sec.name}</span>
+            </button>
+            {isOpen && (
+              <ul className="mt-0.5 space-y-0.5 animate-[bp-fade_0.2s_ease-out]">
+                {sec.items.map((it) => {
+                  const on = isOn(sec.key, it);
+                  return (
+                    <li key={`${it.href}-${it.label}`}>
+                      <Link prefetch={false} href={it.href}
+                        className={`flex items-center rounded-lg py-2 pl-[3.35rem] pr-2.5 text-[13px] transition-all duration-150 ${on ? "bg-[#dcf2ec] font-semibold text-[#0b5e57]" : "text-slate-700 hover:bg-[#eef7f4] hover:text-[#0b1f3a]"}`}>
+                        <span className="min-w-0 flex-1 truncate">{it.label}</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
 function DesktopNav({ role }: { role: Role | null }) {
   const t = useTranslations("shell");
@@ -146,15 +215,18 @@ function DesktopNav({ role }: { role: Role | null }) {
   const tn = useTranslations("nav");
   const pathname = usePathname() || "";
   // En Team o Settings generales no se abre ninguna app
-  const standalone = pathname.startsWith(GLOBAL_TEAM) || pathname.startsWith(GLOBAL_SETTINGS);
+  const inSettings = pathname.startsWith(GLOBAL_SETTINGS) || pathname.startsWith(ACCOUNT);
+  const standalone = pathname.startsWith(GLOBAL_TEAM) || inSettings;
   const current: AppId | null = standalone ? null : appOf(pathname);
-  const [expanded, setExpanded] = useState<AppId | null>(current);
-  useEffect(() => setExpanded(current), [current]);
+  type Open = AppId | "settings" | null;
+  const now: Open = inSettings ? "settings" : current;
+  const [expanded, setExpanded] = useState<Open>(now);
+  useEffect(() => setExpanded(now), [now]);
   // El técnico solo ve Jobs e Inventory
   const apps = APP_ORDER.filter((id) => role !== "technician" || id === "inventory" || id === "jobs");
   const showGlobal = Boolean(role && SETTINGS.roles?.includes(role));
   const extras = showGlobal ? [
-    { key: "team", href: GLOBAL_TEAM, label: tn("team"), art: <TeamArt size={26} /> },
+    { key: "team", href: GLOBAL_TEAM, label: tn("team"), art: <TeamAppArt size={26} /> },
     { key: "settings", href: GLOBAL_SETTINGS, label: tn("settings"), art: <SettingsArt size={26} /> },
   ] : [];
 
@@ -191,15 +263,31 @@ function DesktopNav({ role }: { role: Role | null }) {
             );
           })}
           {extras.map((x) => {
-            const on = pathname.startsWith(x.href);
+            const on = x.key === "settings" ? inSettings : pathname.startsWith(x.href);
+            const isSettings = x.key === "settings";
+            const open = isSettings && expanded === "settings";
             return (
               <li key={x.key}>
-                <Link prefetch={false} href={x.href} onClick={() => setExpanded(null)}
-                  className={`group/app flex items-center gap-2.5 rounded-lg py-1.5 pl-2 pr-2 text-[13.5px] transition-colors duration-150 ${
-                    on ? "bg-[#e6f5f0] font-semibold text-[#0b5e57]" : "text-slate-700 hover:bg-[#eef7f4] hover:text-[#0b1f3a]"}`}>
-                  <span className="-my-0.5 flex shrink-0 transition-transform duration-200 group-hover/app:-rotate-3 group-hover/app:scale-110">{x.art}</span>
-                  <span className="min-w-0 flex-1 truncate">{x.label}</span>
-                </Link>
+                <div className={`group/app relative flex items-center rounded-lg transition-colors duration-150 ${on ? "bg-[#e6f5f0]" : "hover:bg-[#eef7f4]"}`}>
+                  <Link prefetch={false} href={x.href} onClick={() => setExpanded(isSettings ? "settings" : null)}
+                    className={`flex min-w-0 flex-1 items-center gap-2.5 py-1.5 pl-2 pr-2 text-[13.5px] ${on ? "font-semibold text-[#0b5e57]" : "text-slate-700 group-hover/app:text-[#0b1f3a]"}`}>
+                    <span className="-my-0.5 flex shrink-0 transition-transform duration-200 group-hover/app:-rotate-3 group-hover/app:scale-110">{x.art}</span>
+                    <span className="min-w-0 flex-1 truncate">{x.label}</span>
+                  </Link>
+                  {isSettings && (
+                    <button type="button" onClick={() => setExpanded(open ? null : "settings")} aria-expanded={open} aria-label={x.label}
+                      className="mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-white hover:text-[#0f766e]">
+                      <svg viewBox="0 0 20 20" className={`h-3.5 w-3.5 transition-transform duration-200 ${open ? "text-[#0f766e]" : "-rotate-90"}`} fill="currentColor" aria-hidden="true">
+                        <path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+                {open && (
+                  <div className="mb-2 mt-1 animate-[bp-fade_0.2s_ease-out]">
+                    <SettingsMenu />
+                  </div>
+                )}
               </li>
             );
           })}

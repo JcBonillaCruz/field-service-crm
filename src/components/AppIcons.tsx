@@ -102,18 +102,40 @@ export function JobsArt({ size = 48, className = "" }: { size?: number; classNam
   );
 }
 
-// Paso 6.3c: Settings general como "app" del menú izquierdo (mismo estilo que las demás)
+// Paso 6.3e: Settings y Team como "apps" del menú izquierdo (mismo estilo que Finances / Jobs / Inventory)
+// Settings: panel con controles deslizables + engrane que gira al pasar el mouse
 export function SettingsArt({ size = 48, className = "" }: { size?: number; className?: string }) {
   return (
     <svg viewBox="0 0 48 48" width={size} height={size} className={className} aria-hidden="true">
-      <circle cx="24" cy="25" r="20" fill="#eef1f5" />
-      <g className="origin-[24px_24px] transition-transform duration-500 group-hover/app:rotate-90 group-hover:rotate-90">
-        <path d="M21.6 8h4.8l.9 4.3a12 12 0 0 1 3.4 2l4.2-1.4 2.4 4.2-3.3 2.9a12 12 0 0 1 0 4l3.3 2.9-2.4 4.2-4.2-1.4a12 12 0 0 1-3.4 2L26.4 40h-4.8l-.9-4.3a12 12 0 0 1-3.4-2l-4.2 1.4-2.4-4.2 3.3-2.9a12 12 0 0 1 0-4l-3.3-2.9 2.4-4.2 4.2 1.4a12 12 0 0 1 3.4-2z"
-          fill="#64748b" stroke="#475569" strokeWidth="1.2" strokeLinejoin="round" />
-        <circle cx="24" cy="24" r="5.6" fill="#fff" stroke="#475569" strokeWidth="1.4" />
+      <circle cx="24" cy="25" r="20" fill="#e6f5f0" />
+      <rect x="6" y="8" width="25" height="24" rx="4" fill="#fff" stroke="#0f766e" strokeWidth="1.4" />
+      <path d="M10.5 15h16M10.5 21h16M10.5 27h9" stroke="#cfe3de" strokeWidth="2.2" strokeLinecap="round" />
+      <circle cx="15" cy="15" r="2.6" fill="#e8713a" />
+      <circle cx="22" cy="21" r="2.6" fill="#14a39a" />
+      <circle cx="13" cy="27" r="2.6" fill="#24305e" />
+      <g className="origin-[29px_29px] transition-transform duration-500 group-hover/app:rotate-45 group-hover:rotate-45">
+        <path d="M38.32 26.69 L41.33 26.95 L41.33 31.05 L38.32 31.31 L37.22 33.95 L39.17 36.27 L36.27 39.17 L33.95 37.22 L31.31 38.32 L31.05 41.33 L26.95 41.33 L26.69 38.32 L24.05 37.22 L21.73 39.17 L18.83 36.27 L20.78 33.95 L19.68 31.31 L16.67 31.05 L16.67 26.95 L19.68 26.69 L20.78 24.05 L18.83 21.73 L21.73 18.83 L24.05 20.78 L26.69 19.68 L26.95 16.67 L31.05 16.67 L31.31 19.68 L33.95 20.78 L36.27 18.83 L39.17 21.73 L37.22 24.05Z" fill="#24305e" stroke="#24305e" strokeWidth="1.6" strokeLinejoin="round" />
+        <circle cx="29" cy="29" r="7.2" fill="#3b6fd8" />
+        <circle cx="29" cy="29" r="3.4" fill="#fff" />
       </g>
-      <circle cx="36.5" cy="35.5" r="5.5" fill="#14a39a" stroke="#fff" strokeWidth="1.6" />
-      <path d="M34.2 35.6l1.6 1.6 2.9-3" fill="none" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// Team: dos personas (la de adelante con cuello en V) + insignia verde de verificado
+export function TeamAppArt({ size = 48, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg viewBox="0 0 48 48" width={size} height={size} className={className} aria-hidden="true">
+      <circle cx="24" cy="25" r="20" fill="#eef2ff" />
+      <circle cx="31.5" cy="15.5" r="5" fill="#a9c1f5" />
+      <path d="M22.5 34a9 9 0 0 1 18 0v1.5a1.5 1.5 0 0 1-1.5 1.5H24a1.5 1.5 0 0 1-1.5-1.5z" fill="#a9c1f5" />
+      <circle cx="19" cy="18" r="6" fill="#3b6fd8" stroke="#fff" strokeWidth="1.6" />
+      <path d="M7.5 38a11.5 11.5 0 0 1 23 0v.5a2 2 0 0 1-2 2h-19a2 2 0 0 1-2-2z" fill="#24305e" stroke="#fff" strokeWidth="1.6" />
+      <path d="M16.2 28.6 19 32l2.8-3.4" fill="none" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <g className="origin-[37px_35px] transition-transform duration-300 group-hover/app:scale-110 group-hover:scale-110">
+        <circle cx="37" cy="35" r="6" fill="#14a39a" stroke="#fff" strokeWidth="1.8" />
+        <path d="M34.4 35.1l1.8 1.8 3.3-3.4" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+      </g>
     </svg>
   );
 }

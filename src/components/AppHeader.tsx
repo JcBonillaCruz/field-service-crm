@@ -8,7 +8,7 @@ import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import Avatar from "@/components/Avatar";
 import CompanySwitcher from "@/components/CompanySwitcher";
 import TopSearch from "@/components/TopSearch";
-import QuickCreate from "@/components/QuickCreate";
+import LanguagePicker from "@/components/LanguagePicker";
 import NotificationsBell from "@/components/NotificationsBell";
 import RecentMenu from "@/components/RecentMenu";
 import CreateCompanyForm from "@/components/CreateCompanyForm";
@@ -80,7 +80,8 @@ export default function AppHeader({
             </Popover>
 
             <CompanySwitcher companies={companies} currentId={currentId} userId={user.id} onSwitch={switchTo} onNewCompany={() => setCreating(true)} />
-            {current?.role !== "technician" && <QuickCreate />}
+            {/* Paso 6.3d: en lugar del "+", el idioma siempre a la vista */}
+            <LanguagePicker compact />
             <NotificationsBell />
 
             <Link prefetch={false} href="/dashboard/settings" aria-label={t("settings")} title={t("allSettings")} className="group flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-white/70 hover:text-[#0f766e]">
