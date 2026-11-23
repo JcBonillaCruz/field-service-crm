@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { intlTag } from "@/i18n/config";
-import { LOCATION_ICON } from "@/lib/inventory";
+import { LocArt } from "@/components/inventory/InvArt";
 
 // Piezas comunes de las pantallas de Inventory (mismo estilo que la lista de Items)
 export function PageHead({ title, subtitle, children, back }: { title: string; subtitle?: string; children?: React.ReactNode; back?: string }) {
@@ -43,13 +43,9 @@ export function Fab({ href, label }: { href: string; label: string }) {
   );
 }
 
+// Paso 6.12b: ilustración a color (van / almacén) en lugar del ícono de línea
 export function LocIcon({ kind, size = "md" }: { kind: "warehouse" | "van"; size?: "md" | "lg" }) {
-  const s = size === "lg" ? "h-12 w-12 rounded-2xl" : "h-9 w-9 rounded-xl";
-  return (
-    <span className={`flex ${s} shrink-0 items-center justify-center ${kind === "van" ? "bg-[#fff4ec] text-[#ea580c]" : "bg-[#e9f7f4] text-[#0f766e]"}`}>
-      <svg viewBox="0 0 24 24" className={size === "lg" ? "h-6 w-6" : "h-[18px] w-[18px]"} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={LOCATION_ICON[kind]} /></svg>
-    </span>
-  );
+  return <span className="inline-flex shrink-0 transition-transform duration-200 group-hover:scale-110"><LocArt kind={kind} size={size === "lg" ? 52 : 40} /></span>;
 }
 
 export function EmptyBox({ title, text, children }: { title: string; text: string; children?: React.ReactNode }) {

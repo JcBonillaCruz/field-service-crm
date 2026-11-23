@@ -62,7 +62,7 @@ export default function MonthReportCard({ data: d }: { data: MonthCard }) {
           </div>
         </div>
         <Link prefetch={false} href={`/dashboard/reports?p=month&d=${d.prevDay}`} className="hidden h-10 items-center rounded-xl px-3 text-[13.5px] font-semibold text-[#0f766e] hover:bg-[#e9f7f4] sm:inline-flex">{t("lastMonth")}</Link>
-        <Link prefetch={false} href={href} className="group/btn hidden h-10 items-center gap-2 rounded-xl bg-[#0f766e] px-4 text-[13.5px] font-semibold text-white shadow-sm transition-all duration-150 hover:-translate-y-px hover:bg-[#0b5f59] hover:shadow-md sm:inline-flex">
+        <Link prefetch={false} href={href} className="group/btn hidden h-10 items-center gap-2 whitespace-nowrap rounded-xl bg-[#0f766e] px-4 text-[13.5px] font-semibold text-white shadow-sm transition-all duration-150 hover:-translate-y-px hover:bg-[#0b5f59] hover:shadow-md sm:inline-flex">
           {t("openFull")}<Arrow />
         </Link>
       </div>
@@ -135,8 +135,8 @@ export default function MonthReportCard({ data: d }: { data: MonthCard }) {
         </p>
         {/* Celular: los botones abajo, a lo ancho */}
         <div className="flex w-full items-center gap-2 sm:hidden">
-          <Link prefetch={false} href={href} className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#0f766e] px-4 text-[14px] font-semibold text-white active:scale-[0.98]">{t("openFull")}<Arrow /></Link>
-          <Link prefetch={false} href={`/dashboard/reports?p=month&d=${d.prevDay}`} className="inline-flex h-11 items-center rounded-xl border border-slate-200 px-3.5 text-[13.5px] font-semibold text-[#0f766e]">{t("lastMonth")}</Link>
+          <Link prefetch={false} href={href} className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#0f766e] px-4 text-[14px] font-semibold text-white active:scale-[0.98]">{t("openFull")}<Arrow /></Link>
+          <Link prefetch={false} href={`/dashboard/reports?p=month&d=${d.prevDay}`} className="inline-flex h-11 shrink-0 items-center whitespace-nowrap rounded-xl border border-slate-200 px-3.5 text-[13.5px] font-semibold text-[#0f766e]">{t("lastMonth")}</Link>
         </div>
       </div>
     </section>

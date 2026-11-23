@@ -5,33 +5,8 @@ import { useTranslations } from "next-intl";
 import { Modal } from "@/components/sales/SalesBits";
 
 // Paso 6.12 · Botón New → ventana con dos tarjetas: Van / Truck o Warehouse. Después abre el formulario completo.
-export function VanArt({ size = 56 }: { size?: number }) {
-  return (
-    <svg viewBox="0 0 56 56" width={size} height={size} aria-hidden="true">
-      <circle cx="28" cy="28" r="26" fill="#fff4ec" />
-      <g className="transition-transform duration-300 ease-out group-hover:translate-x-1.5">
-        <path d="M9 20h22v16H9z" fill="#fff" stroke="#ea580c" strokeWidth="1.8" strokeLinejoin="round" />
-        <path d="M31 25h8l5 5.5V36H31z" fill="#ffd2b3" stroke="#ea580c" strokeWidth="1.8" strokeLinejoin="round" />
-        <path d="M34 27h4.2l2.6 3H34z" fill="#fff" />
-        <path d="M13 26h9M13 30h6" stroke="#fdba8c" strokeWidth="1.8" strokeLinecap="round" />
-        <circle cx="16" cy="38" r="3.6" fill="#0b1f3a" /><circle cx="16" cy="38" r="1.4" fill="#fff" />
-        <circle cx="37" cy="38" r="3.6" fill="#0b1f3a" /><circle cx="37" cy="38" r="1.4" fill="#fff" />
-      </g>
-    </svg>
-  );
-}
-export function WarehouseArt({ size = 56 }: { size?: number }) {
-  return (
-    <svg viewBox="0 0 56 56" width={size} height={size} aria-hidden="true">
-      <circle cx="28" cy="28" r="26" fill="#e6f6f2" />
-      <path d="M10 24 28 13l18 11v18H10z" fill="#fff" stroke="#0f766e" strokeWidth="1.8" strokeLinejoin="round" />
-      <path d="M18 42V29h20v13" fill="#d7f1eb" stroke="#0f766e" strokeWidth="1.6" />
-      <g className="transition-transform duration-300 ease-out group-hover:-translate-y-1">
-        <path d="M22 33h5v5h-5zM29 33h5v5h-5zM25.5 28h5v5h-5z" fill="#f2a43a" stroke="#b45309" strokeWidth="1" />
-      </g>
-    </svg>
-  );
-}
+import { VanArt, WarehouseArt } from "@/components/inventory/InvArt";
+export { VanArt, WarehouseArt };
 
 export default function NewLocationModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const t = useTranslations("invNewLoc");
