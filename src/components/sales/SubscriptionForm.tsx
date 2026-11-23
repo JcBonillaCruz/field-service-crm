@@ -271,7 +271,6 @@ export default function SubscriptionForm({ companyId, actor, customers, items, s
               <FormRow label={t("payTerms")} width="max-w-[300px]">
                 <SelectMenu value={terms} options={TERMS.filter((x) => x !== "Custom").map((x) => ({ value: x, label: sx.term(x) }))} onChange={setTerms} ariaLabel={t("payTerms")} />
               </FormRow>
-              <p className="text-[14px] text-slate-600">{t("faster")} <span className="text-slate-400">{t("stripe")}</span></p>
               <button type="button" onClick={() => setMore((v) => !v)} className="flex items-center gap-1.5 pt-2 text-[17px] text-[#2563eb]">
                 {t("otherPrefs")}<svg viewBox="0 0 20 20" className={`h-4 w-4 transition-transform ${more ? "rotate-90" : ""}`} fill="currentColor"><path d="M7 5l6 5-6 5z" /></svg>
               </button>

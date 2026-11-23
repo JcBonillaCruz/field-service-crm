@@ -102,7 +102,7 @@ export default function TopSearch() {
 
       {menuOpen && (
         <div className="absolute left-0 z-50 mt-1 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-[0_12px_40px_rgba(15,40,60,0.16)]">
-          {MODULES.map((m) => {
+          {MODULES.filter((m) => ENABLED.has(m)).map((m) => {
             const enabled = ENABLED.has(m);
             return (
               <button key={m} type="button" disabled={!enabled}

@@ -74,7 +74,7 @@ export default function ProfilePanel({
           </div>
           <p className="mt-4 text-lg font-semibold text-[#0b1f3a]">{user.fullName || t("yourName")}</p>
           <p className="text-sm text-slate-500">{user.email}</p>
-          <Link prefetch={false} href="/dashboard/account" onClick={onClose}
+          <Link prefetch={false} href="/dashboard/settings/account" onClick={onClose}
             className="group mt-4 flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-[14px] font-semibold text-[#0b1f3a] transition-colors hover:border-[#14a39a] hover:bg-[#f3fbf8] hover:text-[#0f766e]">
             <svg viewBox="0 0 24 24" className="h-4 w-4 transition-transform duration-500 group-hover:rotate-90" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6" /></svg>
             {t("accountSettings")}

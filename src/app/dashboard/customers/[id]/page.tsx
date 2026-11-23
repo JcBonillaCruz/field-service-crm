@@ -116,7 +116,7 @@ export default async function CustomerPage({
 
       {/* Pestañas — escritorio (5) */}
       <div className="hidden lg:sticky lg:top-[65px] z-10 lg:flex gap-1 overflow-x-auto border-b border-slate-200 bg-white px-4 sm:px-6">
-        {TABS.map((k, i) => i === 0 ? (
+        {TABS.slice(0, 1).map((k, i) => i === 0 ? (
           <span key={k} className="whitespace-nowrap border-b-2 border-[#0f766e] px-3 py-3 text-sm font-semibold text-[#0f766e]">{t(`tab_${k}` as never)}</span>
         ) : (
           <span key={k} title={t("comingSoon")} className="flex items-center gap-1.5 whitespace-nowrap px-3 py-3 text-sm text-slate-400">
@@ -125,8 +125,8 @@ export default async function CustomerPage({
         ))}
       </div>
       {/* Pestañas — móvil (3, como Zoho) */}
-      <div className="grid grid-cols-3 border-b border-slate-200 bg-white lg:hidden">
-        {MOBILE_TABS.map((k, i) => i === 0 ? (
+      <div className="grid grid-cols-1 border-b border-slate-200 bg-white lg:hidden">
+        {MOBILE_TABS.slice(0, 1).map((k, i) => i === 0 ? (
           <span key={k} className="relative flex items-center justify-center py-3 text-[13px] font-semibold uppercase tracking-wide text-[#0f766e]">
             {t(`tab_${k}` as never)}<span className="absolute inset-x-3 bottom-0 h-[3px] rounded-full bg-[#0f766e]" />
           </span>

@@ -84,7 +84,7 @@ export type ToolItem = { label: string; icon?: string; onClick?: () => void; hre
 // Botón con menú (Mails ▾, PDF/Print ▾, Record Payment ▾, ⋯)
 export function ToolMenu({ icon, label, items, dots = false, align = "start" }: { icon?: string; label?: string; items: ToolItem[]; dots?: boolean; align?: "start" | "end" }) {
   const tb = useTranslations("salesBits");
-  const list = items.filter((i) => !i.hidden);
+  const list = items.filter((i) => !i.hidden && !i.soon); // nada de "Soon": lo que no existe no se muestra
   return (
     <Menu>
       <MenuButton aria-label={label ?? tb("more")}

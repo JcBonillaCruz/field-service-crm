@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { bustCache } from "@/lib/cache-client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -91,7 +92,7 @@ export default function PrefsPanel({ open, onClose, module, companyId, prefs }: 
           {l}<span className={`absolute inset-x-0 bottom-0 h-[3px] rounded-full bg-[#0f766e] transition-transform duration-200 ${tab === k ? "scale-x-100" : "scale-x-0"}`} />
         </button>
       ))}
-      <span className="ml-auto" title={tc("comingSoon")}><span className="text-sm text-slate-400">{t("allPrefs")}</span></span>
+      <Link prefetch={false} href="/dashboard/settings" className="ml-auto text-sm font-medium text-[#0f766e] hover:underline">{t("allPrefs")}</Link>
       <XButton onClick={onClose} className="!text-red-500" />
     </div>
   );
@@ -102,11 +103,6 @@ export default function PrefsPanel({ open, onClose, module, companyId, prefs }: 
     <SlideOver open={open} onClose={onClose} width="max-w-[640px]" header={header}>
       {tab === "fields" ? (
         <div className="p-5">
-          <div className="mb-3 flex justify-end">
-            <Tip text={t("customSoon")} side="top">
-              <span className="flex cursor-not-allowed items-center gap-1 rounded-lg bg-[#0f766e]/50 px-3 py-1.5 text-sm font-medium text-white">{t("new")}</span>
-            </Tip>
-          </div>
           <div className="overflow-x-auto rounded-xl border border-slate-200">
             <table className="w-full min-w-[520px] text-sm">
               <thead>

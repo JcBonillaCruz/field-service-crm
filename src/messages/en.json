@@ -3202,7 +3202,7 @@
     "notifications": "Notifications",
     "notificationsText": "Turn phone alerts on from the bell",
     "needHelp": "Need help?",
-    "helpText": "Guides and support channels are coming soon. Meanwhile, these are the places people look for most."
+    "helpText": "These are the places people look for most."
   },
   "monthCard": {
     "title": "This month's report",
@@ -4225,7 +4225,7 @@
     "timer": "Start Project Timer",
     "timerText": "Track time on jobs once dispatch is ready.",
     "helpTitle": "Need help?",
-    "helpText": "Documentation and support channels are coming soon.",
+    "helpText": "Guides and answers for using BrightPro.",
     "selectPeriod": "Select period"
   },
   "noAccess": {
@@ -7257,7 +7257,7 @@
     "setup": "Let's set up your company. It takes less than a minute."
   },
   "settingsHub": {
-    "title": "All Settings",
+    "title": "Settings",
     "search": "Search settings",
     "close": "Close Settings",
     "none": "No settings match “{q}”.",
@@ -7343,6 +7343,46 @@
       "LeadSources": "Lead Sources",
       "Surcharges": "Surcharges",
       "QuoteJobTemplates": "Quote & Job Templates"
+    },
+    "allSettings": "All settings",
+    "homeSub": "Everything you can set up, in one place.",
+    "menu": "Settings section",
+    "g": {
+      "account": "My account",
+      "org": "Organization",
+      "apps": "Apps"
+    },
+    "i": {
+      "account": "My account",
+      "branding": "Company & branding",
+      "users": "Users & roles",
+      "taxes": "Taxes & surcharges",
+      "leadSources": "Lead sources",
+      "statusColors": "Status colors",
+      "email": "Email notifications",
+      "pdf": "PDF templates",
+      "templates": "Quote & job templates",
+      "quotes": "Quotes",
+      "invoices": "Invoices & numbering",
+      "subscriptions": "Subscriptions",
+      "jobs": "Jobs",
+      "inventory": "Inventory"
+    },
+    "d": {
+      "account": "Your photo, name, email, password, organizations and deleting your account.",
+      "branding": "Company name, logo, address, phone and colors on your documents.",
+      "users": "Invite your team and choose what each role can see and do.",
+      "taxes": "Sales tax rates, the default rate and saved surcharges.",
+      "leadSources": "Where your customers come from (Google, referrals…).",
+      "statusColors": "Colors for each job and quote status.",
+      "email": "How emails to your customers look and who they come from.",
+      "pdf": "Choose the design of your quotes and invoices.",
+      "templates": "Ready-made quotes and jobs you use often.",
+      "quotes": "Quote preferences, terms and notes.",
+      "invoices": "Invoice preferences and number series.",
+      "subscriptions": "Subscription preferences.",
+      "jobs": "Business hours, job types, phases, forms and customer notices.",
+      "inventory": "Categories, alerts, minimums, vans and PDF design."
     }
   },
   "branding": {

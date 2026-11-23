@@ -97,8 +97,6 @@ export default function CustomerForm({
     { id: "other", label: t("tOther") },
     { id: "address", label: t("tAddress") },
     { id: "sites", label: t("tSites") },
-    { id: "contacts", label: t("tContacts"), soon: true },
-    { id: "custom", label: t("tCustom"), soon: true },
     { id: "remarks", label: t("tRemarks") },
   ];
 
@@ -321,14 +319,6 @@ export default function CustomerForm({
                 <input type="checkbox" checked={portal} onChange={(e) => setPortal(e.target.checked)} className="h-4 w-4 rounded accent-[#0f766e]" />
                 {t("portalAllow")}
               </label>
-            </Row>
-            <Row label={t("documents")} alignTop>
-              <span className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg border border-dashed border-slate-300 px-4 py-2.5 text-[15px] text-slate-400">
-                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" /></svg>
-                {t("uploadFile")}
-                <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium">{t("soon")}</span>
-              </span>
-              <p className="mt-1.5 text-[13px] text-slate-400">{t("uploadHint")}</p>
             </Row>
           </div>
         )}

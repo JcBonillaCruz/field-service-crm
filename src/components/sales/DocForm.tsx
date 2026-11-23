@@ -412,13 +412,6 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
                   </ComboboxOptions>
                 </Combobox>
               </FormRow>
-              <div className="hidden sm:block"><FormRow label={t("project")} width="max-w-[340px]">
-                <div className="relative">
-                  <input disabled placeholder={t("projectPh")} className={`${inputClass} cursor-not-allowed opacity-70`} />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-slate-200/70 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{t("soon")}</span>
-                </div>
-                <p className="mt-1 text-[13px] text-slate-500">{customerId ? t("projectSoon") : t("projectPick")}</p>
-              </FormRow></div>
               {mobile && !showSubject ? (
                 <button type="button" onClick={() => setShowSubject(true)} className="text-left text-[14px] font-medium text-[#2563eb]">{t("addSubject")}</button>
               ) : (
@@ -558,7 +551,6 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
           {simple && !isQuote && !showTc ? (
             <div className="space-y-3">
               <button type="button" onClick={() => setShowTc(true)} className="flex items-center gap-2 text-[15px] text-[#0b1f3a]"><span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#2563eb] text-white">+</span>{t("addTc")}</button>
-              <span className="flex items-center gap-2 text-[15px] text-slate-400"><span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-300 text-white">+</span>{t("addGateway")} <span className="rounded-full bg-slate-200/70 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{t("soon")}</span></span>
             </div>
           ) : (
             <div className="grid max-w-[1100px] gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
@@ -582,7 +574,6 @@ export default function DocForm({ kind, companyId, actor, customers, items, coup
               </div>
             </div>
           )}
-          <p className="mt-6 hidden text-[13px] text-slate-500 sm:block">{t.rich("additional", { kind, b: (c) => <b className="font-medium text-slate-600">{c}</b> })}</p>
         </div>
       </div>
 

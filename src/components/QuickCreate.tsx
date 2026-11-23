@@ -43,7 +43,7 @@ export default function QuickCreate() {
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{t(col.group.toLowerCase())}</p>
               </div>
               <ul className="space-y-0.5">
-                {col.items.map((it) => (
+                {col.items.filter((it) => it.href).map((it) => (
                   <li key={it.label}>
                     {it.href ? (
                       <Link prefetch={false} href={it.href} className="flex items-center gap-2 whitespace-nowrap rounded-lg px-2 py-1.5 text-[13px] text-slate-700 hover:bg-[#f0faf7] hover:text-[#0b1f3a]">

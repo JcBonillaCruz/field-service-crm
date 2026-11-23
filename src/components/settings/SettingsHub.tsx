@@ -3,118 +3,103 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import type { Role } from "@/lib/types";
 
-type Entry = { label: string; href?: string };
-type Card = { title: string; icon: string; tone: string; items: Entry[] };
-type Section = { title: string; cards: Card[] };
+// =====================================================================
+// Settings (Paso 6.17): una ventana flotante con el menú a la izquierda y la pantalla elegida a la derecha
+// (como Inventory settings). Solo opciones que ya funcionan: nada de "Soon".
+//   · Las de "Mi cuenta" y "Organización" se abren DENTRO de la ventana (/dashboard/settings/...)
+//   · Las de "Apps" abren los ajustes de cada app (Quotes, Invoices, Jobs, Inventory…)
+// Lo usan: SettingsWindow (ventana), esta pantalla de inicio y el menú izquierdo (AppShell).
+// =====================================================================
+export type SetItem = { key: string; href: string; icon: string; roles?: Role[]; out?: boolean };
+export type SetGroup = { key: string; items: SetItem[] };
 
+const MANAGE: Role[] = ["owner", "manager", "office"];
+const BOSS: Role[] = ["owner", "manager"];
 const ic = {
+  user: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20.5a7.5 7.5 0 0 1 15 0",
   org: "M4 20V7l8-4 8 4v13M9 20v-5h6v5M8 10h.01M12 10h.01M16 10h.01",
   users: "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2.5 20a6.5 6.5 0 0 1 13 0M16 4.3a3.5 3.5 0 0 1 0 6.4M18.5 14.2a6.5 6.5 0 0 1 3 5.8",
-  setup: "M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1M15 5v4M9 10v4M17 15v4",
-  brush: "M14 4l6 6-8.5 8.5a3 3 0 0 1-4.2 0l-1.8-1.8a3 3 0 0 1 0-4.2zM4 20c2 0 3-1 3-3",
-  bolt: "M13 3 5 14h6l-1 7 8-11h-6z",
   tax: "M9 15l6-6M9.5 9.5h.01M14.5 14.5h.01M5 4h14v16l-3-2-2 2-2-2-2 2-2-2-3 2z",
-  doc: "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 13h6M9 17h4",
-  card: "M3 6.5h18v11H3zM3 10h18M7 14.5h3",
-  cart: "M3 4h2l2.2 10.6a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L20.5 8H6",
+  lead: "M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1zM15 9a3 3 0 0 1 0 6M18 6a7 7 0 0 1 0 12",
+  colors: "M12 21a9 9 0 1 1 9-9c0 1.7-1.3 3-3 3h-2a2 2 0 0 0-1.5 3.3A1.6 1.6 0 0 1 12 21zM7.5 11.5h.01M10 7.5h.01M14.5 7.5h.01M17 11h.01",
+  mail: "M3 6h18v12H3zM3 7l9 6 9-6",
+  pdf: "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 13h6M9 17h4",
+  tpl: "M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM9 8h6M9 12h6M9 16h3",
+  quote: "M6 3h9l4 4v14H6zM15 3v4h4M9 12h6M9 16h4",
+  invoice: "M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2zM9 8h6M9 12h6M9 16h3",
   repeat: "M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M18 3v4h-4M6 21v-4h4",
-  bag: "M6 8h12l-1 12H7zM9 8V6a3 3 0 0 1 6 0v2",
-  portal: "M3 5h18v12H3zM8 21h8M12 17v4",
-  module: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
-  plug: "M9 7V3M15 7V3M7 7h10v4a5 5 0 0 1-10 0zM12 16v5",
-  code: "M8 8l-4 4 4 4M16 8l4 4-4 4M14 5l-4 14",
+  jobs: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M8 14h3M8 17h6",
+  box: "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9",
 };
-
-// Paso 6.3d: también lo usa el menú izquierdo (Settings → Mi cuenta, Organización, Módulos…)
-export const SECTIONS: Section[] = [
-  { title: "My Account", cards: [
-    { title: "Personal", icon: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20.5a7.5 7.5 0 0 1 15 0", tone: "bg-[#fff4ec] text-[#e8713a]", items: [
-      { label: "Profile & photo", href: "/dashboard/account" }, { label: "Email & password", href: "/dashboard/account#security" }, { label: "My organizations", href: "/dashboard/account" }, { label: "Delete account", href: "/dashboard/account#delete" },
-    ] },
+const S = "/dashboard/settings";
+export const SETTINGS_GROUPS: SetGroup[] = [
+  { key: "account", items: [
+    { key: "account", href: `${S}/account`, icon: ic.user },
   ] },
-  { title: "Organization Settings", cards: [
-    { title: "Organization", icon: ic.org, tone: "bg-[#e9f7f4] text-[#0f766e]", items: [{ label: "Profile" }, { label: "Branding", href: "/dashboard/settings/branding" }, { label: "Custom Domain" }, { label: "Locations" }, { label: "Manage Subscription" }] },
-    { title: "Users & Roles", icon: ic.users, tone: "bg-[#fff0f0] text-[#e11d48]", items: [{ label: "Users" }, { label: "Roles" }, { label: "User Preferences" }] },
-    { title: "Taxes & Compliance", icon: ic.tax, tone: "bg-[#eef6ff] text-[#2563eb]", items: [{ label: "Taxes", href: "/dashboard/settings/taxes" }, { label: "Surcharges", href: "/dashboard/settings/taxes#surcharges" }] },
-    { title: "Setup & Configurations", icon: ic.setup, tone: "bg-[#fff6e8] text-[#d97706]", items: [{ label: "General" }, { label: "Currencies" }, { label: "Payment Terms" }, { label: "Reminders" }, { label: "Transaction Number Series", href: "/dashboard/invoices?prefs=1" }] },
-    { title: "Customization", icon: ic.brush, tone: "bg-[#fff6e8] text-[#ea580c]", items: [{ label: "PDF Templates", href: "/dashboard/settings/pdf-templates" }, { label: "Status Colors", href: "/dashboard/settings/status-colors" }, { label: "Email Notifications", href: "/dashboard/settings/email" }, { label: "Hosted Payment Pages" }, { label: "Web Tabs" }] },
-    { title: "Automation", icon: ic.bolt, tone: "bg-[#fff0f0] text-[#e11d48]", items: [{ label: "Workflow Rules" }, { label: "Workflow Actions" }, { label: "Workflow Logs" }, { label: "Schedules" }] },
+  { key: "org", items: [
+    { key: "branding", href: `${S}/branding`, icon: ic.org, roles: MANAGE },
+    { key: "users", href: `${S}/users`, icon: ic.users, roles: BOSS },
+    { key: "taxes", href: `${S}/taxes`, icon: ic.tax, roles: MANAGE },
+    { key: "leadSources", href: `${S}/lead-sources`, icon: ic.lead, roles: MANAGE },
+    { key: "statusColors", href: `${S}/status-colors`, icon: ic.colors, roles: MANAGE },
+    { key: "email", href: `${S}/email`, icon: ic.mail, roles: MANAGE },
+    { key: "pdf", href: `${S}/pdf-templates`, icon: ic.pdf, roles: MANAGE },
+    { key: "templates", href: `${S}/templates`, icon: ic.tpl, roles: MANAGE },
   ] },
-  { title: "Module Settings", cards: [
-    { title: "General", icon: ic.doc, tone: "bg-[#e9f7f4] text-[#0f766e]", items: [{ label: "Customers", href: "/dashboard/customers" }, { label: "Lead Sources", href: "/dashboard/settings/lead-sources" }, { label: "Products", href: "/dashboard/items" }, { label: "Coupons", href: "/dashboard/coupons" }, { label: "Projects" }, { label: "Timesheet" }] },
-    { title: "Online Payments", icon: ic.card, tone: "bg-[#fff6e8] text-[#d97706]", items: [{ label: "Payment Gateways" }, { label: "Address Verification Settings" }] },
-    { title: "Sales", icon: ic.cart, tone: "bg-[#e9f7f4] text-[#0f766e]", items: [{ label: "Quotes", href: "/dashboard/quotes?prefs=1" }, { label: "Invoices", href: "/dashboard/invoices?prefs=1" }, { label: "Quote & Job Templates", href: "/dashboard/settings/templates" }, { label: "Payments Received" }, { label: "Delivery Notes", href: "/dashboard/settings/pdf-templates?for=invoice" }, { label: "Packing Slips", href: "/dashboard/settings/pdf-templates?for=invoice" }] },
-    { title: "Subscriptions", icon: ic.repeat, tone: "bg-[#e9f7f4] text-[#0f766e]", items: [{ label: "General", href: "/dashboard/subscriptions?prefs=1" }, { label: "Billing Preferences" }, { label: "Advance Billing" }, { label: "Dunning Management" }, { label: "Cancellation Preferences" }] },
-    { title: "Purchases", icon: ic.bag, tone: "bg-[#e9f7f4] text-[#0f766e]", items: [{ label: "Expenses", href: "/dashboard/expenses" }] },
-    { title: "Customer Portal", icon: ic.portal, tone: "bg-[#e9f7f4] text-[#0f766e]", items: [{ label: "General" }, { label: "Subscription Management" }, { label: "Web Tabs" }] },
-    { title: "Custom Modules", icon: ic.module, tone: "bg-[#eef6ff] text-[#2563eb]", items: [{ label: "Overview" }] },
-  ] },
-  { title: "Extension and Developer Data", cards: [
-    { title: "Tools", icon: ic.module, tone: "bg-[#eef2ff] text-[#4f46e5]", items: [{ label: "QR Code Studio", href: "/dashboard/tools/qr" }] },
-    { title: "Integrations & Marketplace", icon: ic.plug, tone: "bg-[#e9f7f4] text-[#0f766e]", items: [{ label: "WhatsApp" }, { label: "SMS Integrations" }, { label: "Accounting" }, { label: "Google Calendar" }, { label: "Marketplace" }] },
-    { title: "Developer Data", icon: ic.code, tone: "bg-[#fff6e8] text-[#ea580c]", items: [{ label: "Incoming Webhooks" }, { label: "Connections" }, { label: "API Usage" }, { label: "Data Management" }, { label: "Web Forms" }] },
+  { key: "apps", items: [
+    { key: "quotes", href: "/dashboard/quotes?prefs=1", icon: ic.quote, roles: MANAGE, out: true },
+    { key: "invoices", href: "/dashboard/invoices?prefs=1", icon: ic.invoice, roles: MANAGE, out: true },
+    { key: "subscriptions", href: "/dashboard/subscriptions?prefs=1", icon: ic.repeat, roles: MANAGE, out: true },
+    { key: "jobs", href: "/dashboard/jobs/settings", icon: ic.jobs, roles: BOSS, out: true },
+    { key: "inventory", href: "/dashboard/inventory/settings", icon: ic.box, roles: MANAGE, out: true },
   ] },
 ];
+export const groupsFor = (role: Role | null) => SETTINGS_GROUPS
+  .map((g) => ({ ...g, items: g.items.filter((i) => !i.roles || Boolean(role && i.roles.includes(role))) }))
+  .filter((g) => g.items.length);
+// La opción que corresponde a la pantalla donde estás
+export const itemAt = (path: string) => SETTINGS_GROUPS.flatMap((g) => g.items).find((i) => !i.out && (path === i.href || path.startsWith(`${i.href}/`)));
 
-export default function SettingsHub({ companyName }: { companyName: string }) {
+export const OutIcon = ({ className = "h-3.5 w-3.5" }: { className?: string }) => (
+  <svg viewBox="0 0 20 20" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 4H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3M11 4h5v5M9.5 10.5 16 4" /></svg>
+);
+
+// Inicio de Settings (lado derecho de la ventana): todas las opciones con su explicación, y un buscador
+export default function SettingsHub({ role }: { role: Role | null }) {
   const t = useTranslations("settingsHub");
-  const L = (s: string) => t(`l.${s.replace(/[^A-Za-z0-9]/g, "")}`);
   const [q, setQ] = useState("");
   const term = q.trim().toLowerCase();
-  const sections = SECTIONS.map((s) => ({
-    ...s, name: L(s.title), cards: s.cards.map((c) => ({ ...c, name: L(c.title), items: c.items.map((i) => ({ ...i, name: L(i.label) })).filter((i) => !term || `${L(c.title)} ${i.name}`.toLowerCase().includes(term)) })).filter((c) => c.items.length),
-  })).filter((s) => s.cards.length);
+  const groups = groupsFor(role).map((g) => ({
+    ...g, items: g.items.filter((i) => !term || `${t(`i.${i.key}`)} ${t(`d.${i.key}`)}`.toLowerCase().includes(term)),
+  })).filter((g) => g.items.length);
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-[#f6f8f9]">
-      <div className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1240px] flex-wrap items-center gap-4 px-5 py-3.5">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#e9f7f4] text-[#0f766e]">
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3" /><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" strokeLinecap="round" /></svg>
-          </span>
-          <div className="min-w-0"><h1 className="text-xl font-semibold text-[#0b1f3a]">{t("title")}</h1><p className="text-[13px] text-slate-500">{companyName}</p></div>
-          <div className="order-last flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 focus-within:border-[#0f766e] focus-within:bg-white sm:order-none sm:mx-auto sm:w-80">
-            <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("search")} className="w-full bg-transparent py-2.5 text-[15px] focus:outline-none" />
+    <div className="px-4 py-5 sm:px-7 sm:py-6">
+      <div className="flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 focus-within:border-[#0f766e] sm:max-w-sm">
+        <svg viewBox="0 0 20 20" className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" /></svg>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("search")} aria-label={t("search")} className="w-full bg-transparent py-2.5 text-[15px] focus:outline-none" />
+      </div>
+      {groups.length === 0 && <p className="py-16 text-center text-slate-500">{t("none", { q })}</p>}
+      {groups.map((g) => (
+        <section key={g.key} className="mt-6">
+          <h3 className="mb-2.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-400">{t(`g.${g.key}`)}</h3>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {g.items.map((i) => (
+              <Link key={i.key} prefetch={false} href={i.href}
+                className="group flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 transition-all duration-150 hover:-translate-y-0.5 hover:border-[#bfe7de] hover:shadow-[0_8px_24px_rgba(15,40,60,0.08)]">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#e9f7f4] text-[#0f766e] transition-transform duration-200 group-hover:-rotate-6 group-hover:scale-110">
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={i.icon} /></svg>
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5 text-[15px] font-semibold text-[#0b1f3a]">{t(`i.${i.key}`)}{i.out && <span className="text-slate-400"><OutIcon /></span>}</span>
+                  <span className="mt-0.5 block text-[13px] leading-snug text-slate-500">{t(`d.${i.key}`)}</span>
+                </span>
+              </Link>
+            ))}
           </div>
-          <Link prefetch={false} href="/dashboard" className="ml-auto flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:ml-0">
-            {t("close")}<svg viewBox="0 0 20 20" className="h-4 w-4 text-red-500" fill="currentColor"><path d="M5.3 5.3a1 1 0 0 1 1.4 0L10 8.6l3.3-3.3a1 1 0 1 1 1.4 1.4L11.4 10l3.3 3.3a1 1 0 0 1-1.4 1.4L10 11.4l-3.3 3.3a1 1 0 0 1-1.4-1.4L8.6 10 5.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
-          </Link>
-        </div>
-      </div>
-      <div className="mx-auto max-w-[1240px] space-y-6 px-4 py-6 sm:px-5 sm:py-8">
-        {sections.length === 0 && <p className="py-16 text-center text-slate-500">{t("none", { q })}</p>}
-        {sections.map((sec) => (
-          <section key={sec.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_3px_rgba(15,40,60,0.04)] sm:p-7">
-            <h2 className="mb-5 text-[18px] font-semibold text-[#0b1f3a]">{sec.name}</h2>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {sec.cards.map((c) => (
-                <div key={c.title} className="rounded-xl border border-slate-100 p-2 transition-shadow hover:shadow-[0_6px_24px_rgba(15,40,60,0.08)]">
-                  <div className={`mb-1 flex items-center gap-2.5 rounded-lg px-3 py-2.5 ${c.tone.split(" ")[0]}`}>
-                    <svg viewBox="0 0 24 24" className={`h-[18px] w-[18px] ${c.tone.split(" ")[1]}`} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={c.icon} /></svg>
-                    <p className="font-semibold text-[#0b1f3a]">{c.name}</p>
-                  </div>
-                  <ul>
-                    {c.items.map((i) => (
-                      <li key={i.label}>
-                        {i.href ? (
-                          <Link prefetch={false} href={i.href} className="group flex items-center justify-between rounded-lg px-3 py-2 text-[15px] text-slate-700 transition-colors hover:bg-[#e9f7f4] hover:text-[#0f766e]">
-                            {i.name}<svg viewBox="0 0 20 20" className="h-4 w-4 -translate-x-1 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100" fill="currentColor"><path d="M7.3 5.3a1 1 0 0 1 1.4 0l4 4a1 1 0 0 1 0 1.4l-4 4a1 1 0 0 1-1.4-1.4L10.6 10 7.3 6.7a1 1 0 0 1 0-1.4z" /></svg>
-                          </Link>
-                        ) : (
-                          <span className="flex items-center justify-between rounded-lg px-3 py-2 text-[15px] text-slate-400">
-                            {i.name}<span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">{t("soon")}</span>
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
+        </section>
+      ))}
     </div>
   );
 }

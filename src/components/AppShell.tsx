@@ -17,7 +17,8 @@ import { useInstallApp } from "@/components/InstallPrompt";
 import { FinanceArt, InventoryArt, JobsArt, QrArt, SettingsArt, TeamAppArt } from "@/components/AppIcons";
 import { DashboardArt } from "@/components/home/DashArt";
 import { canManageSales } from "@/lib/sales";
-import { SECTIONS as SETTINGS_SECTIONS } from "@/components/settings/SettingsHub";
+import { groupsFor, itemAt } from "@/components/settings/SettingsHub";
+import { LAST_APP_KEY } from "@/components/settings/SettingsWindow";
 import { CompanySummary, CurrentUser, Role } from "@/lib/types";
 
 type NavItem = {
@@ -74,15 +75,12 @@ const FINANCE_NAV: NavItem[] = [
       { label: "Financing", href: "/dashboard/financing", icon: "", roles: ["owner", "manager"] },
       { label: "Reports", href: "/dashboard/reports", icon: "", roles: ["owner", "manager"] },
     ] },
-  { label: "Payments", icon: "M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 10h18M7 15h3", roles: ["owner", "manager"] },
   { label: "Team", href: "/dashboard/team", addHref: "/dashboard/team/invite", addLabel: "Member", icon: "M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6", roles: ["owner", "manager"] },
   SETTINGS,
 ];
 
 const QR_NAV: NavItem[] = [
   { label: "Create QR code", href: "/dashboard/tools/qr", icon: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2zM6.5 6.5h1M16.5 6.5h1M6.5 16.5h1" },
-  { label: "My QR codes", icon: "M4 5h16v14H4zM4 9h16M8 13h3M8 16h6" },
-  { label: "Scan stats", icon: "M4 20V10M10 20V4M16 20v-7M22 20H2" },
   SETTINGS,
 ];
 // Inventory: su propio menú. El técnico ve solo lo suyo (su van, escanear, su consumo).
@@ -149,67 +147,24 @@ const appHome = (id: AppId, role: Role | null) =>
 const GLOBAL_SETTINGS = "/dashboard/settings";
 const GLOBAL_TEAM = "/dashboard/team";
 const ACCOUNT = "/dashboard/account";
-const SECTION_ICON = [
-  "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20.5a7.5 7.5 0 0 1 15 0",
-  "M4 20V7l8-4 8 4v13M9 20v-5h6v5M8 10h.01M12 10h.01M16 10h.01",
-  "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
-  "M9 7V3M15 7V3M7 7h10v4a5 5 0 0 1-10 0zM12 16v5",
-];
 
-// Paso 6.3d: Settings general también en el menú izquierdo, con las mismas secciones de "Todos los ajustes"
-// (Mi cuenta, Ajustes de la organización, Ajustes de módulos, Extensiones). Solo las opciones que ya funcionan.
-function SettingsMenu() {
+// Paso 6.3d / 6.17: Settings general en el menú izquierdo, con las mismas opciones de la ventana de Settings
+// (Mi cuenta, Organización, Apps). Solo las opciones que ya funcionan.
+function SettingsMenu({ role }: { role: Role | null }) {
   const t = useTranslations("settingsHub");
-  const L = (x: string) => t(`l.${x.replace(/[^A-Za-z0-9]/g, "")}`);
   const pathname = usePathname() || "";
-  const sections = SETTINGS_SECTIONS.map((sec, i) => ({
-    key: sec.title, name: L(sec.title), icon: SECTION_ICON[i] ?? SECTION_ICON[2],
-    items: sec.cards.flatMap((c) => c.items.filter((it) => it.href).map((it) => ({ label: L(it.label), href: it.href as string }))),
-  })).filter((sec) => sec.items.length);
-  // Solo se marca la primera opción que lleva a la pantalla donde estás
-  const seen = new Set<string>();
-  const marked = new Set<string>();
-  sections.forEach((sec) => sec.items.forEach((it) => {
-    const path = it.href.split(/[?#]/)[0];
-    if (!seen.has(path) && pathname === path) marked.add(`${sec.key}|${it.href}|${it.label}`);
-    seen.add(path);
-  }));
-  const isOn = (sec: string, it: { href: string; label: string }) => marked.has(`${sec}|${it.href}|${it.label}`);
-  const [open, setOpen] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(sections.filter((sec) => sec.items.some((it) => isOn(sec.key, it))).map((sec) => [sec.key, true])));
-
+  const here = itemAt(pathname);
   return (
     <ul className="space-y-0.5">
-      {sections.map((sec) => {
-        const isOpen = Boolean(open[sec.key]);
-        const inside = sec.items.some((it) => isOn(sec.key, it));
+      {groupsFor(role).flatMap((g) => g.items).map((it) => {
+        const on = here?.key === it.key;
         return (
-          <li key={sec.key}>
-            <button type="button" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [sec.key]: !isOpen }))}
-              className={`group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] transition-colors hover:bg-[#eef7f4] ${inside ? "font-semibold text-[#0b5e57]" : "text-slate-700 hover:text-[#0b1f3a]"}`}>
-              <span className="flex w-3.5 shrink-0 justify-center">
-                <svg viewBox="0 0 20 20" className={`h-3.5 w-3.5 transition-transform duration-200 ${isOpen ? "text-[#0f766e]" : "-rotate-90 text-slate-400"}`} fill="currentColor" aria-hidden="true">
-                  <path d="M5.3 7.3a1 1 0 0 1 1.4 0L10 10.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 0-1.4z" />
-                </svg>
-              </span>
-              <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] shrink-0 group-hover:animate-[bp-nav-pop_0.5s_ease-out_forwards]" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={sec.icon} /></svg>
-              <span className="min-w-0 flex-1 truncate">{sec.name}</span>
-            </button>
-            {isOpen && (
-              <ul className="mt-0.5 space-y-0.5 animate-[bp-fade_0.2s_ease-out]">
-                {sec.items.map((it) => {
-                  const on = isOn(sec.key, it);
-                  return (
-                    <li key={`${it.href}-${it.label}`}>
-                      <Link prefetch={false} href={it.href}
-                        className={`flex items-center rounded-lg py-2 pl-[3.35rem] pr-2.5 text-[13px] transition-all duration-150 ${on ? "bg-[#dcf2ec] font-semibold text-[#0b5e57]" : "text-slate-700 hover:bg-[#eef7f4] hover:text-[#0b1f3a]"}`}>
-                        <span className="min-w-0 flex-1 truncate">{it.label}</span>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+          <li key={it.key}>
+            <Link prefetch={false} href={it.href}
+              className={`flex items-center gap-2.5 rounded-lg py-2 pl-[2.1rem] pr-2.5 text-[13px] transition-all duration-150 ${on ? "bg-[#dcf2ec] font-semibold text-[#0b5e57]" : "text-slate-700 hover:bg-[#eef7f4] hover:text-[#0b1f3a]"}`}>
+              <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={it.icon} /></svg>
+              <span className="min-w-0 flex-1 truncate">{t(`i.${it.key}`)}</span>
+            </Link>
           </li>
         );
       })}
@@ -293,7 +248,7 @@ function DesktopNav({ role }: { role: Role | null }) {
                 </div>
                 {open && (
                   <div className="mb-2 mt-1 animate-[bp-fade_0.2s_ease-out]">
-                    <SettingsMenu />
+                    <SettingsMenu role={role} />
                   </div>
                 )}
               </li>
@@ -318,7 +273,8 @@ function NavList({ role, onNavigate, forApp, embedded = false }: { role: Role | 
   // Los hijos de un grupo también respetan "roles" (Payroll y Reports de Finances: dueño y manager)
   // En la computadora, "Settings" de toda la app tiene su propia fila (no repetido dentro de Finances / QR)
   // y "Team" también tiene su propia fila (paso 6.3c)
-  const items = NAV.filter(allowed).filter((i) => !(embedded && (i.href === GLOBAL_SETTINGS || i.label === "Team")))
+  // Nada de "Soon": una opción sin pantalla (sin href ni hijos) no se muestra
+  const items = NAV.filter(allowed).filter((i) => i.href || i.children?.length).filter((i) => !(embedded && (i.href === GLOBAL_SETTINGS || i.label === "Team")))
     .map((i) => (i.children ? { ...i, children: i.children.filter(allowed) } : i));
   const excludes = new Map(NAV.filter((n) => n.exclude && n.href).map((n) => [n.href as string, n.exclude as string[]]));
   const alsoOf = new Map(NAV.filter((n) => n.also && n.href).map((n) => [n.href as string, n.also as string[]]));
@@ -497,6 +453,12 @@ export default function AppShell({
   const appNow = appOf(pathname || "");
   const homeHref = role === "technician" ? (appNow === "inventory" ? "/dashboard/inventory/van" : "/dashboard/jobs/mine")
     : appNow === "inventory" ? "/dashboard/inventory" : appNow === "jobs" ? "/dashboard/jobs" : appNow === "qr" ? "/dashboard/tools/qr" : "/dashboard";
+
+  // Paso 6.17: al cerrar la ventana de Settings se regresa a la última pantalla de la app
+  useEffect(() => {
+    if (!pathname || pathname.startsWith(GLOBAL_SETTINGS) || pathname.startsWith(ACCOUNT)) return;
+    try { sessionStorage.setItem(LAST_APP_KEY, pathname); } catch { /* sin almacenamiento */ }
+  }, [pathname]);
 
   // Presencia: cada minuto avisa que la app está abierta y si la persona la está usando (para Team: verde / naranja / rojo)
   useEffect(() => {

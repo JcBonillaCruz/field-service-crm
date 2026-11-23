@@ -5,7 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AuthShell from "@/components/AuthShell";
-import SocialButtons from "@/components/SocialButtons";
 import { hideSplash, showSplash } from "@/lib/splash";
 import { createClient } from "@/lib/supabase/client";
 import { useTranslations } from "next-intl";
@@ -88,8 +87,6 @@ export default function SignInPage() {
           {loading ? t("signingIn") : t("signIn")}
         </button>
       </form>
-
-      <SocialButtons />
 
       <p className="mt-8 text-sm text-slate-600">
         {t("noAccount")}{" "}

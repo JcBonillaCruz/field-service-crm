@@ -178,7 +178,6 @@ export function CustomizeMenu({ companyId, pdf, whiteLabel, onLogo, kind, back, 
           <MenuItem><button type="button" onClick={() => setEdit(true)} className={item}>{t("title")}</button></MenuItem>
           <div className="my-1 border-t border-slate-100" />
           <MenuItem><button type="button" onClick={onLogo} className={item}>{t("updateLogo")}</button></MenuItem>
-          <MenuItem disabled><span className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-slate-300">{t("customFields")}<span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-400">{t("soon")}</span></span></MenuItem>
         </MenuItems>
       </Menu>
       <EditTemplateModal open={edit} onClose={() => setEdit(false)} companyId={companyId} pdf={pdf} whiteLabel={whiteLabel} preview={preview} />

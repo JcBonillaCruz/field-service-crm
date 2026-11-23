@@ -192,10 +192,6 @@ export default function AccountSettings({ user, companies, currentId }: { user: 
           <div className="mt-2 border-t border-slate-100 pt-2"><NewOrgButton onClick={() => setCreating(true)} /></div>
         </Card>
 
-        <Card title={t("team")} sub={tc("comingSoon")}>
-          <p className="text-[14px] text-slate-600">{t("teamBody")}</p>
-        </Card>
-
         <Card id="delete" title={t("delete")} sub={t("deleteSub")} danger>
           <ul className="list-disc space-y-1 pl-5 text-[13.5px] text-slate-600">
             <li>{t("delete1", { names: owned.length ? ` (${owned.map((c) => c.name).join(", ")})` : "" })}</li>

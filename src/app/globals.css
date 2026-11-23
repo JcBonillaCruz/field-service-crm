@@ -75,3 +75,14 @@ html, body { overflow-x: clip; } /* clip (no hidden): no rompe los encabezados p
 
 /* Pantalla de inicio del técnico: la línea del lector sube y baja sobre el código de barras */
 @keyframes bp-scan { 0%, 100% { transform: translateY(-5px); } 50% { transform: translateY(6px); } }
+
+/* Paso 6.17 · Settings en ventana flotante: las pantallas de ajustes llenan el panel derecho
+   y su enlace "← All settings" sobra (el menú de la izquierda ya está ahí) */
+.bp-settings-pane .min-h-\[calc\(100vh-4rem\)\] { min-height: 100%; }
+.bp-settings-pane a[href="/dashboard/settings"] { display: none; }
+@media (min-width: 1024px) {
+  /* En la computadora el título ya está arriba de la ventana: no se repite el de la pantalla */
+  .bp-settings-pane h1, .bp-settings-pane h1 + p { display: none; }
+  /* …y si ese renglón de título solo traía el ícono (sin botones), se esconde completo */
+  .bp-settings-pane div:has(> div > h1):not(:has(button, a, input, select)) { display: none; }
+}

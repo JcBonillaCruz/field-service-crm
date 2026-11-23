@@ -180,10 +180,10 @@ export default function ExportModal({ open, onClose, initialModule = "Customers"
                     <input autoFocus value={moduleQuery} onChange={(e) => setModuleQuery(e.target.value)} placeholder={t("search")} className={inputClass} />
                   </div>
                   <div className="max-h-56 overflow-y-auto pb-1">
-                    {filteredGroups.map((g) => (
+                    {filteredGroups.filter((g) => g.items.some((i) => ENABLED.has(i))).map((g) => (
                       <div key={g.group}>
                         <p className="px-4 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{grp(g.group)}</p>
-                        {g.items.map((i) => {
+                        {g.items.filter((i) => ENABLED.has(i)).map((i) => {
                           const enabled = ENABLED.has(i);
                           return (
                             <button key={i} type="button" disabled={!enabled}

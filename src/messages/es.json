@@ -3197,7 +3197,7 @@
     "notifications": "Notificaciones",
     "notificationsText": "Activa las alertas del teléfono desde la campana",
     "needHelp": "¿Necesitas ayuda?",
-    "helpText": "Las guías y los canales de soporte llegan pronto. Mientras tanto, estos son los lugares que más se buscan."
+    "helpText": "Estos son los lugares que más se buscan."
   },
   "monthCard": {
     "title": "Reporte de este mes",
@@ -4220,7 +4220,7 @@
     "timer": "Iniciar el reloj del proyecto",
     "timerText": "Mide el tiempo de los trabajos cuando esté listo el despacho.",
     "helpTitle": "¿Necesitas ayuda?",
-    "helpText": "Pronto habrá guías y canales de soporte.",
+    "helpText": "Guías y respuestas para usar BrightPro.",
     "selectPeriod": "Elige el periodo"
   },
   "noAccess": {
@@ -7252,7 +7252,7 @@
     "setup": "Vamos a configurar tu empresa. Toma menos de un minuto."
   },
   "settingsHub": {
-    "title": "Todos los ajustes",
+    "title": "Ajustes",
     "search": "Buscar ajustes",
     "close": "Cerrar ajustes",
     "none": "Ningún ajuste coincide con “{q}”.",
@@ -7338,6 +7338,46 @@
       "LeadSources": "Orígenes de clientes",
       "Surcharges": "Recargos",
       "QuoteJobTemplates": "Plantillas de cotización y trabajo"
+    },
+    "allSettings": "Todos los ajustes",
+    "homeSub": "Todo lo que puedes configurar, en un solo lugar.",
+    "menu": "Sección de ajustes",
+    "g": {
+      "account": "Mi cuenta",
+      "org": "Organización",
+      "apps": "Apps"
+    },
+    "i": {
+      "account": "Mi cuenta",
+      "branding": "Compañía y marca",
+      "users": "Usuarios y roles",
+      "taxes": "Impuestos y recargos",
+      "leadSources": "Fuentes de clientes",
+      "statusColors": "Colores de estado",
+      "email": "Correos a clientes",
+      "pdf": "Plantillas PDF",
+      "templates": "Plantillas de cotización y trabajo",
+      "quotes": "Cotizaciones",
+      "invoices": "Facturas y numeración",
+      "subscriptions": "Suscripciones",
+      "jobs": "Trabajos",
+      "inventory": "Inventario"
+    },
+    "d": {
+      "account": "Tu foto, nombre, correo, contraseña, organizaciones y borrar tu cuenta.",
+      "branding": "Nombre, logo, dirección, teléfono y colores de tus documentos.",
+      "users": "Invita a tu equipo y elige qué puede ver y hacer cada rol.",
+      "taxes": "Tasas de impuesto, la predeterminada y los recargos guardados.",
+      "leadSources": "De dónde llegan tus clientes (Google, referidos…).",
+      "statusColors": "Colores de cada estado de trabajos y cotizaciones.",
+      "email": "Cómo se ven los correos a tus clientes y de quién llegan.",
+      "pdf": "Elige el diseño de tus cotizaciones y facturas.",
+      "templates": "Cotizaciones y trabajos listos que usas seguido.",
+      "quotes": "Preferencias, términos y notas de las cotizaciones.",
+      "invoices": "Preferencias de facturas y la serie de números.",
+      "subscriptions": "Preferencias de suscripciones.",
+      "jobs": "Horario, tipos de trabajo, fases, formularios y avisos al cliente.",
+      "inventory": "Categorías, avisos, mínimos, camionetas y diseño del PDF."
     }
   },
   "branding": {
