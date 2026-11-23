@@ -111,6 +111,8 @@ const JOBS_NAV: NavItem[] = [
   { label: "Operations", href: "/dashboard/jobs/operations", roles: MANAGE, icon: "M3 12h4l2.5-6 4 12 2.5-6H21" },
   { label: "Schedule", href: "/dashboard/jobs/schedule", addHref: "/dashboard/jobs/new", addLabel: "Job", roles: MANAGE, icon: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M8 14h3M13 14h3M8 17h3" },
   { label: "Assign jobs", href: "/dashboard/jobs/assign", roles: MANAGE, icon: "M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2.5 15a5.5 5.5 0 0 1 11 0M14 12h7M18 9l3 3-3 3" },
+  // Paso 6.13b: días libres, permisos y vacaciones del equipo
+  { label: "Time off", href: "/dashboard/jobs/time-off", addHref: "/dashboard/jobs/time-off/new", addLabel: "Time off", roles: MANAGE, icon: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 14.5l2 2 4-4" },
   // Paso 5.11: planes de mantenimiento (visitas que se repiten y se crean solas)
   { label: "Maintenance plans", href: "/dashboard/jobs/plans", addHref: "/dashboard/jobs/plans/new", addLabel: "Plan", roles: MANAGE, icon: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M9 15a3 3 0 0 1 5.2-2M15 15a3 3 0 0 1-5.2 2M14.5 11.5V13H13M9.5 18.5V17H11" },
   // Paso 6.10: plantillas de trabajo y cotización (Tune-up, cambio de capacitor…)

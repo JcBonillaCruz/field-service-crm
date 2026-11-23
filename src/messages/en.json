@@ -126,7 +126,8 @@
     "templates": "Templates",
     "stockVans": "Stock & Vans",
     "history": "History",
-    "purchasing": "Purchasing"
+    "purchasing": "Purchasing",
+    "timeOff": "Time off"
   },
   "navAdd": {
     "customers": "New Customer",
@@ -142,7 +143,8 @@
     "job": "New Job",
     "plan": "New Plan",
     "template": "New Template",
-    "order": "New order"
+    "order": "New order",
+    "timeOff": "New time off"
   },
   "apps": {
     "allApps": "All apps",
@@ -1305,7 +1307,9 @@
       "personal": "Personal",
       "training": "Training",
       "holiday": "Holiday",
-      "other": "Other"
+      "other": "Other",
+      "day_off": "Day off",
+      "permission": "Permission"
     },
     "off": "Off",
     "weekJobs": "{n, plural, one {# this week} other {# this week}}"
@@ -2361,7 +2365,9 @@
       "personal": "Personal",
       "training": "Training",
       "holiday": "Holiday",
-      "other": "Other"
+      "other": "Other",
+      "day_off": "Day off",
+      "permission": "Permission"
     },
     "offWarn": "{name} is off ({kind}): {when}",
     "template": "Template",
@@ -7718,7 +7724,8 @@
     "offDeleted": "Time off deleted",
     "deleteOff": "Delete time off",
     "delOffQ": "Delete {name}'s time off?",
-    "delOffMsg": "It disappears from the calendar. Jobs aren't changed."
+    "delOffMsg": "It disappears from the calendar. Jobs aren't changed.",
+    "eOffKindSql": "Run the step 6.13b SQL to use Day off and Permission."
   },
   "lead": {
     "src": {
@@ -8828,5 +8835,38 @@
     "reason": "Reason",
     "reasonPh": "Model changed, supplier stopped carrying it…",
     "discYes": "Discontinue"
+  },
+  "offDash": {
+    "title": "Out today",
+    "nOut": "{n, plural, one {# person is out} other {# people are out}}",
+    "allIn": "The whole team is working today",
+    "seeAll": "See all",
+    "add": "Assign time off",
+    "today": "Today",
+    "next7": "Next 7 days",
+    "nobody": "Nobody is out today.",
+    "noneSoon": "Nothing in the next 7 days.",
+    "allDay": "All day",
+    "until": "until {d}",
+    "now": "right now",
+    "pageTitle": "Time off",
+    "pageSub": "Days off, permissions, vacations and sick days. They show in the Schedule, and you get a warning if you assign a job during those hours.",
+    "tab": {
+      "today": "Today",
+      "upcoming": "Upcoming",
+      "past": "Past (90 days)"
+    },
+    "person": "Person",
+    "everyone": "Everyone",
+    "reason": "Reason",
+    "allReasons": "All reasons",
+    "noneUpcoming": "No time off scheduled.",
+    "nonePast": "No time off in the last 90 days.",
+    "former": "Former member",
+    "nDays": "{n} days",
+    "newTitle": "Assign time off",
+    "editTitle": "Edit time off",
+    "assign": "Assign",
+    "eSql": "Run the step 6.5 SQL (time off) first."
   }
 }

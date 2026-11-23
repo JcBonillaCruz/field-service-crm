@@ -126,7 +126,8 @@
     "templates": "Plantillas",
     "stockVans": "Stock y camionetas",
     "history": "Historial",
-    "purchasing": "Compras"
+    "purchasing": "Compras",
+    "timeOff": "Días libres"
   },
   "navAdd": {
     "customers": "Nuevo cliente",
@@ -142,7 +143,8 @@
     "job": "Nuevo trabajo",
     "plan": "Nuevo plan",
     "template": "Nueva plantilla",
-    "order": "Nueva orden"
+    "order": "Nueva orden",
+    "timeOff": "Nuevo día libre"
   },
   "apps": {
     "allApps": "Todas las apps",
@@ -1300,7 +1302,9 @@
       "personal": "Personal",
       "training": "Capacitación",
       "holiday": "Día feriado",
-      "other": "Otro"
+      "other": "Otro",
+      "day_off": "Día libre",
+      "permission": "Permiso"
     },
     "off": "Libre",
     "weekJobs": "{n, plural, one {# esta semana} other {# esta semana}}"
@@ -2356,7 +2360,9 @@
       "personal": "Personal",
       "training": "Capacitación",
       "holiday": "Día feriado",
-      "other": "Otro"
+      "other": "Otro",
+      "day_off": "Día libre",
+      "permission": "Permiso"
     },
     "offWarn": "{name} está de descanso ({kind}): {when}",
     "template": "Plantilla",
@@ -7713,7 +7719,8 @@
     "offDeleted": "Día libre borrado",
     "deleteOff": "Borrar día libre",
     "delOffQ": "¿Borrar el día libre de {name}?",
-    "delOffMsg": "Se quita del calendario. Los trabajos no cambian."
+    "delOffMsg": "Se quita del calendario. Los trabajos no cambian.",
+    "eOffKindSql": "Corre el SQL del paso 6.13b para usar Día libre y Permiso."
   },
   "lead": {
     "src": {
@@ -8823,5 +8830,38 @@
     "reason": "Motivo",
     "reasonPh": "Cambió el modelo, el proveedor ya no lo maneja…",
     "discYes": "Descontinuar"
+  },
+  "offDash": {
+    "title": "Fuera hoy",
+    "nOut": "{n, plural, one {# persona fuera} other {# personas fuera}}",
+    "allIn": "Todo el equipo trabaja hoy",
+    "seeAll": "Ver todos",
+    "add": "Asignar día libre",
+    "today": "Hoy",
+    "next7": "Próximos 7 días",
+    "nobody": "Hoy no falta nadie.",
+    "noneSoon": "Nada en los próximos 7 días.",
+    "allDay": "Todo el día",
+    "until": "hasta el {d}",
+    "now": "ahorita",
+    "pageTitle": "Días libres",
+    "pageSub": "Días libres, permisos, vacaciones e incapacidades. Salen en la Agenda y te avisa si le asignas un trabajo en esas horas.",
+    "tab": {
+      "today": "Hoy",
+      "upcoming": "Próximos",
+      "past": "Pasados (90 días)"
+    },
+    "person": "Persona",
+    "everyone": "Todos",
+    "reason": "Motivo",
+    "allReasons": "Todos los motivos",
+    "noneUpcoming": "No hay días libres programados.",
+    "nonePast": "No hubo días libres en los últimos 90 días.",
+    "former": "Ex miembro",
+    "nDays": "{n} días",
+    "newTitle": "Asignar día libre o permiso",
+    "editTitle": "Editar día libre",
+    "assign": "Asignar",
+    "eSql": "Corre primero el SQL del paso 6.5 (días libres)."
   }
 }

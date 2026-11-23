@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmationsStrip } from "@/components/jobs/Confirmations";
+import OffTodayStrip from "@/components/jobs/time-off/OffTodayStrip";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions, Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
@@ -346,7 +347,7 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
   const selected = people.find((p) => p.id === openPerson) ?? null;
 
   if (variant === "jobs") return (
-    <JobsHub header={header} error={error} loading={loading} membersLoading={!members} now={now} withGroup={withGroup} people={people}
+    <JobsHub companyId={companyId} header={header} error={error} loading={loading} membersLoading={!members} now={now} withGroup={withGroup} people={people}
       jobAlerts={jobAlerts} kpiGroups={kpiGroups} canSeePrice={canSeePrice} onPerson={setOpenPerson}
       team={team} canDelete={canDelete} onReload={load} rangeOf={rangeOf} inRange={inRange}
       drawer={selected && <PersonDrawer p={selected} rows={withGroup.filter(({ j }) => j.techs.some((t) => t.user_id === selected.id))} now={now} onClose={() => setOpenPerson(null)} />} />
@@ -360,6 +361,8 @@ export default function JobsDashboard({ companyId, team, weekStartsOn, canSeePri
 
         {/* Paso 5.8b: qué respondieron los clientes de las próximas visitas */}
         <ConfirmationsStrip className="mb-5 lg:mb-6" />
+        {/* Paso 6.13b: quién está fuera hoy */}
+        <OffTodayStrip companyId={companyId} team={team} className="mb-5 lg:mb-6" />
 
         {/* ======= 1. Resumen (KPIs): cada tarjeta lleva a sus trabajos ======= */}
         <div className="mb-4 flex items-center justify-between gap-3 lg:mb-3">
@@ -1228,8 +1231,8 @@ function CardHead({ icon, title, sub, link }: { icon: React.ReactNode; title: st
 
 type HubPeriod = "today" | "week" | "month" | "year";
 const HUB_PERIODS_EN: HubPeriod[] = ["today", "week", "month", "year"];
-function JobsHub({ header, error, loading, membersLoading, now, withGroup, people, jobAlerts, kpiGroups, canSeePrice, onPerson, drawer, team, canDelete, onReload, rangeOf, inRange }: {
-  header?: React.ReactNode; error: string; loading: boolean; membersLoading: boolean; now: number; withGroup: { j: OpsJob; g: OpsGroup }[];
+function JobsHub({ companyId, header, error, loading, membersLoading, now, withGroup, people, jobAlerts, kpiGroups, canSeePrice, onPerson, drawer, team, canDelete, onReload, rangeOf, inRange }: {
+  companyId: string; header?: React.ReactNode; error: string; loading: boolean; membersLoading: boolean; now: number; withGroup: { j: OpsJob; g: OpsGroup }[];
   people: Person[]; jobAlerts: JobAlert[]; kpiGroups: Record<OpsGroup, number>; canSeePrice: boolean; onPerson: (id: string) => void; drawer: React.ReactNode;
   team: TeamMember[]; canDelete: boolean; onReload: () => void;
   rangeOf: (p: Period, shift?: number) => [Date, Date]; inRange: (j: OpsJob, g: OpsGroup, r: [Date, Date], live?: boolean) => boolean;
@@ -1286,6 +1289,8 @@ function JobsHub({ header, error, loading, membersLoading, now, withGroup, peopl
 
         {/* Paso 5.8b: qué respondieron los clientes de las próximas visitas */}
         <ConfirmationsStrip className="mt-5 lg:mt-6" />
+        {/* Paso 6.13b: quién está fuera hoy (día libre, permiso, vacaciones) */}
+        <OffTodayStrip companyId={companyId} team={team} className="mt-5 lg:mt-6" />
 
         {/* 2. Atención · Equipo · Próximos */}
         <div className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-4 lg:mt-6 lg:grid-cols-2 2xl:grid-cols-3">

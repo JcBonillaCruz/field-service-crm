@@ -1,7 +1,8 @@
 // Paso 6.5: días libres del equipo (vacaciones, enfermedad, personal…). Tabla `team_time_off`.
 import { addDays, dayStart, sameDay } from "@/lib/jobs";
 
-export const OFF_KINDS = ["vacation", "sick", "personal", "training", "holiday", "other"] as const;
+// Paso 6.13b: day_off (día libre / descanso) y permission (permiso por horas) — necesitan el SQL 6.13b
+export const OFF_KINDS = ["day_off", "permission", "vacation", "sick", "personal", "training", "holiday", "other"] as const;
 export type OffKind = (typeof OFF_KINDS)[number];
 
 export type TimeOff = {
@@ -9,11 +10,18 @@ export type TimeOff = {
   starts_at: string; ends_at: string; note: string | null;
 };
 
+// Horas de un permiso o "Todo el día"
+export const offHours = (o: Pick<TimeOff, "starts_at" | "ends_at" | "all_day">, tag = "en-US") => {
+  if (o.all_day) return null;
+  const f = (d: string) => new Date(d).toLocaleTimeString(tag, { hour: "numeric", minute: "2-digit" });
+  return `${f(o.starts_at)} – ${f(o.ends_at)}`;
+};
+
 export const OFF_SELECT = "id, company_id, user_id, kind, all_day, starts_at, ends_at, note";
 
 // Un color suave por motivo (solo para el puntito y el ícono; el bloque del calendario siempre es gris rayado)
 export const OFF_COLOR: Record<OffKind, string> = {
-  vacation: "#0ea5e9", sick: "#e11d48", personal: "#8b5cf6", training: "#f59e0b", holiday: "#10b981", other: "#64748b",
+  day_off: "#14a39a", permission: "#e8713a", vacation: "#0ea5e9", sick: "#e11d48", personal: "#8b5cf6", training: "#f59e0b", holiday: "#10b981", other: "#64748b",
 };
 
 // Fondo rayado del bloque "de descanso"

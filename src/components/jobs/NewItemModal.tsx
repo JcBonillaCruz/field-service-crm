@@ -218,7 +218,7 @@ function QuoteTab({ companyId, customers: initial, jobCustomer, onState }: {
 }
 
 // ---------- Pestaña Time off: días libres de una o varias personas ----------
-function TimeOffForm({ companyId, team, slot, offs, visits, editOff, ready, onState, onSaved }: {
+export function TimeOffForm({ companyId, team, slot, offs, visits, editOff, ready, onState, onSaved }: {
   companyId: string; team: TeamMember[]; slot: NewSlot; offs: TimeOff[]; visits: CalVisit[]; editOff: TimeOff | null; ready: boolean;
   onState: (s: { saving: boolean; error: string }) => void; onSaved: (msg: string) => void;
 }) {
@@ -231,7 +231,7 @@ function TimeOffForm({ companyId, team, slot, offs, visits, editOff, ready, onSt
   const people = useMemo(() => [...team].sort((a, b) => Number(receivesJobs(b)) - Number(receivesJobs(a)) || a.full_name.localeCompare(b.full_name)), [team]);
   const s0 = editOff ? new Date(editOff.starts_at) : null;
   const [ids, setIds] = useState<string[]>(editOff ? [editOff.user_id] : slot.techId ? [slot.techId] : []);
-  const [kind, setKind] = useState<OffKind>(editOff?.kind ?? "vacation");
+  const [kind, setKind] = useState<OffKind>(editOff?.kind ?? "day_off");
   const [allDay, setAllDay] = useState(editOff ? editOff.all_day : !slot.dragged);
   const [from, setFrom] = useState(isoDay(s0 ? dayStart(s0) : slot.day));
   const [to, setTo] = useState(isoDay(editOff ? lastDay(editOff) : slot.day));
@@ -272,7 +272,7 @@ function TimeOffForm({ companyId, team, slot, offs, visits, editOff, ready, onSt
       ? await sb.from("team_time_off").update(row).eq("id", editOff.id)
       : await sb.from("team_time_off").insert(ids.map((user_id) => ({ ...row, company_id: companyId, user_id })));
     setSaving(false);
-    if (error) return onState({ saving: false, error: t("eOffSave") });
+    if (error) return onState({ saving: false, error: /team_time_off_kind|check constraint/i.test(error.message) ? t("eOffKindSql") : t("eOffSave") });
     onState({ saving: false, error: "" });
     const names = ids.map((id) => team.find((m) => m.user_id === id)?.full_name ?? "").filter(Boolean);
     onSaved(editOff ? t("offUpdated") : t("offSaved", { names: names.length > 2 ? t("nPeople", { n: names.length }) : names.join(" & ") }));
