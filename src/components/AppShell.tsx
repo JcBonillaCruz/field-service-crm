@@ -14,8 +14,8 @@ import Avatar from "@/components/Avatar";
 import NotificationsProvider from "@/components/NotificationsProvider";
 import { AppsGrid } from "@/components/AppsMenu";
 import { useInstallApp } from "@/components/InstallPrompt";
-import { FinanceArt, InventoryArt, JobsArt, QrArt } from "@/components/AppIcons";
-import { DashboardArt } from "@/components/home/DashArt";
+import { FinanceArt, InventoryArt, JobsArt, QrArt, SettingsArt } from "@/components/AppIcons";
+import { DashboardArt, TeamArt } from "@/components/home/DashArt";
 import { canManageSales } from "@/lib/sales";
 import { CompanySummary, CurrentUser, Role } from "@/lib/types";
 
@@ -129,7 +129,7 @@ const APP_TITLE: Record<AppId, { label: string; icon: string; color: string }> =
 // Paso 6.3 — Computadora: las apps viven en el menú izquierdo (acordeón).
 // Clic en una app = va a su inicio (Finances → Home) y abre su menú de siempre debajo, con sus grupos desplegables.
 // Al tocar otra app, la anterior se cierra y se abre la nueva. La flechita abre/cierra sin cambiar de pantalla.
-// Abajo queda fijo "Settings": los ajustes de toda la app (dueño y manager).
+// Paso 6.3c: Team y Settings (los de toda la compañía) son filas propias, como una app más (dueño y manager).
 const APP_ORDER: AppId[] = ["finance", "jobs", "inventory", "qr"];
 const appArt = (id: AppId, size: number) =>
   id === "finance" ? <FinanceArt size={size} /> : id === "inventory" ? <InventoryArt size={size} /> : id === "jobs" ? <JobsArt size={size} /> : <QrArt size={size} />;
@@ -138,19 +138,25 @@ const appHome = (id: AppId, role: Role | null) =>
   role === "technician" ? (id === "inventory" ? "/dashboard/inventory/van" : "/dashboard/jobs/mine")
     : id === "finance" ? "/dashboard" : id === "jobs" ? "/dashboard/jobs" : id === "inventory" ? "/dashboard/inventory" : "/dashboard/tools/qr";
 const GLOBAL_SETTINGS = "/dashboard/settings";
+const GLOBAL_TEAM = "/dashboard/team";
 
 function DesktopNav({ role }: { role: Role | null }) {
   const t = useTranslations("shell");
   const ta = useTranslations("apps");
   const tn = useTranslations("nav");
   const pathname = usePathname() || "";
-  const current = appOf(pathname);
+  // En Team o Settings generales no se abre ninguna app
+  const standalone = pathname.startsWith(GLOBAL_TEAM) || pathname.startsWith(GLOBAL_SETTINGS);
+  const current: AppId | null = standalone ? null : appOf(pathname);
   const [expanded, setExpanded] = useState<AppId | null>(current);
-  useEffect(() => setExpanded(appOf(pathname)), [pathname]);
+  useEffect(() => setExpanded(current), [current]);
   // El técnico solo ve Jobs e Inventory
   const apps = APP_ORDER.filter((id) => role !== "technician" || id === "inventory" || id === "jobs");
-  const showSettings = Boolean(role && SETTINGS.roles?.includes(role));
-  const settingsOn = pathname.startsWith(GLOBAL_SETTINGS);
+  const showGlobal = Boolean(role && SETTINGS.roles?.includes(role));
+  const extras = showGlobal ? [
+    { key: "team", href: GLOBAL_TEAM, label: tn("team"), art: <TeamArt size={26} /> },
+    { key: "settings", href: GLOBAL_SETTINGS, label: tn("settings"), art: <SettingsArt size={26} /> },
+  ] : [];
 
   return (
     <>
@@ -184,20 +190,21 @@ function DesktopNav({ role }: { role: Role | null }) {
               </li>
             );
           })}
+          {extras.map((x) => {
+            const on = pathname.startsWith(x.href);
+            return (
+              <li key={x.key}>
+                <Link prefetch={false} href={x.href} onClick={() => setExpanded(null)}
+                  className={`group/app flex items-center gap-2.5 rounded-lg py-1.5 pl-2 pr-2 text-[13.5px] transition-colors duration-150 ${
+                    on ? "bg-[#e6f5f0] font-semibold text-[#0b5e57]" : "text-slate-700 hover:bg-[#eef7f4] hover:text-[#0b1f3a]"}`}>
+                  <span className="-my-0.5 flex shrink-0 transition-transform duration-200 group-hover/app:-rotate-3 group-hover/app:scale-110">{x.art}</span>
+                  <span className="min-w-0 flex-1 truncate">{x.label}</span>
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       </nav>
-      {/* Ajustes de toda la app: siempre a la vista, abajo del menú */}
-      {showSettings && (
-        <div className="border-t border-[#dfe7ee] px-2.5 py-2.5">
-          <Link prefetch={false} href={GLOBAL_SETTINGS}
-            className={`group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] transition-colors ${settingsOn ? "bg-[#dcf2ec] font-semibold text-[#0b5e57]" : "text-slate-700 hover:bg-[#eef7f4] hover:text-[#0b1f3a]"}`}>
-            <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] shrink-0 transition-transform duration-500 group-hover:rotate-90" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.8 1.2V21a2 2 0 1 1-4 0a1.7 1.7 0 0 0-2.8-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.8H3a2 2 0 1 1 0-4a1.7 1.7 0 0 0 1.2-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.8-1.2V3a2 2 0 1 1 4 0a1.7 1.7 0 0 0 2.8 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-1.2 2.8H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
-            </svg>
-            <span className="min-w-0 flex-1 truncate">{tn("settings")}</span>
-          </Link>
-        </div>
-      )}
     </>
   );
 }
@@ -213,8 +220,9 @@ function NavList({ role, onNavigate, forApp, embedded = false }: { role: Role | 
   const NAV = NAV_BY_APP[app];
   const allowed = (i: NavItem) => !i.roles || Boolean(role && i.roles.includes(role));
   // Los hijos de un grupo también respetan "roles" (Payroll y Reports de Finances: dueño y manager)
-  // En la computadora, "Settings" de toda la app va fijo abajo del menú (no repetido dentro de Finances / QR)
-  const items = NAV.filter(allowed).filter((i) => !(embedded && i.href === GLOBAL_SETTINGS))
+  // En la computadora, "Settings" de toda la app tiene su propia fila (no repetido dentro de Finances / QR)
+  // y "Team" también tiene su propia fila (paso 6.3c)
+  const items = NAV.filter(allowed).filter((i) => !(embedded && (i.href === GLOBAL_SETTINGS || i.label === "Team")))
     .map((i) => (i.children ? { ...i, children: i.children.filter(allowed) } : i));
   const excludes = new Map(NAV.filter((n) => n.exclude && n.href).map((n) => [n.href as string, n.exclude as string[]]));
   const isActive = (href?: string) => Boolean(href && (href === "/dashboard" ? pathname === "/dashboard"

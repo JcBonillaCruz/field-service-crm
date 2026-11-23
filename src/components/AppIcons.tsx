@@ -101,3 +101,19 @@ export function JobsArt({ size = 48, className = "" }: { size?: number; classNam
     </svg>
   );
 }
+
+// Paso 6.3c: Settings general como "app" del menú izquierdo (mismo estilo que las demás)
+export function SettingsArt({ size = 48, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg viewBox="0 0 48 48" width={size} height={size} className={className} aria-hidden="true">
+      <circle cx="24" cy="25" r="20" fill="#eef1f5" />
+      <g className="origin-[24px_24px] transition-transform duration-500 group-hover/app:rotate-90 group-hover:rotate-90">
+        <path d="M21.6 8h4.8l.9 4.3a12 12 0 0 1 3.4 2l4.2-1.4 2.4 4.2-3.3 2.9a12 12 0 0 1 0 4l3.3 2.9-2.4 4.2-4.2-1.4a12 12 0 0 1-3.4 2L26.4 40h-4.8l-.9-4.3a12 12 0 0 1-3.4-2l-4.2 1.4-2.4-4.2 3.3-2.9a12 12 0 0 1 0-4l-3.3-2.9 2.4-4.2 4.2 1.4a12 12 0 0 1 3.4-2z"
+          fill="#64748b" stroke="#475569" strokeWidth="1.2" strokeLinejoin="round" />
+        <circle cx="24" cy="24" r="5.6" fill="#fff" stroke="#475569" strokeWidth="1.4" />
+      </g>
+      <circle cx="36.5" cy="35.5" r="5.5" fill="#14a39a" stroke="#fff" strokeWidth="1.6" />
+      <path d="M34.2 35.6l1.6 1.6 2.9-3" fill="none" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
