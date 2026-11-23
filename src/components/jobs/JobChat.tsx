@@ -181,7 +181,7 @@ export default function JobChat({ jobId, title, companyId, placement = "float", 
               <path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-4.5 3.5V17H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" /><path d="M8 10h8M8 13h5" />
             </svg>
             {unread > 0 && (
-              <span className="absolute -right-2.5 -top-2.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#e11d48] px-1 text-[10.5px] font-bold text-white ring-2 ring-white animate-[bp-pop-in_0.25s_ease-out]">{unread > 9 ? "9+" : unread}</span>
+              <span className="absolute -right-2.5 -top-2.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#e11d48] px-1 text-[10.5px] font-bold text-white ring-2 ring-white animate-[bp-pop-in_0.25s_ease-out]">{unread > 999 ? "999+" : unread}</span>
             )}
           </span>
         );

@@ -9,7 +9,7 @@ import { confirmDelete } from "@/lib/confirm";
 import { inputClass } from "@/components/customers/ui";
 import { Toast } from "@/components/sales/SalesBits";
 import { AlertFrequency, InvCategory, InvItem, InvLocation, InvMember, InvStock, KitRow } from "@/lib/inventory";
-import { FullDesign, PdfDesign, PdfStyle, buildCountPdf, companyLogoPng, designOf, imageToPng, loadPdfBrand, logoBytesOf } from "@/lib/count-pdf";
+import { FullDesign, PdfDesign, buildCountPdf, companyLogoPng, designOf, imageToPng, loadPdfBrand, logoBytesOf } from "@/lib/count-pdf";
 import { REPORT_SECTIONS, ReportPreset, ReportSection } from "@/lib/inventory-report";
 import KitEditor from "@/components/inventory/KitEditor";
 import { useRunPreset } from "@/components/inventory/ReportPresets";
@@ -281,13 +281,10 @@ function Vans({ cfg, save, items, barcodes }: { cfg: InvSettingsRow; save: Save;
 }
 
 // Marca: colores en pares (principal + acento). El primero es el de BrightPro; el segundo, navy + naranja.
-const PALETTES: { name: string; primary: string; accent: string }[] = [
-  { name: "BrightPro", primary: "#0b1f3a", accent: "#0f766e" },
-  { name: "Navy · Orange", primary: "#1a2744", accent: "#e8713a" },
-  { name: "Ocean", primary: "#0c2d57", accent: "#2563eb" },
-  { name: "Forest", primary: "#14301f", accent: "#16a34a" },
-  { name: "Royal", primary: "#2b1a4a", accent: "#7c3aed" },
-  { name: "Graphite", primary: "#1f2937", accent: "#dc2626" },
+// Color de la marca: se usa en el título y la línea del encabezado. Todo lo demás va en blanco y grises (se imprime bien).
+const PALETTES: { name: string; primary: string }[] = [
+  { name: "Navy", primary: "#1a2744" }, { name: "BrightPro", primary: "#0b1f3a" }, { name: "Teal", primary: "#0f766e" },
+  { name: "Orange", primary: "#e8713a" }, { name: "Blue", primary: "#1d4ed8" }, { name: "Graphite", primary: "#1f2937" },
 ];
 type Preview = "report" | "sheet";
 
@@ -345,30 +342,19 @@ function PdfDesigner({ companyId, company, cfg, save, items, es }: { companyId: 
     return () => { alive = false; clearTimeout(timer); };
   }, [d, logo, kind, company, items, es, ts, tr]);
 
-  const styles: { k: PdfStyle; title: string; sub: string }[] = [
-    { k: "modern", title: t("sModern"), sub: t("sModernSub") }, { k: "grid", title: t("sGrid"), sub: t("sGridSub") }, { k: "minimal", title: t("sMinimal"), sub: t("sMinimalSub") },
-  ];
-  const pal = PALETTES.find((p) => p.primary === d.primary && p.accent === d.accent);
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,370px)_minmax(0,1fr)]">
       <div className="space-y-4">
         <Card title={t("brand")} hint={t("brandHint")}>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="flex flex-wrap items-center gap-2.5">
             {PALETTES.map((p) => (
-              <button key={p.name} type="button" onClick={() => set({ primary: p.primary, accent: p.accent })} aria-pressed={pal === p}
-                className={`group rounded-xl border p-2 text-left transition-all hover:-translate-y-0.5 ${pal === p ? "border-[#0f766e] bg-[#f3fbf8] ring-2 ring-[#0f766e]/15" : "border-slate-200 hover:border-[#14a39a]"}`}>
-                <span className="flex h-7 overflow-hidden rounded-md"><span className="flex-[3]" style={{ background: p.primary }} /><span className="flex-1" style={{ background: p.accent }} /></span>
-                <span className="mt-1 block truncate text-[11.5px] font-medium text-slate-600">{p.name}</span>
-              </button>
+              <button key={p.name} type="button" onClick={() => set({ primary: p.primary })} aria-label={p.name} aria-pressed={d.primary === p.primary}
+                className={`h-9 w-9 rounded-full ring-offset-2 transition-transform hover:scale-110 ${d.primary === p.primary ? "ring-2 ring-[#0b1f3a]" : ""}`} style={{ background: p.primary }} />
             ))}
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            {([["primary", t("cPrimary")], ["accent", t("cAccent")]] as const).map(([k, label]) => (
-              <label key={k} className="flex items-center gap-2.5 rounded-xl border border-slate-200 px-2.5 py-2 hover:border-[#14a39a]">
-                <input type="color" value={d[k]} onChange={(e) => set({ [k]: e.target.value })} className="h-8 w-9 shrink-0 cursor-pointer rounded-md border-0 bg-transparent p-0" />
-                <span className="min-w-0"><span className="block text-[12.5px] font-semibold text-slate-700">{label}</span><span className="block font-mono text-[11px] uppercase text-slate-400">{d[k]}</span></span>
-              </label>
-            ))}
+            <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-2 py-1.5 hover:border-[#14a39a]">
+              <input type="color" value={d.primary} onChange={(e) => set({ primary: e.target.value })} aria-label={t("custom")} className="h-7 w-8 cursor-pointer rounded-md border-0 bg-transparent p-0" />
+              <span className="font-mono text-[11.5px] uppercase text-slate-500">{d.primary}</span>
+            </label>
           </div>
         </Card>
         <Card title={t("logo")} hint={t("logoHint")}>
@@ -387,17 +373,8 @@ function PdfDesigner({ companyId, company, cfg, save, items, es }: { companyId: 
           {!d.logoData && companyLogo === "" && <p className="mt-2 text-[12.5px] text-slate-500">{t("logoNone")}</p>}
           <div className="mt-2"><Switch on={d.logo} onChange={(v) => set({ logo: v })} label={t("logoShow")} /></div>
         </Card>
-        <Card title={t("style")}>
-          <div className="space-y-2">
-            {styles.map((s) => (
-              <button key={s.k} type="button" onClick={() => set({ style: s.k })} aria-pressed={d.style === s.k}
-                className={`group flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-all hover:-translate-y-0.5 ${d.style === s.k ? "border-[#0f766e] bg-[#f3fbf8]" : "border-slate-200 hover:border-[#14a39a]"}`}>
-                <StyleThumb kind={s.k} accent={d.accent} primary={d.primary} />
-                <span className="min-w-0"><span className="block text-[14px] font-semibold text-[#0b1f3a]">{s.title}</span><span className="block text-[12px] text-slate-500">{s.sub}</span></span>
-              </button>
-            ))}
-          </div>
-          <div className="mt-2">
+        <Card title={t("options")}>
+          <div>
             <Switch on={d.signatures} onChange={(v) => set({ signatures: v })} label={t("signatures")} />
             <Switch on={d.zebra} onChange={(v) => set({ zebra: v })} label={t("zebra")} />
           </div>
@@ -422,27 +399,6 @@ function PdfDesigner({ companyId, company, cfg, save, items, es }: { companyId: 
     </div>
   );
 }
-function StyleThumb({ kind, accent, primary }: { kind: PdfStyle; accent: string; primary: string }) {
-  return (
-    <svg viewBox="0 0 44 56" className="h-14 w-11 shrink-0 rounded-md bg-white shadow ring-1 ring-slate-200 transition-transform duration-200 group-hover:scale-105" aria-hidden="true">
-      <rect width="44" height="2.6" fill={primary} /><rect y="2.6" width="44" height="0.9" fill={accent} />
-      <rect x="4" y="7" width="7" height="5" rx="1" fill={accent} opacity=".85" /><rect x="13" y="8" width="12" height="2" rx="1" fill={primary} />
-      <rect x="28" y="7.5" width="12" height="3" rx="1" fill={primary} />
-      <rect x="4" y="15" width="36" height="4" fill={kind === "minimal" ? "#fff" : "#eef1f5"} stroke={kind === "grid" ? "#dbe1e8" : "none"} strokeWidth="0.4" />
-      <rect x="4" y="22" width="36" height="3.4" fill={kind === "modern" ? primary : kind === "grid" ? "#eef1f5" : "#fff"} stroke={kind === "grid" ? "#94a3b8" : "none"} strokeWidth="0.4" />
-      {kind === "minimal" && <rect x="4" y="25.4" width="36" height="0.7" fill={accent} />}
-      {Array.from({ length: 7 }, (_, i) => (
-        <g key={i}>
-          <rect x="4" y={26 + i * 3.6} width="36" height="3.6" fill={i === 1 ? "#ffeef0" : i === 3 ? "#fff8e6" : kind !== "minimal" && i % 2 ? "#f8fafc" : "#fff"} stroke={kind === "grid" ? "#dbe1e8" : "none"} strokeWidth="0.35" />
-          {(i === 1 || i === 3) && <rect x="4" y={26 + i * 3.6} width="0.9" height="3.6" fill={i === 1 ? "#e11d48" : "#d97706"} />}
-          <rect x="6.5" y={27.3 + i * 3.6} width={10 + (i % 3) * 3} height="1" rx=".5" fill={i === 1 ? "#e11d48" : "#94a3b8"} />
-          {kind === "grid" && <><line x1="22" y1={26 + i * 3.6} x2="22" y2={29.6 + i * 3.6} stroke="#dbe1e8" strokeWidth="0.35" /><line x1="31" y1={26 + i * 3.6} x2="31" y2={29.6 + i * 3.6} stroke="#dbe1e8" strokeWidth="0.35" /></>}
-        </g>
-      ))}
-    </svg>
-  );
-}
-
 function Reports({ companyId, company, cfg, save, items, stock, locations, members }: { companyId: string; company: string; cfg: InvSettingsRow; save: Save; items: InvItem[]; stock: InvStock[]; locations: InvLocation[]; members: InvMember[] }) {
   const t = useTranslations("invSet");
   const tr = useTranslations("invReport");

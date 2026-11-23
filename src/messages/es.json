@@ -8362,8 +8362,8 @@
     "myReportsHint": "En PDF con tu diseño",
     "making": "Generando…",
     "parts": "secciones",
-    "brand": "Colores de tu marca",
-    "brandHint": "Elige una combinación o pon tus propios colores.",
+    "brand": "Color de tu marca",
+    "brandHint": "Va en el título y la línea de arriba. Lo demás sale en blanco y gris para imprimir limpio.",
     "cPrimary": "Principal",
     "cAccent": "Acento",
     "logoUpload": "Subir otro logo",
@@ -8372,10 +8372,11 @@
     "noLogo": "Sin logo",
     "logoBad": "Usa una imagen PNG, JPG o SVG de menos de 5 MB.",
     "logoNone": "Tu empresa aún no tiene logo en Ventas: súbelo aquí.",
-    "pagesRule": "Los reportes salen siempre en vertical y las hojas para contar a mano en horizontal. Letra pequeña: caben unos 45 renglones por hoja.",
+    "pagesRule": "Los reportes salen siempre en vertical y limpios (blanco y gris). Las hojas para contar a mano salen en horizontal y con cuadrícula. Caben unos 45 renglones por hoja.",
     "pvReport": "Reporte",
     "pvSheet": "Hoja de conteo",
-    "alwaysPortrait": "Siempre vertical (carta)"
+    "alwaysPortrait": "Siempre vertical (carta)",
+    "options": "Opciones"
   },
   "invReport": {
     "s": {

@@ -8367,8 +8367,8 @@
     "myReportsHint": "PDF with your design",
     "making": "Generating…",
     "parts": "sections",
-    "brand": "Your brand colors",
-    "brandHint": "Pick a combination or set your own colors.",
+    "brand": "Your brand color",
+    "brandHint": "Used on the title and the top line. Everything else prints in white and gray.",
     "cPrimary": "Primary",
     "cAccent": "Accent",
     "logoUpload": "Upload another logo",
@@ -8377,10 +8377,11 @@
     "noLogo": "No logo",
     "logoBad": "Use a PNG, JPG or SVG image under 5 MB.",
     "logoNone": "Your company has no logo in Sales yet: upload one here.",
-    "pagesRule": "Reports always print portrait and hand-count sheets landscape. Small type: about 45 rows per page.",
+    "pagesRule": "Reports always print portrait and clean (white and gray). Hand-count sheets print landscape with a grid. About 45 rows per page.",
     "pvReport": "Report",
     "pvSheet": "Count sheet",
-    "alwaysPortrait": "Always portrait (letter)"
+    "alwaysPortrait": "Always portrait (letter)",
+    "options": "Options"
   },
   "invReport": {
     "s": {
