@@ -4,6 +4,7 @@ import CompanyReportView from "@/components/finances/CompanyReportView";
 import { REPORT_PERIODS, finRange, pickPeriod } from "@/lib/finance-period";
 import { canSeeCompanyMoney, financeContext } from "@/lib/payroll-server";
 import { loadCompanyReport } from "@/lib/company-report-server";
+import { loadMarketingRaw } from "@/lib/marketing-roi-server";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,10 @@ export default async function CompanyReportPage({ searchParams }: { searchParams
   if (!current) redirect("/dashboard");
   if (!canSeeCompanyMoney(current.role)) return <NoAccess />;
   const range = finRange(pickPeriod(searchParams?.p, REPORT_PERIODS, "month"), searchParams?.d ?? today, weekStartsOn, today);
-  const r = await loadCompanyReport(supabase, current.id, range, tz, weekStartsOn, today);
+  const [r, marketing] = await Promise.all([
+    loadCompanyReport(supabase, current.id, range, tz, weekStartsOn, today),
+    loadMarketingRaw(supabase, current.id, range.from, range.to, tz).catch(() => null), // Paso 6.16-M
+  ]);
   return <CompanyReportView range={range} today={today} report={r.report} extras={r.extras} buckets={r.buckets}
-    needsExpensesSql={r.needsExpensesSql} needsPayrollSql={r.needsPayrollSql} companyName={current.name} preparedBy={user.fullName || user.email || ""} />;
+    needsExpensesSql={r.needsExpensesSql} needsPayrollSql={r.needsPayrollSql} companyName={current.name} preparedBy={user.fullName || user.email || ""} marketing={marketing} />;
 }

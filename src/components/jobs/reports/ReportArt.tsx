@@ -1,5 +1,5 @@
 // Íconos ilustrados de Reports (mismo estilo que los de All apps: a color, con capas, y una pieza se mueve al pasar el mouse)
-export type ReportArtKind = "title" | "done" | "ontime" | "site" | "idle" | "held" | "revenue" | "parts" | "value" | "noscan" | "counts" | "profit";
+export type ReportArtKind = "title" | "done" | "ontime" | "site" | "idle" | "held" | "revenue" | "parts" | "value" | "noscan" | "counts" | "profit" | "marketing";
 
 export default function ReportArt({ kind, size = 48 }: { kind: ReportArtKind; size?: number }) {
   const move = "transition-transform duration-300 ease-out";
@@ -100,6 +100,19 @@ export default function ReportArt({ kind, size = 48 }: { kind: ReportArtKind; si
         <rect x="22" y="24.5" width="9" height="1.8" rx=".9" fill="#f6dcb2" />
         <g className={`origin-[17px_32px] ${move} group-hover:rotate-90`}><path d="M15.2 30.4l3.6 3.6M18.8 30.4l-3.6 3.6" stroke="#e11d48" strokeWidth="1.8" strokeLinecap="round" /></g>
         <rect x="22" y="31.2" width="7" height="1.8" rx=".9" fill="#fda4af" />
+      </>}
+      {kind === "marketing" && <>
+        <circle cx="24" cy="25" r="20" fill="#fff1e8" />
+        <path d="M9.5 21.5h5.5l13-7.5v20l-13-7.5H9.5a2 2 0 0 1-2-2v-1a2 2 0 0 1 2-2z" fill="#e8713a" />
+        <path d="M15 21.5v5l13 7.5v-20z" fill="#f59e5b" />
+        <path d="M11.5 26.5l2.6 8.2a1.6 1.6 0 0 0 1.5 1.1h1.6a1 1 0 0 0 1-1.3l-2.2-8" fill="#0f766e" />
+        <rect x="28" y="12.5" width="3.2" height="23" rx="1.6" fill="#c2410c" />
+        <g className={`origin-[33px_24px] ${move} group-hover:scale-125`}>
+          <path d="M34.5 19.5c1.6 1.2 2.5 2.8 2.5 4.5s-.9 3.3-2.5 4.5" fill="none" stroke="#14a39a" strokeWidth="2" strokeLinecap="round" />
+          <path d="M37.5 16.5c2.4 2 3.7 4.6 3.7 7.5s-1.3 5.5-3.7 7.5" fill="none" stroke="#8fd3c5" strokeWidth="2" strokeLinecap="round" />
+        </g>
+        <circle cx="38" cy="36" r="6.2" fill="#16a34a" stroke="#fff" strokeWidth="1.5" />
+        <path d="M38 33v6M36.2 34.6c0-.8.8-1.2 1.8-1.2s1.8.5 1.8 1.2c0 1.8-3.6 1-3.6 2.8 0 .7.8 1.2 1.8 1.2s1.8-.4 1.8-1.2" fill="none" stroke="#fff" strokeWidth="1.1" strokeLinecap="round" />
       </>}
     </svg>
   );

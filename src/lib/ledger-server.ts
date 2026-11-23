@@ -34,13 +34,16 @@ export async function loadLedger(kind: LedgerKind, sp?: { range?: string; from?:
     if (byCustomer && customerId) q = q.eq("customer_id", customerId);
     return q.order(s.date, { ascending: false }).order("created_at", { ascending: false }).limit(5000);
   };
-  let res = await query(`${base}, ${linkCols}`, true);
+  // Paso 6.16-M: y la fuente de clientes de los gastos de Marketing (si ya se corrió su SQL)
+  let res = kind === "expense" ? await query(`${base}, ${linkCols}, lead_source_id`, true) : await query(`${base}, ${linkCols}`, true);
+  if (res.error && kind === "expense") res = await query(`${base}, ${linkCols}`, true);
   let linkReady = !res.error;
   if (res.error) { res = await query(base, false); linkReady = false; }
   const { data, error } = res;
   const rows: Entry[] = ((data ?? []) as unknown as Record<string, unknown>[]).map((r) => ({
     ...(r as unknown as Entry), date: r[s.date] as string, party: (r[s.party] as string | null) ?? null,
     customer_id: (r.customer_id as string | null | undefined) ?? null, doc_id: (r.doc_id as string | null | undefined) ?? null, cost_type: (r.cost_type as string | null | undefined) ?? null,
+    lead_source_id: (r.lead_source_id as string | null | undefined) ?? null,
   }));
   // Clientes (la MISMA base de datos de Customers): buscador del formulario y filtro de la lista
   const { data: cs } = await supabase.from("customers").select("id, display_name, company_name, email, phone").eq("company_id", current.id).order("display_name").limit(5000);

@@ -3765,7 +3765,8 @@
     "backOne": "Esa fecha es hoy o ya pasó, así que el primer gasto se agrega a Gastos de una vez.",
     "saving": "Guardando…",
     "save": "Guardar",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "leadSource": "¿Para qué fuente?"
   },
   "ledger": {
     "title": "{kind, select, income {Entradas de dinero} other {Gastos}}",
@@ -3858,7 +3859,9 @@
     "takePhoto": "Tomar foto o subir",
     "viewReceipt": "Ver recibo ({name})",
     "notes": "Notas",
-    "notesPh": "¿Para qué fue?"
+    "notesPh": "¿Para qué fue?",
+    "leadSource": "¿Para qué fuente?",
+    "leadSourceHint": "¿Para qué fuente de clientes es este gasto? (Google Ads, SEO, sitio web…) Sirve para medir tu retorno de marketing."
   },
   "ledgerCharts": {
     "sub": "{verb} por {unit, select, day {día} week {semana} month {mes} other {año}} · {range}. Pasa el mouse sobre una barra para ver {unit, select, day {ese día} week {esa semana} month {ese mes} other {ese año}}.",
@@ -8863,5 +8866,57 @@
     "editTitle": "Editar día libre",
     "assign": "Asignar",
     "eSql": "Corre primero el SQL del paso 6.5 (días libres)."
+  },
+  "mkRoi": {
+    "title": "Retorno de marketing",
+    "sub": "Lo que gastaste para conseguir clientes y lo que te pagaron",
+    "period": "Periodo",
+    "p": {
+      "month": "Este mes",
+      "3months": "Últimos 3 meses",
+      "year": "Este año",
+      "12months": "Últimos 12 meses"
+    },
+    "needsSql": "Corre el SQL del Paso 6.16-M en Supabase para poder ligar los gastos a una fuente de clientes.",
+    "emptyTitle": "Todavía no hay datos de marketing",
+    "emptyText": "Anota tus gastos de marketing (Google Ads, agencia SEO, sitio web, volantes…) en Gastos → Marketing y anuncios y elige la fuente. Pon la fuente (Lead source) a tus clientes y aquí verás cuánto te regresa cada una.",
+    "spent": "Gastado en marketing",
+    "spentNote": "Gastos de Marketing y anuncios",
+    "collected": "Cobrado de esos clientes",
+    "collectedNote": "De las fuentes en que gastaste, sin impuesto",
+    "perDollar": "Regresa por cada $1",
+    "perDollarNote": "Cobrado ÷ gastado",
+    "perDollarLoss": "Menos de lo que gastaste",
+    "perDollarNone": "Anota gastos con fuente para medirlo",
+    "perCustomer": "Costo por cliente nuevo",
+    "perCustomerNote": "{n, plural, =0 {Sin clientes nuevos} one {# cliente nuevo} other {# clientes nuevos}}",
+    "h": {
+      "source": "Fuente",
+      "spent": "Gastado",
+      "new": "Clientes nuevos",
+      "collected": "Cobrado",
+      "perDollar": "Por $1",
+      "perCustomer": "Costo / cliente"
+    },
+    "noSource": "Sin fuente",
+    "noSpend": "Sin gasto",
+    "perDollarShort": "{v} por $1",
+    "showAll": "Ver las {n}",
+    "showLess": "Ver menos",
+    "legendSpent": "Gastado",
+    "legendCollected": "Cobrado",
+    "explain": "Lo que dicen tus números",
+    "fTotal": "Gastaste {spent} en marketing con fuente y esos clientes te pagaron {back}: regresan {roi} por cada $1.",
+    "fBest": "{name} es la que mejor te paga: {roi} por cada $1{per}.",
+    "fPer": " y cada cliente nuevo te costó {v}",
+    "fLow": "{name} no te está pagando: gastaste {spent} y regresaron {back}. Revísala antes de gastar más.",
+    "fZero": "{name}: gastaste {spent} y todavía no te ha pagado ningún cliente de esa fuente.",
+    "fFree": "{name} te dejó {back} sin gastar nada — vale la pena cuidarla.",
+    "fUntaggedSpend": "{v} de marketing no tienen fuente y no se pueden medir. Edita esos gastos y elige la fuente.",
+    "fUntaggedCust": "{n, plural, one {# cliente no tiene} other {# clientes no tienen}} fuente. Pónsela en el cliente para que sus pagos cuenten aquí.",
+    "fNothing": "Todavía no hay nada que medir en este periodo.",
+    "footer": "Solo cuentan los clientes con fuente. Pagos sin impuesto; también cuenta Money In ligado a un cliente.",
+    "addSpend": "Anotar gasto",
+    "sources": "Fuentes"
   }
 }

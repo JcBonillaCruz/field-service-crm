@@ -22,6 +22,9 @@ import CustomerFilter from "@/components/expenses/CustomerFilter";
 import { COST_TYPES, CostType, Profit, costTypeOf } from "@/lib/job-costing";
 import { useTranslations } from "next-intl";
 import { useFinTx } from "@/i18n/useFinTx";
+import { LeadSourceSelect } from "@/components/customers/LeadSourcePicker";
+import type { LeadSource } from "@/lib/lead-sources";
+import { MARKETING_CATEGORY } from "@/lib/marketing-roi";
 
 // =====================================================================
 // Libro de Finanzas: el mismo diseño sirve para Gastos (rojo) y Entradas de dinero (verde).
@@ -32,6 +35,7 @@ export type Entry = {
   customer_id?: string | null; // cliente ligado (de la tabla customers)
   doc_id?: string | null;      // Gastos: invoice / trabajo ligado
   cost_type?: string | null;   // Gastos: material | labor | other
+  lead_source_id?: string | null; // Paso 6.16-M: gastos de Marketing → para qué fuente de clientes
 };
 export type PayerOption = { id: string; display_name: string; company_name: string | null; email: string | null; phone: string | null };
 // Barras de categorías: colores MUY distintos entre sí (por puesto, no por categoría), con degradado
@@ -199,6 +203,16 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
   const [pending, startTransition] = useTransition();
   const [q, setQ] = useState("");
   const [edit, setEdit] = useState<Entry | "new" | null>(null);
+  const [newCat, setNewCat] = useState<string | null>(null);
+  // Paso 6.16-M: "Anotar gasto de marketing" (Home / Reports) abre el formulario ya en Marketing & Ads
+  useEffect(() => {
+    if (kind !== "expense" || typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("new") === "marketing") {
+      setNewCat(MARKETING_CATEGORY); setEdit("new");
+      router.replace(pathname || "/dashboard/expenses", { scroll: false });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [toast, setToast] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
@@ -444,10 +458,10 @@ export default function ExpensesWorkspace({ kind = "expense", companyId, actor, 
         </div>
       </div>
 
-      <ExpenseModal cfg={cfg} kind={kind} open={edit !== null} expense={edit === "new" ? null : edit} onClose={() => setEdit(null)} companyId={companyId} actor={actor}
+      <ExpenseModal cfg={cfg} kind={kind} open={edit !== null} expense={edit === "new" ? null : edit} onClose={() => { setEdit(null); setNewCat(null); }} companyId={companyId} actor={actor}
         people={people} onPersonCreated={(c) => setPeople((p) => [...p, c].sort((a, b) => a.display_name.localeCompare(b.display_name)))} linkReady={linkReady}
-        defaultCustomer={filterCustomer?.id ?? null}
-        onSaved={(m) => { setEdit(null); router.refresh(); flash(m); }} />
+        defaultCustomer={filterCustomer?.id ?? null} defaultCategory={newCat}
+        onSaved={(m) => { setEdit(null); setNewCat(null); router.refresh(); flash(m); }} />
       <Toast text={toast} />
     </div>
   );
@@ -520,9 +534,9 @@ function FinancingPanel({ list, today }: { list: FinBrief[]; today: string }) {
 // Tipo de costo sugerido por la categoría (se puede cambiar con un toque)
 const guessType = (cat: string): CostType => (/material|supplies|equipment|tools/i.test(cat) ? "material" : /payroll|labor|subcontract/i.test(cat) ? "labor" : "other");
 
-function ExpenseModal({ cfg, kind, open, expense, onClose, companyId, actor, onSaved, people, onPersonCreated, linkReady, defaultCustomer }: {
+function ExpenseModal({ cfg, kind, open, expense, onClose, companyId, actor, onSaved, people, onPersonCreated, linkReady, defaultCustomer, defaultCategory = null }: {
   cfg: Cfg; kind: LedgerKind; open: boolean; expense: Entry | null; onClose: () => void; companyId: string; actor: string; onSaved: (msg: string) => void;
-  people: PayerOption[]; onPersonCreated: (c: PayerOption) => void; linkReady: boolean; defaultCustomer: string | null;
+  people: PayerOption[]; onPersonCreated: (c: PayerOption) => void; linkReady: boolean; defaultCustomer: string | null; defaultCategory?: string | null;
 }) {
   const L = useLedgerTx(kind);
   const { t, fx, k } = L;
@@ -547,19 +561,31 @@ function ExpenseModal({ cfg, kind, open, expense, onClose, companyId, actor, onS
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Paso 6.16-M: fuente de clientes de un gasto de Marketing
+  const [leadSource, setLeadSource] = useState("");
+  const [sources, setSources] = useState<LeadSource[] | null>(null);
+  const isMarketing = !isIncome && cat === MARKETING_CATEGORY;
+  useEffect(() => {
+    if (!open || !isMarketing || sources) return;
+    let alive = true;
+    createClient().from("lead_sources").select("id, code, name, is_active, position").eq("company_id", companyId).order("position").order("created_at")
+      .then(({ data }) => { if (alive) setSources((data ?? []) as LeadSource[]); });
+    return () => { alive = false; };
+  }, [open, isMarketing, sources, companyId]);
   const input = useRef<HTMLInputElement>(null);
   const key = `${open}-${expense?.id ?? "new"}`;
   const [loaded, setLoaded] = useState("");
   if (open && loaded !== key) {
     setLoaded(key);
-    setDate(expense?.date ?? today()); setCat(expense?.category ?? cats[0].name);
+    setDate(expense?.date ?? today()); setCat(expense?.category ?? (defaultCategory && cats.some((c) => c.name === defaultCategory) ? defaultCategory : cats[0].name));
+    setLeadSource(expense?.lead_source_id ?? "");
     setCustom(expense && !cats.some((c) => c.name === expense.category) ? expense.category : ""); setVendor(expense?.party ?? "");
     setAmount(expense ? String(expense.amount) : ""); setMode(expense?.payment_mode ?? (cfg.table === "expenses" ? "Credit Card" : "Cash")); setRef(expense?.reference ?? "");
     setNotes(expense?.notes ?? ""); setFile(null); setError("");
     const cid = expense ? expense.customer_id ?? null : (jobCosting ? defaultCustomer : null);
     setCustomerId(cid); setCustName(cid ? people.find((p) => p.id === cid)?.display_name ?? "" : "");
     setDocId(expense?.doc_id ?? null);
-    setCostType((expense ? (["material", "labor"].includes(expense.cost_type ?? "") ? expense.cost_type : "other") : guessType(cats[0].name)) as CostType);
+    setCostType((expense ? (["material", "labor"].includes(expense.cost_type ?? "") ? expense.cost_type : "other") : guessType(defaultCategory ?? cats[0].name)) as CostType);
     setTypeTouched(Boolean(expense));
   }
   if (!open && loaded) setLoaded("");
@@ -599,7 +625,11 @@ function ExpenseModal({ cfg, kind, open, expense, onClose, companyId, actor, onS
     // Money In: se guarda el cliente ligado (si ya se corrió el SQL); si no, solo el nombre
     const link = isIncome && linkReady ? { customer_id: customerId }
       : jobCosting ? { customer_id: customerId, doc_id: customerId ? docId : null, cost_type: costType } : null;
-    let { error: e } = await write(link ? { ...row, ...link } : row);
+    // Paso 6.16-M: la fuente solo se guarda en gastos de Marketing (si la columna aún no existe, se guarda sin ella)
+    const src = !isIncome ? { lead_source_id: isMarketing && leadSource ? leadSource : null } : null;
+    const full = { ...row, ...(link ?? {}), ...(src ?? {}) };
+    let { error: e } = await write(full);
+    if (e && src && /lead_source_id/i.test(e.message)) ({ error: e } = await write({ ...row, ...(link ?? {}) }));
     if (e && link && /customer_id|doc_id|cost_type/i.test(e.message)) ({ error: e } = await write(row));
     setBusy(false);
     if (e) return setError(`${t("cantSave")} ${L.sql}`);
@@ -647,6 +677,16 @@ function ExpenseModal({ cfg, kind, open, expense, onClose, companyId, actor, onS
               className={`${inputClass} mt-2 animate-[bp-fade_0.2s_ease-out]`} />
           )}
         </div>
+        {isMarketing && (
+          <div className="rounded-2xl border border-[#f6d3bd] bg-[#fffaf6] p-3.5 animate-[bp-fade_0.2s_ease-out]">
+            <p className="mb-0.5 text-sm font-medium text-slate-700">{t("leadSource")} <span className="font-normal text-slate-400">({t("optional")})</span></p>
+            <p className="mb-2 text-[12px] leading-snug text-slate-500">{t("leadSourceHint")}</p>
+            {sources ? (
+              <LeadSourceSelect id="exp-lead-source" companyId={companyId} sources={sources} value={leadSource} onChange={setLeadSource}
+                onCreated={(s) => setSources((l) => [...(l ?? []), s])} />
+            ) : <div className="h-10 animate-pulse rounded-lg bg-slate-100" />}
+          </div>
+        )}
         {jobCosting && (
           <div className="space-y-3 rounded-2xl border border-slate-200 bg-[#fbfcfd] p-3.5">
             <div>

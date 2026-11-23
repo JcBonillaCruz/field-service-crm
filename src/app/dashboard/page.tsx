@@ -13,6 +13,8 @@ import MonthReportCard from "@/components/home/MonthReportCard";
 import { loadMonthCard } from "@/lib/company-report-server";
 import { dayKeyIn, safeTz } from "@/lib/finance-period";
 import { headers } from "next/headers";
+import MarketingRoi, { cardWindow } from "@/components/finances/MarketingRoi";
+import { loadMarketingRaw } from "@/lib/marketing-roi-server";
 
 export const dynamic = "force-dynamic";
 const TRIAL_DAYS = 14;
@@ -45,13 +47,24 @@ export default async function DashboardPage({ searchParams }: { searchParams?: {
     ? basicsP.then((b) => loadMonthCard(supabase, current.id, b.settings.week_starts_on,
         dayKeyIn(safeTz(b.settings.timezone, ipTz))(new Date()))).catch(() => null)
     : Promise.resolve(null);
-  const [basics, alerts, dash, typeRows, month] = await Promise.all([
+  // Paso 6.16-M: retorno de marketing (dueño y manager) — se carga el último año y la tarjeta elige el periodo
+  const mkP = canFinance
+    ? basicsP.then((b) => {
+        const tz = safeTz(b.settings.timezone, ipTz);
+        const today = dayKeyIn(tz)(new Date());
+        const w = cardWindow(today);
+        return loadMarketingRaw(supabase, current.id, w.from, w.to, tz).then((raw) => ({ raw, today }));
+      }).catch(() => null)
+    : Promise.resolve(null);
+  const [basics, alerts, dash, typeRows, month, mk] = await Promise.all([
     basicsP,
     loadHomeAlerts(supabase, current.id, { finances: canFinance, inventory: true, quotes: canQuotes }).catch(() => []),
     canFinance ? loadDashboard(supabase, current.id).catch(() => null) : Promise.resolve(null),
     canFinance ? supabase.from("customers").select("customer_type").eq("company_id", current.id).eq("is_archived", false) : Promise.resolve({ data: [] }),
     monthP,
+    mkP,
   ]);
+  const marketing = mk ? <MarketingRoi raw={mk.raw} today={mk.today} /> : null;
   const rows = (typeRows.data ?? []) as { customer_type: string | null }[];
   const counts = {
     total: rows.length,
@@ -79,7 +92,10 @@ export default async function DashboardPage({ searchParams }: { searchParams?: {
           canQuotes={canQuotes}
           actor={user.fullName || user.email}
           revenue={canFinance && dash ? buildRevenue(dash.data, weekStartsOn) : null}
-          monthReport={month ? <MonthReportCard data={month} /> : null}
+          monthReport={month || marketing ? <>
+            {month && <MonthReportCard data={month} />}
+            {marketing && <div className={month ? "mt-7 lg:mt-6" : ""}>{marketing}</div>}
+          </> : null}
           alerts={alerts}
         />
       }
@@ -87,6 +103,7 @@ export default async function DashboardPage({ searchParams }: { searchParams?: {
         <DesktopDashboard firstName={firstName || "there"} companyId={current.id} companyName={current.name} companyIndex={companyIndex}
           demo={searchParams?.demo === "1"} real={dash?.data ?? null} stats={dash?.mobile ?? null} embedded />
       ) : null}
+      financesExtra={marketing}
       financesMobile={canFinance ? (
         <Dashboard firstName={firstName ?? "there"} companyName={current.name} industry={current.industry ?? "Business"} role={current.role}
           counts={counts} daysLeft={daysLeft} stats={dash?.mobile ?? null} embedded />

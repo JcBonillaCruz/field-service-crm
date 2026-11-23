@@ -18,10 +18,11 @@ type Tab = "dashboard" | "finances" | "help";
 const Art = ({ t, size }: { t: Tab; size: number }) => (t === "dashboard" ? <DashboardArt size={size} /> : t === "finances" ? <FinanceArt size={size} /> : <HelpArt size={size} />);
 function greeting(h: number) { return h < 12 ? "morning" : h < 18 ? "afternoon" : "evening"; }
 
-export default function HomeTabs({ firstName, companyId, companyName, companyIndex, canFinance, canAddCustomer, dashboard, financesDesktop, financesMobile }: {
+export default function HomeTabs({ firstName, companyId, companyName, companyIndex, canFinance, canAddCustomer, dashboard, financesDesktop, financesMobile, financesExtra = null }: {
   firstName: string; companyId: string; companyName: string; companyIndex: number;
   canFinance: boolean; canAddCustomer: boolean;
   dashboard: React.ReactNode; financesDesktop: React.ReactNode; financesMobile: React.ReactNode;
+  financesExtra?: React.ReactNode; // Paso 6.16-M: retorno de marketing debajo de las finanzas
 }) {
   const tabs: Tab[] = canFinance ? ["dashboard", "finances", "help"] : ["dashboard", "help"];
   const [tab, setTabState] = useState<Tab>("dashboard");
@@ -110,6 +111,7 @@ export default function HomeTabs({ firstName, companyId, companyName, companyInd
           <>
             <div className="hidden bg-white lg:block">{financesDesktop}</div>
             <div className="lg:hidden">{financesMobile}</div>
+            {financesExtra && <div className="bg-[#f4f6f8] px-3 pb-24 pt-1 lg:bg-white lg:px-8 lg:pb-10 lg:pt-2">{financesExtra}</div>}
           </>
         )}
         {tab === "help" && <HelpTab />}

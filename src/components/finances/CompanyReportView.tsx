@@ -10,16 +10,20 @@ import { CompanyReport, RepBucket, RepExtras, RepL, RepTx, changeText, companyRe
 import ExportModal from "@/components/customers/ExportModal";
 import PdfViewer from "@/components/ui/PdfViewer";
 import type { PdfDoc } from "@/lib/report-pdf";
+import MarketingRoi, { useMarketingPdf } from "@/components/finances/MarketingRoi";
+import type { MkRaw } from "@/lib/marketing-roi";
 import { ExportIcon, Kpi, PeriodBar, PrintIcon, card, ghostBtn, tealBtn } from "@/components/finances/FinBits";
 
 const tone = (v: number) => (v < 0 ? "text-[#be123c]" : "text-[#15803d]");
 
 // Finances → Reports (Paso 5.10c): el reporte de toda la compañía. Dueño y manager.
 // Ingresos − costo de los trabajos = ganancia de los trabajos − gastos generales = ganancia real.
-export default function CompanyReportView({ range, today, report: r, extras: x, buckets, needsExpensesSql, needsPayrollSql, companyName, preparedBy }: {
+export default function CompanyReportView({ range, today, report: r, extras: x, buckets, needsExpensesSql, needsPayrollSql, companyName, preparedBy, marketing = null }: {
   range: FinRange; today: string; report: CompanyReport; extras: RepExtras; buckets: RepBucket[];
   needsExpensesSql: boolean; needsPayrollSql: boolean; companyName: string; preparedBy: string;
+  marketing?: MkRaw | null; // Paso 6.16-M: retorno de marketing del periodo
 }) {
+  const marketingPdf = useMarketingPdf();
   const t = useTranslations("compRep");
   const fx = useFinTx();
   const money = fx.money;
@@ -66,7 +70,12 @@ export default function CompanyReportView({ range, today, report: r, extras: x, 
           <p className="text-[13px] text-slate-500">{t("subtitle")}</p>
         </div>
         <button type="button" onClick={() => setExportOpen(true)} className={ghostBtn}><ExportIcon />{t("export")}</button>
-        <button type="button" onClick={() => setPdf(companyReportPdf(r, x, parts, { company: companyName, title, range: rangeLabel, by: preparedBy || t("theManager"), prevLabel }, L))} className={tealBtn}><PrintIcon />{t("printPdf")}</button>
+        <button type="button" onClick={() => {
+          const doc = companyReportPdf(r, x, parts, { company: companyName, title, range: rangeLabel, by: preparedBy || t("theManager"), prevLabel }, L);
+          // Marketing va antes de la nota final
+          if (marketing) doc.blocks.splice(Math.max(0, doc.blocks.length - 1), 0, ...marketingPdf(marketing, range.from, range.to));
+          setPdf(doc);
+        }} className={tealBtn}><PrintIcon />{t("printPdf")}</button>
       </div>
       <div className="mt-4"><PeriodBar periods={REPORT_PERIODS} range={range} today={today} onGo={go} /></div>
 
@@ -175,6 +184,8 @@ export default function CompanyReportView({ range, today, report: r, extras: x, 
             </div>)}
           </div>
         </div>
+
+        {marketing && <div className="mt-4"><MarketingRoi raw={marketing} today={today} variant="report" from={range.from} to={range.to} rangeLabel={rangeLabel} /></div>}
 
         <p className="mt-4 text-[12.5px] leading-relaxed text-slate-500">
           {t.rich("footer", {

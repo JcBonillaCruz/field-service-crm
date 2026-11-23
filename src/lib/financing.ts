@@ -84,6 +84,7 @@ export const FREQUENCIES: { value: Frequency; label: string; every: string }[] =
 export type Recurring = {
   id: string; company_id: string; category: string; vendor: string | null; amount: number; payment_mode: string | null; notes: string | null;
   frequency: Frequency; start_date: string; runs: number; next_date: string; end_date: string | null; is_active: boolean; last_run: string | null; created_by_name: string | null;
+  lead_source_id?: string | null; // Paso 6.16-M: gastos de Marketing → para qué fuente de clientes
 };
 // Cuánto pesa al mes (para sumar renta mensual + seguro anual + algo semanal)
 export const monthlyOf = (r: Pick<Recurring, "amount" | "frequency">) => r2(n(r.amount) * (r.frequency === "weekly" ? 52 / 12 : r.frequency === "yearly" ? 1 / 12 : 1));

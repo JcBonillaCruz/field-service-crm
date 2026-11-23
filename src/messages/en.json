@@ -3770,7 +3770,8 @@
     "backOne": "That date is today or already passed, so the first expense is added to Expenses right away.",
     "saving": "Saving…",
     "save": "Save",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "leadSource": "Lead source"
   },
   "ledger": {
     "title": "{kind, select, income {Money In} other {Expenses}}",
@@ -3863,7 +3864,9 @@
     "takePhoto": "Take photo or upload",
     "viewReceipt": "View receipt ({name})",
     "notes": "Notes",
-    "notesPh": "What was it for?"
+    "notesPh": "What was it for?",
+    "leadSource": "Lead source",
+    "leadSourceHint": "Which source is this marketing for? (Google Ads, SEO, website…) Used to measure your marketing return."
   },
   "ledgerCharts": {
     "sub": "{verb} by {unit, select, day {day} week {week} month {month} other {year}} · {range}. Hover a bar to see that {unit, select, day {day} week {week} month {month} other {year}}.",
@@ -8868,5 +8871,57 @@
     "editTitle": "Edit time off",
     "assign": "Assign",
     "eSql": "Run the step 6.5 SQL (time off) first."
+  },
+  "mkRoi": {
+    "title": "Marketing return",
+    "sub": "What you spent to get customers and what they paid you",
+    "period": "Period",
+    "p": {
+      "month": "This month",
+      "3months": "Last 3 months",
+      "year": "This year",
+      "12months": "Last 12 months"
+    },
+    "needsSql": "Run the Paso 6.16-M SQL in Supabase so expenses can be tied to a lead source.",
+    "emptyTitle": "No marketing data yet",
+    "emptyText": "Add your marketing expenses (Google Ads, SEO agency, website, flyers…) under Expenses → Marketing & Ads and pick the lead source. Set the lead source on your customers, and here you'll see how much each source brings back.",
+    "spent": "Spent on marketing",
+    "spentNote": "Marketing & Ads expenses",
+    "collected": "Collected from those customers",
+    "collectedNote": "From the sources you paid for, without tax",
+    "perDollar": "Back for every $1",
+    "perDollarNote": "Collected ÷ spent",
+    "perDollarLoss": "Less than what you spent",
+    "perDollarNone": "Add spend with a source to measure it",
+    "perCustomer": "Cost per new customer",
+    "perCustomerNote": "{n, plural, =0 {No new customers} one {# new customer} other {# new customers}}",
+    "h": {
+      "source": "Source",
+      "spent": "Spent",
+      "new": "New customers",
+      "collected": "Collected",
+      "perDollar": "Per $1",
+      "perCustomer": "Cost / customer"
+    },
+    "noSource": "No source",
+    "noSpend": "No spend",
+    "perDollarShort": "{v} per $1",
+    "showAll": "See all {n}",
+    "showLess": "Show less",
+    "legendSpent": "Spent",
+    "legendCollected": "Collected",
+    "explain": "What your numbers say",
+    "fTotal": "You spent {spent} on marketing with a source and those customers paid you {back}: {roi} back for every $1.",
+    "fBest": "{name} gives you the best return: {roi} for every $1{per}.",
+    "fPer": ", and each new customer cost {v}",
+    "fLow": "{name} is not paying off: you spent {spent} and got back {back}. Review it before spending more.",
+    "fZero": "{name}: you spent {spent} and no customer from that source has paid yet.",
+    "fFree": "{name} brought in {back} without any spend — worth taking care of.",
+    "fUntaggedSpend": "{v} of marketing has no source, so it can't be measured. Edit those expenses and pick the source.",
+    "fUntaggedCust": "{n, plural, one {# customer has} other {# customers have}} no lead source. Set it on the customer so their payments count here.",
+    "fNothing": "Nothing to measure in this period yet.",
+    "footer": "Only customers with a lead source count. Payments without tax; Money In tied to a customer counts too.",
+    "addSpend": "Add marketing expense",
+    "sources": "Lead sources"
   }
 }

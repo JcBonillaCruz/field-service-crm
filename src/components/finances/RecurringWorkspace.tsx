@@ -13,6 +13,9 @@ import { CATEGORIES } from "@/components/expenses/ExpensesWorkspace";
 import SelectMenu from "@/components/ui/SelectMenu";
 import DatePicker from "@/components/ui/DatePicker";
 import { Kpi, card, ghostBtn, tealBtn } from "@/components/finances/FinBits";
+import { LeadSourceSelect } from "@/components/customers/LeadSourcePicker";
+import type { LeadSource } from "@/lib/lead-sources";
+import { MARKETING_CATEGORY } from "@/lib/marketing-roi";
 
 const inputClass = "w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-[15px] placeholder:text-slate-400 focus:border-[#0f766e] focus:bg-white focus:outline-none focus:ring-4 focus:ring-[#14a39a]/15";
 const catOf = (name: string) => CATEGORIES.find((c) => c.name === name) ?? CATEGORIES[CATEGORIES.length - 1];
@@ -162,6 +165,17 @@ function RecurringForm({ companyId, actor, today, item, onCancel, onDone }: { co
   const [notes, setNotes] = useState(item?.notes ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Paso 6.16-M: un gasto de Marketing que se repite (agencia SEO, Google Ads…) lleva su fuente de clientes
+  const [leadSource, setLeadSource] = useState(item?.lead_source_id ?? "");
+  const [sources, setSources] = useState<LeadSource[] | null>(null);
+  const isMarketing = category === MARKETING_CATEGORY;
+  useEffect(() => {
+    if (!isMarketing || sources) return;
+    let alive = true;
+    createClient().from("lead_sources").select("id, code, name, is_active, position").eq("company_id", companyId).order("position").order("created_at")
+      .then(({ data }) => { if (alive) setSources((data ?? []) as LeadSource[]); });
+    return () => { alive = false; };
+  }, [isMarketing, sources, companyId]);
   // Cambió la fecha o cada cuánto: la cuenta empieza de nuevo desde esa fecha
   const rescheduled = !item || date !== item.next_date || frequency !== item.frequency;
   const back = rescheduled ? catchUpCount(date, frequency, today, end || null) : 0;
@@ -175,9 +189,11 @@ function RecurringForm({ companyId, actor, today, item, onCancel, onDone }: { co
     const sb = createClient();
     const base = { category, vendor: vendor.trim() || null, amount: a, payment_mode: mode, notes: notes.trim() || null, frequency, end_date: end || null, updated_at: new Date().toISOString() };
     const sched = rescheduled ? { start_date: date, next_date: date, runs: 0, is_active: true } : {};
-    const { error: e } = item
-      ? await sb.from("recurring_expenses").update({ ...base, ...sched }).eq("id", item.id)
-      : await sb.from("recurring_expenses").insert({ ...base, ...sched, company_id: companyId, created_by_name: actor });
+    const put = (b: Record<string, unknown>) => item
+      ? sb.from("recurring_expenses").update({ ...b, ...sched }).eq("id", item.id)
+      : sb.from("recurring_expenses").insert({ ...b, ...sched, company_id: companyId, created_by_name: actor });
+    let { error: e } = await put({ ...base, lead_source_id: isMarketing && leadSource ? leadSource : null });
+    if (e && /lead_source_id/i.test(e.message ?? "")) ({ error: e } = await put(base)); // sin el SQL 6.16-M se guarda sin la fuente
     if (e) { setBusy(false); return setError(err(e)); }
     // Si ya toca (hoy o una fecha que ya pasó), el gasto se crea de una vez
     await sb.rpc("recurring_expenses_run", { p_company: companyId, p_today: today }).then(() => null, () => null);
@@ -194,6 +210,10 @@ function RecurringForm({ companyId, actor, today, item, onCancel, onDone }: { co
       </div>
       <div className="grid w-full max-w-3xl flex-1 content-start gap-4 px-4 py-5 sm:grid-cols-2 lg:px-8">
         {field(t("category"), null, <SelectMenu ariaLabel={t("category")} value={category} onChange={setCategory} options={CATEGORIES.map((c) => ({ value: c.name, label: fx.cat(c.name) }))} />)}
+        {isMarketing && field(t("leadSource"), t("optional"), sources ? (
+          <LeadSourceSelect id="rec-lead-source" companyId={companyId} sources={sources} value={leadSource} onChange={setLeadSource}
+            onCreated={(s) => setSources((l) => [...(l ?? []), s])} />
+        ) : <div className="h-10 animate-pulse rounded-lg bg-slate-100" />)}
         {field(t("paidTo"), t("optional"), <input value={vendor} onChange={(e) => setVendor(e.target.value)} placeholder={t("paidToPh")} aria-label={t("paidTo")} className={inputClass} />)}
         {field(t("amount"), t("eachTime"), <div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
           <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" aria-label={t("amount")} autoFocus={!item} className={`${inputClass} pl-7`} /></div>)}
